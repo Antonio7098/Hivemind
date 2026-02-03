@@ -175,11 +175,14 @@ As Hivemind matures, adapters may incrementally add interception:
 - Patch-level diff extraction
 - Scoped command allowlists
 - Improved checkpoint granularity
+- **Scope enforcement** transitions from detection to prevention
 
 Crucially:
 > Hybrid interception must not change TaskFlow semantics.
 
-It only improves observability.
+It only improves observability and enforcement.
+
+In Phase 1, scope violations are detected post-hoc via diffs. In Phase 2+, violations are prevented via runtime interception. See `docs/design/scope-enforcement.md` for detailed enforcement mechanics across phases.
 
 ---
 

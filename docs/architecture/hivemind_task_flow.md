@@ -153,13 +153,25 @@ Verification consists of:
 
 ### 7.2 Verification Outcomes
 
-Verifier produces one of:
+Verification is not a single judgment. It has a defined authority hierarchy:
 
-- **PASS** — task may succeed
-- **SOFT FAIL** — retry allowed with feedback
-- **HARD FAIL** — task must fail
+1. **Automated Checks (Primary Gate)**
+   - Deterministic, authoritative
+   - Required checks must pass
+   - Cannot be overridden by verifier
 
-Verification decisions are authoritative.
+2. **Verifier Agent (Advisory)**
+   - LLM-based evaluation
+   - Produces PASS / SOFT FAIL / HARD FAIL
+   - Can trigger retry but cannot approve alone
+   - May be wrong; is advisory
+
+3. **Human Authority (Ultimate)**
+   - Can override any automated decision
+   - Can approve despite check failures
+   - Can reject despite verifier approval
+
+**Important:** Automated checks are the primary gate. Verifier agents provide advisory guidance. See `docs/design/verification-authority.md` for complete authority model.
 
 ---
 
@@ -167,10 +179,12 @@ Verification decisions are authoritative.
 
 Retry behavior is defined per task:
 - Maximum retries
-- Conditions for retry
+- Conditions for retry (check failure, soft verifier fail)
 - Escalation rules
 
 Retry transitions are explicit and bounded.
+
+When retrying, agents receive **explicit retry context** (not implicit memory) including prior attempt diffs, check results, and verifier feedback. See `docs/design/retry-context.md` for retry context assembly.
 
 ---
 

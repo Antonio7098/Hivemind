@@ -288,9 +288,9 @@ All state transitions are driven by **events**.
 - Timestamped
 - Attributed
 
-State is derived from the event log.
+**Important:** State is derived from the event log, but events reference execution artifacts (files, commits) without containing them. The event log is the source of truth for *what happened*, while artifacts are the source of truth for *what was produced*.
 
-The event log is the **single source of truth**.
+The event log is the **single source of truth for orchestration state**.
 
 ---
 

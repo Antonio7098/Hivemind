@@ -284,14 +284,18 @@ No component may mutate state without emitting events.
 
 Hivemind guarantees that:
 
-- Replaying events in order reconstructs TaskFlow state
+- Replaying events in order deterministically reconstructs **orchestration state** (TaskFlow position, task states, attempt history, decisions)
 - Replaying does not re-trigger side effects
 - Execution is idempotent with respect to events
+
+**Important:** Event replay reconstructs *logical state*, not *execution artifacts*. Files, commits, and diffs are referenced by events but not contained in them. These artifacts must be preserved separately.
 
 This enables:
 - Crash recovery
 - Debugging
 - Historical inspection
+
+See `docs/design/event-replay-semantics.md` for detailed explanation of what can and cannot be reconstructed.
 
 ---
 
