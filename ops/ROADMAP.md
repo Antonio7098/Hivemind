@@ -21,8 +21,8 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Establish the development foundation.
 
 ### 0.1 Repository Setup
-- [ ] Initialize Rust workspace (`cargo init --name hivemind`)
-- [ ] Create directory structure:
+- [x] Initialize Rust workspace (`cargo init --name hivemind`)
+- [x] Create directory structure:
   ```
   src/
     main.rs           # CLI entrypoint
@@ -33,22 +33,22 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
     storage/          # Event storage
   tests/              # Integration tests
   ```
-- [ ] Set up Makefile (build, test, lint, fmt)
-- [ ] Configure clippy (strict: `-D warnings`)
-- [ ] Configure rustfmt
+- [x] Set up Makefile (build, test, lint, fmt)
+- [x] Configure clippy (strict: `-D warnings`)
+- [x] Configure rustfmt
 - [ ] Configure cargo-nextest for test runner
 
 ### 0.2 CI Foundation
-- [ ] GitHub Actions for build
-- [ ] GitHub Actions for tests
-- [ ] GitHub Actions for lint
-- [ ] All CI must pass before any merge
+- [x] GitHub Actions for build
+- [x] GitHub Actions for tests
+- [x] GitHub Actions for lint
+- [x] All CI must pass before any merge
 
 ### 0.3 Exit Criteria
-- [ ] `make build` produces binary
-- [ ] `make test` runs (even with zero tests)
-- [ ] `make lint` passes
-- [ ] CI runs on every PR
+- [x] `make build` produces binary
+- [x] `make test` runs (even with zero tests)
+- [x] `make lint` passes
+- [x] CI runs on every PR
 
 ---
 
@@ -59,38 +59,38 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 > **Principle 1:** Observability is truth. If it's not observable, it didn't happen.
 
 ### 1.1 Event Core Types
-- [ ] Define `Event` interface
-- [ ] Define `EventID` (unique, ordered)
-- [ ] Define `Timestamp` handling (monotonic within flow)
-- [ ] Define `CorrelationIDs` (project, flow, task, attempt)
-- [ ] Define event serialization format (JSON initially)
+- [x] Define `Event` interface
+- [x] Define `EventID` (unique, ordered)
+- [x] Define `Timestamp` handling (monotonic within flow)
+- [x] Define `CorrelationIDs` (project, flow, task, attempt)
+- [x] Define event serialization format (JSON initially)
 
 ### 1.2 Event Store Interface
-- [ ] Define `EventStore` interface:
+- [x] Define `EventStore` interface:
   - `Append(event) -> EventID`
   - `Read(filter) -> []Event`
   - `Stream(filter) -> chan Event`
-- [ ] Implement file-based EventStore (append-only file per flow)
-- [ ] Implement in-memory EventStore (for testing)
+- [x] Implement file-based EventStore (append-only file per flow)
+- [x] Implement in-memory EventStore (for testing)
 
 ### 1.3 Event Replay
-- [ ] Implement `Replay(events) -> State` function
-- [ ] Prove: replay is deterministic (same events → same state)
-- [ ] Prove: replay is idempotent (replay twice → same result)
+- [x] Implement `Replay(events) -> State` function
+- [x] Prove: replay is deterministic (same events → same state)
+- [x] Prove: replay is idempotent (replay twice → same result)
 
 ### 1.4 Core Event Types (Minimal Set)
-- [ ] `ProjectCreated`
-- [ ] `ProjectUpdated`
-- [ ] `TaskCreated`
-- [ ] `TaskUpdated`
-- [ ] `TaskClosed`
+- [x] `ProjectCreated`
+- [x] `ProjectUpdated`
+- [x] `TaskCreated`
+- [x] `TaskUpdated`
+- [x] `TaskClosed`
 
 ### 1.5 Exit Criteria
-- [ ] Events can be appended and read
-- [ ] Events survive process restart (file store)
-- [ ] Replay produces identical state from identical events
-- [ ] Tests prove determinism and idempotency
-- [ ] No state exists outside events
+- [x] Events can be appended and read
+- [x] Events survive process restart (file store)
+- [x] Replay produces identical state from identical events
+- [x] Tests prove determinism and idempotency
+- [x] No state exists outside events
 
 ---
 
@@ -101,7 +101,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 > **Principle 4:** Errors must be classifiable, attributable, and actionable.
 
 ### 2.1 Error Types
-- [ ] Define `HivemindError` struct:
+- [x] Define `HivemindError` struct:
   - Category (System, Runtime, Agent, Scope, Verification, Git, User, Policy)
   - Code (unique within category)
   - Message (human-readable)
@@ -109,17 +109,17 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
   - Recoverable (bool)
   - RecoveryHint (optional)
   - Context (map)
-- [ ] Implement error constructors for each category
+- [x] Implement error constructors for each category
 
 ### 2.2 Error Events
 - [ ] Define `ErrorOccurred` event
-- [ ] Errors emit events (no silent failures)
+- [x] Errors emit events (no silent failures)
 
 ### 2.3 Exit Criteria
-- [ ] All error categories defined
-- [ ] All errors produce structured output
-- [ ] Errors include actionable recovery hints
-- [ ] Tests verify error classification
+- [x] All error categories defined
+- [x] All errors produce structured output
+- [x] Errors include actionable recovery hints
+- [x] Tests verify error classification
 
 ---
 
@@ -130,28 +130,28 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 > **Principle 7:** If it cannot be done via CLI, it is not a real feature.
 
 ### 3.1 CLI Framework
-- [ ] Choose CLI framework (clap recommended)
-- [ ] Implement root command with version
-- [ ] Implement global flags (--format, --verbose)
-- [ ] Implement structured output (JSON, table via comfy-table or similar)
+- [x] Choose CLI framework (clap recommended)
+- [x] Implement root command with version
+- [x] Implement global flags (--format, --verbose)
+- [x] Implement structured output (JSON, table via comfy-table or similar)
 
 ### 3.2 Output Contract
-- [ ] JSON output for all commands when `--format json`
-- [ ] Structured error output (code, message, details)
-- [ ] Exit codes per spec (0=success, 1=error, 2=not found, etc.)
+- [x] JSON output for all commands when `--format json`
+- [x] Structured error output (code, message, details)
+- [x] Exit codes per spec (0=success, 1=error, 2=not found, etc.)
 
 ### 3.3 Stub Commands
-- [ ] `hivemind version`
-- [ ] `hivemind project` (subcommand group)
-- [ ] `hivemind task` (subcommand group)
-- [ ] `hivemind events` (subcommand group)
+- [x] `hivemind version`
+- [x] `hivemind project` (subcommand group)
+- [x] `hivemind task` (subcommand group)
+- [x] `hivemind events` (subcommand group)
 
 ### 3.4 Exit Criteria
-- [ ] CLI parses commands correctly
-- [ ] `--format json` produces valid JSON
-- [ ] Errors produce structured output
-- [ ] Exit codes follow spec
-- [ ] `hivemind --help` is useful
+- [x] CLI parses commands correctly
+- [x] `--format json` produces valid JSON
+- [x] Errors produce structured output
+- [x] Exit codes follow spec
+- [x] `hivemind --help` is useful
 
 ---
 
@@ -160,25 +160,25 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Projects are the top-level organizational unit.
 
 ### 4.1 Project State
-- [ ] Define Project struct (ID, name, description, created_at)
-- [ ] Derive project state from events via replay
+- [x] Define Project struct (ID, name, description, created_at)
+- [x] Derive project state from events via replay
 
 ### 4.2 Project Commands
-- [ ] `hivemind project create <name>` → emits `ProjectCreated`
-- [ ] `hivemind project list` → reads from derived state
-- [ ] `hivemind project inspect <id>` → shows project details
-- [ ] `hivemind project update <id>` → emits `ProjectUpdated`
+- [x] `hivemind project create <name>` → emits `ProjectCreated`
+- [x] `hivemind project list` → reads from derived state
+- [x] `hivemind project inspect <id>` → shows project details
+- [x] `hivemind project update <id>` → emits `ProjectUpdated`
 
 ### 4.3 Project Registry Storage
-- [ ] Define registry location (`~/.hivemind/` or configurable)
-- [ ] Event log per project
+- [x] Define registry location (`~/.hivemind/` or configurable)
+- [x] Event log per project
 - [ ] Registry index (project ID → event log path)
 
 ### 4.4 Exit Criteria
-- [ ] Can create, list, inspect projects
-- [ ] Projects survive restart (events persisted)
-- [ ] State is derived purely from events
-- [ ] CLI output matches spec
+- [x] Can create, list, inspect projects
+- [x] Projects survive restart (events persisted)
+- [x] State is derived purely from events
+- [x] CLI output matches spec
 
 ---
 
@@ -187,24 +187,24 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Projects reference repositories (git).
 
 ### 5.1 Repository Events
-- [ ] `RepositoryAttachedToProject`
-- [ ] `RepositoryDetachedFromProject`
+- [x] `RepositoryAttachedToProject`
+- [x] `RepositoryDetachedFromProject`
 
 ### 5.2 Repository Commands
-- [ ] `hivemind project attach-repo <project> <path>` → validates git repo, emits event
-- [ ] `hivemind project detach-repo <project> <repo-name>`
-- [ ] Show attached repos in `project inspect`
+- [x] `hivemind project attach-repo <project> <path>` → validates git repo, emits event
+- [x] `hivemind project detach-repo <project> <repo-name>`
+- [x] Show attached repos in `project inspect`
 
 ### 5.3 Repository Validation
-- [ ] Verify path is a git repository
-- [ ] Verify repo is accessible
-- [ ] Store repo path and access mode (ro/rw)
+- [x] Verify path is a git repository
+- [x] Verify repo is accessible
+- [x] Store repo path and access mode (ro/rw)
 
 ### 5.4 Exit Criteria
-- [ ] Can attach/detach repos to projects
-- [ ] Invalid paths rejected with clear error
-- [ ] Repo state derived from events
-- [ ] `project inspect` shows attached repos
+- [x] Can attach/detach repos to projects
+- [x] Invalid paths rejected with clear error
+- [x] Repo state derived from events
+- [x] `project inspect` shows attached repos
 
 ---
 
@@ -215,27 +215,27 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 > **User Story 1:** Simple todo tracking without automation.
 
 ### 6.1 Task Events
-- [ ] `TaskCreated`
-- [ ] `TaskUpdated`
-- [ ] `TaskClosed`
+- [x] `TaskCreated`
+- [x] `TaskUpdated`
+- [x] `TaskClosed`
 
 ### 6.2 Task State
-- [ ] Define Task struct (ID, project_id, title, description, state, created_at)
-- [ ] Task states: OPEN, CLOSED
-- [ ] Derive task state from events
+- [x] Define Task struct (ID, project_id, title, description, state, created_at)
+- [x] Task states: OPEN, CLOSED
+- [x] Derive task state from events
 
 ### 6.3 Task Commands
-- [ ] `hivemind task create <project> <title>`
-- [ ] `hivemind task list <project>` (with filters: --state)
-- [ ] `hivemind task inspect <task-id>`
-- [ ] `hivemind task update <task-id>`
-- [ ] `hivemind task close <task-id>`
+- [x] `hivemind task create <project> <title>`
+- [x] `hivemind task list <project>` (with filters: --state)
+- [x] `hivemind task inspect <task-id>`
+- [x] `hivemind task update <task-id>`
+- [x] `hivemind task close <task-id>`
 
 ### 6.4 Exit Criteria
-- [ ] Tasks work as simple todo list
-- [ ] Tasks survive restart
-- [ ] State derived from events
-- [ ] User Story 1 is achievable
+- [x] Tasks work as simple todo list
+- [x] Tasks survive restart
+- [x] State derived from events
+- [x] User Story 1 is achievable
 
 ---
 
@@ -244,25 +244,25 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Define scope contracts before enforcement.
 
 ### 7.1 Scope Types
-- [ ] Define FilesystemScope (paths, read/write/deny)
-- [ ] Define RepositoryScope (repo, access mode)
-- [ ] Define ExecutionScope (allowed commands)
-- [ ] Define GitScope (may commit, may branch)
+- [x] Define FilesystemScope (paths, read/write/deny)
+- [x] Define RepositoryScope (repo, access mode)
+- [x] Define ExecutionScope (allowed commands)
+- [x] Define GitScope (may commit, may branch)
 
 ### 7.2 Scope Declaration
-- [ ] Scope attached to tasks (optional at this phase)
-- [ ] Scope serialization (YAML/JSON)
-- [ ] Scope validation (well-formed)
+- [x] Scope attached to tasks (optional at this phase)
+- [x] Scope serialization (YAML/JSON)
+- [x] Scope validation (well-formed)
 
 ### 7.3 Scope Compatibility
-- [ ] Implement compatibility check between two scopes
-- [ ] Compatible / Soft Conflict / Hard Conflict classification
-- [ ] Unit tests for compatibility rules
+- [x] Implement compatibility check between two scopes
+- [x] Compatible / Soft Conflict / Hard Conflict classification
+- [x] Unit tests for compatibility rules
 
 ### 7.4 Exit Criteria
-- [ ] Scopes can be defined and validated
-- [ ] Compatibility can be computed
-- [ ] No enforcement yet (definitions only)
+- [x] Scopes can be defined and validated
+- [x] Compatibility can be computed
+- [x] No enforcement yet (definitions only)
 
 ---
 

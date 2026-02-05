@@ -55,9 +55,9 @@ Before writing code:
 
 ### 1.3 Planning Outputs
 
-- [ ] Branch created and pushed
-- [ ] Phase scope understood
-- [ ] Dependencies verified
+- [Branch created and pushed  
+- [Phase scope understood  
+- [Dependencies verified  
 
 ---
 
@@ -88,9 +88,9 @@ As you complete items, update `ops/ROADMAP.md`:
 
 ### 2.3 Development Outputs
 
-- [ ] All phase checklist items implemented
-- [ ] All new code has tests
-- [ ] Commits are atomic and well-messaged
+- [All phase checklist items implemented  
+- [All new code has tests  
+- [Commits are atomic and well-messaged  
 
 ---
 
@@ -157,12 +157,12 @@ Review each principle and document compliance in phase report:
 
 ### 3.4 Validation Outputs
 
-- [ ] `cargo fmt --check` passes
-- [ ] `cargo clippy -D warnings` passes
-- [ ] All tests pass
-- [ ] Coverage meets threshold (target: 80%+)
-- [ ] All exit criteria verified
-- [ ] Principle checkpoint completed
+- cargo fmt --check` passes
+- cargo clippy -D warnings` passes
+- All tests pass
+- Coverage meets threshold (target: 80%+)
+- All exit criteria verified
+- Principle checkpoint completed
 
 ---
 
@@ -207,11 +207,11 @@ If the phase adds user-facing features:
 
 ### 4.5 Documentation Outputs
 
-- [ ] All public items documented
-- [ ] `cargo doc` produces no warnings
-- [ ] Architecture/design docs synchronized
-- [ ] Changelog entry added
-- [ ] README updated (if applicable)
+- All public items documented
+- cargo doc` produces no warnings
+- Architecture/design docs synchronized
+- Changelog entry added
+- README updated (if applicable)
 
 ---
 
@@ -320,11 +320,11 @@ gh pr create \
 
 ### 6.5 Review Outputs
 
-- [ ] Self-review completed
-- [ ] Version number incremented
-- [ ] Version consistency verified
-- [ ] PR description complete
-- [ ] PR created
+- Self-review completed
+- Version number incremented
+- Version consistency verified
+- PR description complete
+- PR created
 
 ---
 
@@ -348,9 +348,9 @@ gh pr merge <PR-number> --squash --delete-branch
 
 ### 7.3 Merge Outputs
 
-- [ ] PR merged to main
-- [ ] Phase branch deleted
-- [ ] Phase report present in main
+- PR merged to main
+- Phase branch deleted
+- Phase report present in main
 
 ---
 
@@ -416,11 +416,11 @@ git commit -m "docs: Phase <N> marked complete"
 
 ### 8.6 CI Monitoring Outputs
 
-- [ ] CI pipeline passes
-- [ ] Local build/test verification complete
-- [ ] Tag created (if milestone)
-- [ ] ops/ROADMAP.md updated on main
-- [ ] Next phase is ready to begin
+- CI pipeline passes
+- Local build/test verification complete
+- Tag created (if milestone)
+- ops/ROADMAP.md updated on main
+- Next phase is ready to begin
 
 ---
 
