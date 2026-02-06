@@ -1,0 +1,406 @@
+//! Event definitions and types.
+//!
+//! All state in Hivemind is derived from events. Events are immutable,
+//! append-only, and form the single source of truth.
+
+use crate::core::flow::TaskExecState;
+use crate::core::graph::GraphTask;
+use crate::core::scope::{RepoAccessMode, Scope};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// Unique identifier for an event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct EventId(Uuid);
+
+impl EventId {
+    /// Creates a new unique event ID.
+    #[must_use]
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+
+    /// Returns the inner UUID.
+    #[must_use]
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+}
+
+impl Default for EventId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for EventId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Correlation IDs for tracing event relationships.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CorrelationIds {
+    /// Project this event belongs to.
+    pub project_id: Option<Uuid>,
+    #[serde(default)]
+    pub graph_id: Option<Uuid>,
+    /// Flow this event belongs to.
+    pub flow_id: Option<Uuid>,
+    /// Task this event belongs to.
+    pub task_id: Option<Uuid>,
+    /// Attempt this event belongs to.
+    pub attempt_id: Option<Uuid>,
+}
+
+impl CorrelationIds {
+    /// Creates empty correlation IDs.
+    #[must_use]
+    pub fn none() -> Self {
+        Self {
+            project_id: None,
+            graph_id: None,
+            flow_id: None,
+            task_id: None,
+            attempt_id: None,
+        }
+    }
+
+    /// Creates correlation IDs with only a project ID.
+    #[must_use]
+    pub fn for_project(project_id: Uuid) -> Self {
+        Self {
+            project_id: Some(project_id),
+            graph_id: None,
+            flow_id: None,
+            task_id: None,
+            attempt_id: None,
+        }
+    }
+
+    #[must_use]
+    pub fn for_graph(project_id: Uuid, graph_id: Uuid) -> Self {
+        Self {
+            project_id: Some(project_id),
+            graph_id: Some(graph_id),
+            flow_id: None,
+            task_id: None,
+            attempt_id: None,
+        }
+    }
+
+    /// Creates correlation IDs with project and task.
+    #[must_use]
+    pub fn for_task(project_id: Uuid, task_id: Uuid) -> Self {
+        Self {
+            project_id: Some(project_id),
+            graph_id: None,
+            flow_id: None,
+            task_id: Some(task_id),
+            attempt_id: None,
+        }
+    }
+
+    #[must_use]
+    pub fn for_flow(project_id: Uuid, flow_id: Uuid) -> Self {
+        Self {
+            project_id: Some(project_id),
+            graph_id: None,
+            flow_id: Some(flow_id),
+            task_id: None,
+            attempt_id: None,
+        }
+    }
+
+    #[must_use]
+    pub fn for_graph_flow(project_id: Uuid, graph_id: Uuid, flow_id: Uuid) -> Self {
+        Self {
+            project_id: Some(project_id),
+            graph_id: Some(graph_id),
+            flow_id: Some(flow_id),
+            task_id: None,
+            attempt_id: None,
+        }
+    }
+
+    #[must_use]
+    pub fn for_flow_task(project_id: Uuid, flow_id: Uuid, task_id: Uuid) -> Self {
+        Self {
+            project_id: Some(project_id),
+            graph_id: None,
+            flow_id: Some(flow_id),
+            task_id: Some(task_id),
+            attempt_id: None,
+        }
+    }
+
+    #[must_use]
+    pub fn for_graph_flow_task(
+        project_id: Uuid,
+        graph_id: Uuid,
+        flow_id: Uuid,
+        task_id: Uuid,
+    ) -> Self {
+        Self {
+            project_id: Some(project_id),
+            graph_id: Some(graph_id),
+            flow_id: Some(flow_id),
+            task_id: Some(task_id),
+            attempt_id: None,
+        }
+    }
+}
+
+/// Event metadata common to all events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EventMetadata {
+    /// Unique event identifier.
+    pub id: EventId,
+    /// When the event occurred.
+    pub timestamp: DateTime<Utc>,
+    /// Correlation IDs for tracing.
+    pub correlation: CorrelationIds,
+    /// Sequence number within the event stream (assigned by store).
+    pub sequence: Option<u64>,
+}
+
+impl EventMetadata {
+    /// Creates new metadata with current timestamp.
+    #[must_use]
+    pub fn new(correlation: CorrelationIds) -> Self {
+        Self {
+            id: EventId::new(),
+            timestamp: Utc::now(),
+            correlation,
+            sequence: None,
+        }
+    }
+}
+
+/// Payload types for different events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum EventPayload {
+    /// A new project was created.
+    ProjectCreated {
+        id: Uuid,
+        name: String,
+        description: Option<String>,
+    },
+    /// A project was updated.
+    ProjectUpdated {
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+    },
+    /// A new task was created.
+    TaskCreated {
+        id: Uuid,
+        project_id: Uuid,
+        title: String,
+        description: Option<String>,
+        #[serde(default)]
+        scope: Option<Scope>,
+    },
+    /// A task was updated.
+    TaskUpdated {
+        id: Uuid,
+        title: Option<String>,
+        description: Option<String>,
+    },
+    /// A task was closed.
+    TaskClosed {
+        id: Uuid,
+        #[serde(default)]
+        reason: Option<String>,
+    },
+    /// A repository was attached to a project.
+    RepositoryAttached {
+        project_id: Uuid,
+        path: String,
+        name: String,
+        #[serde(default)]
+        access_mode: RepoAccessMode,
+    },
+    /// A repository was detached from a project.
+    RepositoryDetached {
+        project_id: Uuid,
+        name: String,
+    },
+
+    TaskGraphCreated {
+        graph_id: Uuid,
+        project_id: Uuid,
+        name: String,
+        #[serde(default)]
+        description: Option<String>,
+    },
+    TaskAddedToGraph {
+        graph_id: Uuid,
+        task: GraphTask,
+    },
+    DependencyAdded {
+        graph_id: Uuid,
+        from_task: Uuid,
+        to_task: Uuid,
+    },
+    ScopeAssigned {
+        graph_id: Uuid,
+        task_id: Uuid,
+        scope: Scope,
+    },
+
+    TaskFlowCreated {
+        flow_id: Uuid,
+        graph_id: Uuid,
+        project_id: Uuid,
+        #[serde(default)]
+        name: Option<String>,
+        task_ids: Vec<Uuid>,
+    },
+    TaskFlowStarted {
+        flow_id: Uuid,
+    },
+    TaskFlowPaused {
+        flow_id: Uuid,
+        #[serde(default)]
+        running_tasks: Vec<Uuid>,
+    },
+    TaskFlowResumed {
+        flow_id: Uuid,
+    },
+    TaskFlowCompleted {
+        flow_id: Uuid,
+    },
+    TaskFlowAborted {
+        flow_id: Uuid,
+        #[serde(default)]
+        reason: Option<String>,
+        forced: bool,
+    },
+
+    TaskReady {
+        flow_id: Uuid,
+        task_id: Uuid,
+    },
+    TaskBlocked {
+        flow_id: Uuid,
+        task_id: Uuid,
+        #[serde(default)]
+        reason: Option<String>,
+    },
+    TaskExecutionStateChanged {
+        flow_id: Uuid,
+        task_id: Uuid,
+        from: TaskExecState,
+        to: TaskExecState,
+    },
+
+    TaskRetryRequested {
+        task_id: Uuid,
+        reset_count: bool,
+    },
+    TaskAborted {
+        task_id: Uuid,
+        #[serde(default)]
+        reason: Option<String>,
+    },
+
+    HumanOverride {
+        task_id: Uuid,
+        override_type: String,
+        decision: String,
+        reason: String,
+        #[serde(default)]
+        user: Option<String>,
+    },
+
+    MergePrepared {
+        flow_id: Uuid,
+        #[serde(default)]
+        target_branch: Option<String>,
+        #[serde(default)]
+        conflicts: Vec<String>,
+    },
+    MergeApproved {
+        flow_id: Uuid,
+        #[serde(default)]
+        user: Option<String>,
+    },
+    MergeCompleted {
+        flow_id: Uuid,
+        #[serde(default)]
+        commits: Vec<String>,
+    },
+}
+
+/// A complete event with metadata and payload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Event {
+    /// Event metadata.
+    pub metadata: EventMetadata,
+    /// Event payload.
+    pub payload: EventPayload,
+}
+
+impl Event {
+    /// Creates a new event with the given payload and correlation.
+    #[must_use]
+    pub fn new(payload: EventPayload, correlation: CorrelationIds) -> Self {
+        Self {
+            metadata: EventMetadata::new(correlation),
+            payload,
+        }
+    }
+
+    /// Returns the event ID.
+    #[must_use]
+    pub fn id(&self) -> EventId {
+        self.metadata.id
+    }
+
+    /// Returns the event timestamp.
+    #[must_use]
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        self.metadata.timestamp
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn event_id_is_unique() {
+        let id1 = EventId::new();
+        let id2 = EventId::new();
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn event_serialization_roundtrip() {
+        let event = Event::new(
+            EventPayload::ProjectCreated {
+                id: Uuid::new_v4(),
+                name: "test-project".to_string(),
+                description: Some("A test project".to_string()),
+            },
+            CorrelationIds::none(),
+        );
+
+        let json = serde_json::to_string(&event).expect("serialize");
+        let restored: Event = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(event.payload, restored.payload);
+    }
+
+    #[test]
+    fn correlation_ids_for_project() {
+        let project_id = Uuid::new_v4();
+        let corr = CorrelationIds::for_project(project_id);
+        assert_eq!(corr.project_id, Some(project_id));
+        assert!(corr.task_id.is_none());
+    }
+}

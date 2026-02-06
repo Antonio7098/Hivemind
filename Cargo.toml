@@ -1,0 +1,42 @@
+[package]
+name = "hivemind"
+version = "0.1.0"
+edition = "2021"
+authors = ["Antonio"]
+description = "A structured orchestration system for agentic coding workflows"
+license = "MIT"
+repository = "https://github.com/Antonio7098/hivemind"
+readme = "README.md"
+keywords = ["cli", "orchestration", "agents", "workflow"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = "1"
+dirs = "5"
+comfy-table = "7"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = true
+strip = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+missing_const_for_fn = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+result_large_err = "allow"
