@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-/// TaskFlow lifecycle state.
+/// `TaskFlow` lifecycle state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FlowState {
@@ -49,7 +49,7 @@ pub enum TaskExecState {
 /// Execution state for a single task within a flow.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskExecution {
-    /// Task ID (from TaskGraph).
+    /// Task ID (from `TaskGraph`).
     pub task_id: Uuid,
     /// Current execution state.
     pub state: TaskExecState,
@@ -96,7 +96,9 @@ impl TaskExecution {
     /// Checks if a transition is valid.
     #[must_use]
     pub fn can_transition_to(&self, new_state: TaskExecState) -> bool {
-        use TaskExecState::*;
+        use TaskExecState::{
+            Escalated, Failed, Pending, Ready, Retry, Running, Success, Verifying,
+        };
         matches!(
             (self.state, new_state),
             (Pending, Ready | Running)
@@ -108,12 +110,12 @@ impl TaskExecution {
     }
 }
 
-/// A TaskFlow - runtime instance of a TaskGraph.
+/// A `TaskFlow` - runtime instance of a `TaskGraph`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskFlow {
     /// Unique flow ID.
     pub id: Uuid,
-    /// Associated TaskGraph ID.
+    /// Associated `TaskGraph` ID.
     pub graph_id: Uuid,
     /// Associated project ID.
     pub project_id: Uuid,
@@ -132,7 +134,7 @@ pub struct TaskFlow {
 }
 
 impl TaskFlow {
-    /// Creates a new TaskFlow from a graph.
+    /// Creates a new `TaskFlow` from a graph.
     #[must_use]
     pub fn new(graph_id: Uuid, project_id: Uuid, task_ids: &[Uuid]) -> Self {
         let now = Utc::now();

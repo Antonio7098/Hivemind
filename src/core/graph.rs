@@ -1,6 +1,6 @@
-//! TaskGraph - Static, immutable DAG representing planned intent.
+//! `TaskGraph` - Static, immutable DAG representing planned intent.
 //!
-//! A TaskGraph is created by the Planner and is immutable once execution begins.
+//! A `TaskGraph` is created by the Planner and is immutable once execution begins.
 //! It represents what should happen, not what has happened.
 
 use super::scope::Scope;
@@ -54,7 +54,7 @@ impl SuccessCriteria {
     }
 }
 
-/// A task node within a TaskGraph.
+/// A task node within a `TaskGraph`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GraphTask {
     /// Unique task ID.
@@ -107,7 +107,7 @@ impl GraphTask {
     }
 }
 
-/// State of a TaskGraph.
+/// State of a `TaskGraph`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GraphState {
