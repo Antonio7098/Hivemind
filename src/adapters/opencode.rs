@@ -85,29 +85,32 @@ impl OpenCodeAdapter {
 
     /// Formats the input for the runtime.
     fn format_input(&self, input: &ExecutionInput) -> String {
-        let mut prompt = format!("Task: {}\n\n", input.task_description);
-        prompt.push_str(&format!("Success Criteria: {}\n\n", input.success_criteria));
+        let task_description = &input.task_description;
+        let success_criteria = &input.success_criteria;
+        let mut prompt = format!("Task: {task_description}\n\n");
+        prompt.push_str(&format!("Success Criteria: {success_criteria}\n\n"));
 
         if let Some(ref context) = input.context {
-            prompt.push_str(&format!("Context:\n{}\n\n", context));
+            prompt.push_str(&format!("Context:\n{context}\n\n"));
         }
 
         if !input.prior_attempts.is_empty() {
             prompt.push_str("Prior Attempts:\n");
             for attempt in &input.prior_attempts {
+                let attempt_number = attempt.attempt_number;
+                let summary = &attempt.summary;
                 prompt.push_str(&format!(
-                    "- Attempt {}: {}\n",
-                    attempt.attempt_number, attempt.summary
+                    "- Attempt {attempt_number}: {summary}\n",
                 ));
                 if let Some(ref reason) = attempt.failure_reason {
-                    prompt.push_str(&format!("  Failure: {}\n", reason));
+                    prompt.push_str(&format!("  Failure: {reason}\n"));
                 }
             }
             prompt.push('\n');
         }
 
         if let Some(ref feedback) = input.verifier_feedback {
-            prompt.push_str(&format!("Verifier Feedback:\n{}\n\n", feedback));
+            prompt.push_str(&format!("Verifier Feedback:\n{feedback}\n\n"));
         }
 
         prompt
@@ -144,14 +147,14 @@ impl RuntimeAdapter for OpenCodeAdapter {
                     Ok(status) if status.success() => Ok(()),
                     _ => Err(RuntimeError::new(
                         "health_check_failed",
-                        format!("Binary {} is not responding correctly", binary.display()),
+                        format!("Binary {binary:?} is not responding correctly"),
                         false,
                     )),
                 }
             }
             Err(e) => Err(RuntimeError::new(
                 "binary_not_found",
-                format!("Cannot execute {}: {}", binary.display(), e),
+                format!("Cannot execute {binary:?}: {e}"),
                 false,
             )),
         }
@@ -162,7 +165,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
         if !worktree.exists() {
             return Err(RuntimeError::new(
                 "worktree_not_found",
-                format!("Worktree does not exist: {}", worktree.display()),
+                format!("Worktree does not exist: {worktree:?}"),
                 false,
             ));
         }
@@ -197,7 +200,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
         let mut child = cmd.spawn().map_err(|e| {
             RuntimeError::new(
                 "spawn_failed",
-                format!("Failed to spawn process: {}", e),
+                format!("Failed to spawn process: {e}"),
                 false,
             )
         })?;
@@ -208,7 +211,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
             stdin.write_all(formatted_input.as_bytes()).map_err(|e| {
                 RuntimeError::new(
                     "stdin_write_failed",
-                    format!("Failed to write to stdin: {}", e),
+                    format!("Failed to write to stdin: {e}"),
                     true,
                 )
             })?;
@@ -255,7 +258,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
             let status = process.wait().map_err(|e| {
                 RuntimeError::new(
                     "wait_failed",
-                    format!("Failed to wait for process: {}", e),
+                    format!("Failed to wait for process: {e}"),
                     true,
                 )
             })?;
@@ -275,7 +278,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
                     duration,
                     RuntimeError::new(
                         "nonzero_exit",
-                        format!("Process exited with code {}", exit_code),
+                        format!("Process exited with code {exit_code}"),
                         true,
                     ),
                 ))
@@ -294,7 +297,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
             process.kill().map_err(|e| {
                 RuntimeError::new(
                     "kill_failed",
-                    format!("Failed to kill process: {}", e),
+                    format!("Failed to kill process: {e}"),
                     false,
                 )
             })?;
