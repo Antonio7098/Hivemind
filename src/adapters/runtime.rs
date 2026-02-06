@@ -1,7 +1,7 @@
 //! Runtime adapter interface for execution backends.
 //!
 //! Runtime adapters are the only components that interact directly with
-//! execution runtimes (e.g. Claude Code, OpenCode, Codex CLI).
+//! execution runtimes (e.g. Claude Code, `OpenCode`, Codex CLI).
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -90,7 +90,8 @@ impl ExecutionReport {
         self.exit_code == 0 && self.errors.is_empty()
     }
 
-    /// Adds file change information.
+    /// Adds file changes to the input.
+    #[must_use]
     pub fn with_file_changes(
         mut self,
         created: Vec<PathBuf>,
@@ -171,12 +172,14 @@ impl AdapterConfig {
     }
 
     /// Sets the timeout.
+    #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }
 
     /// Adds an argument.
+    #[must_use]
     pub fn with_arg(mut self, arg: impl Into<String>) -> Self {
         self.args.push(arg.into());
         self

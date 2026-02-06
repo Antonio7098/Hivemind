@@ -252,11 +252,9 @@ impl RuntimeAdapter for OpenCodeAdapter {
 
             if let Some(stderr) = stderr {
                 let reader = BufReader::new(stderr);
-                for line in reader.lines() {
-                    if let Ok(line) = line {
-                        stderr_content.push_str(&line);
-                        stderr_content.push('\n');
-                    }
+                for line in reader.lines().flatten() {
+                    stderr_content.push_str(&line);
+                    stderr_content.push('\n');
                 }
             }
 
