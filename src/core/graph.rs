@@ -364,7 +364,7 @@ impl TaskGraph {
             .filter(|id| {
                 self.dependencies
                     .get(*id)
-                    .is_none_or(|deps| deps.is_empty())
+                    .is_none_or(HashSet::is_empty)
             })
             .copied()
             .collect()
