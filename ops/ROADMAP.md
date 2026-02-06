@@ -271,32 +271,32 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** TaskGraphs represent immutable intent (DAG of tasks).
 
 ### 8.1 TaskGraph Events
-- [ ] `TaskGraphCreated`
-- [ ] `TaskAddedToGraph`
-- [ ] `DependencyAdded`
-- [ ] `ScopeAssigned`
-- [ ] `TaskGraphValidated`
-- [ ] `TaskGraphLocked` (becomes immutable)
+- [x] `TaskGraphCreated`
+- [x] `TaskAddedToGraph`
+- [x] `DependencyAdded`
+- [x] `ScopeAssigned`
+- [x] `TaskGraphValidated`
+- [x] `TaskGraphLocked` (becomes immutable)
 
 ### 8.2 TaskGraph State
-- [ ] Define TaskGraph struct (ID, project_id, tasks, edges, scopes)
-- [ ] Derive from events
-- [ ] DAG validation (no cycles)
-- [ ] Mutable until locked
+- [x] Define TaskGraph struct (ID, project_id, tasks, edges, scopes)
+- [x] Derive from events
+- [x] DAG validation (no cycles)
+- [x] Mutable until locked
 
 ### 8.3 TaskGraph Commands
-- [ ] `hivemind graph create <project> <name>`
-- [ ] `hivemind graph add-task <graph> <task>`
-- [ ] `hivemind graph add-dependency <graph> <from> <to>`
-- [ ] `hivemind graph set-scope <graph> <task> <scope>`
-- [ ] `hivemind graph validate <graph>`
-- [ ] `hivemind graph inspect <graph>`
+- [x] `hivemind graph create <project> <name>`
+- [x] `hivemind graph add-task <graph> <task>` (via --from-tasks)
+- [x] `hivemind graph add-dependency <graph> <from> <to>`
+- [x] `hivemind graph set-scope <graph> <task> <scope>`
+- [x] `hivemind graph validate <graph>`
+- [x] `hivemind graph inspect <graph>`
 
 ### 8.4 Exit Criteria
-- [ ] Can build TaskGraphs from tasks
-- [ ] Dependencies form valid DAG
-- [ ] Cycle detection works
-- [ ] Graph is immutable after lock
+- [x] Can build TaskGraphs from tasks
+- [x] Dependencies form valid DAG
+- [x] Cycle detection works
+- [x] Graph is immutable after lock
 
 ---
 
@@ -305,31 +305,31 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** TaskFlow is the runtime instance of a TaskGraph.
 
 ### 9.1 TaskFlow Events
-- [ ] `TaskFlowCreated`
-- [ ] `TaskFlowStarted`
-- [ ] `TaskFlowPaused`
-- [ ] `TaskFlowResumed`
-- [ ] `TaskFlowCompleted`
-- [ ] `TaskFlowAborted`
+- [x] `TaskFlowCreated`
+- [x] `TaskFlowStarted`
+- [x] `TaskFlowPaused`
+- [x] `TaskFlowResumed`
+- [x] `TaskFlowCompleted`
+- [x] `TaskFlowAborted`
 
 ### 9.2 TaskFlow State
-- [ ] Define TaskFlow struct (ID, graph_id, state, created_at)
-- [ ] Flow states: CREATED, RUNNING, PAUSED, COMPLETED, ABORTED
-- [ ] Derive from events
+- [x] Define TaskFlow struct (ID, graph_id, state, created_at)
+- [x] Flow states: CREATED, RUNNING, PAUSED, COMPLETED, ABORTED
+- [x] Derive from events
 
 ### 9.3 TaskFlow Commands
-- [ ] `hivemind flow create <graph-id>`
-- [ ] `hivemind flow start <flow-id>` (state change only, no execution yet)
-- [ ] `hivemind flow pause <flow-id>`
-- [ ] `hivemind flow resume <flow-id>`
-- [ ] `hivemind flow abort <flow-id>`
-- [ ] `hivemind flow status <flow-id>`
+- [x] `hivemind flow create <graph-id>`
+- [x] `hivemind flow start <flow-id>` (state change only, no execution yet)
+- [x] `hivemind flow pause <flow-id>`
+- [x] `hivemind flow resume <flow-id>`
+- [x] `hivemind flow abort <flow-id>`
+- [x] `hivemind flow status <flow-id>`
 
 ### 9.4 Exit Criteria
-- [ ] TaskFlow lifecycle works (create → start → pause → resume → complete)
-- [ ] State transitions emit events
-- [ ] State derived from events
-- [ ] Flow can be paused and resumed
+- [x] TaskFlow lifecycle works (create → start → pause → resume → complete)
+- [x] State transitions emit events
+- [x] State derived from events
+- [x] Flow can be paused and resumed
 
 ---
 
@@ -338,36 +338,35 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Task execution FSM without actual agent execution.
 
 ### 10.1 TaskExecution Events
-- [ ] `TaskReady`
-- [ ] `TaskBlocked`
-- [ ] `TaskExecutionStarted`
-- [ ] `TaskExecutionStateChanged`
-- [ ] `TaskExecutionSucceeded`
-- [ ] `TaskExecutionFailed`
+- [x] `TaskReady`
+- [x] `TaskBlocked`
+- [x] `TaskExecutionStarted`
+- [x] `TaskExecutionStateChanged`
+- [x] `TaskExecutionSucceeded`
+- [x] `TaskExecutionFailed`
 
 ### 10.2 TaskExecution States
-- [ ] PENDING → RUNNING → VERIFYING → SUCCESS
-- [ ] PENDING → RUNNING → VERIFYING → RETRY
-- [ ] PENDING → RUNNING → VERIFYING → FAILED
-- [ ] RETRY → RUNNING (bounded)
-- [ ] FAILED → ESCALATED (optional)
+- [x] PENDING → RUNNING → VERIFYING → SUCCESS
+- [x] PENDING → RUNNING → VERIFYING → RETRY
+- [x] PENDING → RUNNING → VERIFYING → FAILED
+- [x] RETRY → RUNNING (bounded)
+- [x] FAILED → ESCALATED (optional)
 
 ### 10.3 Scheduler (Dependency Resolution)
-- [ ] Task becomes READY when all upstream tasks are SUCCESS
-- [ ] Task is BLOCKED while dependencies are pending
-- [ ] Emit `TaskReady` / `TaskBlocked` events
+- [x] Task becomes READY when all upstream tasks are SUCCESS
+- [x] Task is BLOCKED while dependencies are pending
+- [x] Emit `TaskReady` / `TaskBlocked` events
 
 ### 10.4 Manual State Transitions (Testing)
-- [ ] `hivemind task-exec start <task>` (simulate PENDING → RUNNING)
-- [ ] `hivemind task-exec complete <task>` (simulate → SUCCESS)
-- [ ] `hivemind task-exec fail <task>` (simulate → FAILED)
-- [ ] Used for testing FSM without runtime
+- [x] `hivemind task retry <task-id>` (FAILED → PENDING/RETRY)
+- [x] `hivemind task abort <task-id>` (any → FAILED)
+- [x] Used for testing FSM without runtime
 
 ### 10.5 Exit Criteria
-- [ ] FSM transitions are correct
-- [ ] Scheduler releases tasks in dependency order
-- [ ] All transitions emit events
-- [ ] Manual simulation works for testing
+- [x] FSM transitions are correct
+- [x] Scheduler releases tasks in dependency order
+- [x] All transitions emit events
+- [x] Manual simulation works for testing
 
 ---
 
@@ -589,22 +588,22 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Humans are ultimate authority.
 
 ### 19.1 Override Actions
-- [ ] Override check failures
-- [ ] Override verifier decision
-- [ ] Direct approval/rejection
-- [ ] Manual retry with reset count
+- [x] Override check failures
+- [x] Override verifier decision
+- [x] Direct approval/rejection
+- [x] Manual retry with reset count
 
 ### 19.2 Override Events
-- [ ] `HumanOverride` with attribution and reason
+- [x] `HumanOverride` with attribution and reason
 
 ### 19.3 Override Commands
-- [ ] `hivemind verify override <task-id> pass|fail --reason <text>`
-- [ ] `hivemind task retry <task-id> --reset-count`
+- [x] `hivemind verify override <task-id> pass|fail --reason <text>`
+- [x] `hivemind task retry <task-id> --reset-count`
 
 ### 19.4 Exit Criteria
-- [ ] Humans can override any automated decision
-- [ ] Overrides are audited
-- [ ] Overrides require reason
+- [x] Humans can override any automated decision
+- [x] Overrides are audited
+- [x] Overrides require reason
 
 ---
 
@@ -639,25 +638,25 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Explicit, human-approved integration.
 
 ### 21.1 Merge Preparation
-- [ ] Collect successful task branches
-- [ ] Compute integration commits
-- [ ] Test merge against target
-- [ ] Report conflicts
+- [x] Collect successful task branches
+- [x] Compute integration commits
+- [x] Test merge against target
+- [x] Report conflicts
 
 ### 21.2 Merge Commands
-- [ ] `hivemind merge prepare <flow-id>`
-- [ ] `hivemind merge approve <flow-id>`
-- [ ] `hivemind merge execute <flow-id>`
+- [x] `hivemind merge prepare <flow-id>`
+- [x] `hivemind merge approve <flow-id>`
+- [x] `hivemind merge execute <flow-id>`
 
 ### 21.3 Merge Events
-- [ ] `MergePrepared`
-- [ ] `MergeApproved`
-- [ ] `MergeCompleted`
+- [x] `MergePrepared`
+- [x] `MergeApproved`
+- [x] `MergeCompleted`
 
 ### 21.4 Exit Criteria
-- [ ] Merge is explicit and human-approved
-- [ ] Conflicts detected before execution
-- [ ] Integration commits clean
+- [x] Merge is explicit and human-approved
+- [x] Conflicts detected before execution
+- [x] Integration commits clean
 
 ---
 
@@ -770,18 +769,19 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Real-time observability.
 
 ### 26.1 Event Stream Command
-- [ ] `hivemind events stream` (real-time)
-- [ ] Filters: --flow, --task, --since
+- [x] `hivemind events stream` (real-time)
+- [x] Filters: --flow, --task, --since
 
 ### 26.2 Event Query Command
-- [ ] `hivemind events query` (historical)
-- [ ] Correlation filtering
-- [ ] Time range filtering
+- [x] `hivemind events list` (historical)
+- [x] `hivemind events inspect <event-id>`
+- [x] Correlation filtering
+- [x] Time range filtering
 
 ### 26.3 Exit Criteria
-- [ ] Real-time event stream works
-- [ ] Historical queries work
-- [ ] Events are the complete record
+- [x] Real-time event stream works
+- [x] Historical queries work
+- [x] Events are the complete record
 
 ---
 
