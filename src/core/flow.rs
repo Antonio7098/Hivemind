@@ -100,10 +100,9 @@ impl TaskExecution {
         matches!(
             (self.state, new_state),
             (Pending, Ready | Running)
-                | (Ready, Running)
+                | (Ready | Retry, Running)
                 | (Running, Verifying)
                 | (Verifying, Success | Retry | Failed)
-                | (Retry, Running)
                 | (Failed, Escalated)
         )
     }

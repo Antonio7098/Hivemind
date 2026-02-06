@@ -6,6 +6,7 @@
 use super::runtime::{
     AdapterConfig, ExecutionInput, ExecutionReport, RuntimeAdapter, RuntimeError,
 };
+use std::fmt::Write as FmtWrite;
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};

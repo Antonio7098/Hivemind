@@ -1686,7 +1686,7 @@ mod tests {
 
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
-        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+        let _ = registry.start_flow(&flow.id.to_string()).unwrap();
 
         let flow = registry.abort_task(&t1.id.to_string(), Some("no"));
         assert!(flow.is_ok());
@@ -1795,7 +1795,7 @@ mod tests {
     #[test]
     fn verify_override_pass_transitions_to_success() {
         let registry = test_registry();
-        let (flow, t1_id) = setup_flow_with_verifying_task(&registry);
+        let (_flow, t1_id) = setup_flow_with_verifying_task(&registry);
 
         let updated = registry
             .verify_override(&t1_id.to_string(), "pass", "looks good")
