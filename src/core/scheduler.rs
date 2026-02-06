@@ -20,7 +20,7 @@ pub enum ScheduleResult {
     HasFailures(Vec<Uuid>),
 }
 
-/// Scheduler for TaskFlow execution.
+/// Scheduler for `TaskFlow` execution.
 pub struct Scheduler<'a> {
     graph: &'a TaskGraph,
     flow: &'a mut TaskFlow,
@@ -48,10 +48,13 @@ impl<'a> Scheduler<'a> {
             }
 
             // Check if all dependencies are satisfied
-            if self.dependencies_satisfied(*task_id) {
-                if let Ok(()) = self.flow.transition_task(*task_id, TaskExecState::Ready) {
-                    newly_ready.push(*task_id);
-                }
+            if self.dependencies_satisfied(*task_id)
+                && self
+                    .flow
+                    .transition_task(*task_id, TaskExecState::Ready)
+                    .is_ok()
+            {
+                newly_ready.push(*task_id);
             }
         }
 
@@ -60,9 +63,8 @@ impl<'a> Scheduler<'a> {
 
     /// Checks if all dependencies for a task are satisfied (SUCCESS).
     fn dependencies_satisfied(&self, task_id: Uuid) -> bool {
-        let deps = match self.graph.dependencies.get(&task_id) {
-            Some(deps) => deps,
-            None => return true,
+        let Some(deps) = self.graph.dependencies.get(&task_id) else {
+            return true;
         };
 
         for dep_id in deps {

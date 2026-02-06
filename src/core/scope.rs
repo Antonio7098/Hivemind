@@ -83,7 +83,7 @@ fn glob_match(pattern: &str, path: &str) -> bool {
             // Check suffix (e.g., *.rs)
             if !suffix.is_empty() {
                 if let Some(ext) = suffix.strip_prefix("*.") {
-                    return path.ends_with(&format!(".{}", ext));
+                    return path.ends_with(&format!(".{ext}"));
                 }
                 return path.ends_with(suffix);
             }
@@ -164,19 +164,14 @@ impl FilesystemScope {
 }
 
 /// Repository access mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RepoAccessMode {
     /// Read-only access.
     ReadOnly,
     /// Read and write access.
+    #[default]
     ReadWrite,
-}
-
-impl Default for RepoAccessMode {
-    fn default() -> Self {
-        Self::ReadWrite
-    }
 }
 
 /// Repository scope defining repository access.

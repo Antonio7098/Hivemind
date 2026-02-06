@@ -6,7 +6,7 @@
 use crate::core::error::{HivemindError, Result};
 use crate::core::events::{CorrelationIds, Event, EventPayload};
 use crate::core::flow::{FlowState, TaskExecState, TaskFlow};
-use crate::core::graph::{GraphState, GraphTask, SuccessCriteria, TaskGraph};
+use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, TaskGraph};
 use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::state::{AppState, Project, Task, TaskState};
 use crate::storage::event_store::{EventFilter, EventStore, FileEventStore};
@@ -26,9 +26,8 @@ impl RegistryConfig {
     /// Creates a new config with default data directory.
     #[must_use]
     pub fn default_dir() -> Self {
-        let data_dir = dirs::home_dir()
-            .map(|h| h.join(".hivemind"))
-            .unwrap_or_else(|| PathBuf::from(".hivemind"));
+        let data_dir =
+            dirs::home_dir().map_or_else(|| PathBuf::from(".hivemind"), |h| h.join(".hivemind"));
         Self { data_dir }
     }
 
@@ -175,7 +174,7 @@ impl Registry {
             CorrelationIds::for_project(id),
         );
 
-        self.store.append(event.clone()).map_err(|e| {
+        self.store.append(event).map_err(|e| {
             HivemindError::system(
                 "event_append_failed",
                 e.to_string(),
@@ -463,7 +462,7 @@ impl Registry {
             .tasks
             .into_values()
             .filter(|t| t.project_id == project.id)
-            .filter(|t| state_filter.map_or(true, |s| t.state == s))
+            .filter(|t| state_filter.is_none_or(|s| t.state == s))
             .collect();
 
         tasks.sort_by(|a, b| a.created_at.cmp(&b.created_at));
@@ -478,7 +477,7 @@ impl Registry {
         let id = Uuid::parse_str(task_id).map_err(|_| {
             HivemindError::user(
                 "invalid_task_id",
-                format!("'{}' is not a valid task ID", task_id),
+                format!("'{task_id}' is not a valid task ID"),
                 "registry:get_task",
             )
         })?;
@@ -566,7 +565,7 @@ impl Registry {
         let id = Uuid::parse_str(graph_id).map_err(|_| {
             HivemindError::user(
                 "invalid_graph_id",
-                format!("'{}' is not a valid graph ID", graph_id),
+                format!("'{graph_id}' is not a valid graph ID"),
                 "registry:get_graph",
             )
         })?;
@@ -575,7 +574,7 @@ impl Registry {
         state.graphs.get(&id).cloned().ok_or_else(|| {
             HivemindError::user(
                 "graph_not_found",
-                format!("Graph '{}' not found", graph_id),
+                format!("Graph '{graph_id}' not found"),
                 "registry:get_graph",
             )
         })
@@ -634,7 +633,7 @@ impl Registry {
                 title: task.title,
                 description: task.description,
                 criteria: SuccessCriteria::new("Done"),
-                retry_policy: Default::default(),
+                retry_policy: RetryPolicy::default(),
                 scope: task.scope,
             };
             let event = Event::new(
@@ -665,7 +664,7 @@ impl Registry {
         let gid = Uuid::parse_str(graph_id).map_err(|_| {
             HivemindError::user(
                 "invalid_graph_id",
-                format!("'{}' is not a valid graph ID", graph_id),
+                format!("'{graph_id}' is not a valid graph ID"),
                 "registry:add_graph_dependency",
             )
         })?;
@@ -688,7 +687,7 @@ impl Registry {
         let graph = state.graphs.get(&gid).cloned().ok_or_else(|| {
             HivemindError::user(
                 "graph_not_found",
-                format!("Graph '{}' not found", graph_id),
+                format!("Graph '{graph_id}' not found"),
                 "registry:add_graph_dependency",
             )
         })?;
@@ -712,7 +711,7 @@ impl Registry {
         if graph
             .dependencies
             .get(&to)
-            .map_or(false, |deps| deps.contains(&from))
+            .is_some_and(|deps| deps.contains(&from))
         {
             return Ok(graph);
         }
@@ -747,21 +746,6 @@ impl Registry {
     }
 
     fn validate_graph_issues(graph: &TaskGraph) -> Vec<String> {
-        if graph.tasks.is_empty() {
-            return vec!["Graph must contain at least one task".to_string()];
-        }
-
-        for (task_id, deps) in &graph.dependencies {
-            if !graph.tasks.contains_key(task_id) {
-                return vec![format!("Task not found: {task_id}")];
-            }
-            for dep in deps {
-                if !graph.tasks.contains_key(dep) {
-                    return vec![format!("Task not found: {dep}")];
-                }
-            }
-        }
-
         fn has_cycle(graph: &TaskGraph) -> bool {
             use std::collections::HashSet;
 
@@ -803,6 +787,21 @@ impl Registry {
             false
         }
 
+        if graph.tasks.is_empty() {
+            return vec!["Graph must contain at least one task".to_string()];
+        }
+
+        for (task_id, deps) in &graph.dependencies {
+            if !graph.tasks.contains_key(task_id) {
+                return vec![format!("Task not found: {task_id}")];
+            }
+            for dep in deps {
+                if !graph.tasks.contains_key(dep) {
+                    return vec![format!("Task not found: {dep}")];
+                }
+            }
+        }
+
         if has_cycle(graph) {
             return vec!["Cycle detected in task dependencies".to_string()];
         }
@@ -824,7 +823,7 @@ impl Registry {
         let id = Uuid::parse_str(flow_id).map_err(|_| {
             HivemindError::user(
                 "invalid_flow_id",
-                format!("'{}' is not a valid flow ID", flow_id),
+                format!("'{flow_id}' is not a valid flow ID"),
                 "registry:get_flow",
             )
         })?;
@@ -1052,7 +1051,7 @@ impl Registry {
         let id = Uuid::parse_str(task_id).map_err(|_| {
             HivemindError::user(
                 "invalid_task_id",
-                format!("'{}' is not a valid task ID", task_id),
+                format!("'{task_id}' is not a valid task ID"),
                 "registry:retry_task",
             )
         })?;
@@ -1083,10 +1082,9 @@ impl Registry {
             .graphs
             .get(&flow.graph_id)
             .and_then(|g| g.tasks.get(&id))
-            .map(|t| t.retry_policy.max_retries)
-            .unwrap_or(3);
+            .map_or(3, |t| t.retry_policy.max_retries);
         let max_attempts = max_retries.saturating_add(1);
-        if !reset_count && (exec.attempt_count as u32) >= max_attempts {
+        if !reset_count && exec.attempt_count >= max_attempts {
             return Err(HivemindError::user(
                 "retry_limit_exceeded",
                 "Retry limit exceeded",
@@ -1121,7 +1119,7 @@ impl Registry {
         let id = Uuid::parse_str(task_id).map_err(|_| {
             HivemindError::user(
                 "invalid_task_id",
-                format!("'{}' is not a valid task ID", task_id),
+                format!("'{task_id}' is not a valid task ID"),
                 "registry:abort_task",
             )
         })?;
@@ -1179,7 +1177,7 @@ impl Registry {
         let id = Uuid::parse_str(task_id).map_err(|_| {
             HivemindError::user(
                 "invalid_task_id",
-                format!("'{}' is not a valid task ID", task_id),
+                format!("'{task_id}' is not a valid task ID"),
                 "registry:verify_override",
             )
         })?;
@@ -1393,7 +1391,7 @@ impl Registry {
         let fid = Uuid::parse_str(flow_id).map_err(|_| {
             HivemindError::user(
                 "invalid_flow_id",
-                format!("'{}' is not a valid flow ID", flow_id),
+                format!("'{flow_id}' is not a valid flow ID"),
                 "registry:replay_flow",
             )
         })?;
@@ -1596,7 +1594,7 @@ mod tests {
         assert!(updated
             .dependencies
             .get(&t2.id)
-            .map_or(false, |deps| deps.contains(&t1.id)));
+            .is_some_and(|deps| deps.contains(&t1.id)));
 
         let again = registry
             .add_graph_dependency(

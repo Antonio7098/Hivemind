@@ -65,18 +65,15 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
         GraphCommands::Create(args) => {
             let mut task_ids = Vec::new();
             for raw in &args.from_tasks {
-                let id = match Uuid::parse_str(raw) {
-                    Ok(id) => id,
-                    Err(_) => {
-                        return output_error(
-                            &hivemind::core::error::HivemindError::user(
-                                "invalid_task_id",
-                                format!("'{}' is not a valid task ID", raw),
-                                "cli:graph:create",
-                            ),
-                            format,
-                        );
-                    }
+                let Ok(id) = Uuid::parse_str(raw) else {
+                    return output_error(
+                        &hivemind::core::error::HivemindError::user(
+                            "invalid_task_id",
+                            format!("'{raw}' is not a valid task ID"),
+                            "cli:graph:create",
+                        ),
+                        format,
+                    );
                 };
                 task_ids.push(id);
             }
@@ -294,7 +291,7 @@ fn print_projects(projects: &[Project], format: OutputFormat) {
                 println!("No projects found.");
                 return;
             }
-            println!("{:<36}  {:<20}  {}", "ID", "NAME", "DESCRIPTION");
+            println!("{:<36}  {:<20}  DESCRIPTION", "ID", "NAME");
             println!("{}", "-".repeat(80));
             for p in projects {
                 let desc = p.description.as_deref().unwrap_or("");
@@ -426,7 +423,7 @@ fn print_tasks(tasks: &[Task], format: OutputFormat) {
                 println!("No tasks found.");
                 return;
             }
-            println!("{:<36}  {:<8}  {}", "ID", "STATE", "TITLE");
+            println!("{:<36}  {:<8}  TITLE", "ID", "STATE");
             println!("{}", "-".repeat(80));
             for t in tasks {
                 let state = match t.state {
@@ -579,10 +576,7 @@ fn print_events_table(events: Vec<hivemind::core::events::Event>) {
         println!("No events found.");
         return;
     }
-    println!(
-        "{:<6}  {:<24}  {:<22}  {}",
-        "SEQ", "TYPE", "TIMESTAMP", "PROJECT"
-    );
+    println!("{:<6}  {:<24}  {:<22}  PROJECT", "SEQ", "TYPE", "TIMESTAMP",);
     println!("{}", "-".repeat(90));
     for ev in events {
         let seq = ev.metadata.sequence.unwrap_or(0);
@@ -592,12 +586,12 @@ fn print_events_table(events: Vec<hivemind::core::events::Event>) {
             .metadata
             .correlation
             .project_id
-            .map(|p| p.to_string())
-            .unwrap_or_else(|| "-".to_string());
-        println!("{:<6}  {:<24}  {:<22}  {}", seq, typ, ts, proj);
+            .map_or_else(|| "-".to_string(), |p| p.to_string());
+        println!("{seq:<6}  {typ:<24}  {ts:<22}  {proj}");
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
         return ExitCode::Error;
@@ -683,7 +677,7 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
                         return output_error(
                             &hivemind::core::error::HivemindError::user(
                                 "invalid_flow_id",
-                                format!("'{}' is not a valid flow ID", flow),
+                                format!("'{flow}' is not a valid flow ID"),
                                 "cli:events:stream",
                             ),
                             format,
@@ -698,7 +692,7 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
                         return output_error(
                             &hivemind::core::error::HivemindError::user(
                                 "invalid_task_id",
-                                format!("'{}' is not a valid task ID", task),
+                                format!("'{task}' is not a valid task ID"),
                                 "cli:events:stream",
                             ),
                             format,
@@ -713,7 +707,7 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
                         return output_error(
                             &hivemind::core::error::HivemindError::user(
                                 "invalid_graph_id",
-                                format!("'{}' is not a valid graph ID", graph),
+                                format!("'{graph}' is not a valid graph ID"),
                                 "cli:events:stream",
                             ),
                             format,
@@ -763,7 +757,7 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
                         current
                             .task_executions
                             .get(tid)
-                            .map_or(false, |ce| ce.state == exec.state)
+                            .is_some_and(|ce| ce.state == exec.state)
                     });
 
                 if match_ok {
@@ -924,18 +918,15 @@ fn handle_attempt(cmd: AttemptCommands, format: OutputFormat) -> ExitCode {
 
     match cmd {
         AttemptCommands::Inspect(args) => {
-            let attempt_id = match Uuid::parse_str(&args.attempt_id) {
-                Ok(id) => id,
-                Err(_) => {
-                    return output_error(
-                        &hivemind::core::error::HivemindError::user(
-                            "invalid_attempt_id",
-                            format!("'{}' is not a valid attempt ID", args.attempt_id),
-                            "cli:attempt:inspect",
-                        ),
-                        format,
-                    );
-                }
+            let Ok(attempt_id) = Uuid::parse_str(&args.attempt_id) else {
+                return output_error(
+                    &hivemind::core::error::HivemindError::user(
+                        "invalid_attempt_id",
+                        format!("'{}' is not a valid attempt ID", args.attempt_id),
+                        "cli:attempt:inspect",
+                    ),
+                    format,
+                );
             };
 
             let state = match registry.state() {

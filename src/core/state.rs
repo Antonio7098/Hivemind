@@ -99,6 +99,7 @@ impl AppState {
     }
 
     /// Applies an event to the state in place.
+    #[allow(clippy::too_many_lines)]
     pub fn apply_mut(&mut self, event: &Event) {
         let timestamp = event.timestamp();
 
@@ -127,7 +128,7 @@ impl AppState {
             } => {
                 if let Some(project) = self.projects.get_mut(id) {
                     if let Some(n) = name {
-                        project.name = n.clone();
+                        n.clone_into(&mut project.name);
                     }
                     if let Some(d) = description {
                         project.description = Some(d.clone());
@@ -163,7 +164,7 @@ impl AppState {
             } => {
                 if let Some(task) = self.tasks.get_mut(id) {
                     if let Some(t) = title {
-                        task.title = t.clone();
+                        t.clone_into(&mut task.title);
                     }
                     if let Some(d) = description {
                         task.description = Some(d.clone());
@@ -352,7 +353,7 @@ impl AppState {
                 if let Some(flow) = self.flows.get_mut(flow_id) {
                     if let Some(exec) = flow.task_executions.get_mut(task_id) {
                         exec.state = TaskExecState::Pending;
-                        exec.blocked_reason = reason.clone();
+                        exec.blocked_reason.clone_from(reason);
                         exec.updated_at = timestamp;
                     }
                     flow.updated_at = timestamp;
@@ -502,7 +503,7 @@ impl AppState {
             EventPayload::MergeCompleted { flow_id, commits } => {
                 if let Some(ms) = self.merge_states.get_mut(flow_id) {
                     ms.status = MergeStatus::Completed;
-                    ms.commits = commits.clone();
+                    commits.clone_into(&mut ms.commits);
                     ms.updated_at = timestamp;
                 }
             }

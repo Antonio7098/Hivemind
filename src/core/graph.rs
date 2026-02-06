@@ -361,11 +361,7 @@ impl TaskGraph {
     pub fn root_tasks(&self) -> Vec<Uuid> {
         self.tasks
             .keys()
-            .filter(|id| {
-                self.dependencies
-                    .get(*id)
-                    .is_none_or(HashSet::is_empty)
-            })
+            .filter(|id| self.dependencies.get(*id).is_none_or(HashSet::is_empty))
             .copied()
             .collect()
     }

@@ -111,7 +111,7 @@ impl WorktreeManager {
         base_ref: Option<&str>,
     ) -> Result<WorktreeInfo> {
         let worktree_id = Uuid::new_v4();
-        let branch_name = format!("hivemind/{}/{}", flow_id, task_id);
+        let branch_name = format!("hivemind/{flow_id}/{task_id}");
         let worktree_path = self
             .config
             .base_dir
