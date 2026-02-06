@@ -171,7 +171,7 @@ impl ScopeEnforcer {
         }
 
         // Check for denied paths
-        if let Some(FilePermission::Deny) = self.scope.filesystem.permission_for(&path_str) {
+        if self.scope.filesystem.permission_for(&path_str) == Some(FilePermission::Deny) {
             return Some(ScopeViolation::filesystem(
                 path_str.to_string(),
                 format!("Access to '{path_str}' is explicitly denied"),

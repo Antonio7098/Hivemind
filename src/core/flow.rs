@@ -1,7 +1,7 @@
-//! TaskFlow - Runtime instance of a TaskGraph.
+//! `TaskFlow` - Runtime instance of a `TaskGraph`.
 //!
-//! A TaskFlow binds a TaskGraph to execution state. Multiple TaskFlows
-//! may exist for the same TaskGraph.
+//! A `TaskFlow` binds a `TaskGraph` to execution state. Multiple `TaskFlows`
+//! may exist for the same `TaskGraph`.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
