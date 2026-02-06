@@ -54,6 +54,26 @@ pub struct Task {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Merge workflow status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MergeStatus {
+    Prepared,
+    Approved,
+    Completed,
+}
+
+/// Merge state for a flow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergeState {
+    pub flow_id: Uuid,
+    pub status: MergeStatus,
+    pub target_branch: Option<String>,
+    pub conflicts: Vec<String>,
+    pub commits: Vec<String>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// The complete application state derived from events.
 #[derive(Debug, Default, Clone)]
 pub struct AppState {
@@ -61,6 +81,7 @@ pub struct AppState {
     pub tasks: HashMap<Uuid, Task>,
     pub graphs: HashMap<Uuid, TaskGraph>,
     pub flows: HashMap<Uuid, TaskFlow>,
+    pub merge_states: HashMap<Uuid, MergeState>,
 }
 
 impl AppState {
@@ -413,6 +434,76 @@ impl AppState {
                             break;
                         }
                     }
+                }
+            }
+
+            EventPayload::HumanOverride {
+                task_id,
+                override_type: _,
+                decision,
+                reason: _,
+                user: _,
+            } => {
+                let flow_id = event.metadata.correlation.flow_id;
+                let mut candidate_flow_ids = Vec::new();
+
+                if let Some(fid) = flow_id {
+                    candidate_flow_ids.push(fid);
+                } else {
+                    for (fid, flow) in &self.flows {
+                        if flow.task_executions.contains_key(task_id) {
+                            candidate_flow_ids.push(*fid);
+                        }
+                    }
+                }
+
+                let new_state = if decision == "pass" {
+                    TaskExecState::Success
+                } else {
+                    TaskExecState::Failed
+                };
+
+                for fid in candidate_flow_ids {
+                    if let Some(flow) = self.flows.get_mut(&fid) {
+                        if let Some(exec) = flow.task_executions.get_mut(task_id) {
+                            exec.state = new_state;
+                            exec.blocked_reason = None;
+                            exec.updated_at = timestamp;
+                            flow.updated_at = timestamp;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            EventPayload::MergePrepared {
+                flow_id,
+                target_branch,
+                conflicts,
+            } => {
+                self.merge_states.insert(
+                    *flow_id,
+                    MergeState {
+                        flow_id: *flow_id,
+                        status: MergeStatus::Prepared,
+                        target_branch: target_branch.clone(),
+                        conflicts: conflicts.clone(),
+                        commits: Vec::new(),
+                        updated_at: timestamp,
+                    },
+                );
+            }
+            EventPayload::MergeApproved { flow_id, user: _ } => {
+                if let Some(ms) = self.merge_states.get_mut(flow_id) {
+                    ms.status = MergeStatus::Approved;
+                    ms.updated_at = timestamp;
+                }
+            }
+            EventPayload::MergeCompleted { flow_id, commits } => {
+                if let Some(ms) = self.merge_states.get_mut(flow_id) {
+                    ms.status = MergeStatus::Completed;
+                    ms.commits = commits.clone();
+                    ms.updated_at = timestamp;
                 }
             }
         }

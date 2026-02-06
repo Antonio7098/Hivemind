@@ -292,6 +292,33 @@ pub enum EventPayload {
         #[serde(default)]
         reason: Option<String>,
     },
+
+    HumanOverride {
+        task_id: Uuid,
+        override_type: String,
+        decision: String,
+        reason: String,
+        #[serde(default)]
+        user: Option<String>,
+    },
+
+    MergePrepared {
+        flow_id: Uuid,
+        #[serde(default)]
+        target_branch: Option<String>,
+        #[serde(default)]
+        conflicts: Vec<String>,
+    },
+    MergeApproved {
+        flow_id: Uuid,
+        #[serde(default)]
+        user: Option<String>,
+    },
+    MergeCompleted {
+        flow_id: Uuid,
+        #[serde(default)]
+        commits: Vec<String>,
+    },
 }
 
 /// A complete event with metadata and payload.

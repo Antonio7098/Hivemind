@@ -2,7 +2,8 @@
 
 use clap::Parser;
 use hivemind::cli::commands::{
-    Cli, Commands, EventCommands, FlowCommands, GraphCommands, ProjectCommands, TaskCommands,
+    AttemptCommands, Cli, Commands, EventCommands, FlowCommands, GraphCommands, MergeCommands,
+    ProjectCommands, TaskCommands, VerifyCommands,
 };
 use hivemind::cli::output::{output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
@@ -27,6 +28,11 @@ fn print_graph_id(graph_id: Uuid, format: OutputFormat) {
         OutputFormat::Table => {
             println!("Graph ID: {}", graph_id);
         }
+        OutputFormat::Yaml => {
+            if let Ok(yaml) = serde_yaml::to_string(&serde_json::json!({"graph_id": graph_id.to_string()})) {
+                print!("{yaml}");
+            }
+        }
     }
 }
 
@@ -37,6 +43,11 @@ fn print_flow_id(flow_id: Uuid, format: OutputFormat) {
         }
         OutputFormat::Table => {
             println!("Flow ID: {}", flow_id);
+        }
+        OutputFormat::Yaml => {
+            if let Ok(yaml) = serde_yaml::to_string(&serde_json::json!({"flow_id": flow_id.to_string()})) {
+                print!("{yaml}");
+            }
         }
     }
 }
@@ -90,6 +101,12 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
                 OutputFormat::Json => {
                     if let Ok(json) = serde_json::to_string_pretty(&result) {
                         println!("{json}");
+                    }
+                    ExitCode::Success
+                }
+                OutputFormat::Yaml => {
+                    if let Ok(yaml) = serde_yaml::to_string(&result) {
+                        print!("{yaml}");
                     }
                     ExitCode::Success
                 }
@@ -166,6 +183,12 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
                     }
                     ExitCode::Success
                 }
+                OutputFormat::Yaml => {
+                    if let Ok(yaml) = serde_yaml::to_string(&flow) {
+                        print!("{yaml}");
+                    }
+                    ExitCode::Success
+                }
                 OutputFormat::Table => {
                     println!("ID:      {}", flow.id);
                     println!("Graph:   {}", flow.graph_id);
@@ -202,6 +225,9 @@ fn run(cli: Cli) -> ExitCode {
         Some(Commands::Graph(cmd)) => handle_graph(cmd, format),
         Some(Commands::Flow(cmd)) => handle_flow(cmd, format),
         Some(Commands::Events(cmd)) => handle_events(cmd, format),
+        Some(Commands::Verify(cmd)) => handle_verify(cmd, format),
+        Some(Commands::Merge(cmd)) => handle_merge(cmd, format),
+        Some(Commands::Attempt(cmd)) => handle_attempt(cmd, format),
         None => {
             println!("hivemind {}", env!("CARGO_PKG_VERSION"));
             println!("Use --help for usage information.");
@@ -227,6 +253,11 @@ fn print_project(project: &Project, format: OutputFormat) {
                 println!("{json}");
             }
         }
+        OutputFormat::Yaml => {
+            if let Ok(yaml) = serde_yaml::to_string(project) {
+                print!("{yaml}");
+            }
+        }
         OutputFormat::Table => {
             println!("ID:          {}", project.id);
             println!("Name:        {}", project.name);
@@ -249,6 +280,11 @@ fn print_projects(projects: &[Project], format: OutputFormat) {
         OutputFormat::Json => {
             if let Ok(json) = serde_json::to_string_pretty(projects) {
                 println!("{json}");
+            }
+        }
+        OutputFormat::Yaml => {
+            if let Ok(yaml) = serde_yaml::to_string(projects) {
+                print!("{yaml}");
             }
         }
         OutputFormat::Table => {
@@ -357,6 +393,11 @@ fn print_task(task: &Task, format: OutputFormat) {
                 println!("{json}");
             }
         }
+        OutputFormat::Yaml => {
+            if let Ok(yaml) = serde_yaml::to_string(task) {
+                print!("{yaml}");
+            }
+        }
         OutputFormat::Table => {
             println!("ID:          {}", task.id);
             println!("Project:     {}", task.project_id);
@@ -375,6 +416,11 @@ fn print_tasks(tasks: &[Task], format: OutputFormat) {
         OutputFormat::Json => {
             if let Ok(json) = serde_json::to_string_pretty(tasks) {
                 println!("{json}");
+            }
+        }
+        OutputFormat::Yaml => {
+            if let Ok(yaml) = serde_yaml::to_string(tasks) {
+                print!("{yaml}");
             }
         }
         OutputFormat::Table => {
@@ -494,6 +540,59 @@ fn handle_task(cmd: TaskCommands, format: OutputFormat) -> ExitCode {
     }
 }
 
+fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static str {
+    use hivemind::core::events::EventPayload;
+    match payload {
+        EventPayload::ProjectCreated { .. } => "project_created",
+        EventPayload::ProjectUpdated { .. } => "project_updated",
+        EventPayload::TaskCreated { .. } => "task_created",
+        EventPayload::TaskUpdated { .. } => "task_updated",
+        EventPayload::TaskClosed { .. } => "task_closed",
+        EventPayload::RepositoryAttached { .. } => "repo_attached",
+        EventPayload::RepositoryDetached { .. } => "repo_detached",
+        EventPayload::TaskGraphCreated { .. } => "graph_created",
+        EventPayload::TaskAddedToGraph { .. } => "graph_task_added",
+        EventPayload::DependencyAdded { .. } => "graph_dependency_added",
+        EventPayload::ScopeAssigned { .. } => "graph_scope_assigned",
+        EventPayload::TaskFlowCreated { .. } => "flow_created",
+        EventPayload::TaskFlowStarted { .. } => "flow_started",
+        EventPayload::TaskFlowPaused { .. } => "flow_paused",
+        EventPayload::TaskFlowResumed { .. } => "flow_resumed",
+        EventPayload::TaskFlowCompleted { .. } => "flow_completed",
+        EventPayload::TaskFlowAborted { .. } => "flow_aborted",
+        EventPayload::TaskReady { .. } => "task_ready",
+        EventPayload::TaskBlocked { .. } => "task_blocked",
+        EventPayload::TaskExecutionStateChanged { .. } => "task_exec_state_changed",
+        EventPayload::TaskRetryRequested { .. } => "task_retry_requested",
+        EventPayload::TaskAborted { .. } => "task_aborted",
+        EventPayload::HumanOverride { .. } => "human_override",
+        EventPayload::MergePrepared { .. } => "merge_prepared",
+        EventPayload::MergeApproved { .. } => "merge_approved",
+        EventPayload::MergeCompleted { .. } => "merge_completed",
+    }
+}
+
+fn print_events_table(events: Vec<hivemind::core::events::Event>) {
+    if events.is_empty() {
+        println!("No events found.");
+        return;
+    }
+    println!("{:<6}  {:<24}  {:<22}  {}", "SEQ", "TYPE", "TIMESTAMP", "PROJECT");
+    println!("{}", "-".repeat(90));
+    for ev in events {
+        let seq = ev.metadata.sequence.unwrap_or(0);
+        let typ = event_type_label(&ev.payload);
+        let ts = ev.metadata.timestamp.to_rfc3339();
+        let proj = ev
+            .metadata
+            .correlation
+            .project_id
+            .map(|p| p.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        println!("{:<6}  {:<24}  {:<22}  {}", seq, typ, ts, proj);
+    }
+}
+
 fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
         return ExitCode::Error;
@@ -501,7 +600,6 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
 
     match cmd {
         EventCommands::List(args) => {
-            // Basic implementation: only project filter + limit
             let filter_project_id = if let Some(project) = args.project.as_deref() {
                 match registry.get_project(project) {
                     Ok(p) => Some(p.id),
@@ -518,59 +616,18 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
 
             match format {
                 OutputFormat::Json => {
-                    let response = hivemind::cli::output::CliResponse::success(events);
+                    let response = hivemind::cli::output::CliResponse::success(&events);
                     if let Ok(json) = serde_json::to_string_pretty(&response) {
                         println!("{json}");
                     }
                 }
-                OutputFormat::Table => {
-                    if events.is_empty() {
-                        println!("No events found.");
-                        return ExitCode::Success;
-                    }
-
-                    println!("{:<6}  {:<20}  {:<22}  {}", "SEQ", "TYPE", "TIMESTAMP", "PROJECT");
-                    println!("{}", "-".repeat(90));
-                    for ev in events {
-                        let seq = ev.metadata.sequence.unwrap_or(0);
-                        let typ = match &ev.payload {
-                            hivemind::core::events::EventPayload::ProjectCreated { .. } => "project_created",
-                            hivemind::core::events::EventPayload::ProjectUpdated { .. } => "project_updated",
-                            hivemind::core::events::EventPayload::TaskCreated { .. } => "task_created",
-                            hivemind::core::events::EventPayload::TaskUpdated { .. } => "task_updated",
-                            hivemind::core::events::EventPayload::TaskClosed { .. } => "task_closed",
-                            hivemind::core::events::EventPayload::RepositoryAttached { .. } => "repo_attached",
-                            hivemind::core::events::EventPayload::RepositoryDetached { .. } => "repo_detached",
-                            hivemind::core::events::EventPayload::TaskGraphCreated { .. } => "graph_created",
-                            hivemind::core::events::EventPayload::TaskAddedToGraph { .. } => "graph_task_added",
-                            hivemind::core::events::EventPayload::DependencyAdded { .. } => "graph_dependency_added",
-                            hivemind::core::events::EventPayload::ScopeAssigned { .. } => "graph_scope_assigned",
-                            hivemind::core::events::EventPayload::TaskFlowCreated { .. } => "flow_created",
-                            hivemind::core::events::EventPayload::TaskFlowStarted { .. } => "flow_started",
-                            hivemind::core::events::EventPayload::TaskFlowPaused { .. } => "flow_paused",
-                            hivemind::core::events::EventPayload::TaskFlowResumed { .. } => "flow_resumed",
-                            hivemind::core::events::EventPayload::TaskFlowCompleted { .. } => "flow_completed",
-                            hivemind::core::events::EventPayload::TaskFlowAborted { .. } => "flow_aborted",
-                            hivemind::core::events::EventPayload::TaskReady { .. } => "task_ready",
-                            hivemind::core::events::EventPayload::TaskBlocked { .. } => "task_blocked",
-                            hivemind::core::events::EventPayload::TaskExecutionStateChanged { .. } => {
-                                "task_exec_state_changed"
-                            }
-                            hivemind::core::events::EventPayload::TaskRetryRequested { .. } => {
-                                "task_retry_requested"
-                            }
-                            hivemind::core::events::EventPayload::TaskAborted { .. } => "task_aborted",
-                        };
-                        let ts = ev.metadata.timestamp.to_rfc3339();
-                        let proj = ev
-                            .metadata
-                            .correlation
-                            .project_id
-                            .map(|p| p.to_string())
-                            .unwrap_or_else(|| "-".to_string());
-                        println!("{:<6}  {:<20}  {:<22}  {}", seq, typ, ts, proj);
+                OutputFormat::Yaml => {
+                    let response = hivemind::cli::output::CliResponse::success(&events);
+                    if let Ok(yaml) = serde_yaml::to_string(&response) {
+                        print!("{yaml}");
                     }
                 }
+                OutputFormat::Table => print_events_table(events),
             }
 
             ExitCode::Success
@@ -583,9 +640,14 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
 
             match format {
                 OutputFormat::Json => {
-                    let response = hivemind::cli::output::CliResponse::success(event);
+                    let response = hivemind::cli::output::CliResponse::success(&event);
                     if let Ok(json) = serde_json::to_string_pretty(&response) {
                         println!("{json}");
+                    }
+                }
+                OutputFormat::Yaml => {
+                    if let Ok(yaml) = serde_yaml::to_string(&event) {
+                        print!("{yaml}");
                     }
                 }
                 OutputFormat::Table => {
@@ -596,6 +658,330 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
             }
 
             ExitCode::Success
+        }
+        EventCommands::Stream(args) => {
+            use hivemind::storage::event_store::EventFilter;
+
+            let mut filter = EventFilter::all();
+            filter.limit = Some(args.limit);
+
+            if let Some(ref project) = args.project {
+                match registry.get_project(project) {
+                    Ok(p) => filter.project_id = Some(p.id),
+                    Err(e) => return output_error(&e, format),
+                }
+            }
+            if let Some(ref flow) = args.flow {
+                match Uuid::parse_str(flow) {
+                    Ok(id) => filter.flow_id = Some(id),
+                    Err(_) => {
+                        return output_error(
+                            &hivemind::core::error::HivemindError::user(
+                                "invalid_flow_id",
+                                format!("'{}' is not a valid flow ID", flow),
+                                "cli:events:stream",
+                            ),
+                            format,
+                        );
+                    }
+                }
+            }
+            if let Some(ref task) = args.task {
+                match Uuid::parse_str(task) {
+                    Ok(id) => filter.task_id = Some(id),
+                    Err(_) => {
+                        return output_error(
+                            &hivemind::core::error::HivemindError::user(
+                                "invalid_task_id",
+                                format!("'{}' is not a valid task ID", task),
+                                "cli:events:stream",
+                            ),
+                            format,
+                        );
+                    }
+                }
+            }
+            if let Some(ref graph) = args.graph {
+                match Uuid::parse_str(graph) {
+                    Ok(id) => filter.graph_id = Some(id),
+                    Err(_) => {
+                        return output_error(
+                            &hivemind::core::error::HivemindError::user(
+                                "invalid_graph_id",
+                                format!("'{}' is not a valid graph ID", graph),
+                                "cli:events:stream",
+                            ),
+                            format,
+                        );
+                    }
+                }
+            }
+
+            let events = match registry.read_events(&filter) {
+                Ok(evs) => evs,
+                Err(e) => return output_error(&e, format),
+            };
+
+            match format {
+                OutputFormat::Json => {
+                    let response = hivemind::cli::output::CliResponse::success(&events);
+                    if let Ok(json) = serde_json::to_string_pretty(&response) {
+                        println!("{json}");
+                    }
+                }
+                OutputFormat::Yaml => {
+                    let response = hivemind::cli::output::CliResponse::success(&events);
+                    if let Ok(yaml) = serde_yaml::to_string(&response) {
+                        print!("{yaml}");
+                    }
+                }
+                OutputFormat::Table => print_events_table(events),
+            }
+
+            ExitCode::Success
+        }
+        EventCommands::Replay(args) => {
+            let replayed = match registry.replay_flow(&args.flow_id) {
+                Ok(f) => f,
+                Err(e) => return output_error(&e, format),
+            };
+
+            if args.verify {
+                let current = match registry.get_flow(&args.flow_id) {
+                    Ok(f) => f,
+                    Err(e) => return output_error(&e, format),
+                };
+
+                let match_ok = replayed.state == current.state
+                    && replayed.task_executions.len() == current.task_executions.len()
+                    && replayed.task_executions.iter().all(|(tid, exec)| {
+                        current
+                            .task_executions
+                            .get(tid)
+                            .map_or(false, |ce| ce.state == exec.state)
+                    });
+
+                if match_ok {
+                    println!("Verification passed: replayed state matches current state.");
+                } else {
+                    eprintln!("Verification FAILED: replayed state differs from current state.");
+                    return ExitCode::Error;
+                }
+            }
+
+            match format {
+                OutputFormat::Json => {
+                    if let Ok(json) = serde_json::to_string_pretty(&replayed) {
+                        println!("{json}");
+                    }
+                }
+                OutputFormat::Yaml => {
+                    if let Ok(yaml) = serde_yaml::to_string(&replayed) {
+                        print!("{yaml}");
+                    }
+                }
+                OutputFormat::Table => {
+                    println!("ID:      {}", replayed.id);
+                    println!("Graph:   {}", replayed.graph_id);
+                    println!("State:   {:?}", replayed.state);
+                    let mut counts = std::collections::HashMap::new();
+                    for exec in replayed.task_executions.values() {
+                        *counts.entry(exec.state).or_insert(0usize) += 1;
+                    }
+                    println!("Tasks:");
+                    let mut keys: Vec<_> = counts.keys().copied().collect();
+                    keys.sort_by_key(|k| format!("{k:?}"));
+                    for k in keys {
+                        println!("  - {:?}: {}", k, counts[&k]);
+                    }
+                }
+            }
+
+            ExitCode::Success
+        }
+    }
+}
+
+fn handle_verify(cmd: VerifyCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        VerifyCommands::Override(args) => {
+            match registry.verify_override(&args.task_id, &args.decision, &args.reason) {
+                Ok(flow) => {
+                    print_flow_id(flow.id, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+    }
+}
+
+fn handle_merge(cmd: MergeCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        MergeCommands::Prepare(args) => {
+            match registry.merge_prepare(&args.flow_id, args.target.as_deref()) {
+                Ok(ms) => {
+                    match format {
+                        OutputFormat::Json => {
+                            if let Ok(json) = serde_json::to_string_pretty(&ms) {
+                                println!("{json}");
+                            }
+                        }
+                        OutputFormat::Yaml => {
+                            if let Ok(yaml) = serde_yaml::to_string(&ms) {
+                                print!("{yaml}");
+                            }
+                        }
+                        OutputFormat::Table => {
+                            println!("Flow:     {}", ms.flow_id);
+                            println!("Status:   {:?}", ms.status);
+                            if let Some(ref branch) = ms.target_branch {
+                                println!("Target:   {branch}");
+                            }
+                            if !ms.conflicts.is_empty() {
+                                println!("Conflicts:");
+                                for c in &ms.conflicts {
+                                    println!("  - {c}");
+                                }
+                            }
+                        }
+                    }
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+        MergeCommands::Approve(args) => match registry.merge_approve(&args.flow_id) {
+            Ok(ms) => {
+                match format {
+                    OutputFormat::Json => {
+                        if let Ok(json) = serde_json::to_string_pretty(&ms) {
+                            println!("{json}");
+                        }
+                    }
+                    OutputFormat::Yaml => {
+                        if let Ok(yaml) = serde_yaml::to_string(&ms) {
+                            print!("{yaml}");
+                        }
+                    }
+                    OutputFormat::Table => {
+                        println!("Flow:   {}", ms.flow_id);
+                        println!("Status: {:?}", ms.status);
+                    }
+                }
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
+        MergeCommands::Execute(args) => match registry.merge_execute(&args.flow_id) {
+            Ok(ms) => {
+                match format {
+                    OutputFormat::Json => {
+                        if let Ok(json) = serde_json::to_string_pretty(&ms) {
+                            println!("{json}");
+                        }
+                    }
+                    OutputFormat::Yaml => {
+                        if let Ok(yaml) = serde_yaml::to_string(&ms) {
+                            print!("{yaml}");
+                        }
+                    }
+                    OutputFormat::Table => {
+                        println!("Flow:   {}", ms.flow_id);
+                        println!("Status: {:?}", ms.status);
+                        if !ms.commits.is_empty() {
+                            println!("Commits:");
+                            for c in &ms.commits {
+                                println!("  - {c}");
+                            }
+                        }
+                    }
+                }
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
+    }
+}
+
+fn handle_attempt(cmd: AttemptCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        AttemptCommands::Inspect(args) => {
+            let attempt_id = match Uuid::parse_str(&args.attempt_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    return output_error(
+                        &hivemind::core::error::HivemindError::user(
+                            "invalid_attempt_id",
+                            format!("'{}' is not a valid attempt ID", args.attempt_id),
+                            "cli:attempt:inspect",
+                        ),
+                        format,
+                    );
+                }
+            };
+
+            let state = match registry.state() {
+                Ok(s) => s,
+                Err(e) => return output_error(&e, format),
+            };
+
+            for flow in state.flows.values() {
+                for exec in flow.task_executions.values() {
+                    if exec.task_id == attempt_id {
+                        let info = serde_json::json!({
+                            "task_id": exec.task_id,
+                            "state": format!("{:?}", exec.state),
+                            "attempt_count": exec.attempt_count,
+                            "blocked_reason": exec.blocked_reason,
+                            "flow_id": flow.id,
+                        });
+                        match format {
+                            OutputFormat::Json => {
+                                if let Ok(json) = serde_json::to_string_pretty(&info) {
+                                    println!("{json}");
+                                }
+                            }
+                            OutputFormat::Yaml => {
+                                if let Ok(yaml) = serde_yaml::to_string(&info) {
+                                    print!("{yaml}");
+                                }
+                            }
+                            OutputFormat::Table => {
+                                println!("Task:     {}", exec.task_id);
+                                println!("Flow:     {}", flow.id);
+                                println!("State:    {:?}", exec.state);
+                                println!("Attempts: {}", exec.attempt_count);
+                                if let Some(ref reason) = exec.blocked_reason {
+                                    println!("Blocked:  {reason}");
+                                }
+                            }
+                        }
+                        return ExitCode::Success;
+                    }
+                }
+            }
+
+            output_error(
+                &hivemind::core::error::HivemindError::user(
+                    "attempt_not_found",
+                    format!("Attempt '{}' not found", args.attempt_id),
+                    "cli:attempt:inspect",
+                ),
+                format,
+            )
         }
     }
 }

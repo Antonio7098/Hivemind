@@ -46,6 +46,18 @@ pub enum Commands {
     /// Event inspection commands
     #[command(subcommand)]
     Events(EventCommands),
+
+    /// Verification commands
+    #[command(subcommand)]
+    Verify(VerifyCommands),
+
+    /// Merge commands
+    #[command(subcommand)]
+    Merge(MergeCommands),
+
+    /// Attempt inspection commands
+    #[command(subcommand)]
+    Attempt(AttemptCommands),
 }
 
 #[derive(Subcommand)]
@@ -312,6 +324,12 @@ pub enum EventCommands {
 
     /// Show event details
     Inspect(EventInspectArgs),
+
+    /// Stream events with filters
+    Stream(EventStreamArgs),
+
+    /// Replay events to reconstruct state
+    Replay(EventReplayArgs),
 }
 
 /// Arguments for event list.
@@ -331,4 +349,124 @@ pub struct EventListArgs {
 pub struct EventInspectArgs {
     /// Event ID
     pub event_id: String,
+}
+
+/// Arguments for event stream.
+#[derive(Args)]
+pub struct EventStreamArgs {
+    /// Filter by flow ID
+    #[arg(long)]
+    pub flow: Option<String>,
+
+    /// Filter by task ID
+    #[arg(long)]
+    pub task: Option<String>,
+
+    /// Filter by project
+    #[arg(long)]
+    pub project: Option<String>,
+
+    /// Filter by graph ID
+    #[arg(long)]
+    pub graph: Option<String>,
+
+    /// Maximum number of events
+    #[arg(long, default_value = "100")]
+    pub limit: usize,
+}
+
+/// Arguments for event replay.
+#[derive(Args)]
+pub struct EventReplayArgs {
+    /// Flow ID to replay
+    pub flow_id: String,
+
+    /// Verify replayed state against current state
+    #[arg(long)]
+    pub verify: bool,
+}
+
+/// Verify subcommands.
+#[derive(Subcommand)]
+pub enum VerifyCommands {
+    /// Override verification for a task
+    Override(VerifyOverrideArgs),
+}
+
+/// Arguments for verify override.
+#[derive(Args)]
+pub struct VerifyOverrideArgs {
+    /// Task ID
+    pub task_id: String,
+
+    /// Decision: pass or fail
+    pub decision: String,
+
+    /// Reason for override
+    #[arg(long)]
+    pub reason: String,
+}
+
+/// Merge subcommands.
+#[derive(Subcommand)]
+pub enum MergeCommands {
+    /// Prepare merge for a completed flow
+    Prepare(MergePrepareArgs),
+
+    /// Approve a prepared merge
+    Approve(MergeApproveArgs),
+
+    /// Execute an approved merge
+    Execute(MergeExecuteArgs),
+}
+
+/// Arguments for merge prepare.
+#[derive(Args)]
+pub struct MergePrepareArgs {
+    /// Flow ID
+    pub flow_id: String,
+
+    /// Target branch
+    #[arg(long)]
+    pub target: Option<String>,
+}
+
+/// Arguments for merge approve.
+#[derive(Args)]
+pub struct MergeApproveArgs {
+    /// Flow ID
+    pub flow_id: String,
+}
+
+/// Arguments for merge execute.
+#[derive(Args)]
+pub struct MergeExecuteArgs {
+    /// Flow ID
+    pub flow_id: String,
+}
+
+/// Attempt subcommands.
+#[derive(Subcommand)]
+pub enum AttemptCommands {
+    /// Inspect an attempt
+    Inspect(AttemptInspectArgs),
+}
+
+/// Arguments for attempt inspect.
+#[derive(Args)]
+pub struct AttemptInspectArgs {
+    /// Attempt ID
+    pub attempt_id: String,
+
+    /// Show retry context
+    #[arg(long)]
+    pub context: bool,
+
+    /// Show changes diff
+    #[arg(long)]
+    pub diff: bool,
+
+    /// Show runtime output
+    #[arg(long)]
+    pub output: bool,
 }

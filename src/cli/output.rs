@@ -14,6 +14,8 @@ pub enum OutputFormat {
     Table,
     /// Machine-readable JSON format.
     Json,
+    /// YAML output format.
+    Yaml,
 }
 
 /// Structured CLI response.
@@ -77,6 +79,12 @@ pub fn output<T: Serialize>(data: T, format: OutputFormat) -> std::io::Result<()
         OutputFormat::Table => {
             println!("{}", serde_json::to_string_pretty(&data)?);
         }
+        OutputFormat::Yaml => {
+            let response = CliResponse::success(data);
+            if let Ok(yaml) = serde_yaml::to_string(&response) {
+                print!("{yaml}");
+            }
+        }
     }
     Ok(())
 }
@@ -90,6 +98,12 @@ pub fn output_error(err: &HivemindError, format: OutputFormat) -> ExitCode {
                 eprintln!("{json}");
             }
         }
+        OutputFormat::Yaml => {
+            let response = CliResponse::<()>::error(err);
+            if let Ok(yaml) = serde_yaml::to_string(&response) {
+                eprint!("{yaml}");
+            }
+        }
         OutputFormat::Table => {
             eprintln!("Error: {err}");
             if let Some(hint) = &err.recovery_hint {
@@ -97,7 +111,19 @@ pub fn output_error(err: &HivemindError, format: OutputFormat) -> ExitCode {
             }
         }
     }
-    ExitCode::Error
+    error_to_exit_code(err)
+}
+
+/// Maps error codes to exit codes per CLI operational semantics.
+fn error_to_exit_code(err: &HivemindError) -> ExitCode {
+    match err.code.as_str() {
+        c if c.contains("not_found") => ExitCode::NotFound,
+        c if c.contains("conflict") || c.contains("immutable") || c.contains("in_use")
+            || c.contains("already_terminal") || c.contains("already_running")
+            || c.contains("not_running") || c.contains("not_paused") => ExitCode::Conflict,
+        "override_not_permitted" => ExitCode::Conflict,
+        _ => ExitCode::Error,
+    }
 }
 
 /// Helper to create a table with headers.

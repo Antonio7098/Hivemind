@@ -1166,6 +1166,293 @@ impl Registry {
 
         self.get_flow(&flow.id.to_string())
     }
+
+    pub fn verify_override(
+        &self,
+        task_id: &str,
+        decision: &str,
+        reason: &str,
+    ) -> Result<TaskFlow> {
+        let id = Uuid::parse_str(task_id).map_err(|_| {
+            HivemindError::user(
+                "invalid_task_id",
+                format!("'{}' is not a valid task ID", task_id),
+                "registry:verify_override",
+            )
+        })?;
+
+        if decision != "pass" && decision != "fail" {
+            return Err(HivemindError::user(
+                "invalid_decision",
+                "Decision must be 'pass' or 'fail'",
+                "registry:verify_override",
+            ));
+        }
+
+        let state = self.state()?;
+        let flow = state
+            .flows
+            .values()
+            .find(|f| f.task_executions.contains_key(&id))
+            .cloned()
+            .ok_or_else(|| {
+                HivemindError::user(
+                    "task_not_in_flow",
+                    "Task is not part of any flow",
+                    "registry:verify_override",
+                )
+            })?;
+
+        let exec = flow.task_executions.get(&id).ok_or_else(|| {
+            HivemindError::system(
+                "task_exec_not_found",
+                "Task execution not found",
+                "registry:verify_override",
+            )
+        })?;
+
+        if exec.state != TaskExecState::Verifying {
+            return Err(HivemindError::user(
+                "task_not_verifying",
+                "Task is not in verification state",
+                "registry:verify_override",
+            ));
+        }
+
+        let event = Event::new(
+            EventPayload::HumanOverride {
+                task_id: id,
+                override_type: "VERIFICATION_OVERRIDE".to_string(),
+                decision: decision.to_string(),
+                reason: reason.to_string(),
+                user: None,
+            },
+            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
+        );
+
+        self.store.append(event).map_err(|e| {
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:verify_override",
+            )
+        })?;
+
+        self.get_flow(&flow.id.to_string())
+    }
+
+    pub fn merge_prepare(
+        &self,
+        flow_id: &str,
+        target_branch: Option<&str>,
+    ) -> Result<crate::core::state::MergeState> {
+        let flow = self.get_flow(flow_id)?;
+
+        if flow.state != FlowState::Completed {
+            return Err(HivemindError::user(
+                "flow_not_completed",
+                "Flow has not completed successfully",
+                "registry:merge_prepare",
+            ));
+        }
+
+        let state = self.state()?;
+        if let Some(ms) = state.merge_states.get(&flow.id) {
+            if ms.status == crate::core::state::MergeStatus::Prepared {
+                return Ok(ms.clone());
+            }
+        }
+
+        let event = Event::new(
+            EventPayload::MergePrepared {
+                flow_id: flow.id,
+                target_branch: target_branch.map(String::from),
+                conflicts: Vec::new(),
+            },
+            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+        );
+
+        self.store.append(event).map_err(|e| {
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:merge_prepare",
+            )
+        })?;
+
+        let state = self.state()?;
+        state
+            .merge_states
+            .get(&flow.id)
+            .cloned()
+            .ok_or_else(|| {
+                HivemindError::system(
+                    "merge_state_not_found",
+                    "Merge state not found after prepare",
+                    "registry:merge_prepare",
+                )
+            })
+    }
+
+    pub fn merge_approve(
+        &self,
+        flow_id: &str,
+    ) -> Result<crate::core::state::MergeState> {
+        let flow = self.get_flow(flow_id)?;
+
+        let state = self.state()?;
+        let ms = state.merge_states.get(&flow.id).ok_or_else(|| {
+            HivemindError::user(
+                "merge_not_prepared",
+                "No merge preparation exists for this flow",
+                "registry:merge_approve",
+            )
+        })?;
+
+        if ms.status == crate::core::state::MergeStatus::Approved {
+            return Ok(ms.clone());
+        }
+
+        if !ms.conflicts.is_empty() {
+            return Err(HivemindError::user(
+                "unresolved_conflicts",
+                "Merge has unresolved conflicts",
+                "registry:merge_approve",
+            ));
+        }
+
+        let event = Event::new(
+            EventPayload::MergeApproved {
+                flow_id: flow.id,
+                user: None,
+            },
+            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+        );
+
+        self.store.append(event).map_err(|e| {
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:merge_approve",
+            )
+        })?;
+
+        let state = self.state()?;
+        state
+            .merge_states
+            .get(&flow.id)
+            .cloned()
+            .ok_or_else(|| {
+                HivemindError::system(
+                    "merge_state_not_found",
+                    "Merge state not found after approve",
+                    "registry:merge_approve",
+                )
+            })
+    }
+
+    pub fn merge_execute(
+        &self,
+        flow_id: &str,
+    ) -> Result<crate::core::state::MergeState> {
+        let flow = self.get_flow(flow_id)?;
+
+        let state = self.state()?;
+        let ms = state.merge_states.get(&flow.id).ok_or_else(|| {
+            HivemindError::user(
+                "merge_not_prepared",
+                "No merge preparation exists for this flow",
+                "registry:merge_execute",
+            )
+        })?;
+
+        if ms.status != crate::core::state::MergeStatus::Approved {
+            return Err(HivemindError::user(
+                "merge_not_approved",
+                "Merge has not been approved",
+                "registry:merge_execute",
+            ));
+        }
+
+        let event = Event::new(
+            EventPayload::MergeCompleted {
+                flow_id: flow.id,
+                commits: Vec::new(),
+            },
+            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+        );
+
+        self.store.append(event).map_err(|e| {
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:merge_execute",
+            )
+        })?;
+
+        let state = self.state()?;
+        state
+            .merge_states
+            .get(&flow.id)
+            .cloned()
+            .ok_or_else(|| {
+                HivemindError::system(
+                    "merge_state_not_found",
+                    "Merge state not found after execute",
+                    "registry:merge_execute",
+                )
+            })
+    }
+
+    pub fn replay_flow(&self, flow_id: &str) -> Result<TaskFlow> {
+        let fid = Uuid::parse_str(flow_id).map_err(|_| {
+            HivemindError::user(
+                "invalid_flow_id",
+                format!("'{}' is not a valid flow ID", flow_id),
+                "registry:replay_flow",
+            )
+        })?;
+
+        let filter = EventFilter {
+            flow_id: Some(fid),
+            ..EventFilter::default()
+        };
+        let events = self.read_events(&filter)?;
+        if events.is_empty() {
+            return Err(HivemindError::user(
+                "flow_not_found",
+                format!("No events found for flow '{}'", flow_id),
+                "registry:replay_flow",
+            ));
+        }
+
+        let all_events = self.store.read_all().map_err(|e| {
+            HivemindError::system("event_read_failed", e.to_string(), "registry:replay_flow")
+        })?;
+        let flow_related: Vec<Event> = all_events
+            .into_iter()
+            .filter(|e| {
+                e.metadata.correlation.flow_id == Some(fid)
+                    || match &e.payload {
+                        EventPayload::TaskFlowCreated { flow_id: f, .. } => *f == fid,
+                        _ => false,
+                    }
+            })
+            .collect();
+
+        let replayed = crate::core::state::AppState::replay(&flow_related);
+        replayed
+            .flows
+            .get(&fid)
+            .cloned()
+            .ok_or_else(|| {
+                HivemindError::user(
+                    "flow_not_found",
+                    format!("Flow '{}' not found in replayed state", flow_id),
+                    "registry:replay_flow",
+                )
+            })
+    }
 }
 
 #[cfg(test)]
@@ -1496,5 +1783,299 @@ mod tests {
 
         assert!(registry.retry_task(&t1.id.to_string(), false).is_err());
         assert!(registry.retry_task(&t1.id.to_string(), true).is_ok());
+    }
+
+    fn setup_flow_with_verifying_task(registry: &Registry) -> (TaskFlow, Uuid) {
+        registry.create_project("proj", None).unwrap();
+        let t1 = registry
+            .create_task("proj", "Task 1", None, None)
+            .unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry
+            .create_flow(&graph.id.to_string(), None)
+            .unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let event = Event::new(
+            EventPayload::TaskExecutionStateChanged {
+                flow_id: flow.id,
+                task_id: t1.id,
+                from: TaskExecState::Ready,
+                to: TaskExecState::Running,
+            },
+            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, t1.id),
+        );
+        registry.store.append(event).unwrap();
+
+        let event = Event::new(
+            EventPayload::TaskExecutionStateChanged {
+                flow_id: flow.id,
+                task_id: t1.id,
+                from: TaskExecState::Running,
+                to: TaskExecState::Verifying,
+            },
+            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, t1.id),
+        );
+        registry.store.append(event).unwrap();
+
+        let flow = registry.get_flow(&flow.id.to_string()).unwrap();
+        (flow, t1.id)
+    }
+
+    #[test]
+    fn verify_override_pass_transitions_to_success() {
+        let registry = test_registry();
+        let (flow, t1_id) = setup_flow_with_verifying_task(&registry);
+
+        let updated = registry
+            .verify_override(&t1_id.to_string(), "pass", "looks good")
+            .unwrap();
+        assert_eq!(
+            updated
+                .task_executions
+                .get(&t1_id)
+                .map(|e| e.state),
+            Some(TaskExecState::Success)
+        );
+    }
+
+    #[test]
+    fn verify_override_fail_transitions_to_failed() {
+        let registry = test_registry();
+        let (_, t1_id) = setup_flow_with_verifying_task(&registry);
+
+        let updated = registry
+            .verify_override(&t1_id.to_string(), "fail", "bad output")
+            .unwrap();
+        assert_eq!(
+            updated
+                .task_executions
+                .get(&t1_id)
+                .map(|e| e.state),
+            Some(TaskExecState::Failed)
+        );
+    }
+
+    #[test]
+    fn verify_override_rejects_non_verifying_task() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let t1 = registry
+            .create_task("proj", "Task 1", None, None)
+            .unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry
+            .create_flow(&graph.id.to_string(), None)
+            .unwrap();
+        let _ = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let res = registry.verify_override(&t1.id.to_string(), "pass", "reason");
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "task_not_verifying");
+    }
+
+    #[test]
+    fn verify_override_rejects_invalid_decision() {
+        let registry = test_registry();
+        let (_, t1_id) = setup_flow_with_verifying_task(&registry);
+
+        let res = registry.verify_override(&t1_id.to_string(), "maybe", "reason");
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "invalid_decision");
+    }
+
+    fn setup_completed_flow(registry: &Registry) -> TaskFlow {
+        registry.create_project("proj", None).unwrap();
+        let t1 = registry
+            .create_task("proj", "Task 1", None, None)
+            .unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry
+            .create_flow(&graph.id.to_string(), None)
+            .unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        for (from, to) in [
+            (TaskExecState::Ready, TaskExecState::Running),
+            (TaskExecState::Running, TaskExecState::Verifying),
+            (TaskExecState::Verifying, TaskExecState::Success),
+        ] {
+            let event = Event::new(
+                EventPayload::TaskExecutionStateChanged {
+                    flow_id: flow.id,
+                    task_id: t1.id,
+                    from,
+                    to,
+                },
+                CorrelationIds::for_graph_flow_task(
+                    flow.project_id,
+                    flow.graph_id,
+                    flow.id,
+                    t1.id,
+                ),
+            );
+            registry.store.append(event).unwrap();
+        }
+
+        let event = Event::new(
+            EventPayload::TaskFlowCompleted { flow_id: flow.id },
+            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+        );
+        registry.store.append(event).unwrap();
+
+        registry.get_flow(&flow.id.to_string()).unwrap()
+    }
+
+    #[test]
+    fn merge_lifecycle_prepare_approve_execute() {
+        let registry = test_registry();
+        let flow = setup_completed_flow(&registry);
+
+        let ms = registry
+            .merge_prepare(&flow.id.to_string(), Some("main"))
+            .unwrap();
+        assert_eq!(ms.status, crate::core::state::MergeStatus::Prepared);
+        assert_eq!(ms.target_branch, Some("main".to_string()));
+
+        let ms = registry.merge_approve(&flow.id.to_string()).unwrap();
+        assert_eq!(ms.status, crate::core::state::MergeStatus::Approved);
+
+        let ms = registry.merge_execute(&flow.id.to_string()).unwrap();
+        assert_eq!(ms.status, crate::core::state::MergeStatus::Completed);
+    }
+
+    #[test]
+    fn merge_prepare_idempotent() {
+        let registry = test_registry();
+        let flow = setup_completed_flow(&registry);
+
+        let ms1 = registry
+            .merge_prepare(&flow.id.to_string(), Some("main"))
+            .unwrap();
+        let ms2 = registry
+            .merge_prepare(&flow.id.to_string(), Some("main"))
+            .unwrap();
+        assert_eq!(ms1.status, ms2.status);
+    }
+
+    #[test]
+    fn merge_approve_idempotent() {
+        let registry = test_registry();
+        let flow = setup_completed_flow(&registry);
+
+        registry
+            .merge_prepare(&flow.id.to_string(), None)
+            .unwrap();
+        let ms1 = registry.merge_approve(&flow.id.to_string()).unwrap();
+        let ms2 = registry.merge_approve(&flow.id.to_string()).unwrap();
+        assert_eq!(ms1.status, ms2.status);
+    }
+
+    #[test]
+    fn merge_prepare_rejects_non_completed_flow() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let t1 = registry
+            .create_task("proj", "Task 1", None, None)
+            .unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry
+            .create_flow(&graph.id.to_string(), None)
+            .unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let res = registry.merge_prepare(&flow.id.to_string(), None);
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "flow_not_completed");
+    }
+
+    #[test]
+    fn merge_execute_rejects_unapproved() {
+        let registry = test_registry();
+        let flow = setup_completed_flow(&registry);
+
+        registry
+            .merge_prepare(&flow.id.to_string(), None)
+            .unwrap();
+        let res = registry.merge_execute(&flow.id.to_string());
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "merge_not_approved");
+    }
+
+    #[test]
+    fn merge_execute_rejects_unprepared() {
+        let registry = test_registry();
+        let flow = setup_completed_flow(&registry);
+
+        let res = registry.merge_execute(&flow.id.to_string());
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "merge_not_prepared");
+    }
+
+    #[test]
+    fn replay_flow_reconstructs_state() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let t1 = registry
+            .create_task("proj", "Task 1", None, None)
+            .unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry
+            .create_flow(&graph.id.to_string(), None)
+            .unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let replayed = registry.replay_flow(&flow.id.to_string()).unwrap();
+        assert_eq!(replayed.id, flow.id);
+        assert_eq!(replayed.state, FlowState::Running);
+        assert!(replayed.task_executions.contains_key(&t1.id));
+    }
+
+    #[test]
+    fn replay_flow_not_found() {
+        let registry = test_registry();
+        let res = registry.replay_flow(&Uuid::new_v4().to_string());
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "flow_not_found");
+    }
+
+    #[test]
+    fn read_events_with_flow_filter() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let t1 = registry
+            .create_task("proj", "Task 1", None, None)
+            .unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry
+            .create_flow(&graph.id.to_string(), None)
+            .unwrap();
+        let _ = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let filter = EventFilter {
+            flow_id: Some(flow.id),
+            ..EventFilter::default()
+        };
+        let events = registry.read_events(&filter).unwrap();
+        assert!(!events.is_empty());
+        for ev in &events {
+            assert_eq!(ev.metadata.correlation.flow_id, Some(flow.id));
+        }
+    }
+
+    #[test]
+    fn read_events_with_task_filter() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let t1 = registry
+            .create_task("proj", "Task 1", None, None)
+            .unwrap();
+
+        let filter = EventFilter {
+            task_id: Some(t1.id),
+            ..EventFilter::default()
+        };
+        let events = registry.read_events(&filter).unwrap();
+        assert_eq!(events.len(), 1);
     }
 }

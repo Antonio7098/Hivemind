@@ -46,12 +46,15 @@ Examples:
 
 Before writing code:
 
+> **CRITICAL:** Thoroughly review **all** relevant documentation in `docs/architecture/` and `docs/design/`. Do not miss anything — missing docs lead to incomplete implementations.
+
 1. Read the phase definition in `ops/ROADMAP.md`
 2. Identify all checklist items for the phase
-3. Review related architecture docs in `docs/architecture/`
-4. Review related design docs in `docs/design/`
-5. Identify dependencies on prior phases
-6. Verify prior phase exit criteria are met
+3. **Review related architecture docs** in `docs/architecture/` — check for patterns, interfaces, and constraints
+4. **Review related design docs** in `docs/design/` — understand operational semantics, error models, and decisions
+5. **Cross-reference docs** — ensure architecture and design docs are consistent
+6. Identify dependencies on prior phases
+7. Verify prior phase exit criteria are met
 
 ### 1.3 Planning Outputs
 
@@ -243,11 +246,11 @@ git push origin phase/<N>-<name>
 
 ### 5.3 Report Outputs
 
-- [ ] Phase report generated from template
-- [ ] All exit criteria documented with results
-- [ ] Metrics captured (coverage, lines changed, etc.)
-- [ ] Principle compliance documented
-- [ ] Report committed and pushed
+- Phase report generated from template
+- All exit criteria documented with results
+- Metrics captured (coverage, lines changed, etc.)
+- Principle compliance documented
+- Report committed and pushed
 
 ---
 
@@ -257,11 +260,11 @@ git push origin phase/<N>-<name>
 
 Before requesting review:
 
-- [ ] Re-read all changed files
-- [ ] Diff against main: `git diff main...HEAD`
-- [ ] Check for debug code, commented code, TODOs
-- [ ] Verify no secrets or credentials
-- [ ] Run full validation suite one more time
+- Re-read all changed files
+- Diff against main: `git diff main...HEAD`
+- Check for debug code, commented code, TODOs
+- Verify no secrets or credentials
+- Run full validation suite one more time
 
 ### 6.2 Version Management
 
@@ -522,6 +525,51 @@ This protocol enforces:
 - **Changelog is updated** — changes are tracked
 
 Violating these invariants requires explicit justification documented in the phase report.
+
+---
+
+## Final Pre-Merge Checklist
+
+Before considering this phase complete, verify **nothing has been missed**:
+
+### Documentation Review
+- **Re-read** `docs/architecture/` — any patterns/interfaces you missed?
+- **Re-read** `docs/design/` — any operational semantics you overlooked?
+- **Cross-check** architecture against design docs — are they consistent?
+- **Review** phase-specific docs in architecture — are all relevant specs covered?
+
+### Code Completeness
+- All checklist items from `ops/ROADMAP.md` implemented
+- No stray `TODO` comments without tracking issues
+- No debug code or commented-out code
+- All error cases handled explicitly
+
+### Validation
+- `make validate` passes completely
+- All exit criteria verified with evidence
+- Coverage meets threshold (80%+)
+- Doc tests pass (`cargo test --doc`)
+
+### Documentation
+- Phase report generated and committed
+- `changelog.json` updated
+- Public API items have doc comments
+- README updated (if user-facing changes)
+
+### Testing
+- Unit tests cover all new code paths
+- Integration tests pass for affected modules
+- Edge cases tested explicitly
+- **Manual CLI testing completed** — all commands exercised end-to-end
+- Error scenarios tested via CLI (invalid inputs, missing args, etc.)
+- CLI output verified matches expected format
+
+### Final Verification
+- **One final read-through** of all changed files
+- **One final run** of full validation suite
+- Phase report accurately reflects what was done
+
+> **WARNING:** If you think "I probably don't need to check this" — **check it anyway**. Undocumented assumptions cause failures.
 
 ---
 
