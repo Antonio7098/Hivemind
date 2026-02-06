@@ -1774,14 +1774,9 @@ mod tests {
         let registry = test_registry();
         let (_, t1_id) = setup_flow_with_verifying_task(&registry);
 
-        let updated = registry
-            .verify_override(&t1_id.to_string(), "fail", "bad output")
-            .unwrap();
+        let updated = registry.verify_override(&t1_id.to_string(), "fail", "bad output").unwrap();
         assert_eq!(
-            updated
-                .task_executions
-                .get(&t1_id)
-                .map(|e| e.state),
+            updated.task_executions.get(&t1_id).map(|e| e.state),
             Some(TaskExecState::Failed)
         );
     }
@@ -1792,9 +1787,7 @@ mod tests {
         registry.create_project("proj", None).unwrap();
         let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
-        let flow = registry
-            .create_flow(&graph.id.to_string(), None)
-            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
         let _ = registry.start_flow(&flow.id.to_string()).unwrap();
 
         let res = registry.verify_override(&t1.id.to_string(), "pass", "reason");
