@@ -1768,14 +1768,9 @@ mod tests {
         let registry = test_registry();
         let (flow, t1_id) = setup_flow_with_verifying_task(&registry);
 
-        let updated = registry
-            .verify_override(&t1_id.to_string(), "pass", "looks good")
-            .unwrap();
+        let updated = registry.verify_override(&t1_id.to_string(), "pass", "looks good").unwrap();
         assert_eq!(
-            updated
-                .task_executions
-                .get(&t1_id)
-                .map(|e| e.state),
+            updated.task_executions.get(&t1_id).map(|e| e.state),
             Some(TaskExecState::Success)
         );
     }
