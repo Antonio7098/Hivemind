@@ -1587,14 +1587,10 @@ mod tests {
         assert!(graph.tasks.contains_key(&t1.id));
         assert!(graph.tasks.contains_key(&t2.id));
 
-        let updated = registry
-            .add_graph_dependency(&graph.id.to_string(), &t1.id.to_string(), &t2.id.to_string())
-            .unwrap();
+        let updated = registry.add_graph_dependency(&graph.id.to_string(), &t1.id.to_string(), &t2.id.to_string()).unwrap();
         assert!(updated.dependencies.get(&t2.id).map_or(false, |deps| deps.contains(&t1.id)));
 
-        let again = registry
-            .add_graph_dependency(&graph.id.to_string(), &t1.id.to_string(), &t2.id.to_string())
-            .unwrap();
+        let again = registry.add_graph_dependency(&graph.id.to_string(), &t1.id.to_string(), &t2.id.to_string()).unwrap();
         assert_eq!(again.dependencies.get(&t2.id), updated.dependencies.get(&t2.id));
     }
 
