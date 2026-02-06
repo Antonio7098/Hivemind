@@ -1273,25 +1273,17 @@ impl Registry {
         );
 
         self.store.append(event).map_err(|e| {
-            HivemindError::system(
-                "event_append_failed",
-                e.to_string(),
-                "registry:merge_prepare",
-            )
+            HivemindError::system("event_append_failed", e.to_string(), "registry:merge_prepare")
         })?;
 
         let state = self.state()?;
-        state
-            .merge_states
-            .get(&flow.id)
-            .cloned()
-            .ok_or_else(|| {
-                HivemindError::system(
-                    "merge_state_not_found",
-                    "Merge state not found after prepare",
-                    "registry:merge_prepare",
-                )
-            })
+        state.merge_states.get(&flow.id).cloned().ok_or_else(|| {
+            HivemindError::system(
+                "merge_state_not_found",
+                "Merge state not found after prepare",
+                "registry:merge_prepare",
+            )
+        })
     }
 
     pub fn merge_approve(
