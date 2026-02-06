@@ -1553,9 +1553,7 @@ mod tests {
         assert_eq!(open_tasks.len(), 1);
         assert_eq!(open_tasks[0].id, t1.id);
 
-        let closed_tasks = registry
-            .list_tasks("proj", Some(TaskState::Closed))
-            .unwrap();
+        let closed_tasks = registry.list_tasks("proj", Some(TaskState::Closed)).unwrap();
         assert_eq!(closed_tasks.len(), 1);
     }
 
