@@ -164,7 +164,7 @@ impl ScopeEnforcer {
                 if !self.scope.filesystem.can_write(&path_str) {
                     return Some(ScopeViolation::filesystem(
                         path_str.to_string(),
-                        format!("Delete of '{}' not allowed by scope", path_str),
+                        format!("Delete of '{path_str}' not allowed by scope"),
                     ));
                 }
             }
@@ -174,7 +174,7 @@ impl ScopeEnforcer {
         if let Some(FilePermission::Deny) = self.scope.filesystem.permission_for(&path_str) {
             return Some(ScopeViolation::filesystem(
                 path_str.to_string(),
-                format!("Access to '{}' is explicitly denied", path_str),
+                format!("Access to '{path_str}' is explicitly denied"),
             ));
         }
 
