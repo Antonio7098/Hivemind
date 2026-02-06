@@ -119,7 +119,7 @@ pub enum GraphState {
     Locked,
 }
 
-/// A TaskGraph - static DAG of planned intent.
+/// A `TaskGraph` - static DAG of planned intent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskGraph {
     /// Unique graph ID.
@@ -134,7 +134,7 @@ pub struct TaskGraph {
     pub state: GraphState,
     /// Task nodes.
     pub tasks: HashMap<Uuid, GraphTask>,
-    /// Dependencies (task_id -> set of dependency task_ids).
+    /// Dependencies (`task_id` -> set of dependency `task_ids`).
     pub dependencies: HashMap<Uuid, HashSet<Uuid>>,
     /// Creation timestamp.
     pub created_at: DateTime<Utc>,
@@ -143,7 +143,7 @@ pub struct TaskGraph {
 }
 
 impl TaskGraph {
-    /// Creates a new draft TaskGraph.
+    /// Creates a new draft `TaskGraph`.
     #[must_use]
     pub fn new(project_id: Uuid, name: impl Into<String>) -> Self {
         let now = Utc::now();
@@ -364,7 +364,7 @@ impl TaskGraph {
             .filter(|id| {
                 self.dependencies
                     .get(*id)
-                    .map_or(true, |deps| deps.is_empty())
+                    .is_none_or(|deps| deps.is_empty())
             })
             .copied()
             .collect()

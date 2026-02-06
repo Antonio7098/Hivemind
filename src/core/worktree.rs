@@ -63,10 +63,10 @@ pub enum WorktreeError {
 impl std::fmt::Display for WorktreeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::GitError(msg) => write!(f, "Git error: {}", msg),
-            Self::IoError(e) => write!(f, "IO error: {}", e),
-            Self::NotFound(id) => write!(f, "Worktree not found: {}", id),
-            Self::AlreadyExists(id) => write!(f, "Worktree already exists: {}", id),
+            Self::GitError(msg) => write!(f, "Git error: {msg}"),
+            Self::IoError(e) => write!(f, "IO error: {e}"),
+            Self::NotFound(id) => write!(f, "Worktree not found: {id}"),
+            Self::AlreadyExists(id) => write!(f, "Worktree already exists: {id}"),
             Self::InvalidRepo(path) => write!(f, "Invalid repository: {}", path.display()),
         }
     }
