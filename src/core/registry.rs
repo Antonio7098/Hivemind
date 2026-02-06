@@ -159,7 +159,7 @@ impl Registry {
         if state.projects.values().any(|p| p.name == name) {
             return Err(HivemindError::user(
                 "project_exists",
-                format!("Project '{}' already exists", name),
+                format!("Project '{name}' already exists"),
                 "registry:create_project",
             )
             .with_hint("Choose a different project name"));
@@ -690,7 +690,7 @@ impl Registry {
         if graph.state != GraphState::Draft {
             return Err(HivemindError::user(
                 "graph_immutable",
-                format!("Graph '{}' is immutable", graph_id),
+                format!("Graph '{graph_id}' is immutable"),
                 "registry:add_graph_dependency",
             ));
         }
@@ -747,11 +747,11 @@ impl Registry {
 
         for (task_id, deps) in &graph.dependencies {
             if !graph.tasks.contains_key(task_id) {
-                return vec![format!("Task not found: {}", task_id)];
+                return vec![format!("Task not found: {task_id}")];
             }
             for dep in deps {
                 if !graph.tasks.contains_key(dep) {
-                    return vec![format!("Task not found: {}", dep)];
+                    return vec![format!("Task not found: {dep}")];
                 }
             }
         }
@@ -827,7 +827,7 @@ impl Registry {
         state.flows.get(&id).cloned().ok_or_else(|| {
             HivemindError::user(
                 "flow_not_found",
-                format!("Flow '{}' not found", flow_id),
+                format!("Flow '{flow_id}' not found"),
                 "registry:get_flow",
             )
         })
@@ -1400,7 +1400,7 @@ impl Registry {
         if events.is_empty() {
             return Err(HivemindError::user(
                 "flow_not_found",
-                format!("No events found for flow '{}'", flow_id),
+                format!("No events found for flow '{flow_id}'"),
                 "registry:replay_flow",
             ));
         }
@@ -1423,7 +1423,7 @@ impl Registry {
         replayed.flows.get(&fid).cloned().ok_or_else(|| {
             HivemindError::user(
                 "flow_not_found",
-                format!("Flow '{}' not found in replayed state", flow_id),
+                format!("Flow '{flow_id}' not found in replayed state"),
                 "registry:replay_flow",
             )
         })
