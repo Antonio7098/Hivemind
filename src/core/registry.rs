@@ -1579,13 +1579,9 @@ mod tests {
         let proj = registry.create_project("proj", None).unwrap();
 
         let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
-        let t2 = registry
-            .create_task("proj", "Task 2", None, None)
-            .unwrap();
+        let t2 = registry.create_task("proj", "Task 2", None, None).unwrap();
 
-        let graph = registry
-            .create_graph("proj", "g1", &[t1.id, t2.id])
-            .unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id, t2.id]).unwrap();
         assert_eq!(graph.project_id, proj.id);
         assert_eq!(graph.tasks.len(), 2);
         assert!(graph.tasks.contains_key(&t1.id));
