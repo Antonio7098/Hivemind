@@ -104,10 +104,7 @@ impl OpenCodeAdapter {
             for attempt in &input.prior_attempts {
                 let attempt_number = attempt.attempt_number;
                 let summary = &attempt.summary;
-                let _ = writeln!(
-                    prompt,
-                    "- Attempt {attempt_number}: {summary}",
-                );
+                let _ = writeln!(prompt, "- Attempt {attempt_number}: {summary}",);
                 if let Some(ref reason) = attempt.failure_reason {
                     let _ = writeln!(prompt, "  Failure: {reason}");
                 }
@@ -299,11 +296,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
     fn terminate(&mut self) -> Result<(), RuntimeError> {
         if let Some(ref mut process) = self.process {
             process.kill().map_err(|e| {
-                RuntimeError::new(
-                    "kill_failed",
-                    format!("Failed to kill process: {e}"),
-                    false,
-                )
+                RuntimeError::new("kill_failed", format!("Failed to kill process: {e}"), false)
             })?;
         }
 

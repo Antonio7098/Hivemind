@@ -352,7 +352,10 @@ impl Registry {
         if project.repositories.iter().any(|r| r.name == repo_name) {
             return Err(HivemindError::user(
                 "repo_name_already_attached",
-                format!("Repository name '{repo_name}' is already attached to project '{}'", project.name),
+                format!(
+                    "Repository name '{repo_name}' is already attached to project '{}'",
+                    project.name
+                ),
                 "registry:attach_repo",
             )
             .with_hint("Use --name to provide a different repository name"));
@@ -386,7 +389,10 @@ impl Registry {
         if !project.repositories.iter().any(|r| r.name == repo_name) {
             return Err(HivemindError::user(
                 "repo_not_found",
-                format!("Repository '{repo_name}' is not attached to project '{}'", project.name),
+                format!(
+                    "Repository '{repo_name}' is not attached to project '{}'",
+                    project.name
+                ),
                 "registry:detach_repo",
             )
             .with_hint("Use 'hivemind project inspect' to see attached repositories"));
