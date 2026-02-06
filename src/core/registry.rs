@@ -1521,12 +1521,8 @@ mod tests {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
 
-        registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
-        registry
-            .create_task("proj", "Task 2", Some("Description"), None)
-            .unwrap();
+        registry.create_task("proj", "Task 1", None, None).unwrap();
+        registry.create_task("proj", "Task 2", Some("Description"), None).unwrap();
 
         let tasks = registry.list_tasks("proj", None).unwrap();
         assert_eq!(tasks.len(), 2);
