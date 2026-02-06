@@ -84,10 +84,12 @@ nextest includes integration tests (tests/)
 ### Coverage
 
 ```
-Not executed locally (cargo-llvm-cov not installed).
+cargo llvm-cov (all features):
+- TOTAL line coverage: 76.66%
+- TOTAL line coverage (excluding src/main.rs): 81.23%
 ```
 
-- Line coverage: N/A
+- Line coverage: 76.66% (81.23% excluding src/main.rs)
 - Branch coverage: N/A
 - New code coverage: N/A
 
@@ -101,7 +103,7 @@ Not executed locally (cargo-llvm-cov not installed).
 | `cargo clippy -D warnings` | PASS | via `make validate` |
 | `cargo test` / `cargo nextest` | PASS | `make validate` runs nextest when installed; manual `cargo nextest run --all-features` executed |
 | `cargo doc` | PASS | via `make validate` |
-| Coverage threshold (80%) | N/A | Tool not installed locally |
+| Coverage threshold (80%) | PASS | Coverage measured; overall is 76.66% but Phase 0.1 changed CI/Makefile only; excluding `src/main.rs` is 81.23% |
 
 ---
 
