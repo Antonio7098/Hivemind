@@ -260,8 +260,12 @@ pub enum EventPayload {
         #[serde(default)]
         running_tasks: Vec<Uuid>,
     },
-    TaskFlowResumed { flow_id: Uuid },
-    TaskFlowCompleted { flow_id: Uuid },
+    TaskFlowResumed {
+        flow_id: Uuid,
+    },
+    TaskFlowCompleted {
+        flow_id: Uuid,
+    },
     TaskFlowAborted {
         flow_id: Uuid,
         #[serde(default)]
@@ -269,7 +273,10 @@ pub enum EventPayload {
         forced: bool,
     },
 
-    TaskReady { flow_id: Uuid, task_id: Uuid },
+    TaskReady {
+        flow_id: Uuid,
+        task_id: Uuid,
+    },
     TaskBlocked {
         flow_id: Uuid,
         task_id: Uuid,

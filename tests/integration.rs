@@ -112,26 +112,17 @@ fn cli_events_stream_with_filters() {
     assert_eq!(code, 0, "{err}");
 
     // Stream events filtered by flow
-    let (code, out, err) = run_hivemind(
-        tmp.path(),
-        &["events", "stream", "--flow", &flow_id],
-    );
+    let (code, out, err) = run_hivemind(tmp.path(), &["events", "stream", "--flow", &flow_id]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("flow_created") || out.contains("flow_started"));
 
     // Stream events filtered by project
-    let (code, out, err) = run_hivemind(
-        tmp.path(),
-        &["events", "stream", "--project", "proj"],
-    );
+    let (code, out, err) = run_hivemind(tmp.path(), &["events", "stream", "--project", "proj"]);
     assert_eq!(code, 0, "{err}");
     assert!(!out.contains("No events found."));
 
     // Stream with invalid flow ID
-    let (code, _, _) = run_hivemind(
-        tmp.path(),
-        &["events", "stream", "--flow", "not-a-uuid"],
-    );
+    let (code, _, _) = run_hivemind(tmp.path(), &["events", "stream", "--flow", "not-a-uuid"]);
     assert_ne!(code, 0);
 }
 
@@ -175,10 +166,7 @@ fn cli_events_replay_and_verify() {
     assert!(out.contains("State:"));
 
     // Replay with verify
-    let (code, out, err) = run_hivemind(
-        tmp.path(),
-        &["events", "replay", &flow_id, "--verify"],
-    );
+    let (code, out, err) = run_hivemind(tmp.path(), &["events", "replay", &flow_id, "--verify"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("Verification passed"));
 }
@@ -294,16 +282,10 @@ fn cli_merge_lifecycle() {
         .expect("flow id");
 
     // merge prepare should fail on non-completed flow
-    let (code, _, _) = run_hivemind(
-        tmp.path(),
-        &["merge", "prepare", &flow_id],
-    );
+    let (code, _, _) = run_hivemind(tmp.path(), &["merge", "prepare", &flow_id]);
     assert_ne!(code, 0);
 
     // merge approve should fail without prepare
-    let (code, _, _) = run_hivemind(
-        tmp.path(),
-        &["merge", "approve", &flow_id],
-    );
+    let (code, _, _) = run_hivemind(tmp.path(), &["merge", "approve", &flow_id]);
     assert_ne!(code, 0);
 }
