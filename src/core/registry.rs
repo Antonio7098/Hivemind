@@ -666,14 +666,14 @@ impl Registry {
         let from = Uuid::parse_str(from_task).map_err(|_| {
             HivemindError::user(
                 "invalid_task_id",
-                format!("'{}' is not a valid task ID", from_task),
+                format!("'{from_task}' is not a valid task ID"),
                 "registry:add_graph_dependency",
             )
         })?;
         let to = Uuid::parse_str(to_task).map_err(|_| {
             HivemindError::user(
                 "invalid_task_id",
-                format!("'{}' is not a valid task ID", to_task),
+                format!("'{to_task}' is not a valid task ID"),
                 "registry:add_graph_dependency",
             )
         })?;
