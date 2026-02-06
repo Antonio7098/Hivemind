@@ -36,18 +36,21 @@ impl OpenCodeConfig {
     }
 
     /// Sets the model.
+    #[must_use]
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.model = Some(model.into());
         self
     }
 
     /// Enables verbose mode.
+    #[must_use]
     pub fn with_verbose(mut self, verbose: bool) -> Self {
         self.verbose = verbose;
         self
     }
 
     /// Sets the timeout.
+    #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.base.timeout = timeout;
         self
@@ -101,12 +104,12 @@ impl OpenCodeAdapter {
             for attempt in &input.prior_attempts {
                 let attempt_number = attempt.attempt_number;
                 let summary = &attempt.summary;
-                let _ = write!(
+                let _ = writeln!(
                     prompt,
-                    "- Attempt {attempt_number}: {summary}\n",
+                    "- Attempt {attempt_number}: {summary}",
                 );
                 if let Some(ref reason) = attempt.failure_reason {
-                    let _ = write!(prompt, "  Failure: {reason}\n");
+                    let _ = writeln!(prompt, "  Failure: {reason}");
                 }
             }
             prompt.push('\n');
@@ -150,14 +153,14 @@ impl RuntimeAdapter for OpenCodeAdapter {
                     Ok(status) if status.success() => Ok(()),
                     _ => Err(RuntimeError::new(
                         "health_check_failed",
-                        format!("Binary {binary:?} is not responding correctly"),
+                        format!("Binary {} is not responding correctly", binary.display()),
                         false,
                     )),
                 }
             }
             Err(e) => Err(RuntimeError::new(
                 "binary_not_found",
-                format!("Cannot execute {binary:?}: {e}"),
+                format!("Cannot execute {}: {e}", binary.display()),
                 false,
             )),
         }
@@ -168,7 +171,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
         if !worktree.exists() {
             return Err(RuntimeError::new(
                 "worktree_not_found",
-                format!("Worktree does not exist: {worktree:?}"),
+                format!("Worktree does not exist: {}", worktree.display()),
                 false,
             ));
         }
