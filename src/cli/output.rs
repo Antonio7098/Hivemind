@@ -118,9 +118,16 @@ pub fn output_error(err: &HivemindError, format: OutputFormat) -> ExitCode {
 fn error_to_exit_code(err: &HivemindError) -> ExitCode {
     match err.code.as_str() {
         c if c.contains("not_found") => ExitCode::NotFound,
-        c if c.contains("conflict") || c.contains("immutable") || c.contains("in_use")
-            || c.contains("already_terminal") || c.contains("already_running")
-            || c.contains("not_running") || c.contains("not_paused") => ExitCode::Conflict,
+        c if c.contains("conflict")
+            || c.contains("immutable")
+            || c.contains("in_use")
+            || c.contains("already_terminal")
+            || c.contains("already_running")
+            || c.contains("not_running")
+            || c.contains("not_paused") =>
+        {
+            ExitCode::Conflict
+        }
         "override_not_permitted" => ExitCode::Conflict,
         _ => ExitCode::Error,
     }

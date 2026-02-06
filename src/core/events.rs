@@ -3,10 +3,10 @@
 //! All state in Hivemind is derived from events. Events are immutable,
 //! append-only, and form the single source of truth.
 
-use chrono::{DateTime, Utc};
 use crate::core::flow::TaskExecState;
 use crate::core::graph::GraphTask;
 use crate::core::scope::{RepoAccessMode, Scope};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
