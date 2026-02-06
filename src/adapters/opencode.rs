@@ -83,30 +83,6 @@ impl OpenCodeAdapter {
         Self::new(OpenCodeConfig::default())
     }
 
-    /// Builds the command arguments.
-    fn build_args(&self, input: &ExecutionInput) -> Vec<String> {
-        let mut args = Vec::new();
-
-        // Add model if specified
-        if let Some(ref model) = self.config.model {
-            args.push("--model".to_string());
-            args.push(model.clone());
-        }
-
-        // Add verbose flag
-        if self.config.verbose {
-            args.push("--verbose".to_string());
-        }
-
-        // Add any custom args
-        args.extend(self.config.base.args.clone());
-
-        // The task instruction is typically passed via stdin or as final arg
-        args.push(input.task_description.clone());
-
-        args
-    }
-
     /// Formats the input for the runtime.
     fn format_input(&self, input: &ExecutionInput) -> String {
         let mut prompt = format!("Task: {}\n\n", input.task_description);

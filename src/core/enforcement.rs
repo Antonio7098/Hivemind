@@ -4,7 +4,7 @@
 //! Violations are detected after execution and made fatal.
 
 use super::diff::{ChangeType, Diff, FileChange};
-use super::scope::{FilePermission, GitScope, Scope};
+use super::scope::{FilePermission, Scope};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use uuid::Uuid;
