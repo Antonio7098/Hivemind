@@ -411,7 +411,9 @@ fn check_filesystem_compatibility(a: &FilesystemScope, b: &FilesystemScope) -> S
             // Check if patterns might overlap
             if patterns_might_overlap(&rule_a.pattern, &rule_b.pattern) {
                 // Deny rules always produce a hard conflict when overlapping.
-                if rule_a.permission == FilePermission::Deny || rule_b.permission == FilePermission::Deny {
+                if rule_a.permission == FilePermission::Deny
+                    || rule_b.permission == FilePermission::Deny
+                {
                     return ScopeCompatibility::HardConflict;
                 }
                 match (rule_a.permission, rule_b.permission) {
@@ -572,14 +574,15 @@ mod tests {
 
     #[test]
     fn deny_rules_produce_hard_conflict_on_overlap() {
-        let a = Scope::new().with_filesystem(
-            FilesystemScope::new().with_rule(PathRule::deny("src/")),
-        );
-        let b = Scope::new().with_filesystem(
-            FilesystemScope::new().with_rule(PathRule::read("src/")),
-        );
+        let a =
+            Scope::new().with_filesystem(FilesystemScope::new().with_rule(PathRule::deny("src/")));
+        let b =
+            Scope::new().with_filesystem(FilesystemScope::new().with_rule(PathRule::read("src/")));
 
-        assert_eq!(check_compatibility(&a, &b), ScopeCompatibility::HardConflict);
+        assert_eq!(
+            check_compatibility(&a, &b),
+            ScopeCompatibility::HardConflict
+        );
     }
 
     #[test]

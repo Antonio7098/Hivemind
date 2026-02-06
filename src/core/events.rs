@@ -225,7 +225,10 @@ pub enum EventPayload {
         access_mode: RepoAccessMode,
     },
     /// A repository was detached from a project.
-    RepositoryDetached { project_id: Uuid, name: String },
+    RepositoryDetached {
+        project_id: Uuid,
+        name: String,
+    },
 
     TaskGraphCreated {
         graph_id: Uuid,
@@ -234,7 +237,10 @@ pub enum EventPayload {
         #[serde(default)]
         description: Option<String>,
     },
-    TaskAddedToGraph { graph_id: Uuid, task: GraphTask },
+    TaskAddedToGraph {
+        graph_id: Uuid,
+        task: GraphTask,
+    },
     DependencyAdded {
         graph_id: Uuid,
         from_task: Uuid,
@@ -254,7 +260,9 @@ pub enum EventPayload {
         name: Option<String>,
         task_ids: Vec<Uuid>,
     },
-    TaskFlowStarted { flow_id: Uuid },
+    TaskFlowStarted {
+        flow_id: Uuid,
+    },
     TaskFlowPaused {
         flow_id: Uuid,
         #[serde(default)]

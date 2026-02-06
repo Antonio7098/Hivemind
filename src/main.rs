@@ -29,7 +29,9 @@ fn print_graph_id(graph_id: Uuid, format: OutputFormat) {
             println!("Graph ID: {graph_id}");
         }
         OutputFormat::Yaml => {
-            if let Ok(yaml) = serde_yaml::to_string(&serde_json::json!({"graph_id": graph_id.to_string()})) {
+            if let Ok(yaml) =
+                serde_yaml::to_string(&serde_json::json!({"graph_id": graph_id.to_string()}))
+            {
                 print!("{yaml}");
             }
         }
@@ -45,7 +47,9 @@ fn print_flow_id(flow_id: Uuid, format: OutputFormat) {
             println!("Flow ID: {flow_id}");
         }
         OutputFormat::Yaml => {
-            if let Ok(yaml) = serde_yaml::to_string(&serde_json::json!({"flow_id": flow_id.to_string()})) {
+            if let Ok(yaml) =
+                serde_yaml::to_string(&serde_json::json!({"flow_id": flow_id.to_string()}))
+            {
                 print!("{yaml}");
             }
         }
@@ -85,17 +89,15 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        GraphCommands::AddDependency(args) => match registry.add_graph_dependency(
-            &args.graph_id,
-            &args.from_task,
-            &args.to_task,
-        ) {
-            Ok(graph) => {
-                print_graph_id(graph.id, format);
-                ExitCode::Success
+        GraphCommands::AddDependency(args) => {
+            match registry.add_graph_dependency(&args.graph_id, &args.from_task, &args.to_task) {
+                Ok(graph) => {
+                    print_graph_id(graph.id, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
             }
-            Err(e) => output_error(&e, format),
-        },
+        }
         GraphCommands::Validate(args) => match registry.validate_graph(&args.graph_id) {
             Ok(result) => match format {
                 OutputFormat::Json => {
@@ -133,13 +135,15 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
     };
 
     match cmd {
-        FlowCommands::Create(args) => match registry.create_flow(&args.graph_id, args.name.as_deref()) {
-            Ok(flow) => {
-                print_flow_id(flow.id, format);
-                ExitCode::Success
+        FlowCommands::Create(args) => {
+            match registry.create_flow(&args.graph_id, args.name.as_deref()) {
+                Ok(flow) => {
+                    print_flow_id(flow.id, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
             }
-            Err(e) => output_error(&e, format),
-        },
+        }
         FlowCommands::Start(args) => match registry.start_flow(&args.flow_id) {
             Ok(flow) => {
                 print_flow_id(flow.id, format);
@@ -164,17 +168,15 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
-        FlowCommands::Abort(args) => match registry.abort_flow(
-            &args.flow_id,
-            args.reason.as_deref(),
-            args.force,
-        ) {
-            Ok(flow) => {
-                print_flow_id(flow.id, format);
-                ExitCode::Success
+        FlowCommands::Abort(args) => {
+            match registry.abort_flow(&args.flow_id, args.reason.as_deref(), args.force) {
+                Ok(flow) => {
+                    print_flow_id(flow.id, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
             }
-            Err(e) => output_error(&e, format),
-        },
+        }
         FlowCommands::Status(args) => match registry.get_flow(&args.flow_id) {
             Ok(flow) => match format {
                 OutputFormat::Json => {
@@ -361,12 +363,8 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                 }
             };
 
-            match registry.attach_repo(
-                &args.project,
-                &args.path,
-                args.name.as_deref(),
-                access_mode,
-            ) {
+            match registry.attach_repo(&args.project, &args.path, args.name.as_deref(), access_mode)
+            {
                 Ok(project) => {
                     print_project(&project, format);
                     ExitCode::Success
@@ -516,13 +514,15 @@ fn handle_task(cmd: TaskCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        TaskCommands::Close(args) => match registry.close_task(&args.task_id, args.reason.as_deref()) {
-            Ok(task) => {
-                print_task(&task, format);
-                ExitCode::Success
+        TaskCommands::Close(args) => {
+            match registry.close_task(&args.task_id, args.reason.as_deref()) {
+                Ok(task) => {
+                    print_task(&task, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
             }
-            Err(e) => output_error(&e, format),
-        },
+        }
         TaskCommands::Retry(args) => match registry.retry_task(&args.task_id, args.reset_count) {
             Ok(flow) => {
                 print_flow_id(flow.id, format);
@@ -530,13 +530,15 @@ fn handle_task(cmd: TaskCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
-        TaskCommands::Abort(args) => match registry.abort_task(&args.task_id, args.reason.as_deref()) {
-            Ok(flow) => {
-                print_flow_id(flow.id, format);
-                ExitCode::Success
+        TaskCommands::Abort(args) => {
+            match registry.abort_task(&args.task_id, args.reason.as_deref()) {
+                Ok(flow) => {
+                    print_flow_id(flow.id, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
             }
-            Err(e) => output_error(&e, format),
-        },
+        }
     }
 }
 
@@ -577,13 +579,21 @@ fn print_events_table(events: Vec<hivemind::core::events::Event>) {
         println!("No events found.");
         return;
     }
-    println!("{:<6}  {:<24}  {:<22}  {}", "SEQ", "TYPE", "TIMESTAMP", "PROJECT");
+    println!(
+        "{:<6}  {:<24}  {:<22}  {}",
+        "SEQ", "TYPE", "TIMESTAMP", "PROJECT"
+    );
     println!("{}", "-".repeat(90));
     for ev in events {
         let seq = ev.metadata.sequence.unwrap_or(0);
         let typ = event_type_label(&ev.payload);
         let ts = ev.metadata.timestamp.to_rfc3339();
-        let proj = ev.metadata.correlation.project_id.map(|p| p.to_string()).unwrap_or_else(|| "-".to_string());
+        let proj = ev
+            .metadata
+            .correlation
+            .project_id
+            .map(|p| p.to_string())
+            .unwrap_or_else(|| "-".to_string());
         println!("{:<6}  {:<24}  {:<22}  {}", seq, typ, ts, proj);
     }
 }

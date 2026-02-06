@@ -342,7 +342,11 @@ impl Registry {
         // Derive repo name from arg or path
         let repo_name = name
             .map(ToString::to_string)
-            .or_else(|| path_buf.file_name().map(|n| n.to_string_lossy().to_string()))
+            .or_else(|| {
+                path_buf
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+            })
             .unwrap_or_else(|| "repo".to_string());
 
         if project.repositories.iter().any(|r| r.name == repo_name) {
@@ -617,7 +621,11 @@ impl Registry {
         );
 
         self.store.append(event).map_err(|e| {
-            HivemindError::system("event_append_failed", e.to_string(), "registry:create_graph")
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:create_graph",
+            )
         })?;
 
         for task in tasks_to_add {
@@ -1167,12 +1175,7 @@ impl Registry {
         self.get_flow(&flow.id.to_string())
     }
 
-    pub fn verify_override(
-        &self,
-        task_id: &str,
-        decision: &str,
-        reason: &str,
-    ) -> Result<TaskFlow> {
+    pub fn verify_override(&self, task_id: &str, decision: &str, reason: &str) -> Result<TaskFlow> {
         let id = Uuid::parse_str(task_id).map_err(|_| {
             HivemindError::user(
                 "invalid_task_id",
@@ -1273,7 +1276,11 @@ impl Registry {
         );
 
         self.store.append(event).map_err(|e| {
-            HivemindError::system("event_append_failed", e.to_string(), "registry:merge_prepare")
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:merge_prepare",
+            )
         })?;
 
         let state = self.state()?;
@@ -1286,10 +1293,7 @@ impl Registry {
         })
     }
 
-    pub fn merge_approve(
-        &self,
-        flow_id: &str,
-    ) -> Result<crate::core::state::MergeState> {
+    pub fn merge_approve(&self, flow_id: &str) -> Result<crate::core::state::MergeState> {
         let flow = self.get_flow(flow_id)?;
 
         let state = self.state()?;
@@ -1322,7 +1326,11 @@ impl Registry {
         );
 
         self.store.append(event).map_err(|e| {
-            HivemindError::system("event_append_failed", e.to_string(), "registry:merge_approve")
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:merge_approve",
+            )
         })?;
 
         let state = self.state()?;
@@ -1503,7 +1511,9 @@ mod tests {
         registry.create_project("proj", None).unwrap();
 
         registry.create_task("proj", "Task 1", None, None).unwrap();
-        registry.create_task("proj", "Task 2", Some("Description"), None).unwrap();
+        registry
+            .create_task("proj", "Task 2", Some("Description"), None)
+            .unwrap();
 
         let tasks = registry.list_tasks("proj", None).unwrap();
         assert_eq!(tasks.len(), 2);
@@ -1526,15 +1536,21 @@ mod tests {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
 
-        let t1 = registry.create_task("proj", "Open Task", None, None).unwrap();
-        let t2 = registry.create_task("proj", "Closed Task", None, None).unwrap();
+        let t1 = registry
+            .create_task("proj", "Open Task", None, None)
+            .unwrap();
+        let t2 = registry
+            .create_task("proj", "Closed Task", None, None)
+            .unwrap();
         registry.close_task(&t2.id.to_string(), None).unwrap();
 
         let open_tasks = registry.list_tasks("proj", Some(TaskState::Open)).unwrap();
         assert_eq!(open_tasks.len(), 1);
         assert_eq!(open_tasks[0].id, t1.id);
 
-        let closed_tasks = registry.list_tasks("proj", Some(TaskState::Closed)).unwrap();
+        let closed_tasks = registry
+            .list_tasks("proj", Some(TaskState::Closed))
+            .unwrap();
         assert_eq!(closed_tasks.len(), 1);
     }
 
@@ -1562,17 +1578,37 @@ mod tests {
         let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let t2 = registry.create_task("proj", "Task 2", None, None).unwrap();
 
-        let graph = registry.create_graph("proj", "g1", &[t1.id, t2.id]).unwrap();
+        let graph = registry
+            .create_graph("proj", "g1", &[t1.id, t2.id])
+            .unwrap();
         assert_eq!(graph.project_id, proj.id);
         assert_eq!(graph.tasks.len(), 2);
         assert!(graph.tasks.contains_key(&t1.id));
         assert!(graph.tasks.contains_key(&t2.id));
 
-        let updated = registry.add_graph_dependency(&graph.id.to_string(), &t1.id.to_string(), &t2.id.to_string()).unwrap();
-        assert!(updated.dependencies.get(&t2.id).map_or(false, |deps| deps.contains(&t1.id)));
+        let updated = registry
+            .add_graph_dependency(
+                &graph.id.to_string(),
+                &t1.id.to_string(),
+                &t2.id.to_string(),
+            )
+            .unwrap();
+        assert!(updated
+            .dependencies
+            .get(&t2.id)
+            .map_or(false, |deps| deps.contains(&t1.id)));
 
-        let again = registry.add_graph_dependency(&graph.id.to_string(), &t1.id.to_string(), &t2.id.to_string()).unwrap();
-        assert_eq!(again.dependencies.get(&t2.id), updated.dependencies.get(&t2.id));
+        let again = registry
+            .add_graph_dependency(
+                &graph.id.to_string(),
+                &t1.id.to_string(),
+                &t2.id.to_string(),
+            )
+            .unwrap();
+        assert_eq!(
+            again.dependencies.get(&t2.id),
+            updated.dependencies.get(&t2.id)
+        );
     }
 
     #[test]
@@ -1583,8 +1619,16 @@ mod tests {
         let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let t2 = registry.create_task("proj", "Task 2", None, None).unwrap();
 
-        let graph = registry.create_graph("proj", "g1", &[t1.id, t2.id]).unwrap();
-        registry.add_graph_dependency(&graph.id.to_string(), &t1.id.to_string(), &t2.id.to_string()).unwrap();
+        let graph = registry
+            .create_graph("proj", "g1", &[t1.id, t2.id])
+            .unwrap();
+        registry
+            .add_graph_dependency(
+                &graph.id.to_string(),
+                &t1.id.to_string(),
+                &t2.id.to_string(),
+            )
+            .unwrap();
 
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
         let locked = registry.get_graph(&graph.id.to_string()).unwrap();
@@ -1594,8 +1638,14 @@ mod tests {
         assert_eq!(started.state, FlowState::Running);
 
         let started = registry.get_flow(&flow.id.to_string()).unwrap();
-        assert_eq!(started.task_executions.get(&t1.id).map(|e| e.state), Some(TaskExecState::Ready));
-        assert_eq!(started.task_executions.get(&t2.id).map(|e| e.state), Some(TaskExecState::Pending));
+        assert_eq!(
+            started.task_executions.get(&t1.id).map(|e| e.state),
+            Some(TaskExecState::Ready)
+        );
+        assert_eq!(
+            started.task_executions.get(&t2.id).map(|e| e.state),
+            Some(TaskExecState::Pending)
+        );
     }
 
     #[test]
@@ -1617,9 +1667,13 @@ mod tests {
         let flow = registry.resume_flow(&flow.id.to_string()).unwrap();
         assert_eq!(flow.state, FlowState::Running);
 
-        let flow = registry.abort_flow(&flow.id.to_string(), Some("stop"), true).unwrap();
+        let flow = registry
+            .abort_flow(&flow.id.to_string(), Some("stop"), true)
+            .unwrap();
         assert_eq!(flow.state, FlowState::Aborted);
-        let flow2 = registry.abort_flow(&flow.id.to_string(), None, false).unwrap();
+        let flow2 = registry
+            .abort_flow(&flow.id.to_string(), None, false)
+            .unwrap();
         assert_eq!(flow2.state, FlowState::Aborted);
     }
 
@@ -1743,7 +1797,9 @@ mod tests {
         let registry = test_registry();
         let (flow, t1_id) = setup_flow_with_verifying_task(&registry);
 
-        let updated = registry.verify_override(&t1_id.to_string(), "pass", "looks good").unwrap();
+        let updated = registry
+            .verify_override(&t1_id.to_string(), "pass", "looks good")
+            .unwrap();
         assert_eq!(
             updated.task_executions.get(&t1_id).map(|e| e.state),
             Some(TaskExecState::Success)
@@ -1755,7 +1811,9 @@ mod tests {
         let registry = test_registry();
         let (_, t1_id) = setup_flow_with_verifying_task(&registry);
 
-        let updated = registry.verify_override(&t1_id.to_string(), "fail", "bad output").unwrap();
+        let updated = registry
+            .verify_override(&t1_id.to_string(), "fail", "bad output")
+            .unwrap();
         assert_eq!(
             updated.task_executions.get(&t1_id).map(|e| e.state),
             Some(TaskExecState::Failed)
@@ -1790,9 +1848,7 @@ mod tests {
         registry.create_project("proj", None).unwrap();
         let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
-        let flow = registry
-            .create_flow(&graph.id.to_string(), None)
-            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
         let flow = registry.start_flow(&flow.id.to_string()).unwrap();
 
         for (from, to) in [
@@ -1807,12 +1863,7 @@ mod tests {
                     from,
                     to,
                 },
-                CorrelationIds::for_graph_flow_task(
-                    flow.project_id,
-                    flow.graph_id,
-                    flow.id,
-                    t1.id,
-                ),
+                CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, t1.id),
             );
             registry.store.append(event).unwrap();
         }
@@ -1849,8 +1900,12 @@ mod tests {
         let registry = test_registry();
         let flow = setup_completed_flow(&registry);
 
-        let ms1 = registry.merge_prepare(&flow.id.to_string(), Some("main")).unwrap();
-        let ms2 = registry.merge_prepare(&flow.id.to_string(), Some("main")).unwrap();
+        let ms1 = registry
+            .merge_prepare(&flow.id.to_string(), Some("main"))
+            .unwrap();
+        let ms2 = registry
+            .merge_prepare(&flow.id.to_string(), Some("main"))
+            .unwrap();
         assert_eq!(ms1.status, ms2.status);
     }
 
@@ -1871,9 +1926,7 @@ mod tests {
         registry.create_project("proj", None).unwrap();
         let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
-        let flow = registry
-            .create_flow(&graph.id.to_string(), None)
-            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
         let flow = registry.start_flow(&flow.id.to_string()).unwrap();
 
         let res = registry.merge_prepare(&flow.id.to_string(), None);
