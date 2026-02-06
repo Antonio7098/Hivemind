@@ -129,7 +129,7 @@ impl RuntimeError {
     pub fn timeout(duration: Duration) -> Self {
         Self::new(
             "timeout",
-            format!("Execution timed out after {:?}", duration),
+            format!("Execution timed out after {duration:?}"),
             true,
         )
     }
