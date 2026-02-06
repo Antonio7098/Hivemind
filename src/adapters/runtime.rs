@@ -186,6 +186,7 @@ impl AdapterConfig {
     }
 
     /// Sets an environment variable.
+    #[must_use]
     pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.insert(key.into(), value.into());
         self
@@ -242,7 +243,7 @@ pub trait RuntimeAdapter: Send + Sync {
     fn health_check(&self) -> Result<(), RuntimeError>;
 
     /// Prepares the adapter for execution.
-    fn prepare(&mut self, worktree: &PathBuf, task_id: Uuid) -> Result<(), RuntimeError>;
+    fn prepare(&mut self, worktree: &std::path::Path, task_id: Uuid) -> Result<(), RuntimeError>;
 
     /// Executes the runtime with the given input.
     fn execute(&mut self, input: ExecutionInput) -> Result<ExecutionReport, RuntimeError>;
@@ -273,6 +274,7 @@ impl MockAdapter {
     }
 
     /// Sets the response to return on execute.
+    #[must_use]
     pub fn with_response(mut self, report: ExecutionReport) -> Self {
         self.response = Some(report);
         self

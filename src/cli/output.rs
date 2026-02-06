@@ -20,7 +20,7 @@ pub enum OutputFormat {
 
 /// Structured CLI response.
 #[derive(Debug, Serialize)]
-pub struct CliResponse<T: Serialize> {
+pub struct CliResponse<T> {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,

@@ -135,10 +135,7 @@ fn get_git_head(path: &Path) -> io::Result<String> {
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to get git HEAD",
-        ))
+        Err(io::Error::other("Failed to get git HEAD"))
     }
 }
 
@@ -242,12 +239,14 @@ impl Diff {
     }
 
     /// Attributes this diff to a task.
+    #[must_use]
     pub fn for_task(mut self, task_id: Uuid) -> Self {
         self.task_id = Some(task_id);
         self
     }
 
     /// Attributes this diff to an attempt.
+    #[must_use]
     pub fn for_attempt(mut self, attempt_id: Uuid) -> Self {
         self.attempt_id = Some(attempt_id);
         self
