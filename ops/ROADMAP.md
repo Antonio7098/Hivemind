@@ -36,7 +36,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 - [x] Set up Makefile (build, test, lint, fmt)
 - [x] Configure clippy (strict: `-D warnings`)
 - [x] Configure rustfmt
-- [ ] Configure cargo-nextest for test runner
+- [x] Configure cargo-nextest for test runner
 
 ### 0.2 CI Foundation
 - [x] GitHub Actions for build

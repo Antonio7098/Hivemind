@@ -2,5 +2,23 @@
   "project": "hivemind",
   "description": "Changelog for Hivemind - Local-first observable orchestration for agentic development",
   "format_version": "1.0.0",
-  "entries": []
+  "entries": [
+    {
+      "version": "v0.1.1",
+      "date": "2026-02-06",
+      "phase": 0,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "ci",
+          "description": "Run the test suite with cargo-nextest in CI"
+        },
+        {
+          "type": "changed",
+          "area": "ci",
+          "description": "Prefer cargo-nextest locally when available (Makefile)"
+        }
+      ]
+    }
+  ]
 }
