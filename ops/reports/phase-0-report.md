@@ -7,7 +7,7 @@
 | Phase Number | 0 |
 | Phase Title | Project Bootstrap — cargo-nextest |
 | Branch | `phase/0-cargo-nextest` |
-| PR | TBD |
+| PR | #2 |
 | Start Date | 2026-02-06 |
 | Completion Date | 2026-02-06 |
 | Duration | 0 days |
