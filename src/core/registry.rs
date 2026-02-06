@@ -1335,10 +1335,7 @@ impl Registry {
         })
     }
 
-    pub fn merge_execute(
-        &self,
-        flow_id: &str,
-    ) -> Result<crate::core::state::MergeState> {
+    pub fn merge_execute(&self, flow_id: &str) -> Result<crate::core::state::MergeState> {
         let flow = self.get_flow(flow_id)?;
 
         let state = self.state()?;
