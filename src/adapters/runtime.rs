@@ -296,7 +296,7 @@ impl RuntimeAdapter for MockAdapter {
         Ok(())
     }
 
-    fn prepare(&mut self, _worktree: &PathBuf, _task_id: Uuid) -> Result<(), RuntimeError> {
+    fn prepare(&mut self, _worktree: &std::path::Path, _task_id: Uuid) -> Result<(), RuntimeError> {
         self.prepared = true;
         Ok(())
     }

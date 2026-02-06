@@ -166,7 +166,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
         }
     }
 
-    fn prepare(&mut self, worktree: &PathBuf, task_id: Uuid) -> Result<(), RuntimeError> {
+    fn prepare(&mut self, worktree: &std::path::Path, task_id: Uuid) -> Result<(), RuntimeError> {
         // Verify worktree exists
         if !worktree.exists() {
             return Err(RuntimeError::new(
