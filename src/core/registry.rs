@@ -127,7 +127,7 @@ impl Registry {
         let id = Uuid::parse_str(event_id).map_err(|_| {
             HivemindError::user(
                 "invalid_event_id",
-                format!("'{}' is not a valid event ID", event_id),
+                format!("'{event_id}' is not a valid event ID"),
                 "registry:get_event",
             )
         })?;
@@ -142,7 +142,7 @@ impl Registry {
             .ok_or_else(|| {
                 HivemindError::user(
                     "event_not_found",
-                    format!("Event '{}' not found", event_id),
+                    format!("Event '{event_id}' not found"),
                     "registry:get_event",
                 )
             })
@@ -228,7 +228,7 @@ impl Registry {
             .ok_or_else(|| {
                 HivemindError::user(
                     "project_not_found",
-                    format!("Project '{}' not found", id_or_name),
+                    format!("Project '{id_or_name}' not found"),
                     "registry:get_project",
                 )
                 .with_hint("Use 'hivemind project list' to see available projects")
@@ -257,7 +257,7 @@ impl Registry {
             {
                 return Err(HivemindError::user(
                     "project_name_conflict",
-                    format!("Project name '{}' is already taken", new_name),
+                    format!("Project name '{new_name}' is already taken"),
                     "registry:update_project",
                 ));
             }
@@ -308,7 +308,7 @@ impl Registry {
         if !git_dir.exists() {
             return Err(HivemindError::git(
                 "not_a_git_repo",
-                format!("'{}' is not a git repository", path),
+                format!("'{path}' is not a git repository"),
                 "registry:attach_repo",
             )
             .with_hint("Provide a path to a directory containing a .git folder"));
@@ -334,7 +334,7 @@ impl Registry {
         {
             return Err(HivemindError::user(
                 "repo_already_attached",
-                format!("Repository '{}' is already attached to this project", path),
+                format!("Repository '{path}' is already attached to this project"),
                 "registry:attach_repo",
             ));
         }
@@ -352,10 +352,7 @@ impl Registry {
         if project.repositories.iter().any(|r| r.name == repo_name) {
             return Err(HivemindError::user(
                 "repo_name_already_attached",
-                format!(
-                    "Repository name '{}' is already attached to project '{}'",
-                    repo_name, project.name
-                ),
+                format!("Repository name '{repo_name}' is already attached to project '{}'", project.name),
                 "registry:attach_repo",
             )
             .with_hint("Use --name to provide a different repository name"));
@@ -389,10 +386,7 @@ impl Registry {
         if !project.repositories.iter().any(|r| r.name == repo_name) {
             return Err(HivemindError::user(
                 "repo_not_found",
-                format!(
-                    "Repository '{}' is not attached to project '{}'",
-                    repo_name, project.name
-                ),
+                format!("Repository '{repo_name}' is not attached to project '{}'", project.name),
                 "registry:detach_repo",
             )
             .with_hint("Use 'hivemind project inspect' to see attached repositories"));
@@ -487,7 +481,7 @@ impl Registry {
         state.tasks.get(&id).cloned().ok_or_else(|| {
             HivemindError::user(
                 "task_not_found",
-                format!("Task '{}' not found", task_id),
+                format!("Task '{task_id}' not found"),
                 "registry:get_task",
             )
             .with_hint("Use 'hivemind task list <project>' to see available tasks")
@@ -595,14 +589,14 @@ impl Registry {
             let task = state.tasks.get(tid).cloned().ok_or_else(|| {
                 HivemindError::user(
                     "task_not_found",
-                    format!("Task '{}' not found", tid),
+                    format!("Task '{tid}' not found"),
                     "registry:create_graph",
                 )
             })?;
             if task.state != TaskState::Open {
                 return Err(HivemindError::user(
                     "task_not_open",
-                    format!("Task '{}' is not open", tid),
+                    format!("Task '{tid}' is not open"),
                     "registry:create_graph",
                 ));
             }
