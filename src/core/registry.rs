@@ -1734,9 +1734,7 @@ mod tests {
         registry.create_project("proj", None).unwrap();
         let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
-        let flow = registry
-            .create_flow(&graph.id.to_string(), None)
-            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
         let flow = registry.start_flow(&flow.id.to_string()).unwrap();
 
         let event = Event::new(
