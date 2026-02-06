@@ -272,7 +272,7 @@ pub fn path_matches_any(path: &Path, patterns: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::diff::{Baseline, ChangeType, Diff, FileChange};
+    use crate::core::diff::{ChangeType, Diff, FileChange};
     use crate::core::scope::{FilesystemScope, GitScope, PathRule, Scope};
     use std::path::PathBuf;
 
