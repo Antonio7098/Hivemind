@@ -1868,12 +1868,8 @@ mod tests {
         let registry = test_registry();
         let flow = setup_completed_flow(&registry);
 
-        let ms1 = registry
-            .merge_prepare(&flow.id.to_string(), Some("main"))
-            .unwrap();
-        let ms2 = registry
-            .merge_prepare(&flow.id.to_string(), Some("main"))
-            .unwrap();
+        let ms1 = registry.merge_prepare(&flow.id.to_string(), Some("main")).unwrap();
+        let ms2 = registry.merge_prepare(&flow.id.to_string(), Some("main")).unwrap();
         assert_eq!(ms1.status, ms2.status);
     }
 
