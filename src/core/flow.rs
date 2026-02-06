@@ -313,12 +313,12 @@ impl std::fmt::Display for FlowError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::InvalidTransition { from, to } => {
-                write!(f, "Invalid transition from {:?} to {:?}", from, to)
+                write!(f, "Invalid transition from {from:?} to {to:?}")
             }
             Self::InvalidFlowTransition { from, to } => {
-                write!(f, "Invalid flow transition from {:?} to {:?}", from, to)
+                write!(f, "Invalid flow transition from {from:?} to {to:?}")
             }
-            Self::TaskNotFound(id) => write!(f, "Task not found: {}", id),
+            Self::TaskNotFound(id) => write!(f, "Task not found: {id}"),
             Self::TasksNotComplete => write!(f, "Cannot complete flow with incomplete tasks"),
         }
     }
