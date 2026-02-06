@@ -59,7 +59,7 @@ impl Default for OpenCodeConfig {
     }
 }
 
-/// OpenCode runtime adapter.
+/// `OpenCode` runtime adapter.
 pub struct OpenCodeAdapter {
     config: OpenCodeConfig,
     worktree: Option<PathBuf>,
@@ -68,7 +68,7 @@ pub struct OpenCodeAdapter {
 }
 
 impl OpenCodeAdapter {
-    /// Creates a new OpenCode adapter.
+    /// Creates a new `OpenCode` adapter.
     pub fn new(config: OpenCodeConfig) -> Self {
         Self {
             config,
@@ -84,14 +84,15 @@ impl OpenCodeAdapter {
     }
 
     /// Formats the input for the runtime.
+    #[allow(clippy::unused_self)]
     fn format_input(&self, input: &ExecutionInput) -> String {
         let task_description = &input.task_description;
         let success_criteria = &input.success_criteria;
         let mut prompt = format!("Task: {task_description}\n\n");
-        prompt.push_str(&format!("Success Criteria: {success_criteria}\n\n"));
+        let _ = write!(prompt, "Success Criteria: {success_criteria}\n\n");
 
         if let Some(ref context) = input.context {
-            prompt.push_str(&format!("Context:\n{context}\n\n"));
+            let _ = write!(prompt, "Context:\n{context}\n\n");
         }
 
         if !input.prior_attempts.is_empty() {
@@ -99,18 +100,19 @@ impl OpenCodeAdapter {
             for attempt in &input.prior_attempts {
                 let attempt_number = attempt.attempt_number;
                 let summary = &attempt.summary;
-                prompt.push_str(&format!(
+                let _ = write!(
+                    prompt,
                     "- Attempt {attempt_number}: {summary}\n",
-                ));
+                );
                 if let Some(ref reason) = attempt.failure_reason {
-                    prompt.push_str(&format!("  Failure: {reason}\n"));
+                    let _ = write!(prompt, "  Failure: {reason}\n");
                 }
             }
             prompt.push('\n');
         }
 
         if let Some(ref feedback) = input.verifier_feedback {
-            prompt.push_str(&format!("Verifier Feedback:\n{feedback}\n\n"));
+            let _ = write!(prompt, "Verifier Feedback:\n{feedback}\n\n");
         }
 
         prompt
