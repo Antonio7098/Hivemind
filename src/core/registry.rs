@@ -109,21 +109,13 @@ impl Registry {
         filter.limit = Some(limit);
 
         self.store.read(&filter).map_err(|e| {
-            HivemindError::system(
-                "event_read_failed",
-                e.to_string(),
-                "registry:list_events",
-            )
+            HivemindError::system("event_read_failed", e.to_string(), "registry:list_events")
         })
     }
 
     pub fn read_events(&self, filter: &EventFilter) -> Result<Vec<Event>> {
         self.store.read(filter).map_err(|e| {
-            HivemindError::system(
-                "event_read_failed",
-                e.to_string(),
-                "registry:read_events",
-            )
+            HivemindError::system("event_read_failed", e.to_string(), "registry:read_events")
         })
     }
 
