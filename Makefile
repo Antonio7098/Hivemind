@@ -3,7 +3,14 @@
 # Principle 7: CLI-first is non-negotiable.
 # Principle 9: Automated checks are mandatory.
 
-.PHONY: all build test lint fmt check validate clean doc help
+.PHONY: all build test test-nextest lint fmt check validate clean doc help
+
+NEXTEST_AVAILABLE := $(shell cargo nextest --version >/dev/null 2>&1 && echo 1)
+ifeq ($(NEXTEST_AVAILABLE),1)
+TEST_CMD := cargo nextest run --all-features
+else
+TEST_CMD := cargo test --all-features
+endif
 
 # Default target
 all: validate build
@@ -18,7 +25,10 @@ release:
 
 # Run all tests
 test:
-	cargo test --all-features
+	$(TEST_CMD)
+
+test-nextest:
+	cargo nextest run --all-features
 
 # Run integration tests (marked as ignored by default)
 test-integration:

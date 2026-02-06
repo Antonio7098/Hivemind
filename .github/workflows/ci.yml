@@ -57,8 +57,11 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install cargo-nextest
+        run: cargo install cargo-nextest --locked
+
       - name: Run tests
-        run: cargo test --all-features
+        run: cargo nextest run --all-features
 
   lint:
     runs-on: ubuntu-latest
