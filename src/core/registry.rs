@@ -1014,7 +1014,12 @@ impl Registry {
         self.get_flow(flow_id)
     }
 
-    pub fn abort_flow(&self, flow_id: &str, reason: Option<&str>, forced: bool) -> Result<TaskFlow> {
+    pub fn abort_flow(
+        &self,
+        flow_id: &str,
+        reason: Option<&str>,
+        forced: bool,
+    ) -> Result<TaskFlow> {
         let flow = self.get_flow(flow_id)?;
         if flow.state == FlowState::Aborted {
             return Ok(flow);
