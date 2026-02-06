@@ -1601,9 +1601,7 @@ mod tests {
         let registry = test_registry();
         let proj = registry.create_project("proj", None).unwrap();
 
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let t2 = registry
             .create_task("proj", "Task 2", None, None)
             .unwrap();
@@ -1619,10 +1617,7 @@ mod tests {
         let updated = registry
             .add_graph_dependency(&graph.id.to_string(), &t1.id.to_string(), &t2.id.to_string())
             .unwrap();
-        assert!(updated
-            .dependencies
-            .get(&t2.id)
-            .map_or(false, |deps| deps.contains(&t1.id)));
+        assert!(updated.dependencies.get(&t2.id).map_or(false, |deps| deps.contains(&t1.id)));
 
         let again = registry
             .add_graph_dependency(&graph.id.to_string(), &t1.id.to_string(), &t2.id.to_string())
@@ -1635,9 +1630,7 @@ mod tests {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
 
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let t2 = registry
             .create_task("proj", "Task 2", None, None)
             .unwrap();
@@ -1657,20 +1650,8 @@ mod tests {
         assert_eq!(started.state, FlowState::Running);
 
         let started = registry.get_flow(&flow.id.to_string()).unwrap();
-        assert_eq!(
-            started
-                .task_executions
-                .get(&t1.id)
-                .map(|e| e.state),
-            Some(TaskExecState::Ready)
-        );
-        assert_eq!(
-            started
-                .task_executions
-                .get(&t2.id)
-                .map(|e| e.state),
-            Some(TaskExecState::Pending)
-        );
+        assert_eq!(started.task_executions.get(&t1.id).map(|e| e.state), Some(TaskExecState::Ready));
+        assert_eq!(started.task_executions.get(&t2.id).map(|e| e.state), Some(TaskExecState::Pending));
     }
 
     #[test]
@@ -1678,9 +1659,7 @@ mod tests {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
 
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
 
@@ -1705,9 +1684,7 @@ mod tests {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
 
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
 
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
@@ -1737,9 +1714,7 @@ mod tests {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
 
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
         let _ = registry.start_flow(&flow.id.to_string()).unwrap();
@@ -1753,9 +1728,7 @@ mod tests {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
 
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
         let flow = registry.start_flow(&flow.id.to_string()).unwrap();
@@ -1790,9 +1763,7 @@ mod tests {
 
     fn setup_flow_with_verifying_task(registry: &Registry) -> (TaskFlow, Uuid) {
         registry.create_project("proj", None).unwrap();
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry
             .create_flow(&graph.id.to_string(), None)
@@ -1863,9 +1834,7 @@ mod tests {
     fn verify_override_rejects_non_verifying_task() {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry
             .create_flow(&graph.id.to_string(), None)
@@ -1889,9 +1858,7 @@ mod tests {
 
     fn setup_completed_flow(registry: &Registry) -> TaskFlow {
         registry.create_project("proj", None).unwrap();
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry
             .create_flow(&graph.id.to_string(), None)
@@ -1978,9 +1945,7 @@ mod tests {
     fn merge_prepare_rejects_non_completed_flow() {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry
             .create_flow(&graph.id.to_string(), None)
@@ -2019,9 +1984,7 @@ mod tests {
     fn replay_flow_reconstructs_state() {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry
             .create_flow(&graph.id.to_string(), None)
@@ -2046,9 +2009,7 @@ mod tests {
     fn read_events_with_flow_filter() {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry
             .create_flow(&graph.id.to_string(), None)
@@ -2070,9 +2031,7 @@ mod tests {
     fn read_events_with_task_filter() {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
-        let t1 = registry
-            .create_task("proj", "Task 1", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
 
         let filter = EventFilter {
             task_id: Some(t1.id),
