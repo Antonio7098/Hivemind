@@ -583,12 +583,7 @@ fn print_events_table(events: Vec<hivemind::core::events::Event>) {
         let seq = ev.metadata.sequence.unwrap_or(0);
         let typ = event_type_label(&ev.payload);
         let ts = ev.metadata.timestamp.to_rfc3339();
-        let proj = ev
-            .metadata
-            .correlation
-            .project_id
-            .map(|p| p.to_string())
-            .unwrap_or_else(|| "-".to_string());
+        let proj = ev.metadata.correlation.project_id.map(|p| p.to_string()).unwrap_or_else(|| "-".to_string());
         println!("{:<6}  {:<24}  {:<22}  {}", seq, typ, ts, proj);
     }
 }
