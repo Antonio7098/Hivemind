@@ -99,7 +99,7 @@ impl TaskExecution {
         use TaskExecState::*;
         matches!(
             (self.state, new_state),
-            (Pending, Ready | Running) // Direct start when ready
+            (Pending, Ready | Running)
                 | (Ready, Running)
                 | (Running, Verifying)
                 | (Verifying, Success | Retry | Failed)

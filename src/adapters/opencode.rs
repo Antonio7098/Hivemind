@@ -1,6 +1,6 @@
-//! OpenCode adapter - wrapper for OpenCode CLI runtime.
+//! `OpenCode` adapter - wrapper for `OpenCode` CLI runtime.
 //!
-//! This adapter wraps the OpenCode CLI to provide task execution
+//! This adapter wraps the `OpenCode` CLI to provide task execution
 //! capabilities within Hivemind's orchestration framework.
 
 use super::runtime::{
@@ -12,7 +12,7 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
-/// OpenCode adapter configuration.
+/// `OpenCode` adapter configuration.
 #[derive(Debug, Clone)]
 pub struct OpenCodeConfig {
     /// Base adapter config.
@@ -24,7 +24,7 @@ pub struct OpenCodeConfig {
 }
 
 impl OpenCodeConfig {
-    /// Creates a new OpenCode config with default settings.
+    /// Creates a new `OpenCode` config with default settings.
     pub fn new(binary_path: PathBuf) -> Self {
         Self {
             base: AdapterConfig::new("opencode", binary_path)
