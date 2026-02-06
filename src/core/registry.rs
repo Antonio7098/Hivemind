@@ -1604,13 +1604,9 @@ mod tests {
         registry.create_project("proj", None).unwrap();
 
         let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
-        let t2 = registry
-            .create_task("proj", "Task 2", None, None)
-            .unwrap();
+        let t2 = registry.create_task("proj", "Task 2", None, None).unwrap();
 
-        let graph = registry
-            .create_graph("proj", "g1", &[t1.id, t2.id])
-            .unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id, t2.id]).unwrap();
         registry
             .add_graph_dependency(&graph.id.to_string(), &t1.id.to_string(), &t2.id.to_string())
             .unwrap();
