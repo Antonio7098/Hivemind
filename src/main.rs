@@ -26,7 +26,7 @@ fn print_graph_id(graph_id: Uuid, format: OutputFormat) {
             println!("{}", serde_json::json!({"graph_id": graph_id}));
         }
         OutputFormat::Table => {
-            println!("Graph ID: {}", graph_id);
+            println!("Graph ID: {graph_id}");
         }
         OutputFormat::Yaml => {
             if let Ok(yaml) = serde_yaml::to_string(&serde_json::json!({"graph_id": graph_id.to_string()})) {
@@ -42,7 +42,7 @@ fn print_flow_id(flow_id: Uuid, format: OutputFormat) {
             println!("{}", serde_json::json!({"flow_id": flow_id}));
         }
         OutputFormat::Table => {
-            println!("Flow ID: {}", flow_id);
+            println!("Flow ID: {flow_id}");
         }
         OutputFormat::Yaml => {
             if let Ok(yaml) = serde_yaml::to_string(&serde_json::json!({"flow_id": flow_id.to_string()})) {
