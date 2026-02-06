@@ -1338,25 +1338,17 @@ impl Registry {
         );
 
         self.store.append(event).map_err(|e| {
-            HivemindError::system(
-                "event_append_failed",
-                e.to_string(),
-                "registry:merge_approve",
-            )
+            HivemindError::system("event_append_failed", e.to_string(), "registry:merge_approve")
         })?;
 
         let state = self.state()?;
-        state
-            .merge_states
-            .get(&flow.id)
-            .cloned()
-            .ok_or_else(|| {
-                HivemindError::system(
-                    "merge_state_not_found",
-                    "Merge state not found after approve",
-                    "registry:merge_approve",
-                )
-            })
+        state.merge_states.get(&flow.id).cloned().ok_or_else(|| {
+            HivemindError::system(
+                "merge_state_not_found",
+                "Merge state not found after approve",
+                "registry:merge_approve",
+            )
+        })
     }
 
     pub fn merge_execute(
@@ -1399,17 +1391,13 @@ impl Registry {
         })?;
 
         let state = self.state()?;
-        state
-            .merge_states
-            .get(&flow.id)
-            .cloned()
-            .ok_or_else(|| {
-                HivemindError::system(
-                    "merge_state_not_found",
-                    "Merge state not found after execute",
-                    "registry:merge_execute",
-                )
-            })
+        state.merge_states.get(&flow.id).cloned().ok_or_else(|| {
+            HivemindError::system(
+                "merge_state_not_found",
+                "Merge state not found after execute",
+                "registry:merge_execute",
+            )
+        })
     }
 
     pub fn replay_flow(&self, flow_id: &str) -> Result<TaskFlow> {
@@ -1449,17 +1437,13 @@ impl Registry {
             .collect();
 
         let replayed = crate::core::state::AppState::replay(&flow_related);
-        replayed
-            .flows
-            .get(&fid)
-            .cloned()
-            .ok_or_else(|| {
-                HivemindError::user(
-                    "flow_not_found",
-                    format!("Flow '{}' not found in replayed state", flow_id),
-                    "registry:replay_flow",
-                )
-            })
+        replayed.flows.get(&fid).cloned().ok_or_else(|| {
+            HivemindError::user(
+                "flow_not_found",
+                format!("Flow '{}' not found in replayed state", flow_id),
+                "registry:replay_flow",
+            )
+        })
     }
 }
 
