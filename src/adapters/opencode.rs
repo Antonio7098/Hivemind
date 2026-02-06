@@ -176,7 +176,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
             ));
         }
 
-        self.worktree = Some(worktree.clone());
+        self.worktree = Some(worktree.to_path_buf());
         self.task_id = Some(task_id);
         Ok(())
     }
