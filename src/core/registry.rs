@@ -718,9 +718,13 @@ impl Registry {
         }
 
         let mut graph_for_check = graph.clone();
-        graph_for_check
-            .add_dependency(to, from)
-            .map_err(|e| HivemindError::user("cycle_detected", e.to_string(), "registry:add_graph_dependency"))?;
+        graph_for_check.add_dependency(to, from).map_err(|e| {
+            HivemindError::user(
+                "cycle_detected",
+                e.to_string(),
+                "registry:add_graph_dependency",
+            )
+        })?;
 
         let event = Event::new(
             EventPayload::DependencyAdded {
@@ -849,8 +853,7 @@ impl Registry {
 
         let state = self.state()?;
         let has_active = state.flows.values().any(|f| {
-            f.graph_id == graph.id
-                && !matches!(f.state, FlowState::Completed | FlowState::Aborted)
+            f.graph_id == graph.id && !matches!(f.state, FlowState::Completed | FlowState::Aborted)
         });
         if has_active {
             return Err(HivemindError::user(
