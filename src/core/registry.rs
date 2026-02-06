@@ -1905,9 +1905,7 @@ mod tests {
         let registry = test_registry();
         let flow = setup_completed_flow(&registry);
 
-        registry
-            .merge_prepare(&flow.id.to_string(), None)
-            .unwrap();
+        registry.merge_prepare(&flow.id.to_string(), None).unwrap();
         let res = registry.merge_execute(&flow.id.to_string());
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code, "merge_not_approved");
