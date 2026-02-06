@@ -1533,9 +1533,7 @@ mod tests {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
 
-        let task = registry
-            .create_task("proj", "My Task", None, None)
-            .unwrap();
+        let task = registry.create_task("proj", "My Task", None, None).unwrap();
         assert_eq!(task.state, TaskState::Open);
 
         let closed = registry.close_task(&task.id.to_string(), None).unwrap();
@@ -1547,12 +1545,8 @@ mod tests {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
 
-        let t1 = registry
-            .create_task("proj", "Open Task", None, None)
-            .unwrap();
-        let t2 = registry
-            .create_task("proj", "Closed Task", None, None)
-            .unwrap();
+        let t1 = registry.create_task("proj", "Open Task", None, None).unwrap();
+        let t2 = registry.create_task("proj", "Closed Task", None, None).unwrap();
         registry.close_task(&t2.id.to_string(), None).unwrap();
 
         let open_tasks = registry.list_tasks("proj", Some(TaskState::Open)).unwrap();
