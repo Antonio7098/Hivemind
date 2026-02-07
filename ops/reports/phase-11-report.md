@@ -7,7 +7,7 @@
 | Phase Number | 11 |
 | Phase Title | Worktree Management |
 | Branch | `phase/11-worktree-management` |
-| PR | TBD |
+| PR | #3 |
 | Start Date | 2026-02-07 |
 | Completion Date | 2026-02-07 |
 | Duration | 0 days |
