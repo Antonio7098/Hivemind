@@ -653,6 +653,10 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::MergePrepared { .. } => "merge_prepared",
         EventPayload::MergeApproved { .. } => "merge_approved",
         EventPayload::MergeCompleted { .. } => "merge_completed",
+        EventPayload::RuntimeStarted { .. } => "runtime_started",
+        EventPayload::RuntimeOutputChunk { .. } => "runtime_output_chunk",
+        EventPayload::RuntimeExited { .. } => "runtime_exited",
+        EventPayload::RuntimeTerminated { .. } => "runtime_terminated",
     }
 }
 
