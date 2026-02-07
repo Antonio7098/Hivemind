@@ -32,9 +32,9 @@
 | core/ | `src/core/registry.rs`, `src/core/worktree.rs` | 270 | 6 |
 | cli/ | `src/cli/commands.rs`, `src/main.rs` | 111 | 1 |
 | tests/ | `tests/integration.rs` | 68 | 0 |
-| docs/ | `ops/ROADMAP.md`, `changelog.json`, `docs/design/cli-operational-semantics.md`, `docs/architecture/hivemind_cli_capability_specification.md` | 130 | 15 |
-| other | `.gitignore`, `Cargo.toml`, `Cargo.lock` | 3 | 2 |
-| **Total** | 12 | 582 | 24 |
+| docs/ | `ops/ROADMAP.md`, `changelog.json`, `docs/design/cli-operational-semantics.md`, `docs/architecture/hivemind_cli_capability_specification.md`, `ops/reports/phase-11-report.md` | 341 | 15 |
+| other | `.gitignore`, `Cargo.toml`, `Cargo.lock`, `Makefile` | 6 | 5 |
+| **Total** | 14 | 796 | 27 |
 
 ### New Components
 
@@ -140,6 +140,7 @@ cargo llvm-cov (all features):
 | `docs/design/cli-operational-semantics.md` | Added semantics for `worktree` commands |
 | `docs/architecture/hivemind_cli_capability_specification.md` | Added worktree management capability section |
 | `changelog.json` | Added v0.1.2 entry for Phase 11 |
+| `Makefile` | Made `make phase-pr` non-interactive and POSIX-sh compatible |
 
 ---
 
@@ -186,10 +187,10 @@ cargo llvm-cov (all features):
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 4 |
-| Files changed | 12 |
-| Lines added | 582 |
-| Lines removed | 24 |
+| Total commits | 7 |
+| Files changed | 14 |
+| Lines added | 796 |
+| Lines removed | 27 |
 | Tests added | 0 |
 | Test coverage | 78.08% (82.75% excluding `src/main.rs`) |
 | Duration (days) | 0 |
