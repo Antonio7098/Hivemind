@@ -9,6 +9,7 @@ use crate::core::flow::{FlowState, TaskExecState, TaskFlow};
 use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, TaskGraph};
 use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::state::{AppState, Project, Task, TaskState};
+use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
 use crate::storage::event_store::{EventFilter, EventStore, FileEventStore};
 use serde::Serialize;
 use std::path::PathBuf;
@@ -58,6 +59,98 @@ pub struct GraphValidationResult {
 }
 
 impl Registry {
+    fn worktree_error_to_hivemind(err: WorktreeError, origin: &'static str) -> HivemindError {
+        match err {
+            WorktreeError::InvalidRepo(path) => HivemindError::git(
+                "invalid_repo",
+                format!("Invalid git repository: {}", path.display()),
+                origin,
+            ),
+            WorktreeError::GitError(msg) => HivemindError::git("git_worktree_failed", msg, origin),
+            WorktreeError::AlreadyExists(task_id) => HivemindError::user(
+                "worktree_already_exists",
+                format!("Worktree already exists for task {task_id}"),
+                origin,
+            ),
+            WorktreeError::NotFound(id) => HivemindError::user(
+                "worktree_not_found",
+                format!("Worktree not found: {id}"),
+                origin,
+            ),
+            WorktreeError::IoError(e) => {
+                HivemindError::system("worktree_io_error", e.to_string(), origin)
+            }
+        }
+    }
+
+    fn worktree_manager_for_flow(flow: &TaskFlow, state: &AppState) -> Result<WorktreeManager> {
+        let project = state.projects.get(&flow.project_id).ok_or_else(|| {
+            HivemindError::system(
+                "project_not_found",
+                format!("Project '{}' not found", flow.project_id),
+                "registry:worktree_manager_for_flow",
+            )
+        })?;
+
+        if project.repositories.is_empty() {
+            return Err(HivemindError::user(
+                "project_has_no_repo",
+                "Project has no repository attached",
+                "registry:worktree_manager_for_flow",
+            )
+            .with_hint("Attach a repo via 'hivemind project attach-repo <project> <path>'"));
+        }
+
+        if project.repositories.len() != 1 {
+            return Err(HivemindError::user(
+                "multiple_repos_unsupported",
+                "Worktree commands currently support single-repo projects",
+                "registry:worktree_manager_for_flow",
+            )
+            .with_hint("Detach extra repos or wait for multi-repo worktree support"));
+        }
+
+        let repo_path = PathBuf::from(&project.repositories[0].path);
+        WorktreeManager::new(repo_path, WorktreeConfig::default())
+            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_manager_for_flow"))
+    }
+
+    fn maybe_provision_worktrees_for_flow(flow: &TaskFlow, state: &AppState) -> Result<()> {
+        let project = state.projects.get(&flow.project_id).ok_or_else(|| {
+            HivemindError::system(
+                "project_not_found",
+                format!("Project '{}' not found", flow.project_id),
+                "registry:maybe_provision_worktrees_for_flow",
+            )
+        })?;
+
+        if project.repositories.len() != 1 {
+            return Ok(());
+        }
+
+        let manager = WorktreeManager::new(
+            PathBuf::from(&project.repositories[0].path),
+            WorktreeConfig::default(),
+        )
+        .map_err(|e| {
+            Self::worktree_error_to_hivemind(e, "registry:maybe_provision_worktrees_for_flow")
+        })?;
+
+        for task_id in flow.task_executions.keys() {
+            match manager.create(flow.id, *task_id, Some("HEAD")) {
+                Ok(_) | Err(WorktreeError::AlreadyExists(_)) => {}
+                Err(e) => {
+                    return Err(Self::worktree_error_to_hivemind(
+                        e,
+                        "registry:maybe_provision_worktrees_for_flow",
+                    ))
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Opens or creates a registry at the default location.
     ///
     /// # Errors
@@ -924,6 +1017,9 @@ impl Registry {
             }
         }
 
+        let state_for_worktrees = self.state()?;
+        Self::maybe_provision_worktrees_for_flow(&flow, &state_for_worktrees)?;
+
         let event = Event::new(
             EventPayload::TaskFlowStarted { flow_id: flow.id },
             CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
@@ -959,6 +1055,63 @@ impl Registry {
         }
 
         self.get_flow(flow_id)
+    }
+
+    pub fn worktree_list(&self, flow_id: &str) -> Result<Vec<WorktreeStatus>> {
+        let flow = self.get_flow(flow_id)?;
+        let state = self.state()?;
+        let manager = Self::worktree_manager_for_flow(&flow, &state)?;
+
+        let mut statuses = Vec::new();
+        for task_id in flow.task_executions.keys() {
+            let status = manager
+                .inspect(flow.id, *task_id)
+                .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_list"))?;
+            statuses.push(status);
+        }
+        Ok(statuses)
+    }
+
+    pub fn worktree_inspect(&self, task_id: &str) -> Result<WorktreeStatus> {
+        let tid = Uuid::parse_str(task_id).map_err(|_| {
+            HivemindError::user(
+                "invalid_task_id",
+                format!("'{task_id}' is not a valid task ID"),
+                "registry:worktree_inspect",
+            )
+        })?;
+
+        let state = self.state()?;
+        let mut candidates: Vec<&TaskFlow> = state
+            .flows
+            .values()
+            .filter(|f| f.task_executions.contains_key(&tid))
+            .collect();
+
+        if candidates.is_empty() {
+            return Err(HivemindError::user(
+                "task_not_in_flow",
+                "Task is not part of any flow",
+                "registry:worktree_inspect",
+            ));
+        }
+
+        candidates.sort_by_key(|f| std::cmp::Reverse(f.updated_at));
+        let flow = candidates[0].clone();
+
+        let manager = Self::worktree_manager_for_flow(&flow, &state)?;
+        manager
+            .inspect(flow.id, tid)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_inspect"))
+    }
+
+    pub fn worktree_cleanup(&self, flow_id: &str) -> Result<()> {
+        let flow = self.get_flow(flow_id)?;
+        let state = self.state()?;
+        let manager = Self::worktree_manager_for_flow(&flow, &state)?;
+        manager
+            .cleanup_flow(flow.id)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_cleanup"))
     }
 
     pub fn pause_flow(&self, flow_id: &str) -> Result<TaskFlow> {

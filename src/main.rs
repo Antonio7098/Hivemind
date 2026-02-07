@@ -3,7 +3,7 @@
 use clap::Parser;
 use hivemind::cli::commands::{
     AttemptCommands, Cli, Commands, EventCommands, FlowCommands, GraphCommands, MergeCommands,
-    ProjectCommands, TaskCommands, VerifyCommands,
+    ProjectCommands, TaskCommands, VerifyCommands, WorktreeCommands,
 };
 use hivemind::cli::output::{output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
@@ -18,6 +18,90 @@ fn main() {
     let cli = Cli::parse();
     let exit_code = run(cli);
     process::exit(i32::from(exit_code));
+}
+
+fn handle_worktree(cmd: WorktreeCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        WorktreeCommands::List(args) => match registry.worktree_list(&args.flow_id) {
+            Ok(statuses) => match format {
+                OutputFormat::Json => {
+                    let response = hivemind::cli::output::CliResponse::success(&statuses);
+                    if let Ok(json) = serde_json::to_string_pretty(&response) {
+                        println!("{json}");
+                    }
+                    ExitCode::Success
+                }
+                OutputFormat::Yaml => {
+                    let response = hivemind::cli::output::CliResponse::success(&statuses);
+                    if let Ok(yaml) = serde_yaml::to_string(&response) {
+                        print!("{yaml}");
+                    }
+                    ExitCode::Success
+                }
+                OutputFormat::Table => {
+                    if let Ok(json) = serde_json::to_string_pretty(&statuses) {
+                        println!("{json}");
+                    }
+                    ExitCode::Success
+                }
+            },
+            Err(e) => output_error(&e, format),
+        },
+        WorktreeCommands::Inspect(args) => match registry.worktree_inspect(&args.task_id) {
+            Ok(status) => match format {
+                OutputFormat::Json => {
+                    let response = hivemind::cli::output::CliResponse::success(&status);
+                    if let Ok(json) = serde_json::to_string_pretty(&response) {
+                        println!("{json}");
+                    }
+                    ExitCode::Success
+                }
+                OutputFormat::Yaml => {
+                    let response = hivemind::cli::output::CliResponse::success(&status);
+                    if let Ok(yaml) = serde_yaml::to_string(&response) {
+                        print!("{yaml}");
+                    }
+                    ExitCode::Success
+                }
+                OutputFormat::Table => {
+                    if let Ok(json) = serde_json::to_string_pretty(&status) {
+                        println!("{json}");
+                    }
+                    ExitCode::Success
+                }
+            },
+            Err(e) => output_error(&e, format),
+        },
+        WorktreeCommands::Cleanup(args) => match registry.worktree_cleanup(&args.flow_id) {
+            Ok(()) => {
+                match format {
+                    OutputFormat::Json => {
+                        println!(
+                            "{}",
+                            serde_json::json!({"success": true, "flow_id": args.flow_id})
+                        );
+                    }
+                    OutputFormat::Yaml => {
+                        if let Ok(yaml) = serde_yaml::to_string(&serde_json::json!({
+                            "success": true,
+                            "flow_id": args.flow_id
+                        })) {
+                            print!("{yaml}");
+                        }
+                    }
+                    OutputFormat::Table => {
+                        println!("ok");
+                    }
+                }
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
+    }
 }
 
 fn print_graph_id(graph_id: Uuid, format: OutputFormat) {
@@ -227,6 +311,7 @@ fn run(cli: Cli) -> ExitCode {
         Some(Commands::Verify(cmd)) => handle_verify(cmd, format),
         Some(Commands::Merge(cmd)) => handle_merge(cmd, format),
         Some(Commands::Attempt(cmd)) => handle_attempt(cmd, format),
+        Some(Commands::Worktree(cmd)) => handle_worktree(cmd, format),
         None => {
             println!("hivemind {}", env!("CARGO_PKG_VERSION"));
             println!("Use --help for usage information.");
