@@ -4,6 +4,28 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.2",
+      "date": "2026-02-07",
+      "phase": 11,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Create isolated git worktrees per task under .hivemind/worktrees"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add worktree CLI commands: worktree list, inspect, cleanup"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Provision task worktrees on flow start and clean up on verification success (configurable)"
+        }
+      ]
+    },
+    {
       "version": "v0.1.1",
       "date": "2026-02-06",
       "phase": 0,

@@ -375,24 +375,24 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Isolated git worktrees for task execution.
 
 ### 11.1 Worktree Operations
-- [ ] Create worktree from base revision
-- [ ] Delete worktree
-- [ ] List worktrees for flow
+- [x] Create worktree from base revision
+- [x] Delete worktree
+- [x] List worktrees for flow
 
 ### 11.2 Worktree Lifecycle
-- [ ] Create on task start
-- [ ] Preserve on failure (for debugging)
-- [ ] Delete on success (configurable)
+- [x] Create on task start
+- [x] Preserve on failure (for debugging)
+- [x] Delete on success (configurable)
 
 ### 11.3 Worktree Commands
-- [ ] `hivemind worktree list <flow-id>`
-- [ ] `hivemind worktree inspect <task-id>`
-- [ ] `hivemind worktree cleanup <flow-id>` (manual cleanup)
+- [x] `hivemind worktree list <flow-id>`
+- [x] `hivemind worktree inspect <task-id>`
+- [x] `hivemind worktree cleanup <flow-id>` (manual cleanup)
 
 ### 11.4 Exit Criteria
-- [ ] Worktrees created in `.hivemind/worktrees/`
-- [ ] Worktrees are valid git worktrees
-- [ ] Worktrees isolated per task
+- [x] Worktrees created in `.hivemind/worktrees/`
+- [x] Worktrees are valid git worktrees
+- [x] Worktrees isolated per task
 
 ---
 
