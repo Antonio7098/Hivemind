@@ -125,7 +125,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
         &self.config.base.name
     }
 
-    fn health_check(&self) -> Result<(), RuntimeError> {
+    fn initialize(&mut self) -> Result<(), RuntimeError> {
         // Check if binary exists and is executable
         let binary = &self.config.base.binary_path;
 
@@ -163,7 +163,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
         }
     }
 
-    fn prepare(&mut self, worktree: &std::path::Path, task_id: Uuid) -> Result<(), RuntimeError> {
+    fn prepare(&mut self, task_id: Uuid, worktree: &std::path::Path) -> Result<(), RuntimeError> {
         // Verify worktree exists
         if !worktree.exists() {
             return Err(RuntimeError::new(
@@ -386,7 +386,7 @@ mod tests {
         let mut adapter = OpenCodeAdapter::with_defaults();
         let task_id = Uuid::new_v4();
 
-        let result = adapter.prepare(&PathBuf::from("/nonexistent/path"), task_id);
+        let result = adapter.prepare(task_id, &PathBuf::from("/nonexistent/path"));
         assert!(result.is_err());
     }
 
@@ -396,7 +396,7 @@ mod tests {
         let task_id = Uuid::new_v4();
 
         // Use /tmp which should exist
-        let result = adapter.prepare(&PathBuf::from("/tmp"), task_id);
+        let result = adapter.prepare(task_id, &PathBuf::from("/tmp"));
         assert!(result.is_ok());
         assert!(adapter.worktree.is_some());
         assert!(adapter.task_id.is_some());
