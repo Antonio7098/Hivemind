@@ -58,6 +58,31 @@ pub enum Commands {
     /// Attempt inspection commands
     #[command(subcommand)]
     Attempt(AttemptCommands),
+
+    #[command(subcommand)]
+    Worktree(WorktreeCommands),
+}
+
+#[derive(Subcommand)]
+pub enum WorktreeCommands {
+    List(WorktreeListArgs),
+    Inspect(WorktreeInspectArgs),
+    Cleanup(WorktreeCleanupArgs),
+}
+
+#[derive(Args)]
+pub struct WorktreeListArgs {
+    pub flow_id: String,
+}
+
+#[derive(Args)]
+pub struct WorktreeInspectArgs {
+    pub task_id: String,
+}
+
+#[derive(Args)]
+pub struct WorktreeCleanupArgs {
+    pub flow_id: String,
 }
 
 #[derive(Subcommand)]

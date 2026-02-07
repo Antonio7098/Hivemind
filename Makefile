@@ -104,15 +104,15 @@ phase-validate: validate
 # Create PR for current phase branch
 phase-pr:
 	@BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
-	if [[ ! "$$BRANCH" =~ ^phase/ ]]; then \
+	case "$$BRANCH" in phase/*) ;; *) \
 		echo "Error: Not on a phase branch (current: $$BRANCH)"; \
 		exit 1; \
-	fi; \
+	esac; \
 	PHASE_NUM=$$(echo $$BRANCH | sed 's/phase\/\([0-9]*\)-.*/\1/'); \
 	PHASE_NAME=$$(echo $$BRANCH | sed 's/phase\/[0-9]*-//'); \
 	echo "Creating PR for Phase $$PHASE_NUM: $$PHASE_NAME"; \
 	echo "Remember: Phase report (ops/reports/phase-$$PHASE_NUM-report.md) must be committed before merge!"; \
-	gh pr create --title "Phase $$PHASE_NUM: $$PHASE_NAME" --base main
+	gh pr create --title "Phase $$PHASE_NUM: $$PHASE_NAME" --base main --body "Phase report: ops/reports/phase-$$PHASE_NUM-report.md"
 
 # === Help ===
 

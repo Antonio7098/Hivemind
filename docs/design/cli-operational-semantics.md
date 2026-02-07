@@ -582,6 +582,90 @@ hivemind attempt inspect <attempt-id> [--context] [--diff] [--output]
 
 ---
 
+### 6.4 worktree list
+
+**Synopsis:**
+```
+hivemind worktree list <flow-id>
+```
+
+**Preconditions:**
+- Flow exists
+- Flow belongs to a project with exactly one attached repository
+
+**Effects:** None (read-only)
+
+**Output:**
+- Worktree status list for each task in the flow
+
+**Events:** None
+
+**Failures:**
+- `FLOW_NOT_FOUND`
+- `PROJECT_HAS_NO_REPO`: No repository attached
+- `MULTIPLE_REPOS_UNSUPPORTED`: More than one repository attached
+
+**Idempotence:** Idempotent.
+
+---
+
+### 6.5 worktree inspect
+
+**Synopsis:**
+```
+hivemind worktree inspect <task-id>
+```
+
+**Preconditions:**
+- Task exists and is part of a flow
+- Flow belongs to a project with exactly one attached repository
+
+**Effects:** None (read-only)
+
+**Output:**
+- Worktree status for the task, including:
+  - expected worktree path
+  - whether the path is a valid git worktree
+  - current branch and HEAD (if available)
+
+**Events:** None
+
+**Failures:**
+- `TASK_NOT_FOUND`
+- `TASK_NOT_IN_FLOW`
+- `PROJECT_HAS_NO_REPO`: No repository attached
+- `MULTIPLE_REPOS_UNSUPPORTED`: More than one repository attached
+
+**Idempotence:** Idempotent.
+
+---
+
+### 6.6 worktree cleanup
+
+**Synopsis:**
+```
+hivemind worktree cleanup <flow-id>
+```
+
+**Preconditions:**
+- Flow exists
+- Flow belongs to a project with exactly one attached repository
+
+**Effects:**
+- Removes all task worktrees for the flow under `.hivemind/worktrees/<flow-id>/...`
+
+**Events:** None
+
+**Failures:**
+- `FLOW_NOT_FOUND`
+- `PROJECT_HAS_NO_REPO`: No repository attached
+- `MULTIPLE_REPOS_UNSUPPORTED`: More than one repository attached
+- `GIT_WORKTREE_FAILED`: Worktree remove fails
+
+**Idempotence:** Idempotent (no-op if worktrees are absent).
+
+---
+
 ## 7. Verification Commands
 
 ### 7.1 verify override
@@ -781,9 +865,9 @@ hivemind events replay <flow-id> [--until <timestamp>] [--verify]
 
 All commands support:
 ```
---format json    # Machine-readable JSON
---format table   # Human-readable table
---format yaml    # YAML output
+-f json    # Machine-readable JSON
+-f table   # Human-readable table
+-f yaml    # YAML output
 ```
 
 Default: table for TTY, json for pipes

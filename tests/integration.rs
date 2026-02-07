@@ -2,6 +2,53 @@
 
 use std::process::Command;
 
+fn init_git_repo(repo_dir: &std::path::Path) {
+    std::fs::create_dir_all(repo_dir).expect("create repo dir");
+
+    let out = Command::new("git")
+        .args(["init"])
+        .current_dir(repo_dir)
+        .output()
+        .expect("git init");
+    assert!(
+        out.status.success(),
+        "git init: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    std::fs::write(repo_dir.join("README.md"), "test\n").expect("write file");
+
+    let out = Command::new("git")
+        .args(["add", "."])
+        .current_dir(repo_dir)
+        .output()
+        .expect("git add");
+    assert!(
+        out.status.success(),
+        "git add: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let out = Command::new("git")
+        .args([
+            "-c",
+            "user.name=Hivemind",
+            "-c",
+            "user.email=hivemind@example.com",
+            "commit",
+            "-m",
+            "init",
+        ])
+        .current_dir(repo_dir)
+        .output()
+        .expect("git commit");
+    assert!(
+        out.status.success(),
+        "git commit: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, String, String) {
     let output = Command::new(env!("CARGO_BIN_EXE_hivemind"))
         .env("HOME", home)
@@ -20,7 +67,15 @@ fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, String, String) 
 fn cli_graph_flow_and_task_control_smoke() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
     let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
     assert_eq!(code, 0, "{err}");
 
     let (code, out1, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
@@ -73,6 +128,19 @@ fn cli_graph_flow_and_task_control_smoke() {
 
     let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
     assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["-f", "json", "worktree", "list", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains(".hivemind/worktrees"), "{out}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["-f", "json", "worktree", "inspect", &t1_id]);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("\"is_worktree\": true"), "{out}");
+
+    let (code, out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "worktree", "cleanup", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("\"success\":true"), "{out}");
 
     let (code, _out, err) = run_hivemind(tmp.path(), &["task", "abort", &t1_id]);
     assert_eq!(code, 0, "{err}");

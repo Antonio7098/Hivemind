@@ -3,6 +3,7 @@
 //! Worktrees provide isolated git working directories for parallel
 //! task execution without branch conflicts.
 
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use uuid::Uuid;
@@ -43,6 +44,16 @@ pub struct WorktreeInfo {
     pub branch: String,
     /// Base commit the worktree was created from.
     pub base_commit: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorktreeStatus {
+    pub flow_id: Uuid,
+    pub task_id: Uuid,
+    pub path: PathBuf,
+    pub is_worktree: bool,
+    pub head_commit: Option<String>,
+    pub branch: Option<String>,
 }
 
 /// Errors that can occur during worktree operations.
@@ -94,11 +105,34 @@ pub struct WorktreeManager {
 impl WorktreeManager {
     /// Creates a new worktree manager.
     pub fn new(repo_path: PathBuf, config: WorktreeConfig) -> Result<Self> {
+        let WorktreeConfig {
+            base_dir,
+            cleanup_on_success,
+            preserve_on_failure,
+        } = config;
+
         // Verify it's a git repository
-        let git_dir = repo_path.join(".git");
-        if !git_dir.exists() {
+        let is_git_repo = Command::new("git")
+            .current_dir(&repo_path)
+            .args(["rev-parse", "--git-dir"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !is_git_repo {
             return Err(WorktreeError::InvalidRepo(repo_path));
         }
+
+        let base_dir = if base_dir.is_absolute() {
+            base_dir
+        } else {
+            repo_path.join(base_dir)
+        };
+
+        let config = WorktreeConfig {
+            base_dir,
+            cleanup_on_success,
+            preserve_on_failure,
+        };
 
         Ok(Self { repo_path, config })
     }
@@ -111,15 +145,21 @@ impl WorktreeManager {
         base_ref: Option<&str>,
     ) -> Result<WorktreeInfo> {
         let worktree_id = Uuid::new_v4();
-        let branch_name = format!("hivemind/{flow_id}/{task_id}");
+        let branch_name = format!("exec/{flow_id}/{task_id}");
         let worktree_path = self
             .config
             .base_dir
             .join(flow_id.to_string())
             .join(task_id.to_string());
 
+        if worktree_path.exists() {
+            return Err(WorktreeError::AlreadyExists(task_id));
+        }
+
         // Create parent directories
-        std::fs::create_dir_all(&worktree_path)?;
+        if let Some(parent) = worktree_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
 
         // Get base commit
         let base = base_ref.unwrap_or("HEAD");
@@ -131,7 +171,7 @@ impl WorktreeManager {
             .args([
                 "worktree",
                 "add",
-                "-b",
+                "-B",
                 &branch_name,
                 worktree_path.to_str().unwrap_or(""),
                 base,
@@ -172,6 +212,61 @@ impl WorktreeManager {
         }
 
         Ok(())
+    }
+
+    /// Returns the default worktree path for a flow/task pair.
+    #[must_use]
+    pub fn path_for(&self, flow_id: Uuid, task_id: Uuid) -> PathBuf {
+        self.config
+            .base_dir
+            .join(flow_id.to_string())
+            .join(task_id.to_string())
+    }
+
+    /// Inspects an existing worktree for a flow/task.
+    pub fn inspect(&self, flow_id: Uuid, task_id: Uuid) -> Result<WorktreeStatus> {
+        let path = self.path_for(flow_id, task_id);
+        if !path.exists() {
+            return Ok(WorktreeStatus {
+                flow_id,
+                task_id,
+                path,
+                is_worktree: false,
+                head_commit: None,
+                branch: None,
+            });
+        }
+
+        let is_worktree = self.is_worktree(&path);
+        let head_commit = if is_worktree {
+            self.worktree_head(&path).ok()
+        } else {
+            None
+        };
+
+        let branch = if is_worktree {
+            let output = Command::new("git")
+                .current_dir(&path)
+                .args(["rev-parse", "--abbrev-ref", "HEAD"])
+                .output();
+            match output {
+                Ok(o) if o.status.success() => {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        Ok(WorktreeStatus {
+            flow_id,
+            task_id,
+            path,
+            is_worktree,
+            head_commit,
+            branch,
+        })
     }
 
     /// Lists all worktrees for a flow.

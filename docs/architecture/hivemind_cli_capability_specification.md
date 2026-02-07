@@ -167,6 +167,15 @@ Capabilities:
 
 ---
 
+### 6.4 Worktree Management
+
+Capabilities:
+- List worktrees for a flow
+- Inspect worktree for a task
+- Clean up worktrees for a flow
+
+---
+
 ## 7. Verification & Retry
 
 ### 7.1 Verification Control
