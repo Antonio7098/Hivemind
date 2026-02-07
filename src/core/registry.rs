@@ -1377,21 +1377,6 @@ impl Registry {
             ));
         }
 
-        if decision == "pass" {
-            if let Ok(manager) = Self::worktree_manager_for_flow(&flow, &state) {
-                if manager.config().cleanup_on_success {
-                    let status = manager.inspect(flow.id, id).map_err(|e| {
-                        Self::worktree_error_to_hivemind(e, "registry:verify_override")
-                    })?;
-                    if status.is_worktree {
-                        manager.remove(&status.path).map_err(|e| {
-                            Self::worktree_error_to_hivemind(e, "registry:verify_override")
-                        })?;
-                    }
-                }
-            }
-        }
-
         let event = Event::new(
             EventPayload::HumanOverride {
                 task_id: id,
@@ -1410,6 +1395,18 @@ impl Registry {
                 "registry:verify_override",
             )
         })?;
+
+        if decision == "pass" {
+            if let Ok(manager) = Self::worktree_manager_for_flow(&flow, &state) {
+                if manager.config().cleanup_on_success {
+                    if let Ok(status) = manager.inspect(flow.id, id) {
+                        if status.is_worktree {
+                            let _ = manager.remove(&status.path);
+                        }
+                    }
+                }
+            }
+        }
 
         self.get_flow(&flow.id.to_string())
     }
