@@ -426,28 +426,28 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Define the contract for runtime adapters.
 
 ### 13.1 Adapter Interface
-- [ ] Define RuntimeAdapter interface:
+- [x] Define RuntimeAdapter interface:
   - `Initialize() -> error`
   - `Prepare(task, worktree) -> error`
   - `Execute(input) -> ExecutionReport`
   - `Terminate() -> error`
 
 ### 13.2 Execution Report
-- [ ] Define ExecutionReport struct:
+- [x] Define ExecutionReport struct:
   - exit_code, duration, stdout, stderr
   - files_created, files_modified, files_deleted
   - errors
 
 ### 13.3 Adapter Events
-- [ ] `RuntimeStarted`
-- [ ] `RuntimeOutputChunk`
-- [ ] `RuntimeExited`
-- [ ] `RuntimeTerminated`
+- [x] `RuntimeStarted`
+- [x] `RuntimeOutputChunk`
+- [x] `RuntimeExited`
+- [x] `RuntimeTerminated`
 
 ### 13.4 Exit Criteria
-- [ ] Interface defined and documented
-- [ ] ExecutionReport captures all needed data
-- [ ] Events defined for all lifecycle phases
+- [x] Interface defined and documented
+- [x] ExecutionReport captures all needed data
+- [x] Events defined for all lifecycle phases
 
 ---
 
