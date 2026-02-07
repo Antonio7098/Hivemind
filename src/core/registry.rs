@@ -115,12 +115,16 @@ impl Registry {
             .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_manager_for_flow"))
     }
 
-    fn maybe_provision_worktrees_for_flow(flow: &TaskFlow, state: &AppState) -> Result<()> {
+    fn maybe_provision_worktrees_for_flow_tasks(
+        flow: &TaskFlow,
+        state: &AppState,
+        task_ids: &[Uuid],
+    ) -> Result<()> {
         let project = state.projects.get(&flow.project_id).ok_or_else(|| {
             HivemindError::system(
                 "project_not_found",
                 format!("Project '{}' not found", flow.project_id),
-                "registry:maybe_provision_worktrees_for_flow",
+                "registry:maybe_provision_worktrees_for_flow_tasks",
             )
         })?;
 
@@ -133,16 +137,16 @@ impl Registry {
             WorktreeConfig::default(),
         )
         .map_err(|e| {
-            Self::worktree_error_to_hivemind(e, "registry:maybe_provision_worktrees_for_flow")
+            Self::worktree_error_to_hivemind(e, "registry:maybe_provision_worktrees_for_flow_tasks")
         })?;
 
-        for task_id in flow.task_executions.keys() {
+        for task_id in task_ids {
             match manager.create(flow.id, *task_id, Some("HEAD")) {
                 Ok(_) | Err(WorktreeError::AlreadyExists(_)) => {}
                 Err(e) => {
                     return Err(Self::worktree_error_to_hivemind(
                         e,
-                        "registry:maybe_provision_worktrees_for_flow",
+                        "registry:maybe_provision_worktrees_for_flow_tasks",
                     ))
                 }
             }
@@ -1017,8 +1021,9 @@ impl Registry {
             }
         }
 
-        let state_for_worktrees = self.state()?;
-        Self::maybe_provision_worktrees_for_flow(&flow, &state_for_worktrees)?;
+        let state = self.state()?;
+        let all_task_ids: Vec<Uuid> = flow.task_executions.keys().copied().collect();
+        Self::maybe_provision_worktrees_for_flow_tasks(&flow, &state, &all_task_ids)?;
 
         let event = Event::new(
             EventPayload::TaskFlowStarted { flow_id: flow.id },
@@ -1028,7 +1033,6 @@ impl Registry {
             HivemindError::system("event_append_failed", e.to_string(), "registry:start_flow")
         })?;
 
-        let state = self.state()?;
         if let Some(graph) = state.graphs.get(&flow.graph_id) {
             let ready = graph.root_tasks();
             for task_id in ready {
@@ -1371,6 +1375,21 @@ impl Registry {
                 "Task is not in verification state",
                 "registry:verify_override",
             ));
+        }
+
+        if decision == "pass" {
+            if let Ok(manager) = Self::worktree_manager_for_flow(&flow, &state) {
+                if manager.config().cleanup_on_success {
+                    let status = manager.inspect(flow.id, id).map_err(|e| {
+                        Self::worktree_error_to_hivemind(e, "registry:verify_override")
+                    })?;
+                    if status.is_worktree {
+                        manager.remove(&status.path).map_err(|e| {
+                            Self::worktree_error_to_hivemind(e, "registry:verify_override")
+                        })?;
+                    }
+                }
+            }
         }
 
         let event = Event::new(
