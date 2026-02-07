@@ -7,7 +7,7 @@
 | Phase Number | 13 |
 | Phase Title | Runtime Adapter Interface |
 | Branch | `phase/13-runtime-adapter-interface` |
-| PR | TBD |
+| PR | #4 |
 | Start Date | 2026-02-07 |
 | Completion Date | 2026-02-07 |
 | Duration | 0 days |
