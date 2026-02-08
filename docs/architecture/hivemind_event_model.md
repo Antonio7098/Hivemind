@@ -176,6 +176,9 @@ These events describe interactions with execution runtimes.
 Examples:
 - `RuntimeStarted`
 - `RuntimeOutputChunk`
+- `RuntimeInputProvided`
+- `RuntimeInterrupted`
+- `RuntimeFilesystemObserved`
 - `RuntimeExited`
 - `RuntimeError`
 

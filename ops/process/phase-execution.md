@@ -40,7 +40,7 @@ git checkout -b phase/<phase-number>-<short-name>
 Examples:
 - `phase/01-event-foundation`
 - `phase/14-opencode-adapter`
-- `phase/22-single-repo-e2e`
+- `phase/23-single-repo-e2e`
 
 ### 1.2 Scope Review
 

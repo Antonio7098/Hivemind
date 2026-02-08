@@ -194,6 +194,45 @@ Monitor for:
 
 ---
 
+### 5.8 Interactive Execution (PTY-Backed Session Mode)
+
+Some runtimes are inherently interactive: they prompt for follow-up input, confirmations, or iterative guidance while they run.
+
+Hivemind may support an optional **interactive execution mode** for wrapper adapters.
+
+**Invariant:** interactive mode is an IO transport. It must not enable behavior that cannot be achieved via non-interactive CLI execution.
+
+In interactive mode, the adapter:
+- Launches the runtime inside a pseudo-terminal (PTY)
+- Streams PTY output to the caller while still emitting `RuntimeOutputChunk` events
+- Accepts user-provided input lines and forwards them to the PTY
+- Emits explicit events for every user input and interruption
+
+#### 5.8.1 Session Loop
+
+At a high level:
+
+1. Read bytes from the PTY
+2. Emit `RuntimeOutputChunk` with the output content
+3. Write output to the CLI (TTY) so the user can see it
+4. Read user input (line-based)
+5. Emit `RuntimeInputProvided`
+6. Write the input line to the PTY (with newline)
+
+Output labeling ("Agent:" vs "Tool:") is **best-effort presentation** only. Hivemind must not depend on parsing correctness.
+
+#### 5.8.2 Interrupt Semantics
+
+Ctrl+C is not a crash.
+
+In interactive mode, Ctrl+C results in:
+
+- Emit `RuntimeInterrupted`
+- Terminate the runtime deterministically (same termination policy as timeouts: graceful signal, then kill)
+- Emit `RuntimeTerminated`
+
+---
+
 ## 6. Phase: Observe
 
 ### 6.1 Purpose
@@ -444,6 +483,8 @@ No code changes required for basic support.
 |-------|------|
 | RuntimeStarted | Process launched |
 | RuntimeOutputChunk | Periodically during execution |
+| RuntimeInputProvided | User input forwarded to runtime (interactive mode only) |
+| RuntimeInterrupted | User interrupted runtime (interactive mode only) |
 | RuntimeExited | Process terminated |
 | RuntimeTerminated | Cleanup complete |
 | FileModified | Per changed file |

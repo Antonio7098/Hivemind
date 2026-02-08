@@ -283,6 +283,14 @@ There is no hidden state.
 - All functionality is exposed via the CLI
 - UI is a projection of system state
 
+Interactive execution is treated as a transport problem:
+
+- Runtimes are external interactive processes (stdin/stdout)
+- The CLI may optionally relay interactive runtime IO while emitting events
+- Any chat-like UI is a projection over those events and capabilities, not an alternative control plane
+
+Chat transcripts are not state. **Events are state.**
+
 Because of this, agents may operate **Hivemind itself** for automation, recovery, and meta-orchestration.
 
 Key views:

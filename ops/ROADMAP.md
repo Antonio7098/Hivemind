@@ -479,24 +479,52 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 15: Scope Enforcement (Phase 1: Detection)
+## Phase 15: Interactive Runtime Sessions (CLI)
+
+**Goal:** Support interactive execution of external runtimes in the CLI without changing TaskFlow semantics.
+
+> **Invariant:** Interactive mode is a transport. It must not introduce UI-only behavior or bypass scope, verification, retries, or merge governance.
+
+### 15.1 Interactive Execution Mode
+- [ ] Launch runtime in an interactive session when requested
+- [ ] Stream output continuously while emitting `RuntimeOutputChunk` events
+- [ ] Forward user input lines to the runtime
+- [ ] Ctrl+C interrupts the runtime deterministically (not a crash)
+
+### 15.2 Interactive Events
+- [ ] `RuntimeInputProvided`
+- [ ] `RuntimeInterrupted`
+
+### 15.3 CLI Integration
+- [ ] `hivemind flow tick <flow-id> --interactive`
+- [ ] Interactive mode is optional; default remains non-interactive
+
+### 15.4 Exit Criteria
+- [ ] Interactive runtime sessions work end-to-end in a real terminal
+- [ ] All interaction is observable via events
+- [ ] Interruptions are recorded and runtime terminates cleanly
+- [ ] Invariant holds: interactive mode does not change TaskFlow semantics
+
+---
+
+## Phase 16: Scope Enforcement (Phase 1: Detection)
 
 **Goal:** Detect scope violations post-execution.
 
 > **Honest:** Phase 1 is detection, not prevention.
 
-### 15.1 Scope Verification
+### 16.1 Scope Verification
 - [ ] After execution, check all changes against scope
 - [ ] Filesystem scope: all modified files within allowed paths
 - [ ] Git scope: commits/branches only if permitted
 
-### 15.2 Violation Handling
+### 16.2 Violation Handling
 - [ ] `ScopeViolationDetected` event
 - [ ] Attempt fails immediately on violation
 - [ ] Worktree preserved for debugging
 - [ ] Clear error message with violation details
 
-### 15.3 Exit Criteria
+### 16.3 Exit Criteria
 - [ ] Violations detected reliably
 - [ ] Violations are fatal to attempt
 - [ ] Violations emit observable events
@@ -504,169 +532,169 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 16: Verification Framework
+## Phase 17: Verification Framework
 
 **Goal:** Automated checks are the primary gate.
 
-### 16.1 Check Execution
+### 17.1 Check Execution
 - [ ] Run configured checks (test commands)
 - [ ] Capture exit code, output, duration
 - [ ] `CheckStarted`, `CheckCompleted` events
 
-### 16.2 Check Results
+### 17.2 Check Results
 - [ ] Define CheckResult struct
 - [ ] Required vs optional checks
 - [ ] Aggregation: all required must pass
 
-### 16.3 Verification Commands
+### 17.3 Verification Commands
 - [ ] `hivemind verify run <task-id>` (manual verification)
 - [ ] `hivemind verify results <attempt-id>`
 
-### 16.4 Exit Criteria
+### 17.4 Exit Criteria
 - [ ] Checks run in worktree
 - [ ] Results captured and observable
 - [ ] Required check failures block success
 
 ---
 
-## Phase 17: Verifier Agent (Advisory)
+## Phase 18: Verifier Agent (Advisory)
 
 **Goal:** LLM-based verification as advisory layer.
 
 > **Important:** Verifier is advisory, not authoritative.
 
-### 17.1 Verifier Invocation
+### 18.1 Verifier Invocation
 - [ ] After checks, invoke verifier agent
 - [ ] Input: task definition, diff, check results
 - [ ] Output: PASS / SOFT_FAIL / HARD_FAIL + feedback
 
-### 17.2 Verifier Events
+### 18.2 Verifier Events
 - [ ] `VerificationStarted`
 - [ ] `VerificationCompleted`
 
-### 17.3 Integration
+### 18.3 Integration
 - [ ] Verifier decision informs retry/fail
 - [ ] Verifier cannot override failed checks
 - [ ] Verifier feedback included in retry context
 
-### 17.4 Exit Criteria
+### 18.4 Exit Criteria
 - [ ] Verifier produces structured decision
 - [ ] Verifier is advisory only
 - [ ] Feedback captured for retry
 
 ---
 
-## Phase 18: Retry Mechanics
+## Phase 19: Retry Mechanics
 
 **Goal:** Enable intelligent retries with explicit context.
 
-### 18.1 Retry Context Assembly
+### 19.1 Retry Context Assembly
 - [ ] Gather prior attempt outcomes
 - [ ] Gather check results
 - [ ] Gather verifier feedback
 - [ ] Compute actionable feedback
 
-### 18.2 Retry Context Delivery
+### 19.2 Retry Context Delivery
 - [ ] Context is explicit input (not hidden memory)
 - [ ] Context visible in attempt events
 - [ ] Mechanical feedback prioritized over advisory
 
-### 18.3 Retry Policy
+### 19.3 Retry Policy
 - [ ] Max attempts per task
 - [ ] Retry on soft fail, not on hard fail
 - [ ] Bounded retries (no infinite loops)
 
-### 18.4 Exit Criteria
+### 19.4 Exit Criteria
 - [ ] Retries receive explicit context
 - [ ] Context is observable
 - [ ] Retries are bounded
 
 ---
 
-## Phase 19: Human Override
+## Phase 20: Human Override
 
 **Goal:** Humans are ultimate authority.
 
-### 19.1 Override Actions
-- [x] Override check failures
-- [x] Override verifier decision
-- [x] Direct approval/rejection
-- [x] Manual retry with reset count
+### 20.1 Override Actions
+- [ ] Override check failures
+- [ ] Override verifier decision
+- [ ] Direct approval/rejection
+- [ ] Manual retry with reset count
 
-### 19.2 Override Events
-- [x] `HumanOverride` with attribution and reason
+### 20.2 Override Events
+- [ ] `HumanOverride` with attribution and reason
 
-### 19.3 Override Commands
-- [x] `hivemind verify override <task-id> pass|fail --reason <text>`
-- [x] `hivemind task retry <task-id> --reset-count`
+### 20.3 Override Commands
+- [ ] `hivemind verify override <task-id> pass|fail --reason <text>`
+- [ ] `hivemind task retry <task-id> --reset-count`
 
-### 19.4 Exit Criteria
-- [x] Humans can override any automated decision
-- [x] Overrides are audited
-- [x] Overrides require reason
+### 20.4 Exit Criteria
+- [ ] Humans can override any automated decision
+- [ ] Overrides are audited
+- [ ] Overrides require reason
 
 ---
 
-## Phase 20: Execution Commits & Branches
+## Phase 21: Execution Commits & Branches
 
 **Goal:** Git artifacts support observability and rollback.
 
-### 20.1 Execution Branches
+### 21.1 Execution Branches
 - [ ] One branch per task: `exec/<flow>/<task>`
 - [ ] Created from TaskFlow base revision
 - [ ] Never merged directly
 
-### 20.2 Checkpoint Commits
+### 21.2 Checkpoint Commits
 - [ ] Commits created during/after execution
 - [ ] Owned by task, ephemeral
 - [ ] Used for diffs, rollback, retry
 
-### 20.3 Branch Lifecycle
+### 21.3 Branch Lifecycle
 - [ ] Create on task start
 - [ ] Reset on retry
 - [ ] Archive/delete on completion
 
-### 20.4 Exit Criteria
+### 21.4 Exit Criteria
 - [ ] Execution branches are task-isolated
 - [ ] Checkpoints enable rollback
 - [ ] Clean separation from integration commits
 
 ---
 
-## Phase 21: Merge Protocol
+## Phase 22: Merge Protocol
 
 **Goal:** Explicit, human-approved integration.
 
-### 21.1 Merge Preparation
-- [x] Collect successful task branches
-- [x] Compute integration commits
-- [x] Test merge against target
-- [x] Report conflicts
+### 22.1 Merge Preparation
+- [ ] Collect successful task branches
+- [ ] Compute integration commits
+- [ ] Test merge against target
+- [ ] Report conflicts
 
-### 21.2 Merge Commands
-- [x] `hivemind merge prepare <flow-id>`
-- [x] `hivemind merge approve <flow-id>`
-- [x] `hivemind merge execute <flow-id>`
+### 22.2 Merge Commands
+- [ ] `hivemind merge prepare <flow-id>`
+- [ ] `hivemind merge approve <flow-id>`
+- [ ] `hivemind merge execute <flow-id>`
 
-### 21.3 Merge Events
-- [x] `MergePrepared`
-- [x] `MergeApproved`
-- [x] `MergeCompleted`
+### 22.3 Merge Events
+- [ ] `MergePrepared`
+- [ ] `MergeApproved`
+- [ ] `MergeCompleted`
 
-### 21.4 Exit Criteria
-- [x] Merge is explicit and human-approved
-- [x] Conflicts detected before execution
-- [x] Integration commits clean
+### 22.4 Exit Criteria
+- [ ] Merge is explicit and human-approved
+- [ ] Conflicts detected before execution
+- [ ] Integration commits clean
 
 ---
 
-## Phase 22: Single-Repo End-to-End
+## Phase 23: Single-Repo End-to-End
 
 **Goal:** Complete workflow for single-repo projects.
 
 > **User Story 3:** Structured TaskFlow end-to-end.
 
-### 22.1 Integration Test
+### 23.1 Integration Test
 - [ ] Create project with repo
 - [ ] Create tasks with scopes
 - [ ] Build TaskGraph
@@ -676,7 +704,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 - [ ] Retry on failure
 - [ ] Merge on success
 
-### 22.2 Exit Criteria
+### 23.2 Exit Criteria
 - [ ] Full workflow works end-to-end
 - [ ] All events emitted correctly
 - [ ] State derived purely from events
@@ -685,22 +713,22 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 23: Parallel Execution
+## Phase 24: Parallel Execution
 
 **Goal:** Safe parallel agent execution.
 
 > **User Story 5:** Parallel scoped agents.
 
-### 23.1 Scope-Based Parallelism
+### 24.1 Scope-Based Parallelism
 - [ ] Scheduler allows parallel tasks if scopes compatible
 - [ ] Hard conflicts → serialize or isolate
 - [ ] Soft conflicts → warn or isolate
 
-### 23.2 Parallel Worktrees
+### 24.2 Parallel Worktrees
 - [ ] Multiple worktrees active simultaneously
 - [ ] Each task has isolated worktree
 
-### 23.3 Exit Criteria
+### 24.3 Exit Criteria
 - [ ] Compatible tasks run in parallel
 - [ ] Conflicts handled correctly
 - [ ] No corruption from parallel execution
@@ -708,26 +736,26 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 24: Multi-Repo Support
+## Phase 25: Multi-Repo Support
 
 **Goal:** TaskFlows spanning multiple repositories.
 
 > **User Story 7:** Multi-repo project execution.
 
-### 24.1 Multi-Repo Worktrees
+### 25.1 Multi-Repo Worktrees
 - [ ] Worktree per repo per task
 - [ ] Agent receives all repo paths
 
-### 24.2 Multi-Repo Scope
+### 25.2 Multi-Repo Scope
 - [ ] Scope evaluated per repo
 - [ ] Violation in any repo fails task
 
-### 24.3 Multi-Repo Merge
+### 25.3 Multi-Repo Merge
 - [ ] Atomicity at TaskFlow level (default)
 - [ ] All repos merge or none merge
 - [ ] Partial failure handling
 
-### 24.4 Exit Criteria
+### 25.4 Exit Criteria
 - [ ] Tasks can modify multiple repos
 - [ ] Scope enforced per repo
 - [ ] Merge is atomic across repos
@@ -735,73 +763,73 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 25: Additional Runtime Adapters
+## Phase 26: Additional Runtime Adapters
 
 **Goal:** Support multiple runtimes.
 
-### 25.1 Claude Code Adapter
+### 26.1 Claude Code Adapter
 - [ ] Implement ClaudeCodeAdapter
 - [ ] Test integration
 
-### 25.2 Codex CLI Adapter
+### 26.2 Codex CLI Adapter
 - [ ] Implement CodexAdapter
 - [ ] Test integration
 
-### 25.3 Gemini CLI Adapter
+### 26.3 Gemini CLI Adapter
 - [ ] Implement GeminiAdapter
 - [ ] Test integration
 
-### 25.4 Runtime Selection
+### 26.4 Runtime Selection
 - [ ] Per-project default runtime
 - [ ] Per-task override
 - [ ] `hivemind runtime list`
 - [ ] `hivemind runtime health`
 
-### 25.5 Exit Criteria
+### 26.5 Exit Criteria
 - [ ] Multiple runtimes work
 - [ ] Runtime selection works
 - [ ] Same TaskFlow semantics across runtimes
 
 ---
 
-## Phase 26: Event Streaming & Observability
+## Phase 27: Event Streaming & Observability
 
 **Goal:** Real-time observability.
 
-### 26.1 Event Stream Command
-- [x] `hivemind events stream` (real-time)
-- [x] Filters: --flow, --task, --since
+### 27.1 Event Stream Command
+- [ ] `hivemind events stream` (real-time)
+- [ ] Filters: --flow, --task, --since
 
-### 26.2 Event Query Command
-- [x] `hivemind events list` (historical)
-- [x] `hivemind events inspect <event-id>`
-- [x] Correlation filtering
-- [x] Time range filtering
+### 27.2 Event Query Command
+- [ ] `hivemind events list` (historical)
+- [ ] `hivemind events inspect <event-id>`
+- [ ] Correlation filtering
+- [ ] Time range filtering
 
-### 26.3 Exit Criteria
-- [x] Real-time event stream works
-- [x] Historical queries work
-- [x] Events are the complete record
+### 27.3 Exit Criteria
+- [ ] Real-time event stream works
+- [ ] Historical queries work
+- [ ] Events are the complete record
 
 ---
 
-## Phase 27: Automation & Scheduling
+## Phase 28: Automation & Scheduling
 
 **Goal:** Triggered TaskFlows.
 
 > **User Story 9:** Scheduled TaskFlows.
 
-### 27.1 Automation Events
+### 28.1 Automation Events
 - [ ] `AutomationCreated`
 - [ ] `AutomationTriggered`
 
-### 27.2 Automation Commands
+### 28.2 Automation Commands
 - [ ] `hivemind automation create <flow> --schedule <cron>`
 - [ ] `hivemind automation list`
 - [ ] `hivemind automation disable`
 - [ ] `hivemind automation trigger` (manual)
 
-### 27.3 Exit Criteria
+### 28.3 Exit Criteria
 - [ ] Scheduled triggers work
 - [ ] Manual triggers work
 - [ ] Automations are observable
@@ -809,68 +837,68 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 28: Agent Meta-Operation
+## Phase 29: Agent Meta-Operation
 
 **Goal:** Agents can operate Hivemind itself.
 
-### 28.1 CLI as API
+### 29.1 CLI as API
 - [ ] All commands scriptable
 - [ ] JSON output reliable
 - [ ] Exit codes semantic
 
-### 28.2 Attribution
+### 29.2 Attribution
 - [ ] Agent actions attributed in events
 - [ ] Scope applies to meta-operations
 
-### 28.3 Exit Criteria
+### 29.3 Exit Criteria
 - [ ] Agents can invoke CLI commands
 - [ ] Actions are audited
 - [ ] Meta-orchestration possible
 
 ---
 
-## Phase 29: UI Foundation (Optional)
+## Phase 30: UI Foundation (Optional)
 
 **Goal:** UI is a projection over CLI-accessible state.
 
-### 29.1 Views
+### 30.1 Views
 - [ ] Project overview
 - [ ] Task list / Kanban
 - [ ] TaskFlow document view
 - [ ] Dependency graph
 - [ ] Diff and verification views
 
-### 29.2 Principles
+### 30.2 Principles
 - [ ] UI reads via CLI/events only
 - [ ] UI does not modify state directly
 - [ ] UI is secondary to CLI
 
-### 29.3 Exit Criteria
+### 30.3 Exit Criteria
 - [ ] UI reflects CLI state accurately
 - [ ] No UI-only features
 
 ---
 
-## Phase 30: Production Hardening
+## Phase 31: Production Hardening
 
 **Goal:** Production-ready quality.
 
-### 30.1 Error Handling
+### 31.1 Error Handling
 - [ ] All error paths tested
 - [ ] Recovery hints useful
 - [ ] No silent failures
 
-### 30.2 Performance
+### 31.2 Performance
 - [ ] Event replay scales to 10k+ events
 - [ ] CLI response time < 100ms for reads
 - [ ] Parallel execution efficient
 
-### 30.3 Documentation
+### 31.3 Documentation
 - [ ] CLI help complete
 - [ ] Architecture docs match implementation
 - [ ] User guide written
 
-### 30.4 Exit Criteria
+### 31.4 Exit Criteria
 - [ ] All user stories achievable
 - [ ] All principles upheld
 - [ ] Ready for real use
@@ -882,14 +910,14 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 | User Story | Phase |
 |------------|-------|
 | US1: Simple Todo Tracking | Phase 6 |
-| US2: Manual Agent Assistance | Phase 22 |
-| US3: Structured TaskFlow | Phase 22 |
-| US4: Verification Failure & Retry | Phase 18 |
-| US5: Parallel Scoped Agents | Phase 23 |
-| US6: Scope Conflict Handling | Phase 23 |
-| US7: Multi-Repo Project Execution | Phase 24 |
-| US8: Shared Repo Across Projects | Phase 24 |
-| US9: Automation | Phase 27 |
+| US2: Manual Agent Assistance | Phase 23 |
+| US3: Structured TaskFlow | Phase 23 |
+| US4: Verification Failure & Retry | Phase 19 |
+| US5: Parallel Scoped Agents | Phase 24 |
+| US6: Scope Conflict Handling | Phase 24 |
+| US7: Multi-Repo Project Execution | Phase 25 |
+| US8: Shared Repo Across Projects | Phase 25 |
+| US9: Automation | Phase 28 |
 | US10: Pause & Resume | Phase 9 |
 
 ---
