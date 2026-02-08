@@ -2,7 +2,6 @@
 //!
 //! All state in Hivemind is derived by replaying events. This ensures
 //! determinism, idempotency, and complete observability.
-
 use super::events::{Event, EventPayload};
 use super::flow::{FlowState, TaskExecState, TaskExecution, TaskFlow};
 use super::graph::{GraphState, TaskGraph};
@@ -23,6 +22,17 @@ pub struct AttemptState {
     pub diff_id: Option<Uuid>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectRuntimeConfig {
+    pub adapter_name: String,
+    pub binary_path: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+    pub timeout_ms: u64,
+}
+
 /// A project in the system.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Project {
@@ -32,6 +42,8 @@ pub struct Project {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub repositories: Vec<Repository>,
+    #[serde(default)]
+    pub runtime: Option<ProjectRuntimeConfig>,
 }
 
 /// A repository attached to a project.
@@ -130,6 +142,7 @@ impl AppState {
                         created_at: timestamp,
                         updated_at: timestamp,
                         repositories: Vec::new(),
+                        runtime: None,
                     },
                 );
             }
@@ -145,6 +158,25 @@ impl AppState {
                     if let Some(d) = description {
                         project.description = Some(d.clone());
                     }
+                    project.updated_at = timestamp;
+                }
+            }
+            EventPayload::ProjectRuntimeConfigured {
+                project_id,
+                adapter_name,
+                binary_path,
+                args,
+                env,
+                timeout_ms,
+            } => {
+                if let Some(project) = self.projects.get_mut(project_id) {
+                    project.runtime = Some(ProjectRuntimeConfig {
+                        adapter_name: adapter_name.clone(),
+                        binary_path: binary_path.clone(),
+                        args: args.clone(),
+                        env: env.clone(),
+                        timeout_ms: *timeout_ms,
+                    });
                     project.updated_at = timestamp;
                 }
             }
@@ -581,6 +613,31 @@ impl AppState {
                     ms.updated_at = timestamp;
                 }
             }
+            EventPayload::RuntimeStarted {
+                adapter_name: _,
+                task_id: _,
+                attempt_id: _,
+            }
+            | EventPayload::RuntimeOutputChunk {
+                attempt_id: _,
+                stream: _,
+                content: _,
+            }
+            | EventPayload::RuntimeExited {
+                attempt_id: _,
+                exit_code: _,
+                duration_ms: _,
+            }
+            | EventPayload::RuntimeTerminated {
+                attempt_id: _,
+                reason: _,
+            }
+            | EventPayload::RuntimeFilesystemObserved {
+                attempt_id: _,
+                files_created: _,
+                files_modified: _,
+                files_deleted: _,
+            } => {}
         }
     }
 

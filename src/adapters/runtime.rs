@@ -194,45 +194,6 @@ impl AdapterConfig {
     }
 }
 
-/// Runtime adapter lifecycle events.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum AdapterEvent {
-    /// Runtime started.
-    Started {
-        adapter_name: String,
-        task_id: Uuid,
-        attempt_id: Uuid,
-    },
-    /// Output chunk received.
-    OutputChunk {
-        attempt_id: Uuid,
-        stream: OutputStream,
-        content: String,
-    },
-    /// Runtime exited.
-    Exited {
-        attempt_id: Uuid,
-        exit_code: i32,
-        duration: Duration,
-    },
-    /// Runtime was terminated (timeout or manual).
-    Terminated { attempt_id: Uuid, reason: String },
-    /// Error occurred.
-    Error {
-        attempt_id: Uuid,
-        error: RuntimeError,
-    },
-}
-
-/// Output stream type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum OutputStream {
-    Stdout,
-    Stderr,
-}
-
 /// Trait for runtime adapters.
 ///
 /// All adapters must implement this trait to be usable by Hivemind.
@@ -429,18 +390,6 @@ mod tests {
 
         let report = adapter.execute(input).unwrap();
         assert!(!report.is_success());
-    }
-
-    #[test]
-    fn adapter_event_serialization() {
-        let event = AdapterEvent::Started {
-            adapter_name: "test".to_string(),
-            task_id: Uuid::new_v4(),
-            attempt_id: Uuid::new_v4(),
-        };
-
-        let json = serde_json::to_string(&event).unwrap();
-        assert!(json.contains("started"));
     }
 
     #[test]

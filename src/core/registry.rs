@@ -5,7 +5,7 @@
 
 use crate::core::diff::{unified_diff, Baseline, ChangeType, Diff, FileChange};
 use crate::core::error::{HivemindError, Result};
-use crate::core::events::{CorrelationIds, Event, EventPayload};
+use crate::core::events::{CorrelationIds, Event, EventPayload, RuntimeOutputStream};
 use crate::core::flow::{FlowState, TaskExecState, TaskFlow};
 use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, TaskGraph};
 use crate::core::scope::{RepoAccessMode, Scope};
@@ -13,10 +13,16 @@ use crate::core::state::{AppState, AttemptState, Project, Task, TaskState};
 use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
 use crate::storage::event_store::{EventFilter, EventStore, FileEventStore};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use uuid::Uuid;
+
+use crate::adapters::opencode::{OpenCodeAdapter, OpenCodeConfig};
+use crate::adapters::runtime::{ExecutionInput, RuntimeAdapter};
+use crate::core::error::ErrorCategory;
 
 /// Configuration for the registry.
 #[derive(Debug, Clone)]
@@ -778,6 +784,387 @@ impl Registry {
         })?;
 
         self.get_project(&project.id.to_string())
+    }
+
+    pub fn project_runtime_set(
+        &self,
+        id_or_name: &str,
+        adapter: &str,
+        binary_path: &str,
+        args: &[String],
+        env: &[String],
+        timeout_ms: u64,
+    ) -> Result<Project> {
+        let project = self.get_project(id_or_name)?;
+
+        let mut env_map = HashMap::new();
+        for pair in env {
+            let Some((k, v)) = pair.split_once('=') else {
+                return Err(HivemindError::user(
+                    "invalid_env",
+                    format!("Invalid env var '{pair}'. Expected KEY=VALUE"),
+                    "registry:project_runtime_set",
+                ));
+            };
+            env_map.insert(k.to_string(), v.to_string());
+        }
+
+        let event = Event::new(
+            EventPayload::ProjectRuntimeConfigured {
+                project_id: project.id,
+                adapter_name: adapter.to_string(),
+                binary_path: binary_path.to_string(),
+                args: args.to_vec(),
+                env: env_map,
+                timeout_ms,
+            },
+            CorrelationIds::for_project(project.id),
+        );
+
+        self.store.append(event).map_err(|e| {
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:project_runtime_set",
+            )
+        })?;
+
+        self.get_project(&project.id.to_string())
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub fn tick_flow(&self, flow_id: &str) -> Result<TaskFlow> {
+        let flow = self.get_flow(flow_id)?;
+        if flow.state != FlowState::Running {
+            return Err(HivemindError::user(
+                "flow_not_running",
+                "Flow is not in running state",
+                "registry:tick_flow",
+            ));
+        }
+
+        let state = self.state()?;
+        let graph = state.graphs.get(&flow.graph_id).ok_or_else(|| {
+            HivemindError::system("graph_not_found", "Graph not found", "registry:tick_flow")
+        })?;
+
+        let mut newly_ready = Vec::new();
+        for task_id in graph.tasks.keys() {
+            let Some(exec) = flow.task_executions.get(task_id) else {
+                continue;
+            };
+            if exec.state != TaskExecState::Pending {
+                continue;
+            }
+
+            let deps_satisfied = graph.dependencies.get(task_id).is_none_or(|deps| {
+                deps.iter().all(|dep| {
+                    flow.task_executions
+                        .get(dep)
+                        .is_some_and(|e| e.state == TaskExecState::Success)
+                })
+            });
+
+            if deps_satisfied {
+                newly_ready.push(*task_id);
+            }
+        }
+
+        for task_id in newly_ready {
+            let event = Event::new(
+                EventPayload::TaskReady {
+                    flow_id: flow.id,
+                    task_id,
+                },
+                CorrelationIds::for_graph_flow_task(
+                    flow.project_id,
+                    flow.graph_id,
+                    flow.id,
+                    task_id,
+                ),
+            );
+            self.store.append(event).map_err(|e| {
+                HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
+            })?;
+        }
+
+        let flow = self.get_flow(flow_id)?;
+        let mut ready = flow.tasks_in_state(TaskExecState::Ready);
+        ready.sort();
+        let Some(task_id) = ready.first().copied() else {
+            return Ok(flow);
+        };
+
+        let project = state.projects.get(&flow.project_id).ok_or_else(|| {
+            HivemindError::system(
+                "project_not_found",
+                format!("Project '{}' not found", flow.project_id),
+                "registry:tick_flow",
+            )
+        })?;
+
+        let runtime = project.runtime.clone().ok_or_else(|| {
+            HivemindError::new(
+                ErrorCategory::Runtime,
+                "runtime_not_configured",
+                "Project has no runtime configured",
+                "registry:tick_flow",
+            )
+        })?;
+
+        if runtime.adapter_name != "opencode" {
+            return Err(HivemindError::user(
+                "unsupported_runtime",
+                format!("Unsupported runtime adapter '{}'", runtime.adapter_name),
+                "registry:tick_flow",
+            ));
+        }
+
+        let manager = Self::worktree_manager_for_flow(&flow, &state)?;
+        let worktree_status = manager
+            .inspect(flow.id, task_id)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:tick_flow"))?;
+        if !worktree_status.is_worktree {
+            return Err(HivemindError::user(
+                "worktree_not_found",
+                "Worktree not found for task",
+                "registry:tick_flow",
+            ));
+        }
+
+        let baseline = Baseline::capture(&worktree_status.path).map_err(|e| {
+            HivemindError::system(
+                "baseline_capture_failed",
+                e.to_string(),
+                "registry:tick_flow",
+            )
+        })?;
+
+        let attempt_id = Uuid::new_v4();
+        let attempt_corr = CorrelationIds::for_graph_flow_task_attempt(
+            flow.project_id,
+            flow.graph_id,
+            flow.id,
+            task_id,
+            attempt_id,
+        );
+
+        let started_event = Event::new(
+            EventPayload::RuntimeStarted {
+                adapter_name: runtime.adapter_name.clone(),
+                task_id,
+                attempt_id,
+            },
+            attempt_corr.clone(),
+        );
+        self.store.append(started_event).map_err(|e| {
+            HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
+        })?;
+
+        let from_state = flow
+            .task_executions
+            .get(&task_id)
+            .map_or(TaskExecState::Pending, |e| e.state);
+
+        let start_event = Event::new(
+            EventPayload::TaskExecutionStateChanged {
+                flow_id: flow.id,
+                task_id,
+                from: from_state,
+                to: TaskExecState::Running,
+            },
+            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, task_id),
+        );
+        self.store.append(start_event).map_err(|e| {
+            HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
+        })?;
+
+        let timeout = Duration::from_millis(runtime.timeout_ms);
+        let mut cfg = OpenCodeConfig::new(PathBuf::from(runtime.binary_path));
+        cfg.base.args = runtime.args;
+        cfg.base.env = runtime.env;
+        cfg.base.timeout = timeout;
+
+        let mut adapter = OpenCodeAdapter::new(cfg);
+        adapter.initialize().map_err(|e| {
+            HivemindError::new(
+                ErrorCategory::Runtime,
+                e.code,
+                e.message,
+                "registry:tick_flow",
+            )
+        })?;
+        adapter
+            .prepare(task_id, &worktree_status.path)
+            .map_err(|e| {
+                HivemindError::new(
+                    ErrorCategory::Runtime,
+                    e.code,
+                    e.message,
+                    "registry:tick_flow",
+                )
+            })?;
+
+        let task = graph.tasks.get(&task_id).ok_or_else(|| {
+            HivemindError::system(
+                "task_not_found",
+                "Task not found in graph",
+                "registry:tick_flow",
+            )
+        })?;
+
+        let input = ExecutionInput {
+            task_description: task
+                .description
+                .clone()
+                .unwrap_or_else(|| task.title.clone()),
+            success_criteria: task.criteria.description.clone(),
+            context: None,
+            prior_attempts: Vec::new(),
+            verifier_feedback: None,
+        };
+
+        let exec_result = adapter.execute(input);
+
+        let report = match exec_result {
+            Ok(r) => {
+                let diff = Diff::compute(&baseline, &worktree_status.path).map_err(|e| {
+                    HivemindError::system(
+                        "diff_compute_failed",
+                        e.to_string(),
+                        "registry:tick_flow",
+                    )
+                })?;
+                let created = diff
+                    .changes
+                    .iter()
+                    .filter(|c| c.change_type == ChangeType::Created)
+                    .map(|c| c.path.clone())
+                    .collect();
+                let modified = diff
+                    .changes
+                    .iter()
+                    .filter(|c| c.change_type == ChangeType::Modified)
+                    .map(|c| c.path.clone())
+                    .collect();
+                let deleted = diff
+                    .changes
+                    .iter()
+                    .filter(|c| c.change_type == ChangeType::Deleted)
+                    .map(|c| c.path.clone())
+                    .collect();
+                r.with_file_changes(created, modified, deleted)
+            }
+            Err(e) => {
+                let reason = format!("{}: {}", e.code, e.message);
+                let terminated = Event::new(
+                    EventPayload::RuntimeTerminated { attempt_id, reason },
+                    attempt_corr,
+                );
+                self.store.append(terminated).map_err(|err| {
+                    HivemindError::system(
+                        "event_append_failed",
+                        err.to_string(),
+                        "registry:tick_flow",
+                    )
+                })?;
+
+                let verify_event = Event::new(
+                    EventPayload::TaskExecutionStateChanged {
+                        flow_id: flow.id,
+                        task_id,
+                        from: TaskExecState::Running,
+                        to: TaskExecState::Verifying,
+                    },
+                    CorrelationIds::for_graph_flow_task(
+                        flow.project_id,
+                        flow.graph_id,
+                        flow.id,
+                        task_id,
+                    ),
+                );
+                self.store.append(verify_event).map_err(|err| {
+                    HivemindError::system(
+                        "event_append_failed",
+                        err.to_string(),
+                        "registry:tick_flow",
+                    )
+                })?;
+
+                return self.get_flow(flow_id);
+            }
+        };
+
+        let fs_event = Event::new(
+            EventPayload::RuntimeFilesystemObserved {
+                attempt_id,
+                files_created: report.files_created.clone(),
+                files_modified: report.files_modified.clone(),
+                files_deleted: report.files_deleted.clone(),
+            },
+            attempt_corr.clone(),
+        );
+        self.store.append(fs_event).map_err(|e| {
+            HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
+        })?;
+
+        for chunk in report.stdout.lines() {
+            let event = Event::new(
+                EventPayload::RuntimeOutputChunk {
+                    attempt_id,
+                    stream: RuntimeOutputStream::Stdout,
+                    content: chunk.to_string(),
+                },
+                attempt_corr.clone(),
+            );
+            self.store.append(event).map_err(|e| {
+                HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
+            })?;
+        }
+        for chunk in report.stderr.lines() {
+            let event = Event::new(
+                EventPayload::RuntimeOutputChunk {
+                    attempt_id,
+                    stream: RuntimeOutputStream::Stderr,
+                    content: chunk.to_string(),
+                },
+                attempt_corr.clone(),
+            );
+            self.store.append(event).map_err(|e| {
+                HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
+            })?;
+        }
+
+        let duration_ms = u64::try_from(report.duration.as_millis().min(u128::from(u64::MAX)))
+            .unwrap_or(u64::MAX);
+        let exited_event = Event::new(
+            EventPayload::RuntimeExited {
+                attempt_id,
+                exit_code: report.exit_code,
+                duration_ms,
+            },
+            attempt_corr,
+        );
+        self.store.append(exited_event).map_err(|e| {
+            HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
+        })?;
+
+        let verify_event = Event::new(
+            EventPayload::TaskExecutionStateChanged {
+                flow_id: flow.id,
+                task_id,
+                from: TaskExecState::Running,
+                to: TaskExecState::Verifying,
+            },
+            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, task_id),
+        );
+        self.store.append(verify_event).map_err(|e| {
+            HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
+        })?;
+
+        let _ = report;
+
+        self.get_flow(flow_id)
     }
 
     /// Returns the registry configuration.
@@ -2179,11 +2566,59 @@ impl Registry {
 mod tests {
     use super::*;
     use crate::storage::event_store::InMemoryEventStore;
+    use std::process::Command;
 
     fn test_registry() -> Registry {
         let store = Arc::new(InMemoryEventStore::new());
         let config = RegistryConfig::with_dir(PathBuf::from("/tmp/test"));
         Registry::with_store(store, config)
+    }
+
+    fn init_git_repo(repo_dir: &std::path::Path) {
+        std::fs::create_dir_all(repo_dir).expect("create repo dir");
+
+        let out = Command::new("git")
+            .args(["init"])
+            .current_dir(repo_dir)
+            .output()
+            .expect("git init");
+        assert!(
+            out.status.success(),
+            "git init: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        std::fs::write(repo_dir.join("README.md"), "test\n").expect("write file");
+
+        let out = Command::new("git")
+            .args(["add", "."])
+            .current_dir(repo_dir)
+            .output()
+            .expect("git add");
+        assert!(
+            out.status.success(),
+            "git add: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let out = Command::new("git")
+            .args([
+                "-c",
+                "user.name=Hivemind",
+                "-c",
+                "user.email=hivemind@example.com",
+                "commit",
+                "-m",
+                "init",
+            ])
+            .current_dir(repo_dir)
+            .output()
+            .expect("git commit");
+        assert!(
+            out.status.success(),
+            "git commit: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
 
     #[test]
@@ -2242,6 +2677,138 @@ mod tests {
 
         assert_eq!(updated.name, "new-name");
         assert_eq!(updated.description, Some("New desc".to_string()));
+    }
+
+    #[test]
+    fn project_runtime_set_rejects_invalid_env_pairs() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+
+        let res = registry.project_runtime_set(
+            "proj",
+            "opencode",
+            "opencode",
+            &[],
+            &["NO_EQUALS".to_string()],
+            1000,
+        );
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "invalid_env");
+    }
+
+    #[test]
+    fn tick_flow_rejects_non_running_flow() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+
+        let res = registry.tick_flow(&flow.id.to_string());
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "flow_not_running");
+    }
+
+    #[test]
+    fn tick_flow_requires_runtime_configuration() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let res = registry.tick_flow(&flow.id.to_string());
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "runtime_not_configured");
+    }
+
+    #[test]
+    fn tick_flow_rejects_unsupported_runtime_adapter() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set("proj", "not-a-real-adapter", "opencode", &[], &[], 1000)
+            .unwrap();
+
+        let res = registry.tick_flow(&flow.id.to_string());
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "unsupported_runtime");
+    }
+
+    #[test]
+    fn tick_flow_errors_when_project_has_no_repo() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set("proj", "opencode", "opencode", &[], &[], 1000)
+            .unwrap();
+
+        let res = registry.tick_flow(&flow.id.to_string());
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "project_has_no_repo");
+    }
+
+    #[test]
+    fn tick_flow_executes_ready_task_and_emits_runtime_events() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+
+        let repo_path = repo_dir.to_string_lossy().to_string();
+        registry
+            .attach_repo("proj", &repo_path, None, RepoAccessMode::ReadWrite)
+            .unwrap();
+
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "opencode",
+                "/usr/bin/env",
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo unit_stdout; echo unit_stderr 1>&2; printf data > hm_unit.txt"
+                        .to_string(),
+                ],
+                &[],
+                1000,
+            )
+            .unwrap();
+
+        let _ = registry.tick_flow(&flow.id.to_string()).unwrap();
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::RuntimeStarted { .. })));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::RuntimeOutputChunk { .. })));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::RuntimeFilesystemObserved { .. })));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::RuntimeExited { .. })));
     }
 
     #[test]

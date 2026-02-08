@@ -117,6 +117,7 @@ pub struct GraphValidateArgs {
 pub enum FlowCommands {
     Create(FlowCreateArgs),
     Start(FlowStartArgs),
+    Tick(FlowTickArgs),
     Pause(FlowPauseArgs),
     Resume(FlowResumeArgs),
     Abort(FlowAbortArgs),
@@ -132,6 +133,11 @@ pub struct FlowCreateArgs {
 
 #[derive(Args)]
 pub struct FlowStartArgs {
+    pub flow_id: String,
+}
+
+#[derive(Args)]
+pub struct FlowTickArgs {
     pub flow_id: String,
 }
 
@@ -190,6 +196,8 @@ pub enum ProjectCommands {
     /// Update a project
     Update(ProjectUpdateArgs),
 
+    RuntimeSet(ProjectRuntimeSetArgs),
+
     /// Attach a repository to a project
     AttachRepo(AttachRepoArgs),
 
@@ -206,6 +214,26 @@ pub struct ProjectCreateArgs {
     /// Project description
     #[arg(long, short = 'd')]
     pub description: Option<String>,
+}
+
+#[derive(Args)]
+pub struct ProjectRuntimeSetArgs {
+    pub project: String,
+
+    #[arg(long, default_value = "opencode")]
+    pub adapter: String,
+
+    #[arg(long, default_value = "opencode")]
+    pub binary_path: String,
+
+    #[arg(long = "arg", allow_hyphen_values = true)]
+    pub args: Vec<String>,
+
+    #[arg(long = "env")]
+    pub env: Vec<String>,
+
+    #[arg(long, default_value = "600000")]
+    pub timeout_ms: u64,
 }
 
 /// Arguments for project inspect.
