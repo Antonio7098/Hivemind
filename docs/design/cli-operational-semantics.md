@@ -524,8 +524,10 @@ hivemind flow status <flow-id> [--format json|table|detail]
 
 **Synopsis:**
 ```
-hivemind flow tick <flow-id>
+hivemind flow tick <flow-id> [--interactive]
 ```
+
+`--interactive` is introduced in **Phase 15: Interactive Runtime Sessions (CLI)**.
 
 **Preconditions:**
 - Flow exists
@@ -536,6 +538,13 @@ hivemind flow tick <flow-id>
 - Transitions any dependency-satisfied `PENDING` tasks to `READY`
 - Executes a single `READY` task attempt using the configured runtime adapter
 - Emits runtime lifecycle events correlated by attempt ID
+
+If `--interactive` is provided and the selected adapter supports interactive execution:
+
+- The CLI runs the attempt in an interactive session
+- Runtime output is streamed continuously
+- User input is forwarded to the runtime
+- Ctrl+C interrupts the runtime deterministically and records the interruption
 
 **Events:**
 ```
@@ -556,6 +565,13 @@ RuntimeOutputChunk:
   attempt_id: <attempt-id>
   stream: stdout|stderr
   content: <text>
+
+RuntimeInputProvided:
+  attempt_id: <attempt-id>
+  content: <text>
+
+RuntimeInterrupted:
+  attempt_id: <attempt-id>
 
 RuntimeFilesystemObserved:
   attempt_id: <attempt-id>
@@ -579,6 +595,7 @@ TaskExecutionStateChanged:
 - `RUNTIME_NOT_CONFIGURED`
 - `WORKTREE_NOT_FOUND`
 - `UNSUPPORTED_RUNTIME`
+- `INTERACTIVE_MODE_UNSUPPORTED`: `--interactive` was provided but the adapter does not support interactive execution
 
 **Idempotence:** Not idempotent. Each tick may schedule and/or execute work.
 

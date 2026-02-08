@@ -143,6 +143,12 @@ Wrapper adapters:
 - Allow the runtime to operate freely within scope
 - Observe outputs and filesystem changes
 
+Wrapper adapters may optionally support **interactive execution** for runtimes that require follow-up input.
+
+- Interactive execution is treated as IO transport (stdin/stdout), not a new orchestration capability
+- All interaction is recorded as events
+- The UI (if any) is a projection over those events and CLI-accessible capabilities
+
 Undo, retry, and rollback are handled mechanically via git and worktrees.
 
 ---
