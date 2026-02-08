@@ -482,6 +482,12 @@ impl AppState {
             | EventPayload::RuntimeTerminated {
                 attempt_id: _,
                 reason: _,
+            }
+            | EventPayload::RuntimeFilesystemObserved {
+                attempt_id: _,
+                files_created: _,
+                files_modified: _,
+                files_deleted: _,
             } => {}
 
             EventPayload::TaskRetryRequested {
@@ -613,31 +619,6 @@ impl AppState {
                     ms.updated_at = timestamp;
                 }
             }
-            EventPayload::RuntimeStarted {
-                adapter_name: _,
-                task_id: _,
-                attempt_id: _,
-            }
-            | EventPayload::RuntimeOutputChunk {
-                attempt_id: _,
-                stream: _,
-                content: _,
-            }
-            | EventPayload::RuntimeExited {
-                attempt_id: _,
-                exit_code: _,
-                duration_ms: _,
-            }
-            | EventPayload::RuntimeTerminated {
-                attempt_id: _,
-                reason: _,
-            }
-            | EventPayload::RuntimeFilesystemObserved {
-                attempt_id: _,
-                files_created: _,
-                files_modified: _,
-                files_deleted: _,
-            } => {}
         }
     }
 
