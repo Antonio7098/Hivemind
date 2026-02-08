@@ -401,23 +401,23 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Observe what changed during execution.
 
 ### 12.1 Baseline Snapshot
-- [ ] Capture file list + hashes before execution
-- [ ] Capture git HEAD
+- [x] Capture file list + hashes before execution
+- [x] Capture git HEAD
 
 ### 12.2 Change Detection
-- [ ] Compare post-execution state to baseline
-- [ ] Identify: created, modified, deleted files
-- [ ] Compute unified diffs
+- [x] Compare post-execution state to baseline
+- [x] Identify: created, modified, deleted files
+- [x] Compute unified diffs
 
 ### 12.3 Diff Events
-- [ ] `FileModified`
-- [ ] `DiffComputed`
-- [ ] `CheckpointCommitCreated`
+- [x] `FileModified`
+- [x] `DiffComputed`
+- [x] `CheckpointCommitCreated`
 
 ### 12.4 Exit Criteria
-- [ ] Diffs computed accurately
-- [ ] Diffs attributed to task/attempt
-- [ ] Changes observable via events
+- [x] Diffs computed accurately
+- [x] Diffs attributed to task/attempt
+- [x] Changes observable via events
 
 ---
 
@@ -671,7 +671,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 - [ ] Create tasks with scopes
 - [ ] Build TaskGraph
 - [ ] Create and start TaskFlow
-- [ ] Execute tasks via Claude Code adapter
+- [ ] Execute tasks via Opencode adapter
 - [ ] Verify with checks
 - [ ] Retry on failure
 - [ ] Merge on success

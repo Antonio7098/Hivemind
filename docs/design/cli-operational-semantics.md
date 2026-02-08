@@ -489,7 +489,110 @@ hivemind flow status <flow-id> [--format json|table|detail]
 
 ## 6. Task Execution Commands
 
-### 6.1 task retry
+### 6.1 task start
+
+**Synopsis:**
+```
+hivemind task start <task-id>
+```
+
+**Preconditions:**
+- Task exists and is part of a TaskFlow
+- Flow is RUNNING
+- Task execution state is READY or RETRY
+- Worktree exists for the task
+
+**Effects:**
+- Task execution state transitions to RUNNING
+- A new attempt is created for the task
+- A filesystem baseline is captured for that attempt
+- Baseline artifact is persisted under `.hivemind/artifacts/baselines/`
+
+**Events:**
+```
+TaskExecutionStateChanged:
+  task_id: <task-id>
+  from: READY|RETRY
+  to: RUNNING
+
+AttemptStarted:
+  task_id: <task-id>
+  attempt_id: <generated>
+
+BaselineCaptured:
+  task_id: <task-id>
+  attempt_id: <attempt-id>
+  baseline_id: <generated>
+  git_head: <sha>
+```
+
+**Failures:**
+- `TASK_NOT_FOUND`
+- `TASK_NOT_IN_FLOW`: Task is not part of any TaskFlow
+- `FLOW_NOT_RUNNING`: Flow is not in RUNNING state
+- `TASK_NOT_READY`: Task is not in READY or RETRY state
+- `WORKTREE_NOT_FOUND`: Worktree not found for task
+- `BASELINE_CAPTURE_FAILED`: Baseline capture failed
+
+**Idempotence:** Not idempotent.
+
+---
+
+### 6.2 task complete
+
+**Synopsis:**
+```
+hivemind task complete <task-id>
+```
+
+**Preconditions:**
+- Task exists and is part of a TaskFlow
+- Task execution state is RUNNING
+- The current attempt has an associated baseline
+
+**Effects:**
+- Task execution state transitions to VERIFYING
+- Changes are detected and unified diffs are computed against the baseline
+- Diff artifact is persisted under `.hivemind/artifacts/diffs/`
+- A best-effort checkpoint commit may be created in the task worktree
+
+**Events:**
+```
+TaskExecutionStateChanged:
+  task_id: <task-id>
+  from: RUNNING
+  to: VERIFYING
+
+FileModified:
+  task_id: <task-id>
+  attempt_id: <attempt-id>
+  path: <path>
+  change_type: CREATED|MODIFIED|DELETED
+
+DiffComputed:
+  task_id: <task-id>
+  attempt_id: <attempt-id>
+  diff_id: <generated>
+  baseline_id: <baseline-id>
+
+CheckpointCommitCreated:
+  task_id: <task-id>
+  attempt_id: <attempt-id>
+  commit_sha: <sha>
+```
+
+**Failures:**
+- `TASK_NOT_FOUND`
+- `TASK_NOT_IN_FLOW`
+- `TASK_NOT_RUNNING`: Task is not in RUNNING state
+- `BASELINE_NOT_FOUND`: Baseline artifact missing for attempt
+- `DIFF_COMPUTE_FAILED`: Diff computation failed
+
+**Idempotence:** Not idempotent.
+
+---
+
+### 6.3 task retry
 
 **Synopsis:**
 ```
@@ -523,7 +626,7 @@ TaskRetryRequested:
 
 ---
 
-### 6.2 task abort
+### 6.4 task abort
 
 **Synopsis:**
 ```
@@ -555,7 +658,7 @@ TaskAborted:
 
 ---
 
-### 6.3 attempt inspect
+### 6.5 attempt inspect
 
 **Synopsis:**
 ```
@@ -573,6 +676,10 @@ hivemind attempt inspect <attempt-id> [--context] [--diff] [--output]
 - With --diff: changes made
 - With --output: runtime output
 
+**Notes:**
+- The CLI primarily expects `<attempt-id>`. For backwards compatibility, `<task-id>` may be accepted and will return the latest attempt information for that task within its flow.
+- With `--diff`, the CLI prints the stored unified diff artifact (if one has been computed).
+
 **Events:** None
 
 **Failures:**
@@ -582,7 +689,7 @@ hivemind attempt inspect <attempt-id> [--context] [--diff] [--output]
 
 ---
 
-### 6.4 worktree list
+### 6.6 worktree list
 
 **Synopsis:**
 ```
@@ -609,7 +716,7 @@ hivemind worktree list <flow-id>
 
 ---
 
-### 6.5 worktree inspect
+### 6.7 worktree inspect
 
 **Synopsis:**
 ```
@@ -640,7 +747,7 @@ hivemind worktree inspect <task-id>
 
 ---
 
-### 6.6 worktree cleanup
+### 6.8 worktree cleanup
 
 **Synopsis:**
 ```

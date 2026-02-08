@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.3",
+      "date": "2026-02-08",
+      "phase": 12,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Capture per-attempt filesystem baselines and persist them as artifacts for replay-safe diff computation"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Compute created/modified/deleted files and unified diffs at task completion, persisting diff artifacts"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Emit new diff-related events: AttemptStarted, BaselineCaptured, FileModified, DiffComputed, CheckpointCommitCreated"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add manual task execution boundary commands: task start and task complete"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Extend attempt inspect to support --diff and show stored unified diff output"
+        }
+      ]
+    },
+    {
       "version": "v0.1.2",
       "date": "2026-02-07",
       "phase": 11,
