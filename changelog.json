@@ -4,6 +4,48 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.5",
+      "date": "2026-02-08",
+      "phase": 14,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add per-project runtime configuration persisted as events (adapter, binary path, args, env, timeout)"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add project runtime configuration command (project runtime-set)"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Invoke the configured runtime from flow tick and persist attempt-correlated runtime output and filesystem observation"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Persist filesystem observation as RuntimeFilesystemObserved event"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Improve attempt inspect to query attempt-correlated runtime events and optionally show output and file changes"
+        },
+        {
+          "type": "changed",
+          "area": "adapters",
+          "description": "Remove obsolete AdapterEvent layer in favor of core EventPayload runtime lifecycle events"
+        },
+        {
+          "type": "fixed",
+          "area": "tooling",
+          "description": "Fix Makefile coverage target for cargo-llvm-cov compatibility"
+        }
+      ]
+    },
+    {
       "version": "v0.1.4",
       "date": "2026-02-08",
       "phase": 12,

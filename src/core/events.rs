@@ -9,6 +9,8 @@ use crate::core::graph::GraphTask;
 use crate::core::scope::{RepoAccessMode, Scope};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
 use uuid::Uuid;
 
 /// Unique identifier for an event.
@@ -213,6 +215,16 @@ pub enum EventPayload {
         name: Option<String>,
         description: Option<String>,
     },
+    ProjectRuntimeConfigured {
+        project_id: Uuid,
+        adapter_name: String,
+        binary_path: String,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default)]
+        env: HashMap<String, String>,
+        timeout_ms: u64,
+    },
     /// A new task was created.
     TaskCreated {
         id: Uuid,
@@ -415,6 +427,15 @@ pub enum EventPayload {
     RuntimeTerminated {
         attempt_id: Uuid,
         reason: String,
+    },
+    RuntimeFilesystemObserved {
+        attempt_id: Uuid,
+        #[serde(default)]
+        files_created: Vec<PathBuf>,
+        #[serde(default)]
+        files_modified: Vec<PathBuf>,
+        #[serde(default)]
+        files_deleted: Vec<PathBuf>,
     },
 }
 

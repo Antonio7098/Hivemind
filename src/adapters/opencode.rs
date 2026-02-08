@@ -7,7 +7,7 @@ use super::runtime::{
     AdapterConfig, ExecutionInput, ExecutionReport, RuntimeAdapter, RuntimeError,
 };
 use std::fmt::Write as FmtWrite;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -178,6 +178,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     fn execute(&mut self, input: ExecutionInput) -> Result<ExecutionReport, RuntimeError> {
         let worktree = self
             .worktree
@@ -193,6 +194,10 @@ impl RuntimeAdapter for OpenCodeAdapter {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+
+        if !self.config.base.args.is_empty() {
+            cmd.args(&self.config.base.args);
+        }
 
         // Add environment variables
         for (key, value) in &self.config.base.env {
@@ -224,71 +229,89 @@ impl RuntimeAdapter for OpenCodeAdapter {
 
         self.process = Some(child);
 
-        // Wait with timeout
-        let mut stdout_content = String::new();
-        let mut stderr_content = String::new();
+        let (stdout_handle, stderr_handle) = if let Some(ref mut process) = self.process {
+            let stdout = process.stdout.take().ok_or_else(|| {
+                RuntimeError::new("stdout_capture_failed", "Missing stdout pipe", false)
+            })?;
+            let stderr = process.stderr.take().ok_or_else(|| {
+                RuntimeError::new("stderr_capture_failed", "Missing stderr pipe", false)
+            })?;
 
-        if let Some(ref mut process) = self.process {
-            // Read output in a loop with timeout checking
-            let stdout = process.stdout.take();
-            let stderr = process.stderr.take();
+            let stdout_handle = std::thread::spawn(move || {
+                let mut reader = BufReader::new(stdout);
+                let mut out = String::new();
+                let _ = reader.read_to_string(&mut out);
+                out
+            });
+            let stderr_handle = std::thread::spawn(move || {
+                let mut reader = BufReader::new(stderr);
+                let mut out = String::new();
+                let _ = reader.read_to_string(&mut out);
+                out
+            });
 
-            if let Some(stdout) = stdout {
-                let reader = BufReader::new(stdout);
-                for line in reader.lines() {
-                    if start.elapsed() > timeout {
-                        let _ = process.kill();
-                        return Err(RuntimeError::timeout(timeout));
-                    }
-                    if let Ok(line) = line {
-                        stdout_content.push_str(&line);
-                        stdout_content.push('\n');
-                    }
-                }
-            }
+            (stdout_handle, stderr_handle)
+        } else {
+            return Err(RuntimeError::new(
+                "no_process",
+                "No process to wait on",
+                false,
+            ));
+        };
 
-            if let Some(stderr) = stderr {
-                let reader = BufReader::new(stderr);
-                for line in reader.lines().map_while(Result::ok) {
-                    stderr_content.push_str(&line);
-                    stderr_content.push('\n');
-                }
-            }
+        let status = loop {
+            let Some(ref mut process) = self.process else {
+                return Err(RuntimeError::new(
+                    "no_process",
+                    "No process to wait on",
+                    false,
+                ));
+            };
 
-            // Wait for process to complete
-            let status = process.wait().map_err(|e| {
+            if let Some(status) = process.try_wait().map_err(|e| {
                 RuntimeError::new(
                     "wait_failed",
                     format!("Failed to wait for process: {e}"),
                     true,
                 )
-            })?;
-
-            let duration = start.elapsed();
-            let exit_code = status.code().unwrap_or(-1);
-
-            if exit_code == 0 {
-                Ok(ExecutionReport::success(
-                    duration,
-                    stdout_content,
-                    stderr_content,
-                ))
-            } else {
-                Ok(ExecutionReport::failure(
-                    exit_code,
-                    duration,
-                    RuntimeError::new(
-                        "nonzero_exit",
-                        format!("Process exited with code {exit_code}"),
-                        true,
-                    ),
-                ))
+            })? {
+                break status;
             }
+
+            if start.elapsed() > timeout {
+                let _ = process.kill();
+                let _ = process.wait();
+                let _ = stdout_handle.join();
+                let _ = stderr_handle.join();
+                self.process = None;
+                return Err(RuntimeError::timeout(timeout));
+            }
+
+            std::thread::sleep(Duration::from_millis(10));
+        };
+
+        let duration = start.elapsed();
+        let stdout_content = stdout_handle.join().unwrap_or_else(|_| String::new());
+        let stderr_content = stderr_handle.join().unwrap_or_else(|_| String::new());
+
+        self.process = None;
+
+        let exit_code = status.code().unwrap_or(-1);
+        if exit_code == 0 {
+            Ok(ExecutionReport::success(
+                duration,
+                stdout_content,
+                stderr_content,
+            ))
         } else {
-            Err(RuntimeError::new(
-                "no_process",
-                "No process to wait on",
-                false,
+            Ok(ExecutionReport::failure(
+                exit_code,
+                duration,
+                RuntimeError::new(
+                    "nonzero_exit",
+                    format!("Process exited with code {exit_code}"),
+                    true,
+                ),
             ))
         }
     }
@@ -314,6 +337,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn opencode_config_creation() {
@@ -412,6 +436,107 @@ mod tests {
 
         assert!(adapter.worktree.is_none());
         assert!(adapter.task_id.is_none());
+    }
+
+    #[test]
+    fn execute_enforces_timeout() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        let mut cfg = OpenCodeConfig::new(PathBuf::from("/usr/bin/env"));
+        cfg.base.args = vec!["sh".to_string(), "-c".to_string(), "sleep 2".to_string()];
+        cfg.base.timeout = Duration::from_millis(50);
+
+        let mut adapter = OpenCodeAdapter::new(cfg);
+        adapter.initialize().unwrap();
+        adapter.prepare(Uuid::new_v4(), tmp.path()).unwrap();
+
+        let input = ExecutionInput {
+            task_description: "Test".to_string(),
+            success_criteria: "Done".to_string(),
+            context: None,
+            prior_attempts: Vec::new(),
+            verifier_feedback: None,
+        };
+
+        let err = adapter.execute(input).unwrap_err();
+        assert_eq!(err.code, "timeout");
+    }
+
+    #[test]
+    fn initialize_falls_back_to_help_when_version_fails() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let script_path = tmp.path().join("fake_runtime.sh");
+        std::fs::write(
+            &script_path,
+            "#!/usr/bin/env sh\nif [ \"$1\" = \"--version\" ]; then exit 1; fi\nif [ \"$1\" = \"--help\" ]; then exit 0; fi\nexit 0\n",
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&script_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&script_path, perms).unwrap();
+
+        let cfg = OpenCodeConfig::new(script_path);
+        let mut adapter = OpenCodeAdapter::new(cfg);
+        adapter.initialize().unwrap();
+    }
+
+    #[test]
+    fn execute_success_captures_stdout_and_stderr() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        let mut cfg = OpenCodeConfig::new(PathBuf::from("/usr/bin/env"));
+        cfg.base.args = vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "echo ok_stdout; echo ok_stderr 1>&2".to_string(),
+        ];
+        cfg.base.timeout = Duration::from_secs(1);
+
+        let mut adapter = OpenCodeAdapter::new(cfg);
+        adapter.initialize().unwrap();
+        adapter.prepare(Uuid::new_v4(), tmp.path()).unwrap();
+
+        let input = ExecutionInput {
+            task_description: "Test".to_string(),
+            success_criteria: "Done".to_string(),
+            context: None,
+            prior_attempts: Vec::new(),
+            verifier_feedback: None,
+        };
+
+        let report = adapter.execute(input).unwrap();
+        assert_eq!(report.exit_code, 0);
+        assert!(report.stdout.contains("ok_stdout"));
+        assert!(report.stderr.contains("ok_stderr"));
+    }
+
+    #[test]
+    fn execute_nonzero_exit_returns_failure_report() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        let mut cfg = OpenCodeConfig::new(PathBuf::from("/usr/bin/env"));
+        cfg.base.args = vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "echo bad; exit 7".to_string(),
+        ];
+        cfg.base.timeout = Duration::from_secs(1);
+
+        let mut adapter = OpenCodeAdapter::new(cfg);
+        adapter.initialize().unwrap();
+        adapter.prepare(Uuid::new_v4(), tmp.path()).unwrap();
+
+        let input = ExecutionInput {
+            task_description: "Test".to_string(),
+            success_criteria: "Done".to_string(),
+            context: None,
+            prior_attempts: Vec::new(),
+            verifier_feedback: None,
+        };
+
+        let report = adapter.execute(input).unwrap();
+        assert_eq!(report.exit_code, 7);
+        assert!(report.errors.iter().any(|e| e.code == "nonzero_exit"));
     }
 
     // Note: Full execution tests require the actual opencode binary

@@ -234,6 +234,13 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
+        FlowCommands::Tick(args) => match registry.tick_flow(&args.flow_id) {
+            Ok(flow) => {
+                print_flow_id(flow.id, format);
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
         FlowCommands::Pause(args) => {
             let _ = args.wait;
             match registry.pause_flow(&args.flow_id) {
@@ -430,6 +437,20 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
+        ProjectCommands::RuntimeSet(args) => match registry.project_runtime_set(
+            &args.project,
+            &args.adapter,
+            &args.binary_path,
+            &args.args,
+            &args.env,
+            args.timeout_ms,
+        ) {
+            Ok(project) => {
+                print_project(&project, format);
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
         ProjectCommands::AttachRepo(args) => {
             let access_mode = match args.access.to_lowercase().as_str() {
                 "ro" => RepoAccessMode::ReadOnly,
@@ -713,6 +734,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
     match payload {
         EventPayload::ProjectCreated { .. } => "project_created",
         EventPayload::ProjectUpdated { .. } => "project_updated",
+        EventPayload::ProjectRuntimeConfigured { .. } => "project_runtime_configured",
         EventPayload::TaskCreated { .. } => "task_created",
         EventPayload::TaskUpdated { .. } => "task_updated",
         EventPayload::TaskClosed { .. } => "task_closed",
@@ -746,6 +768,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::RuntimeOutputChunk { .. } => "runtime_output_chunk",
         EventPayload::RuntimeExited { .. } => "runtime_exited",
         EventPayload::RuntimeTerminated { .. } => "runtime_terminated",
+        EventPayload::RuntimeFilesystemObserved { .. } => "runtime_filesystem_observed",
     }
 }
 
@@ -1116,6 +1139,12 @@ fn handle_attempt_inspect(
         );
     };
 
+    match try_print_attempt_from_events(registry, parsed, args, format) {
+        Ok(Some(code)) => return code,
+        Ok(None) => {}
+        Err(e) => return output_error(&e, format),
+    }
+
     match registry.get_attempt(attempt_id) {
         Ok(attempt) => print_attempt_inspect_attempt(registry, &attempt, args.diff, format),
         Err(e) if e.code == "attempt_not_found" => {
@@ -1183,6 +1212,274 @@ fn print_attempt_inspect_attempt(
     ExitCode::Success
 }
 
+struct AttemptInspectCollected {
+    stdout: String,
+    stderr: String,
+    adapter_name: Option<String>,
+    task_id: Option<Uuid>,
+    exit_code: Option<i32>,
+    duration_ms: Option<u64>,
+    terminated_reason: Option<String>,
+    files_created: Vec<std::path::PathBuf>,
+    files_modified: Vec<std::path::PathBuf>,
+    files_deleted: Vec<std::path::PathBuf>,
+}
+
+fn collect_attempt_runtime_data(
+    events: &[hivemind::core::events::Event],
+) -> AttemptInspectCollected {
+    use hivemind::core::events::{EventPayload, RuntimeOutputStream};
+
+    let mut collected = AttemptInspectCollected {
+        stdout: String::new(),
+        stderr: String::new(),
+        adapter_name: None,
+        task_id: None,
+        exit_code: None,
+        duration_ms: None,
+        terminated_reason: None,
+        files_created: Vec::new(),
+        files_modified: Vec::new(),
+        files_deleted: Vec::new(),
+    };
+
+    for ev in events {
+        match &ev.payload {
+            EventPayload::RuntimeStarted {
+                adapter_name,
+                task_id,
+                attempt_id: _,
+            } => {
+                collected.adapter_name = Some(adapter_name.clone());
+                collected.task_id = Some(*task_id);
+            }
+            EventPayload::RuntimeOutputChunk {
+                attempt_id: _,
+                stream,
+                content,
+            } => match stream {
+                RuntimeOutputStream::Stdout => {
+                    collected.stdout.push_str(content);
+                    collected.stdout.push('\n');
+                }
+                RuntimeOutputStream::Stderr => {
+                    collected.stderr.push_str(content);
+                    collected.stderr.push('\n');
+                }
+            },
+            EventPayload::RuntimeExited {
+                attempt_id: _,
+                exit_code,
+                duration_ms,
+            } => {
+                collected.exit_code = Some(*exit_code);
+                collected.duration_ms = Some(*duration_ms);
+            }
+            EventPayload::RuntimeTerminated {
+                attempt_id: _,
+                reason,
+            } => {
+                collected.terminated_reason = Some(reason.clone());
+            }
+            EventPayload::RuntimeFilesystemObserved {
+                attempt_id: _,
+                files_created,
+                files_modified,
+                files_deleted,
+            } => {
+                collected.files_created.clone_from(files_created);
+                collected.files_modified.clone_from(files_modified);
+                collected.files_deleted.clone_from(files_deleted);
+            }
+            _ => {}
+        }
+    }
+
+    collected
+}
+
+fn build_attempt_inspect_json(
+    attempt_id: Uuid,
+    corr: &hivemind::core::events::CorrelationIds,
+    collected: &AttemptInspectCollected,
+    args: &hivemind::cli::commands::AttemptInspectArgs,
+) -> serde_json::Value {
+    let mut info = serde_json::Map::new();
+
+    info.insert(
+        "attempt_id".to_string(),
+        serde_json::Value::String(attempt_id.to_string()),
+    );
+    if let Some(pid) = corr.project_id {
+        info.insert(
+            "project_id".to_string(),
+            serde_json::Value::String(pid.to_string()),
+        );
+    }
+    if let Some(gid) = corr.graph_id {
+        info.insert(
+            "graph_id".to_string(),
+            serde_json::Value::String(gid.to_string()),
+        );
+    }
+    if let Some(fid) = corr.flow_id {
+        info.insert(
+            "flow_id".to_string(),
+            serde_json::Value::String(fid.to_string()),
+        );
+    }
+    if let Some(tid) = collected.task_id.or(corr.task_id) {
+        info.insert(
+            "task_id".to_string(),
+            serde_json::Value::String(tid.to_string()),
+        );
+    }
+    if let Some(an) = collected.adapter_name.clone() {
+        info.insert("adapter_name".to_string(), serde_json::Value::String(an));
+    }
+    if let Some(ec) = collected.exit_code {
+        info.insert(
+            "exit_code".to_string(),
+            serde_json::Value::Number(ec.into()),
+        );
+    }
+    if let Some(dm) = collected.duration_ms {
+        info.insert(
+            "duration_ms".to_string(),
+            serde_json::Value::Number(dm.into()),
+        );
+    }
+    if let Some(reason) = collected.terminated_reason.clone() {
+        info.insert(
+            "terminated_reason".to_string(),
+            serde_json::Value::String(reason),
+        );
+    }
+
+    if args.output {
+        info.insert(
+            "stdout".to_string(),
+            serde_json::Value::String(collected.stdout.clone()),
+        );
+        info.insert(
+            "stderr".to_string(),
+            serde_json::Value::String(collected.stderr.clone()),
+        );
+    }
+    if args.diff {
+        info.insert(
+            "files_created".to_string(),
+            serde_json::to_value(&collected.files_created).unwrap_or(serde_json::Value::Null),
+        );
+        info.insert(
+            "files_modified".to_string(),
+            serde_json::to_value(&collected.files_modified).unwrap_or(serde_json::Value::Null),
+        );
+        info.insert(
+            "files_deleted".to_string(),
+            serde_json::to_value(&collected.files_deleted).unwrap_or(serde_json::Value::Null),
+        );
+    }
+
+    serde_json::Value::Object(info)
+}
+
+fn print_attempt_inspect_table(
+    attempt_id: Uuid,
+    corr: &hivemind::core::events::CorrelationIds,
+    collected: &AttemptInspectCollected,
+    args: &hivemind::cli::commands::AttemptInspectArgs,
+) {
+    println!("Attempt:  {attempt_id}");
+    if let Some(fid) = corr.flow_id {
+        println!("Flow:     {fid}");
+    }
+    if let Some(tid) = collected.task_id.or(corr.task_id) {
+        println!("Task:     {tid}");
+    }
+    if let Some(an) = collected.adapter_name.as_ref() {
+        println!("Adapter:  {an}");
+    }
+    if let Some(ec) = collected.exit_code {
+        println!("Exit:     {ec}");
+    }
+    if let Some(dm) = collected.duration_ms {
+        println!("Duration: {dm}ms");
+    }
+    if let Some(reason) = collected.terminated_reason.as_ref() {
+        println!("Terminated: {reason}");
+    }
+    if args.diff {
+        println!("Changes:");
+        if !collected.files_created.is_empty() {
+            println!("  Created:");
+            for p in &collected.files_created {
+                println!("    - {}", p.display());
+            }
+        }
+        if !collected.files_modified.is_empty() {
+            println!("  Modified:");
+            for p in &collected.files_modified {
+                println!("    - {}", p.display());
+            }
+        }
+        if !collected.files_deleted.is_empty() {
+            println!("  Deleted:");
+            for p in &collected.files_deleted {
+                println!("    - {}", p.display());
+            }
+        }
+    }
+    if args.output {
+        println!("Stdout:\n{}", collected.stdout);
+        println!("Stderr:\n{}", collected.stderr);
+    }
+}
+
+fn try_print_attempt_from_events(
+    registry: &Registry,
+    attempt_id: Uuid,
+    args: &hivemind::cli::commands::AttemptInspectArgs,
+    format: OutputFormat,
+) -> Result<Option<ExitCode>, hivemind::core::error::HivemindError> {
+    use hivemind::storage::event_store::EventFilter;
+
+    let mut filter = EventFilter::all();
+    filter.attempt_id = Some(attempt_id);
+    let events = registry.read_events(&filter)?;
+    if events.is_empty() {
+        return Ok(None);
+    }
+
+    let corr = events[0].metadata.correlation.clone();
+
+    let collected = collect_attempt_runtime_data(&events);
+    let info = build_attempt_inspect_json(attempt_id, &corr, &collected, args);
+    match format {
+        OutputFormat::Json => {
+            if let Ok(json) = serde_json::to_string_pretty(&info) {
+                println!("{json}");
+            }
+        }
+        OutputFormat::Yaml => {
+            if let Ok(yaml) = serde_yaml::to_string(&info) {
+                print!("{yaml}");
+            }
+        }
+        OutputFormat::Table => {
+            print_attempt_inspect_table(attempt_id, &corr, &collected, args);
+
+            if args.diff {
+                if let Some(diff) = registry.get_attempt_diff(&attempt_id.to_string())? {
+                    println!("{diff}");
+                }
+            }
+        }
+    }
+
+    Ok(Some(ExitCode::Success))
+}
+
 fn print_attempt_inspect_task_fallback(
     registry: &Registry,
     task_id: Uuid,
@@ -1247,7 +1544,7 @@ fn print_attempt_inspect_task_fallback(
             if let Some(ref reason) = exec.blocked_reason {
                 println!("Blocked:  {reason}");
             }
-            if let Some(d) = diff {
+            if let Some(d) = info.get("diff").and_then(|v| v.as_str()) {
                 println!("{d}");
             }
         }

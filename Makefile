@@ -37,7 +37,7 @@ test-integration:
 # Run tests with coverage
 coverage:
 	cargo llvm-cov --all-features --lcov --output-path lcov.info
-	cargo llvm-cov report --all-features
+	cargo llvm-cov report
 
 # Format code
 fmt:

@@ -33,6 +33,8 @@ pub struct EventFilter {
     pub task_id: Option<Uuid>,
     /// Filter by flow ID.
     pub flow_id: Option<Uuid>,
+    /// Filter by attempt ID.
+    pub attempt_id: Option<Uuid>,
     /// Maximum number of events to return.
     pub limit: Option<usize>,
 }
@@ -81,6 +83,11 @@ impl EventFilter {
         }
         if let Some(fid) = self.flow_id {
             if event.metadata.correlation.flow_id != Some(fid) {
+                return false;
+            }
+        }
+        if let Some(aid) = self.attempt_id {
+            if event.metadata.correlation.attempt_id != Some(aid) {
                 return false;
             }
         }
