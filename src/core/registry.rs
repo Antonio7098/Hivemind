@@ -3,16 +3,18 @@
 //! The registry derives project state from events and provides
 //! operations that emit new events.
 
+use crate::core::diff::{unified_diff, Baseline, ChangeType, Diff, FileChange};
 use crate::core::error::{HivemindError, Result};
 use crate::core::events::{CorrelationIds, Event, EventPayload};
 use crate::core::flow::{FlowState, TaskExecState, TaskFlow};
 use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, TaskGraph};
 use crate::core::scope::{RepoAccessMode, Scope};
-use crate::core::state::{AppState, Project, Task, TaskState};
+use crate::core::state::{AppState, AttemptState, Project, Task, TaskState};
 use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
 use crate::storage::event_store::{EventFilter, EventStore, FileEventStore};
-use serde::Serialize;
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -51,6 +53,18 @@ pub struct Registry {
     config: RegistryConfig,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DiffArtifact {
+    diff: Diff,
+    unified: String,
+}
+
+struct CompletionArtifacts<'a> {
+    baseline_id: Uuid,
+    artifact: &'a DiffArtifact,
+    checkpoint_commit_sha: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct GraphValidationResult {
     pub graph_id: Uuid,
@@ -59,6 +73,393 @@ pub struct GraphValidationResult {
 }
 
 impl Registry {
+    fn create_checkpoint_commit(worktree_path: &Path, attempt_id: Uuid) -> Option<String> {
+        let status = std::process::Command::new("git")
+            .current_dir(worktree_path)
+            .args(["status", "--porcelain"])
+            .output()
+            .ok()?;
+        if !status.status.success() {
+            return None;
+        }
+        if String::from_utf8_lossy(&status.stdout).trim().is_empty() {
+            return None;
+        }
+
+        let add = std::process::Command::new("git")
+            .current_dir(worktree_path)
+            .args(["add", "-A"])
+            .output()
+            .ok()?;
+        if !add.status.success() {
+            return None;
+        }
+
+        let message = format!("hivemind checkpoint {attempt_id}");
+        let commit = std::process::Command::new("git")
+            .current_dir(worktree_path)
+            .args([
+                "-c",
+                "user.name=Hivemind",
+                "-c",
+                "user.email=hivemind@example.com",
+                "commit",
+                "-m",
+                &message,
+            ])
+            .output()
+            .ok()?;
+        if !commit.status.success() {
+            return None;
+        }
+
+        let head = std::process::Command::new("git")
+            .current_dir(worktree_path)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .ok()?;
+        if !head.status.success() {
+            return None;
+        }
+        Some(String::from_utf8_lossy(&head.stdout).trim().to_string())
+    }
+
+    fn append_event(&self, event: Event, origin: &'static str) -> Result<()> {
+        self.store
+            .append(event)
+            .map(|_| ())
+            .map_err(|e| HivemindError::system("event_append_failed", e.to_string(), origin))
+    }
+
+    fn flow_for_task(state: &AppState, task_id: Uuid, origin: &'static str) -> Result<TaskFlow> {
+        state
+            .flows
+            .values()
+            .find(|f| f.task_executions.contains_key(&task_id))
+            .cloned()
+            .ok_or_else(|| {
+                HivemindError::user("task_not_in_flow", "Task is not part of any flow", origin)
+            })
+    }
+
+    fn inspect_task_worktree(
+        flow: &TaskFlow,
+        state: &AppState,
+        task_id: Uuid,
+        origin: &'static str,
+    ) -> Result<WorktreeStatus> {
+        let manager = Self::worktree_manager_for_flow(flow, state)?;
+        let status = manager
+            .inspect(flow.id, task_id)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, origin))?;
+        if !status.is_worktree {
+            return Err(HivemindError::user(
+                "worktree_not_found",
+                "Worktree not found for task",
+                origin,
+            ));
+        }
+        Ok(status)
+    }
+
+    fn resolve_latest_attempt_without_diff(
+        state: &AppState,
+        flow_id: Uuid,
+        task_id: Uuid,
+        origin: &'static str,
+    ) -> Result<AttemptState> {
+        state
+            .attempts
+            .values()
+            .filter(|a| a.flow_id == flow_id && a.task_id == task_id)
+            .filter(|a| a.diff_id.is_none())
+            .max_by_key(|a| a.started_at)
+            .cloned()
+            .ok_or_else(|| {
+                HivemindError::system(
+                    "attempt_not_found",
+                    "Attempt not found for running task",
+                    origin,
+                )
+            })
+    }
+
+    fn emit_task_execution_completion_events(
+        &self,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt: &AttemptState,
+        completion: CompletionArtifacts<'_>,
+        origin: &'static str,
+    ) -> Result<()> {
+        let corr_task =
+            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, task_id);
+        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
+            flow.project_id,
+            flow.graph_id,
+            flow.id,
+            task_id,
+            attempt.id,
+        );
+
+        self.append_event(
+            Event::new(
+                EventPayload::TaskExecutionStateChanged {
+                    flow_id: flow.id,
+                    task_id,
+                    from: TaskExecState::Running,
+                    to: TaskExecState::Verifying,
+                },
+                corr_task,
+            ),
+            origin,
+        )?;
+
+        if let Some(commit_sha) = completion.checkpoint_commit_sha {
+            self.append_event(
+                Event::new(
+                    EventPayload::CheckpointCommitCreated {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id: attempt.id,
+                        commit_sha,
+                    },
+                    corr_attempt.clone(),
+                ),
+                origin,
+            )?;
+        }
+
+        for change in &completion.artifact.diff.changes {
+            self.append_event(
+                Event::new(
+                    EventPayload::FileModified {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id: attempt.id,
+                        path: change.path.to_string_lossy().to_string(),
+                        change_type: change.change_type,
+                        old_hash: change.old_hash.clone(),
+                        new_hash: change.new_hash.clone(),
+                    },
+                    corr_attempt.clone(),
+                ),
+                origin,
+            )?;
+        }
+
+        self.append_event(
+            Event::new(
+                EventPayload::DiffComputed {
+                    flow_id: flow.id,
+                    task_id,
+                    attempt_id: attempt.id,
+                    diff_id: completion.artifact.diff.id,
+                    baseline_id: completion.baseline_id,
+                    change_count: completion.artifact.diff.change_count(),
+                },
+                corr_attempt,
+            ),
+            origin,
+        )?;
+
+        Ok(())
+    }
+
+    fn capture_and_store_baseline(
+        &self,
+        worktree_path: &Path,
+        origin: &'static str,
+    ) -> Result<Baseline> {
+        let baseline = Baseline::capture(worktree_path)
+            .map_err(|e| HivemindError::system("baseline_capture_failed", e.to_string(), origin))?;
+        self.write_baseline_artifact(&baseline)?;
+        Ok(baseline)
+    }
+
+    fn compute_and_store_diff(
+        &self,
+        baseline_id: Uuid,
+        worktree_path: &Path,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        origin: &'static str,
+    ) -> Result<DiffArtifact> {
+        let baseline = self.read_baseline_artifact(baseline_id)?;
+        let diff = Diff::compute(&baseline, worktree_path)
+            .map_err(|e| HivemindError::system("diff_compute_failed", e.to_string(), origin))?
+            .for_task(task_id)
+            .for_attempt(attempt_id);
+
+        let mut unified = String::new();
+        for change in &diff.changes {
+            if let Ok(chunk) = self.unified_diff_for_change(baseline_id, worktree_path, change) {
+                unified.push_str(&chunk);
+                if !chunk.ends_with('\n') {
+                    unified.push('\n');
+                }
+            }
+        }
+
+        let artifact = DiffArtifact { diff, unified };
+        self.write_diff_artifact(&artifact)?;
+        Ok(artifact)
+    }
+
+    fn artifacts_dir(&self) -> PathBuf {
+        self.config.data_dir.join("artifacts")
+    }
+
+    fn baselines_dir(&self) -> PathBuf {
+        self.artifacts_dir().join("baselines")
+    }
+
+    fn baseline_dir(&self, baseline_id: Uuid) -> PathBuf {
+        self.baselines_dir().join(baseline_id.to_string())
+    }
+
+    fn baseline_json_path(&self, baseline_id: Uuid) -> PathBuf {
+        self.baseline_dir(baseline_id).join("baseline.json")
+    }
+
+    fn baseline_files_dir(&self, baseline_id: Uuid) -> PathBuf {
+        self.baseline_dir(baseline_id).join("files")
+    }
+
+    fn diffs_dir(&self) -> PathBuf {
+        self.artifacts_dir().join("diffs")
+    }
+
+    fn diff_json_path(&self, diff_id: Uuid) -> PathBuf {
+        self.diffs_dir().join(format!("{diff_id}.json"))
+    }
+
+    fn write_baseline_artifact(&self, baseline: &Baseline) -> Result<()> {
+        let files_dir = self.baseline_files_dir(baseline.id);
+        fs::create_dir_all(&files_dir).map_err(|e| {
+            HivemindError::system(
+                "artifact_write_failed",
+                e.to_string(),
+                "registry:write_baseline_artifact",
+            )
+        })?;
+
+        let json = serde_json::to_vec_pretty(baseline).map_err(|e| {
+            HivemindError::system(
+                "artifact_serialize_failed",
+                e.to_string(),
+                "registry:write_baseline_artifact",
+            )
+        })?;
+        fs::write(self.baseline_json_path(baseline.id), json).map_err(|e| {
+            HivemindError::system(
+                "artifact_write_failed",
+                e.to_string(),
+                "registry:write_baseline_artifact",
+            )
+        })?;
+
+        for snapshot in baseline.files.values() {
+            if snapshot.is_dir {
+                continue;
+            }
+
+            let src = baseline.root.join(&snapshot.path);
+            let dst = files_dir.join(&snapshot.path);
+            if let Some(parent) = dst.parent() {
+                fs::create_dir_all(parent).map_err(|e| {
+                    HivemindError::system(
+                        "artifact_write_failed",
+                        e.to_string(),
+                        "registry:write_baseline_artifact",
+                    )
+                })?;
+            }
+
+            let Ok(contents) = fs::read(src) else {
+                continue;
+            };
+            let _ = fs::write(dst, contents);
+        }
+        Ok(())
+    }
+
+    fn read_baseline_artifact(&self, baseline_id: Uuid) -> Result<Baseline> {
+        let bytes = fs::read(self.baseline_json_path(baseline_id)).map_err(|e| {
+            HivemindError::system(
+                "artifact_read_failed",
+                e.to_string(),
+                "registry:read_baseline_artifact",
+            )
+        })?;
+        serde_json::from_slice(&bytes).map_err(|e| {
+            HivemindError::system(
+                "artifact_deserialize_failed",
+                e.to_string(),
+                "registry:read_baseline_artifact",
+            )
+        })
+    }
+
+    fn write_diff_artifact(&self, artifact: &DiffArtifact) -> Result<()> {
+        fs::create_dir_all(self.diffs_dir()).map_err(|e| {
+            HivemindError::system(
+                "artifact_write_failed",
+                e.to_string(),
+                "registry:write_diff_artifact",
+            )
+        })?;
+        let json = serde_json::to_vec_pretty(artifact).map_err(|e| {
+            HivemindError::system(
+                "artifact_serialize_failed",
+                e.to_string(),
+                "registry:write_diff_artifact",
+            )
+        })?;
+        fs::write(self.diff_json_path(artifact.diff.id), json).map_err(|e| {
+            HivemindError::system(
+                "artifact_write_failed",
+                e.to_string(),
+                "registry:write_diff_artifact",
+            )
+        })?;
+        Ok(())
+    }
+
+    fn read_diff_artifact(&self, diff_id: Uuid) -> Result<DiffArtifact> {
+        let bytes = fs::read(self.diff_json_path(diff_id)).map_err(|e| {
+            HivemindError::system(
+                "artifact_read_failed",
+                e.to_string(),
+                "registry:read_diff_artifact",
+            )
+        })?;
+        serde_json::from_slice(&bytes).map_err(|e| {
+            HivemindError::system(
+                "artifact_deserialize_failed",
+                e.to_string(),
+                "registry:read_diff_artifact",
+            )
+        })
+    }
+
+    fn unified_diff_for_change(
+        &self,
+        baseline_id: Uuid,
+        worktree_root: &std::path::Path,
+        change: &FileChange,
+    ) -> std::io::Result<String> {
+        let baseline_files = self.baseline_files_dir(baseline_id);
+        let old = baseline_files.join(&change.path);
+        let new = worktree_root.join(&change.path);
+
+        match change.change_type {
+            ChangeType::Created => unified_diff(None, Some(&new)),
+            ChangeType::Deleted => unified_diff(Some(&old), None),
+            ChangeType::Modified => unified_diff(Some(&old), Some(&new)),
+        }
+    }
+
     fn worktree_error_to_hivemind(err: WorktreeError, origin: &'static str) -> HivemindError {
         match err {
             WorktreeError::InvalidRepo(path) => HivemindError::git(
@@ -1270,6 +1671,177 @@ impl Registry {
         })?;
 
         self.get_flow(&flow.id.to_string())
+    }
+
+    pub fn start_task_execution(&self, task_id: &str) -> Result<Uuid> {
+        let origin = "registry:start_task_execution";
+        let id = Uuid::parse_str(task_id).map_err(|_| {
+            HivemindError::user(
+                "invalid_task_id",
+                format!("'{task_id}' is not a valid task ID"),
+                origin,
+            )
+        })?;
+
+        let state = self.state()?;
+        let flow = Self::flow_for_task(&state, id, origin)?;
+        if flow.state != FlowState::Running {
+            return Err(HivemindError::user(
+                "flow_not_running",
+                "Flow is not in running state",
+                origin,
+            ));
+        }
+
+        let exec = flow.task_executions.get(&id).ok_or_else(|| {
+            HivemindError::system("task_exec_not_found", "Task execution not found", origin)
+        })?;
+        if exec.state != TaskExecState::Ready && exec.state != TaskExecState::Retry {
+            return Err(HivemindError::user(
+                "task_not_ready",
+                "Task is not ready to start",
+                origin,
+            ));
+        }
+
+        let status = Self::inspect_task_worktree(&flow, &state, id, origin)?;
+        let attempt_id = Uuid::new_v4();
+        let attempt_number = exec.attempt_count.saturating_add(1);
+        let baseline = self.capture_and_store_baseline(&status.path, origin)?;
+
+        let corr_task =
+            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id);
+        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
+            flow.project_id,
+            flow.graph_id,
+            flow.id,
+            id,
+            attempt_id,
+        );
+
+        self.append_event(
+            Event::new(
+                EventPayload::TaskExecutionStateChanged {
+                    flow_id: flow.id,
+                    task_id: id,
+                    from: exec.state,
+                    to: TaskExecState::Running,
+                },
+                corr_task,
+            ),
+            origin,
+        )?;
+
+        self.append_event(
+            Event::new(
+                EventPayload::AttemptStarted {
+                    flow_id: flow.id,
+                    task_id: id,
+                    attempt_id,
+                    attempt_number,
+                },
+                corr_attempt.clone(),
+            ),
+            origin,
+        )?;
+
+        self.append_event(
+            Event::new(
+                EventPayload::BaselineCaptured {
+                    flow_id: flow.id,
+                    task_id: id,
+                    attempt_id,
+                    baseline_id: baseline.id,
+                    git_head: baseline.git_head.clone(),
+                    file_count: baseline.file_count(),
+                },
+                corr_attempt,
+            ),
+            origin,
+        )?;
+
+        Ok(attempt_id)
+    }
+
+    pub fn complete_task_execution(&self, task_id: &str) -> Result<TaskFlow> {
+        let origin = "registry:complete_task_execution";
+        let id = Uuid::parse_str(task_id).map_err(|_| {
+            HivemindError::user(
+                "invalid_task_id",
+                format!("'{task_id}' is not a valid task ID"),
+                origin,
+            )
+        })?;
+
+        let state = self.state()?;
+        let flow = Self::flow_for_task(&state, id, origin)?;
+        let exec = flow.task_executions.get(&id).ok_or_else(|| {
+            HivemindError::system("task_exec_not_found", "Task execution not found", origin)
+        })?;
+        if exec.state != TaskExecState::Running {
+            return Err(HivemindError::user(
+                "task_not_running",
+                "Task is not in running state",
+                origin,
+            ));
+        }
+
+        let attempt = Self::resolve_latest_attempt_without_diff(&state, flow.id, id, origin)?;
+        let baseline_id = attempt.baseline_id.ok_or_else(|| {
+            HivemindError::system(
+                "baseline_not_found",
+                "Baseline not found for attempt",
+                origin,
+            )
+        })?;
+
+        let status = Self::inspect_task_worktree(&flow, &state, id, origin)?;
+        let artifact =
+            self.compute_and_store_diff(baseline_id, &status.path, id, attempt.id, origin)?;
+
+        let checkpoint_commit_sha = Self::create_checkpoint_commit(&status.path, attempt.id);
+
+        self.emit_task_execution_completion_events(
+            &flow,
+            id,
+            &attempt,
+            CompletionArtifacts {
+                baseline_id,
+                artifact: &artifact,
+                checkpoint_commit_sha,
+            },
+            origin,
+        )?;
+
+        self.get_flow(&flow.id.to_string())
+    }
+
+    pub fn get_attempt(&self, attempt_id: &str) -> Result<AttemptState> {
+        let id = Uuid::parse_str(attempt_id).map_err(|_| {
+            HivemindError::user(
+                "invalid_attempt_id",
+                format!("'{attempt_id}' is not a valid attempt ID"),
+                "registry:get_attempt",
+            )
+        })?;
+
+        let state = self.state()?;
+        state.attempts.get(&id).cloned().ok_or_else(|| {
+            HivemindError::user(
+                "attempt_not_found",
+                format!("Attempt '{attempt_id}' not found"),
+                "registry:get_attempt",
+            )
+        })
+    }
+
+    pub fn get_attempt_diff(&self, attempt_id: &str) -> Result<Option<String>> {
+        let attempt = self.get_attempt(attempt_id)?;
+        let Some(diff_id) = attempt.diff_id else {
+            return Ok(None);
+        };
+        let artifact = self.read_diff_artifact(diff_id)?;
+        Ok(Some(artifact.unified))
     }
 
     pub fn abort_task(&self, task_id: &str, reason: Option<&str>) -> Result<TaskFlow> {

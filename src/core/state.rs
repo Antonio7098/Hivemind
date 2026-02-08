@@ -12,6 +12,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttemptState {
+    pub id: Uuid,
+    pub flow_id: Uuid,
+    pub task_id: Uuid,
+    pub attempt_number: u32,
+    pub started_at: DateTime<Utc>,
+    pub baseline_id: Option<Uuid>,
+    pub diff_id: Option<Uuid>,
+}
+
 /// A project in the system.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Project {
@@ -82,6 +93,7 @@ pub struct AppState {
     pub graphs: HashMap<Uuid, TaskGraph>,
     pub flows: HashMap<Uuid, TaskFlow>,
     pub merge_states: HashMap<Uuid, MergeState>,
+    pub attempts: HashMap<Uuid, AttemptState>,
 }
 
 impl AppState {
@@ -377,6 +389,48 @@ impl AppState {
                     flow.updated_at = timestamp;
                 }
             }
+
+            EventPayload::AttemptStarted {
+                flow_id,
+                task_id,
+                attempt_id,
+                attempt_number,
+            } => {
+                self.attempts.insert(
+                    *attempt_id,
+                    AttemptState {
+                        id: *attempt_id,
+                        flow_id: *flow_id,
+                        task_id: *task_id,
+                        attempt_number: *attempt_number,
+                        started_at: timestamp,
+                        baseline_id: None,
+                        diff_id: None,
+                    },
+                );
+            }
+
+            EventPayload::BaselineCaptured {
+                attempt_id,
+                baseline_id,
+                ..
+            } => {
+                if let Some(attempt) = self.attempts.get_mut(attempt_id) {
+                    attempt.baseline_id = Some(*baseline_id);
+                }
+            }
+
+            EventPayload::DiffComputed {
+                attempt_id,
+                diff_id,
+                ..
+            } => {
+                if let Some(attempt) = self.attempts.get_mut(attempt_id) {
+                    attempt.diff_id = Some(*diff_id);
+                }
+            }
+
+            EventPayload::FileModified { .. } | EventPayload::CheckpointCommitCreated { .. } => {}
 
             EventPayload::TaskRetryRequested {
                 task_id,

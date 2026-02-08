@@ -3,6 +3,7 @@
 //! All state in Hivemind is derived from events. Events are immutable,
 //! append-only, and form the single source of truth.
 
+use crate::core::diff::ChangeType;
 use crate::core::flow::TaskExecState;
 use crate::core::graph::GraphTask;
 use crate::core::scope::{RepoAccessMode, Scope};
@@ -151,6 +152,23 @@ impl CorrelationIds {
             attempt_id: None,
         }
     }
+
+    #[must_use]
+    pub fn for_graph_flow_task_attempt(
+        project_id: Uuid,
+        graph_id: Uuid,
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+    ) -> Self {
+        Self {
+            project_id: Some(project_id),
+            graph_id: Some(graph_id),
+            flow_id: Some(flow_id),
+            task_id: Some(task_id),
+            attempt_id: Some(attempt_id),
+        }
+    }
 }
 
 /// Event metadata common to all events.
@@ -296,6 +314,51 @@ pub enum EventPayload {
         task_id: Uuid,
         from: TaskExecState,
         to: TaskExecState,
+    },
+
+    AttemptStarted {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        attempt_number: u32,
+    },
+
+    BaselineCaptured {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        baseline_id: Uuid,
+        #[serde(default)]
+        git_head: Option<String>,
+        file_count: usize,
+    },
+
+    FileModified {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        path: String,
+        change_type: ChangeType,
+        #[serde(default)]
+        old_hash: Option<String>,
+        #[serde(default)]
+        new_hash: Option<String>,
+    },
+
+    DiffComputed {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        diff_id: Uuid,
+        baseline_id: Uuid,
+        change_count: usize,
+    },
+
+    CheckpointCommitCreated {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        commit_sha: String,
     },
 
     TaskRetryRequested {
