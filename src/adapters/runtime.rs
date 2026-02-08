@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use uuid::Uuid;
@@ -239,11 +240,11 @@ pub trait RuntimeAdapter: Send + Sync {
     /// Returns the adapter name.
     fn name(&self) -> &str;
 
-    /// Checks if the adapter is healthy (binary exists, etc).
-    fn health_check(&self) -> Result<(), RuntimeError>;
+    /// Initializes the adapter.
+    fn initialize(&mut self) -> Result<(), RuntimeError>;
 
     /// Prepares the adapter for execution.
-    fn prepare(&mut self, worktree: &std::path::Path, task_id: Uuid) -> Result<(), RuntimeError>;
+    fn prepare(&mut self, task_id: Uuid, worktree: &Path) -> Result<(), RuntimeError>;
 
     /// Executes the runtime with the given input.
     fn execute(&mut self, input: ExecutionInput) -> Result<ExecutionReport, RuntimeError>;
@@ -292,11 +293,11 @@ impl RuntimeAdapter for MockAdapter {
         &self.config.name
     }
 
-    fn health_check(&self) -> Result<(), RuntimeError> {
+    fn initialize(&mut self) -> Result<(), RuntimeError> {
         Ok(())
     }
 
-    fn prepare(&mut self, _worktree: &std::path::Path, _task_id: Uuid) -> Result<(), RuntimeError> {
+    fn prepare(&mut self, _task_id: Uuid, _worktree: &Path) -> Result<(), RuntimeError> {
         self.prepared = true;
         Ok(())
     }
@@ -384,12 +385,12 @@ mod tests {
     fn mock_adapter_lifecycle() {
         let mut adapter = MockAdapter::new();
 
-        assert!(adapter.health_check().is_ok());
+        assert!(adapter.initialize().is_ok());
 
         let worktree = PathBuf::from("/tmp/test");
         let task_id = Uuid::new_v4();
 
-        adapter.prepare(&worktree, task_id).unwrap();
+        adapter.prepare(task_id, &worktree).unwrap();
 
         let input = ExecutionInput {
             task_description: "Test task".to_string(),
@@ -415,7 +416,7 @@ mod tests {
 
         let mut adapter = MockAdapter::new().with_response(custom_report);
         adapter
-            .prepare(&PathBuf::from("/tmp"), Uuid::new_v4())
+            .prepare(Uuid::new_v4(), &PathBuf::from("/tmp"))
             .unwrap();
 
         let input = ExecutionInput {

@@ -397,6 +397,33 @@ pub enum EventPayload {
         #[serde(default)]
         commits: Vec<String>,
     },
+    RuntimeStarted {
+        adapter_name: String,
+        task_id: Uuid,
+        attempt_id: Uuid,
+    },
+    RuntimeOutputChunk {
+        attempt_id: Uuid,
+        stream: RuntimeOutputStream,
+        content: String,
+    },
+    RuntimeExited {
+        attempt_id: Uuid,
+        exit_code: i32,
+        duration_ms: u64,
+    },
+    RuntimeTerminated {
+        attempt_id: Uuid,
+        reason: String,
+    },
+}
+
+/// Output stream for runtime output events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RuntimeOutputStream {
+    Stdout,
+    Stderr,
 }
 
 /// A complete event with metadata and payload.
