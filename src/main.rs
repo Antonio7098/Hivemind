@@ -2,15 +2,17 @@
 
 use clap::Parser;
 use hivemind::cli::commands::{
-    AttemptCommands, Cli, Commands, EventCommands, FlowCommands, GraphCommands, MergeCommands,
-    ProjectCommands, TaskCommands, VerifyCommands, WorktreeCommands,
+    AttemptCommands, AttemptInspectArgs, Cli, Commands, EventCommands, FlowCommands, GraphCommands,
+    MergeCommands, ProjectCommands, TaskAbortArgs, TaskCloseArgs, TaskCommands, TaskCompleteArgs,
+    TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs, TaskStartArgs, TaskUpdateArgs,
+    VerifyCommands, WorktreeCommands,
 };
 use hivemind::cli::output::{output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
 use hivemind::core::registry::Registry;
 use hivemind::core::scope::RepoAccessMode;
 use hivemind::core::scope::Scope;
-use hivemind::core::state::{Project, Task, TaskState};
+use hivemind::core::state::{AttemptState, Project, Task, TaskState};
 use std::process;
 use uuid::Uuid;
 
@@ -529,98 +531,180 @@ fn parse_task_state(s: &str) -> Option<TaskState> {
     }
 }
 
+fn parse_scope_arg(scope: Option<&str>, format: OutputFormat) -> Result<Option<Scope>, ExitCode> {
+    let Some(raw) = scope else {
+        return Ok(None);
+    };
+
+    match serde_json::from_str::<Scope>(raw) {
+        Ok(s) => Ok(Some(s)),
+        Err(e) => Err(output_error(
+            &hivemind::core::error::HivemindError::user(
+                "invalid_scope",
+                format!("Invalid scope definition: {e}"),
+                "cli:task:create",
+            ),
+            format,
+        )),
+    }
+}
+
+fn print_attempt_id(attempt_id: Uuid, format: OutputFormat) {
+    match format {
+        OutputFormat::Json => {
+            let info = serde_json::json!({"attempt_id": attempt_id});
+            if let Ok(json) = serde_json::to_string_pretty(&info) {
+                println!("{json}");
+            }
+        }
+        OutputFormat::Yaml => {
+            let info = serde_json::json!({"attempt_id": attempt_id});
+            if let Ok(yaml) = serde_yaml::to_string(&info) {
+                print!("{yaml}");
+            }
+        }
+        OutputFormat::Table => {
+            println!("Attempt ID: {attempt_id}");
+        }
+    }
+}
+
+fn handle_task_create(
+    registry: &Registry,
+    args: &TaskCreateArgs,
+    format: OutputFormat,
+) -> ExitCode {
+    let scope = match parse_scope_arg(args.scope.as_deref(), format) {
+        Ok(s) => s,
+        Err(code) => return code,
+    };
+
+    match registry.create_task(
+        &args.project,
+        &args.title,
+        args.description.as_deref(),
+        scope,
+    ) {
+        Ok(task) => {
+            print_task(&task, format);
+            ExitCode::Success
+        }
+        Err(e) => output_error(&e, format),
+    }
+}
+
+fn handle_task_list(registry: &Registry, args: &TaskListArgs, format: OutputFormat) -> ExitCode {
+    let state_filter = args.state.as_ref().and_then(|s| parse_task_state(s));
+    match registry.list_tasks(&args.project, state_filter) {
+        Ok(tasks) => {
+            print_tasks(&tasks, format);
+            ExitCode::Success
+        }
+        Err(e) => output_error(&e, format),
+    }
+}
+
+fn handle_task_inspect(
+    registry: &Registry,
+    args: &TaskInspectArgs,
+    format: OutputFormat,
+) -> ExitCode {
+    match registry.get_task(&args.task_id) {
+        Ok(task) => {
+            print_task(&task, format);
+            ExitCode::Success
+        }
+        Err(e) => output_error(&e, format),
+    }
+}
+
+fn handle_task_update(
+    registry: &Registry,
+    args: &TaskUpdateArgs,
+    format: OutputFormat,
+) -> ExitCode {
+    match registry.update_task(
+        &args.task_id,
+        args.title.as_deref(),
+        args.description.as_deref(),
+    ) {
+        Ok(task) => {
+            print_task(&task, format);
+            ExitCode::Success
+        }
+        Err(e) => output_error(&e, format),
+    }
+}
+
+fn handle_task_close(registry: &Registry, args: &TaskCloseArgs, format: OutputFormat) -> ExitCode {
+    match registry.close_task(&args.task_id, args.reason.as_deref()) {
+        Ok(task) => {
+            print_task(&task, format);
+            ExitCode::Success
+        }
+        Err(e) => output_error(&e, format),
+    }
+}
+
+fn handle_task_start(registry: &Registry, args: &TaskStartArgs, format: OutputFormat) -> ExitCode {
+    match registry.start_task_execution(&args.task_id) {
+        Ok(attempt_id) => {
+            print_attempt_id(attempt_id, format);
+            ExitCode::Success
+        }
+        Err(e) => output_error(&e, format),
+    }
+}
+
+fn handle_task_complete(
+    registry: &Registry,
+    args: &TaskCompleteArgs,
+    format: OutputFormat,
+) -> ExitCode {
+    match registry.complete_task_execution(&args.task_id) {
+        Ok(flow) => {
+            print_flow_id(flow.id, format);
+            ExitCode::Success
+        }
+        Err(e) => output_error(&e, format),
+    }
+}
+
+fn handle_task_retry(registry: &Registry, args: &TaskRetryArgs, format: OutputFormat) -> ExitCode {
+    match registry.retry_task(&args.task_id, args.reset_count) {
+        Ok(flow) => {
+            print_flow_id(flow.id, format);
+            ExitCode::Success
+        }
+        Err(e) => output_error(&e, format),
+    }
+}
+
+fn handle_task_abort(registry: &Registry, args: &TaskAbortArgs, format: OutputFormat) -> ExitCode {
+    match registry.abort_task(&args.task_id, args.reason.as_deref()) {
+        Ok(flow) => {
+            print_flow_id(flow.id, format);
+            ExitCode::Success
+        }
+        Err(e) => output_error(&e, format),
+    }
+}
+
 fn handle_task(cmd: TaskCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
         return ExitCode::Error;
     };
 
     match cmd {
-        TaskCommands::Create(args) => {
-            let scope: Option<Scope> = match args.scope.as_deref() {
-                None => None,
-                Some(raw) => match serde_json::from_str::<Scope>(raw) {
-                    Ok(s) => Some(s),
-                    Err(e) => {
-                        return output_error(
-                            &hivemind::core::error::HivemindError::user(
-                                "invalid_scope",
-                                format!("Invalid scope definition: {e}"),
-                                "cli:task:create",
-                            ),
-                            format,
-                        );
-                    }
-                },
-            };
-
-            match registry.create_task(
-                &args.project,
-                &args.title,
-                args.description.as_deref(),
-                scope,
-            ) {
-                Ok(task) => {
-                    print_task(&task, format);
-                    ExitCode::Success
-                }
-                Err(e) => output_error(&e, format),
-            }
-        }
-        TaskCommands::List(args) => {
-            let state_filter = args.state.as_ref().and_then(|s| parse_task_state(s));
-            match registry.list_tasks(&args.project, state_filter) {
-                Ok(tasks) => {
-                    print_tasks(&tasks, format);
-                    ExitCode::Success
-                }
-                Err(e) => output_error(&e, format),
-            }
-        }
-        TaskCommands::Inspect(args) => match registry.get_task(&args.task_id) {
-            Ok(task) => {
-                print_task(&task, format);
-                ExitCode::Success
-            }
-            Err(e) => output_error(&e, format),
-        },
-        TaskCommands::Update(args) => {
-            match registry.update_task(
-                &args.task_id,
-                args.title.as_deref(),
-                args.description.as_deref(),
-            ) {
-                Ok(task) => {
-                    print_task(&task, format);
-                    ExitCode::Success
-                }
-                Err(e) => output_error(&e, format),
-            }
-        }
-        TaskCommands::Close(args) => {
-            match registry.close_task(&args.task_id, args.reason.as_deref()) {
-                Ok(task) => {
-                    print_task(&task, format);
-                    ExitCode::Success
-                }
-                Err(e) => output_error(&e, format),
-            }
-        }
-        TaskCommands::Retry(args) => match registry.retry_task(&args.task_id, args.reset_count) {
-            Ok(flow) => {
-                print_flow_id(flow.id, format);
-                ExitCode::Success
-            }
-            Err(e) => output_error(&e, format),
-        },
-        TaskCommands::Abort(args) => {
-            match registry.abort_task(&args.task_id, args.reason.as_deref()) {
-                Ok(flow) => {
-                    print_flow_id(flow.id, format);
-                    ExitCode::Success
-                }
-                Err(e) => output_error(&e, format),
-            }
-        }
+        TaskCommands::Create(args) => handle_task_create(&registry, &args, format),
+        TaskCommands::List(args) => handle_task_list(&registry, &args, format),
+        TaskCommands::Inspect(args) => handle_task_inspect(&registry, &args, format),
+        TaskCommands::Update(args) => handle_task_update(&registry, &args, format),
+        TaskCommands::Close(args) => handle_task_close(&registry, &args, format),
+        TaskCommands::Start(args) => handle_task_start(&registry, &args, format),
+        TaskCommands::Complete(args) => handle_task_complete(&registry, &args, format),
+        TaskCommands::Retry(args) => handle_task_retry(&registry, &args, format),
+        TaskCommands::Abort(args) => handle_task_abort(&registry, &args, format),
     }
 }
 
@@ -647,6 +731,11 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::TaskReady { .. } => "task_ready",
         EventPayload::TaskBlocked { .. } => "task_blocked",
         EventPayload::TaskExecutionStateChanged { .. } => "task_exec_state_changed",
+        EventPayload::AttemptStarted { .. } => "attempt_started",
+        EventPayload::BaselineCaptured { .. } => "baseline_captured",
+        EventPayload::FileModified { .. } => "file_modified",
+        EventPayload::DiffComputed { .. } => "diff_computed",
+        EventPayload::CheckpointCommitCreated { .. } => "checkpoint_commit_created",
         EventPayload::TaskRetryRequested { .. } => "task_retry_requested",
         EventPayload::TaskAborted { .. } => "task_aborted",
         EventPayload::HumanOverride { .. } => "human_override",
@@ -1006,67 +1095,163 @@ fn handle_attempt(cmd: AttemptCommands, format: OutputFormat) -> ExitCode {
     };
 
     match cmd {
-        AttemptCommands::Inspect(args) => {
-            let Ok(attempt_id) = Uuid::parse_str(&args.attempt_id) else {
-                return output_error(
-                    &hivemind::core::error::HivemindError::user(
-                        "invalid_attempt_id",
-                        format!("'{}' is not a valid attempt ID", args.attempt_id),
-                        "cli:attempt:inspect",
-                    ),
-                    format,
-                );
-            };
+        AttemptCommands::Inspect(args) => handle_attempt_inspect(&registry, &args, format),
+    }
+}
 
-            let state = match registry.state() {
-                Ok(s) => s,
-                Err(e) => return output_error(&e, format),
-            };
+fn handle_attempt_inspect(
+    registry: &Registry,
+    args: &AttemptInspectArgs,
+    format: OutputFormat,
+) -> ExitCode {
+    let attempt_id = &args.attempt_id;
+    let Ok(parsed) = Uuid::parse_str(attempt_id) else {
+        return output_error(
+            &hivemind::core::error::HivemindError::user(
+                "invalid_attempt_id",
+                format!("'{attempt_id}' is not a valid attempt ID"),
+                "cli:attempt:inspect",
+            ),
+            format,
+        );
+    };
 
-            for flow in state.flows.values() {
-                for exec in flow.task_executions.values() {
-                    if exec.task_id == attempt_id {
-                        let info = serde_json::json!({
-                            "task_id": exec.task_id,
-                            "state": format!("{:?}", exec.state),
-                            "attempt_count": exec.attempt_count,
-                            "blocked_reason": exec.blocked_reason,
-                            "flow_id": flow.id,
-                        });
-                        match format {
-                            OutputFormat::Json => {
-                                if let Ok(json) = serde_json::to_string_pretty(&info) {
-                                    println!("{json}");
-                                }
-                            }
-                            OutputFormat::Yaml => {
-                                if let Ok(yaml) = serde_yaml::to_string(&info) {
-                                    print!("{yaml}");
-                                }
-                            }
-                            OutputFormat::Table => {
-                                println!("Task:     {}", exec.task_id);
-                                println!("Flow:     {}", flow.id);
-                                println!("State:    {:?}", exec.state);
-                                println!("Attempts: {}", exec.attempt_count);
-                                if let Some(ref reason) = exec.blocked_reason {
-                                    println!("Blocked:  {reason}");
-                                }
-                            }
-                        }
-                        return ExitCode::Success;
-                    }
-                }
+    match registry.get_attempt(attempt_id) {
+        Ok(attempt) => print_attempt_inspect_attempt(registry, &attempt, args.diff, format),
+        Err(e) if e.code == "attempt_not_found" => {
+            print_attempt_inspect_task_fallback(registry, parsed, args.diff, format, &e)
+        }
+        Err(e) => output_error(&e, format),
+    }
+}
+
+fn print_attempt_inspect_attempt(
+    registry: &Registry,
+    attempt: &AttemptState,
+    show_diff: bool,
+    format: OutputFormat,
+) -> ExitCode {
+    let diff = if show_diff {
+        match registry.get_attempt_diff(&attempt.id.to_string()) {
+            Ok(d) => d,
+            Err(e) => return output_error(&e, format),
+        }
+    } else {
+        None
+    };
+
+    let info = serde_json::json!({
+        "attempt_id": attempt.id,
+        "task_id": attempt.task_id,
+        "flow_id": attempt.flow_id,
+        "attempt_number": attempt.attempt_number,
+        "started_at": attempt.started_at,
+        "baseline_id": attempt.baseline_id,
+        "diff_id": attempt.diff_id,
+        "diff": diff,
+    });
+
+    match format {
+        OutputFormat::Json => {
+            if let Ok(json) = serde_json::to_string_pretty(&info) {
+                println!("{json}");
             }
-
-            output_error(
-                &hivemind::core::error::HivemindError::user(
-                    "attempt_not_found",
-                    format!("Attempt '{}' not found", args.attempt_id),
-                    "cli:attempt:inspect",
-                ),
-                format,
-            )
+        }
+        OutputFormat::Yaml => {
+            if let Ok(yaml) = serde_yaml::to_string(&info) {
+                print!("{yaml}");
+            }
+        }
+        OutputFormat::Table => {
+            println!("Attempt:  {}", attempt.id);
+            println!("Task:     {}", attempt.task_id);
+            println!("Flow:     {}", attempt.flow_id);
+            println!("Number:   {}", attempt.attempt_number);
+            println!("Started:  {}", attempt.started_at);
+            if let Some(b) = attempt.baseline_id {
+                println!("Baseline: {b}");
+            }
+            if let Some(did) = attempt.diff_id {
+                println!("Diff:     {did}");
+            }
+            if let Some(d) = diff {
+                println!("{d}");
+            }
         }
     }
+
+    ExitCode::Success
+}
+
+fn print_attempt_inspect_task_fallback(
+    registry: &Registry,
+    task_id: Uuid,
+    show_diff: bool,
+    format: OutputFormat,
+    original_error: &hivemind::core::error::HivemindError,
+) -> ExitCode {
+    let state = match registry.state() {
+        Ok(s) => s,
+        Err(e) => return output_error(&e, format),
+    };
+
+    let exec_info = state
+        .flows
+        .values()
+        .find_map(|flow| flow.task_executions.get(&task_id).map(|exec| (flow, exec)));
+
+    let Some((flow, exec)) = exec_info else {
+        return output_error(original_error, format);
+    };
+
+    let latest_attempt = state
+        .attempts
+        .values()
+        .filter(|a| a.task_id == task_id && a.flow_id == flow.id)
+        .max_by_key(|a| a.started_at);
+
+    let diff = if show_diff {
+        latest_attempt
+            .and_then(|a| a.diff_id.map(|_| a.id))
+            .and_then(|aid| registry.get_attempt_diff(&aid.to_string()).ok())
+            .flatten()
+    } else {
+        None
+    };
+
+    let info = serde_json::json!({
+        "task_id": exec.task_id,
+        "state": format!("{:?}", exec.state),
+        "attempt_count": exec.attempt_count,
+        "blocked_reason": exec.blocked_reason,
+        "flow_id": flow.id,
+        "diff": diff,
+    });
+
+    match format {
+        OutputFormat::Json => {
+            if let Ok(json) = serde_json::to_string_pretty(&info) {
+                println!("{json}");
+            }
+        }
+        OutputFormat::Yaml => {
+            if let Ok(yaml) = serde_yaml::to_string(&info) {
+                print!("{yaml}");
+            }
+        }
+        OutputFormat::Table => {
+            println!("Task:     {}", exec.task_id);
+            println!("Flow:     {}", flow.id);
+            println!("State:    {:?}", exec.state);
+            println!("Attempts: {}", exec.attempt_count);
+            if let Some(ref reason) = exec.blocked_reason {
+                println!("Blocked:  {reason}");
+            }
+            if let Some(d) = diff {
+                println!("{d}");
+            }
+        }
+    }
+
+    ExitCode::Success
 }
