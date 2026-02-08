@@ -7,7 +7,7 @@
 | Phase Number | 12 |
 | Phase Title | Baseline & Diff Computation |
 | Branch | `phase/12-baseline-diff-computation` |
-| PR | #TBD |
+| PR | #5 |
 | Start Date | 2026-02-08 |
 | Completion Date | 2026-02-08 |
 | Duration | 0 days |
@@ -138,7 +138,7 @@ Not measured as part of `make validate`.
 |----------|--------|
 | `ops/ROADMAP.md` | Mark Phase 12 items complete |
 | `docs/design/cli-operational-semantics.md` | Add semantics for `task start`/`task complete` and `attempt inspect --diff` |
-| `changelog.json` | Add v0.1.3 entry for Phase 12 |
+| `changelog.json` | Add v0.1.4 entry for Phase 12 |
 | `ops/reports/phase-12-report.md` | Added this report |
 
 ---
