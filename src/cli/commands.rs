@@ -276,8 +276,21 @@ pub enum TaskCommands {
     /// Close a task
     Close(TaskCloseArgs),
 
+    Start(TaskStartArgs),
+    Complete(TaskCompleteArgs),
+
     Retry(TaskRetryArgs),
     Abort(TaskAbortArgs),
+}
+
+#[derive(Args)]
+pub struct TaskStartArgs {
+    pub task_id: String,
+}
+
+#[derive(Args)]
+pub struct TaskCompleteArgs {
+    pub task_id: String,
 }
 
 /// Arguments for task create.

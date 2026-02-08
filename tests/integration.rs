@@ -154,6 +154,72 @@ fn cli_graph_flow_and_task_control_smoke() {
 }
 
 #[test]
+fn cli_attempt_inspect_diff_after_manual_execution() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, start_out, err) = run_hivemind(tmp.path(), &["task", "start", &t1_id]);
+    assert_eq!(code, 0, "{err}");
+    let attempt_id = start_out
+        .lines()
+        .find_map(|l| l.strip_prefix("Attempt ID:").map(|s| s.trim().to_string()))
+        .expect("attempt id");
+
+    let worktree_readme = repo_dir
+        .join(".hivemind/worktrees")
+        .join(&flow_id)
+        .join(&t1_id)
+        .join("README.md");
+    std::fs::write(&worktree_readme, "changed\n").expect("modify worktree file");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["task", "complete", &t1_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, diff_out, err) =
+        run_hivemind(tmp.path(), &["attempt", "inspect", &attempt_id, "--diff"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(diff_out.contains("-test"), "{diff_out}");
+    assert!(diff_out.contains("+changed"), "{diff_out}");
+}
+
+#[test]
 fn cli_events_stream_with_filters() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
