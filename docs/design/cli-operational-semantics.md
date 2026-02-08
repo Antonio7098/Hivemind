@@ -119,6 +119,39 @@ RepositoryAttachedToProject:
 
 ---
 
+### 2.4 project runtime-set
+
+**Synopsis:**
+```
+hivemind project runtime-set <project> [--adapter <name>] [--binary-path <path>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>]
+```
+
+**Preconditions:**
+- Project `<project>` exists
+
+**Effects:**
+- Project runtime configuration is set (or replaced)
+- Adapter selection becomes explicit for TaskFlow execution
+
+**Events:**
+```
+ProjectRuntimeConfigured:
+  project_id: <project_id>
+  adapter_name: <name>
+  binary_path: <path>
+  args: [<args...>]
+  env: { <key>: <value>, ... }
+  timeout_ms: <ms>
+```
+
+**Failures:**
+- `PROJECT_NOT_FOUND`
+- `INVALID_ENV`: invalid env formatting
+
+**Idempotence:** Idempotent if config is unchanged. Otherwise emits a new configuration event.
+
+---
+
 ## 3. Task Commands
 
 ### 3.1 task create
@@ -484,6 +517,70 @@ hivemind flow status <flow-id> [--format json|table|detail]
 - `FLOW_NOT_FOUND`
 
 **Idempotence:** Idempotent.
+
+---
+
+### 5.7 flow tick
+
+**Synopsis:**
+```
+hivemind flow tick <flow-id>
+```
+
+**Preconditions:**
+- Flow exists
+- Flow state is RUNNING
+- Project has runtime configured
+
+**Effects:**
+- Transitions any dependency-satisfied `PENDING` tasks to `READY`
+- Executes a single `READY` task attempt using the configured runtime adapter
+- Emits runtime lifecycle events correlated by attempt ID
+
+**Events:**
+```
+TaskReady:
+  flow_id: <flow-id>
+  task_id: <task-id>
+
+TaskExecutionStateChanged:
+  task_id: <task-id>
+  from: READY
+  to: RUNNING
+
+RuntimeStarted:
+  attempt_id: <attempt-id>
+  task_id: <task-id>
+
+RuntimeOutputChunk:
+  attempt_id: <attempt-id>
+  stream: stdout|stderr
+  content: <text>
+
+RuntimeFilesystemObserved:
+  attempt_id: <attempt-id>
+  files_created: [<paths...>]
+  files_modified: [<paths...>]
+  files_deleted: [<paths...>]
+
+RuntimeExited:
+  attempt_id: <attempt-id>
+  exit_code: <code>
+
+TaskExecutionStateChanged:
+  task_id: <task-id>
+  from: RUNNING
+  to: VERIFYING
+```
+
+**Failures:**
+- `FLOW_NOT_FOUND`
+- `FLOW_NOT_RUNNING`
+- `RUNTIME_NOT_CONFIGURED`
+- `WORKTREE_NOT_FOUND`
+- `UNSUPPORTED_RUNTIME`
+
+**Idempotence:** Not idempotent. Each tick may schedule and/or execute work.
 
 ---
 

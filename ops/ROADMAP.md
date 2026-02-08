@@ -456,26 +456,26 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Wrap OpenCode CLI as first runtime.
 
 ### 14.1 Adapter Implementation
-- [ ] Implement OpenCodeAdapter
-- [ ] Binary detection and health check
-- [ ] Subprocess launch with controlled environment
-- [ ] Input delivery (stdin)
-- [ ] Output capture (stdout/stderr)
-- [ ] Timeout enforcement
+- [x] Implement OpenCodeAdapter
+- [x] Binary detection and health check
+- [x] Subprocess launch with controlled environment
+- [x] Input delivery (stdin)
+- [x] Output capture (stdout/stderr)
+- [x] Timeout enforcement
 
 ### 14.2 Configuration
-- [ ] Adapter config in project/global settings
-- [ ] Binary path, args, timeout, env passthrough
+- [x] Adapter config in project/global settings
+- [x] Binary path, args, timeout, env passthrough
 
 ### 14.3 Integration
-- [ ] Adapter selected per project
-- [ ] Adapter invoked by TaskFlow engine
+- [x] Adapter selected per project
+- [x] Adapter invoked by TaskFlow engine
 
 ### 14.4 Exit Criteria
-- [ ] OpenCode can be launched
-- [ ] Output captured
-- [ ] Timeout works
-- [ ] Filesystem changes observed
+- [x] OpenCode can be launched
+- [x] Output captured
+- [x] Timeout works
+- [x] Filesystem changes observed
 
 ---
 

@@ -6,11 +6,16 @@
     {
       "version": "v0.1.4",
       "date": "2026-02-08",
+<<<<<<< HEAD
       "phase": 12,
+=======
+      "phase": 14,
+>>>>>>> c890275 (docs(release): phase 14 docs + version bump)
       "changes": [
         {
           "type": "added",
           "area": "core",
+<<<<<<< HEAD
           "description": "Capture per-attempt filesystem baselines and persist them as artifacts for replay-safe diff computation"
         },
         {
@@ -22,16 +27,47 @@
           "type": "added",
           "area": "core",
           "description": "Emit new diff-related events: AttemptStarted, BaselineCaptured, FileModified, DiffComputed, CheckpointCommitCreated"
+=======
+          "description": "Add per-project runtime configuration persisted as events (adapter, binary path, args, env, timeout)"
+>>>>>>> c890275 (docs(release): phase 14 docs + version bump)
         },
         {
           "type": "added",
           "area": "cli",
+<<<<<<< HEAD
           "description": "Add manual task execution boundary commands: task start and task complete"
+=======
+          "description": "Add project runtime configuration command (project runtime-set)"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Invoke the configured runtime from flow tick and persist attempt-correlated runtime output and filesystem observation"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Persist filesystem observation as RuntimeFilesystemObserved event"
+>>>>>>> c890275 (docs(release): phase 14 docs + version bump)
         },
         {
           "type": "changed",
           "area": "cli",
+<<<<<<< HEAD
           "description": "Extend attempt inspect to support --diff and show stored unified diff output"
+=======
+          "description": "Improve attempt inspect to query attempt-correlated runtime events and optionally show output and file changes"
+        },
+        {
+          "type": "changed",
+          "area": "adapters",
+          "description": "Remove obsolete AdapterEvent layer in favor of core EventPayload runtime lifecycle events"
+        },
+        {
+          "type": "fixed",
+          "area": "tooling",
+          "description": "Fix Makefile coverage target for cargo-llvm-cov compatibility"
+>>>>>>> c890275 (docs(release): phase 14 docs + version bump)
         }
       ]
     },
