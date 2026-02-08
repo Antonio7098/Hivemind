@@ -337,6 +337,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn opencode_config_creation() {
@@ -459,6 +460,83 @@ mod tests {
 
         let err = adapter.execute(input).unwrap_err();
         assert_eq!(err.code, "timeout");
+    }
+
+    #[test]
+    fn initialize_falls_back_to_help_when_version_fails() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let script_path = tmp.path().join("fake_runtime.sh");
+        std::fs::write(
+            &script_path,
+            "#!/usr/bin/env sh\nif [ \"$1\" = \"--version\" ]; then exit 1; fi\nif [ \"$1\" = \"--help\" ]; then exit 0; fi\nexit 0\n",
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&script_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&script_path, perms).unwrap();
+
+        let cfg = OpenCodeConfig::new(script_path);
+        let mut adapter = OpenCodeAdapter::new(cfg);
+        adapter.initialize().unwrap();
+    }
+
+    #[test]
+    fn execute_success_captures_stdout_and_stderr() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        let mut cfg = OpenCodeConfig::new(PathBuf::from("/usr/bin/env"));
+        cfg.base.args = vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "echo ok_stdout; echo ok_stderr 1>&2".to_string(),
+        ];
+        cfg.base.timeout = Duration::from_secs(1);
+
+        let mut adapter = OpenCodeAdapter::new(cfg);
+        adapter.initialize().unwrap();
+        adapter.prepare(Uuid::new_v4(), tmp.path()).unwrap();
+
+        let input = ExecutionInput {
+            task_description: "Test".to_string(),
+            success_criteria: "Done".to_string(),
+            context: None,
+            prior_attempts: Vec::new(),
+            verifier_feedback: None,
+        };
+
+        let report = adapter.execute(input).unwrap();
+        assert_eq!(report.exit_code, 0);
+        assert!(report.stdout.contains("ok_stdout"));
+        assert!(report.stderr.contains("ok_stderr"));
+    }
+
+    #[test]
+    fn execute_nonzero_exit_returns_failure_report() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        let mut cfg = OpenCodeConfig::new(PathBuf::from("/usr/bin/env"));
+        cfg.base.args = vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "echo bad; exit 7".to_string(),
+        ];
+        cfg.base.timeout = Duration::from_secs(1);
+
+        let mut adapter = OpenCodeAdapter::new(cfg);
+        adapter.initialize().unwrap();
+        adapter.prepare(Uuid::new_v4(), tmp.path()).unwrap();
+
+        let input = ExecutionInput {
+            task_description: "Test".to_string(),
+            success_criteria: "Done".to_string(),
+            context: None,
+            prior_attempts: Vec::new(),
+            verifier_feedback: None,
+        };
+
+        let report = adapter.execute(input).unwrap();
+        assert_eq!(report.exit_code, 7);
+        assert!(report.errors.iter().any(|e| e.code == "nonzero_exit"));
     }
 
     // Note: Full execution tests require the actual opencode binary
