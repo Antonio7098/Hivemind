@@ -139,6 +139,8 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::MergeCompleted { .. } => "MergeCompleted",
         EventPayload::RuntimeStarted { .. } => "RuntimeStarted",
         EventPayload::RuntimeOutputChunk { .. } => "RuntimeOutputChunk",
+        EventPayload::RuntimeInputProvided { .. } => "RuntimeInputProvided",
+        EventPayload::RuntimeInterrupted { .. } => "RuntimeInterrupted",
         EventPayload::RuntimeExited { .. } => "RuntimeExited",
         EventPayload::RuntimeTerminated { .. } => "RuntimeTerminated",
         EventPayload::RuntimeFilesystemObserved { .. } => "RuntimeFilesystemObserved",
@@ -185,6 +187,8 @@ fn payload_category(payload: &EventPayload) -> &'static str {
 
         EventPayload::RuntimeStarted { .. }
         | EventPayload::RuntimeOutputChunk { .. }
+        | EventPayload::RuntimeInputProvided { .. }
+        | EventPayload::RuntimeInterrupted { .. }
         | EventPayload::RuntimeExited { .. }
         | EventPayload::RuntimeTerminated { .. }
         | EventPayload::RuntimeFilesystemObserved { .. }

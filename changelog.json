@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.7",
+      "date": "2026-02-09",
+      "phase": 15,
+      "changes": [
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add optional --interactive flag to flow tick to run the configured runtime in an interactive session"
+        },
+        {
+          "type": "added",
+          "area": "adapters",
+          "description": "Implement PTY-backed interactive execution in the OpenCode adapter with live output streaming and deterministic Ctrl+C handling"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Persist interactive runtime input and interrupt events (RuntimeInputProvided, RuntimeInterrupted) for full observability"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Extend flow tick execution to support interactive runtime sessions while preserving existing TaskFlow semantics"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Label and surface the new runtime interaction event types in CLI and server event rendering"
+        }
+      ]
+    },
+    {
       "version": "v0.1.6",
       "date": "2026-02-09",
       "phase": 22,

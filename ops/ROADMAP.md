@@ -486,24 +486,24 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 > **Invariant:** Interactive mode is a transport. It must not introduce UI-only behavior or bypass scope, verification, retries, or merge governance.
 
 ### 15.1 Interactive Execution Mode
-- [ ] Launch runtime in an interactive session when requested
-- [ ] Stream output continuously while emitting `RuntimeOutputChunk` events
-- [ ] Forward user input lines to the runtime
-- [ ] Ctrl+C interrupts the runtime deterministically (not a crash)
+- [x] Launch runtime in an interactive session when requested
+- [x] Stream output continuously while emitting `RuntimeOutputChunk` events
+- [x] Forward user input lines to the runtime
+- [x] Ctrl+C interrupts the runtime deterministically (not a crash)
 
 ### 15.2 Interactive Events
-- [ ] `RuntimeInputProvided`
-- [ ] `RuntimeInterrupted`
+- [x] `RuntimeInputProvided`
+- [x] `RuntimeInterrupted`
 
 ### 15.3 CLI Integration
-- [ ] `hivemind flow tick <flow-id> --interactive`
-- [ ] Interactive mode is optional; default remains non-interactive
+- [x] `hivemind flow tick <flow-id> --interactive`
+- [x] Interactive mode is optional; default remains non-interactive
 
 ### 15.4 Exit Criteria
-- [ ] Interactive runtime sessions work end-to-end in a real terminal
-- [ ] All interaction is observable via events
-- [ ] Interruptions are recorded and runtime terminates cleanly
-- [ ] Invariant holds: interactive mode does not change TaskFlow semantics
+- [x] Interactive runtime sessions work end-to-end in a real terminal
+- [x] All interaction is observable via events
+- [x] Interruptions are recorded and runtime terminates cleanly
+- [x] Invariant holds: interactive mode does not change TaskFlow semantics
 
 ---
 

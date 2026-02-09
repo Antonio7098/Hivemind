@@ -352,7 +352,7 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
-        FlowCommands::Tick(args) => match registry.tick_flow(&args.flow_id) {
+        FlowCommands::Tick(args) => match registry.tick_flow(&args.flow_id, args.interactive) {
             Ok(flow) => {
                 print_flow_id(flow.id, format);
                 ExitCode::Success
@@ -903,6 +903,8 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::MergeCompleted { .. } => "merge_completed",
         EventPayload::RuntimeStarted { .. } => "runtime_started",
         EventPayload::RuntimeOutputChunk { .. } => "runtime_output_chunk",
+        EventPayload::RuntimeInputProvided { .. } => "runtime_input_provided",
+        EventPayload::RuntimeInterrupted { .. } => "runtime_interrupted",
         EventPayload::RuntimeExited { .. } => "runtime_exited",
         EventPayload::RuntimeTerminated { .. } => "runtime_terminated",
         EventPayload::RuntimeFilesystemObserved { .. } => "runtime_filesystem_observed",

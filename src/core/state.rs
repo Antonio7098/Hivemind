@@ -478,6 +478,11 @@ impl AppState {
                 stream: _,
                 content: _,
             }
+            | EventPayload::RuntimeInputProvided {
+                attempt_id: _,
+                content: _,
+            }
+            | EventPayload::RuntimeInterrupted { attempt_id: _ }
             | EventPayload::RuntimeExited {
                 attempt_id: _,
                 exit_code: _,

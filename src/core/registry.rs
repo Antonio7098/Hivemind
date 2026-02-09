@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -983,7 +984,7 @@ impl Registry {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub fn tick_flow(&self, flow_id: &str) -> Result<TaskFlow> {
+    pub fn tick_flow(&self, flow_id: &str, interactive: bool) -> Result<TaskFlow> {
         let flow = self.get_flow(flow_id)?;
         if flow.state != FlowState::Running {
             return Err(HivemindError::user(
@@ -1274,25 +1275,87 @@ impl Registry {
             verifier_feedback: None,
         };
 
-        let report = match adapter.execute(input) {
-            Ok(r) => r,
-            Err(e) => {
-                let reason = format!("{}: {}", e.code, e.message);
-                self.store
-                    .append(Event::new(
-                        EventPayload::RuntimeTerminated { attempt_id, reason },
-                        attempt_corr,
-                    ))
-                    .map_err(|err| {
-                        HivemindError::system(
-                            "event_append_failed",
-                            err.to_string(),
-                            "registry:tick_flow",
-                        )
-                    })?;
-                let _ = self.complete_task_execution(&task_id.to_string());
-                return self.get_flow(flow_id);
+        let (report, terminated_reason) = if interactive {
+            let mut stdout = std::io::stdout();
+
+            let res = adapter.execute_interactive(&input, |evt| {
+                match evt {
+                    crate::adapters::opencode::InteractiveAdapterEvent::Output { content } => {
+                        let _ = stdout.write_all(content.as_bytes());
+                        let _ = stdout.flush();
+                        let event = Event::new(
+                            EventPayload::RuntimeOutputChunk {
+                                attempt_id,
+                                stream: RuntimeOutputStream::Stdout,
+                                content,
+                            },
+                            attempt_corr.clone(),
+                        );
+                        self.store.append(event).map_err(|e| e.to_string())?;
+                    }
+                    crate::adapters::opencode::InteractiveAdapterEvent::Input { content } => {
+                        let event = Event::new(
+                            EventPayload::RuntimeInputProvided {
+                                attempt_id,
+                                content,
+                            },
+                            attempt_corr.clone(),
+                        );
+                        self.store.append(event).map_err(|e| e.to_string())?;
+                    }
+                    crate::adapters::opencode::InteractiveAdapterEvent::Interrupted => {
+                        let event = Event::new(
+                            EventPayload::RuntimeInterrupted { attempt_id },
+                            attempt_corr.clone(),
+                        );
+                        self.store.append(event).map_err(|e| e.to_string())?;
+                    }
+                }
+                Ok(())
+            });
+
+            match res {
+                Ok(r) => (r.report, r.terminated_reason),
+                Err(e) => {
+                    let reason = format!("{}: {}", e.code, e.message);
+                    self.store
+                        .append(Event::new(
+                            EventPayload::RuntimeTerminated { attempt_id, reason },
+                            attempt_corr,
+                        ))
+                        .map_err(|err| {
+                            HivemindError::system(
+                                "event_append_failed",
+                                err.to_string(),
+                                "registry:tick_flow",
+                            )
+                        })?;
+                    let _ = self.complete_task_execution(&task_id.to_string());
+                    return self.get_flow(flow_id);
+                }
             }
+        } else {
+            let report = match adapter.execute(input) {
+                Ok(r) => r,
+                Err(e) => {
+                    let reason = format!("{}: {}", e.code, e.message);
+                    self.store
+                        .append(Event::new(
+                            EventPayload::RuntimeTerminated { attempt_id, reason },
+                            attempt_corr,
+                        ))
+                        .map_err(|err| {
+                            HivemindError::system(
+                                "event_append_failed",
+                                err.to_string(),
+                                "registry:tick_flow",
+                            )
+                        })?;
+                    let _ = self.complete_task_execution(&task_id.to_string());
+                    return self.get_flow(flow_id);
+                }
+            };
+            (report, None)
         };
 
         // Best-effort filesystem observed based on the persisted baseline.
@@ -1336,31 +1399,48 @@ impl Registry {
             }
         }
 
-        for chunk in report.stdout.lines() {
-            let event = Event::new(
-                EventPayload::RuntimeOutputChunk {
-                    attempt_id,
-                    stream: RuntimeOutputStream::Stdout,
-                    content: chunk.to_string(),
-                },
-                attempt_corr.clone(),
-            );
-            self.store.append(event).map_err(|e| {
-                HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
-            })?;
+        if !interactive {
+            for chunk in report.stdout.lines() {
+                let event = Event::new(
+                    EventPayload::RuntimeOutputChunk {
+                        attempt_id,
+                        stream: RuntimeOutputStream::Stdout,
+                        content: chunk.to_string(),
+                    },
+                    attempt_corr.clone(),
+                );
+                self.store.append(event).map_err(|e| {
+                    HivemindError::system(
+                        "event_append_failed",
+                        e.to_string(),
+                        "registry:tick_flow",
+                    )
+                })?;
+            }
+            for chunk in report.stderr.lines() {
+                let event = Event::new(
+                    EventPayload::RuntimeOutputChunk {
+                        attempt_id,
+                        stream: RuntimeOutputStream::Stderr,
+                        content: chunk.to_string(),
+                    },
+                    attempt_corr.clone(),
+                );
+                self.store.append(event).map_err(|e| {
+                    HivemindError::system(
+                        "event_append_failed",
+                        e.to_string(),
+                        "registry:tick_flow",
+                    )
+                })?;
+            }
         }
-        for chunk in report.stderr.lines() {
-            let event = Event::new(
-                EventPayload::RuntimeOutputChunk {
-                    attempt_id,
-                    stream: RuntimeOutputStream::Stderr,
-                    content: chunk.to_string(),
-                },
+
+        if let Some(reason) = terminated_reason {
+            let _ = self.store.append(Event::new(
+                EventPayload::RuntimeTerminated { attempt_id, reason },
                 attempt_corr.clone(),
-            );
-            self.store.append(event).map_err(|e| {
-                HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
-            })?;
+            ));
         }
 
         let duration_ms = u64::try_from(report.duration.as_millis().min(u128::from(u64::MAX)))
@@ -3369,7 +3449,7 @@ mod tests {
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
 
-        let res = registry.tick_flow(&flow.id.to_string());
+        let res = registry.tick_flow(&flow.id.to_string(), false);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code, "flow_not_running");
     }
@@ -3383,7 +3463,7 @@ mod tests {
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
         let flow = registry.start_flow(&flow.id.to_string()).unwrap();
 
-        let res = registry.tick_flow(&flow.id.to_string());
+        let res = registry.tick_flow(&flow.id.to_string(), false);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code, "runtime_not_configured");
     }
@@ -3409,7 +3489,7 @@ mod tests {
             )
             .unwrap();
 
-        let res = registry.tick_flow(&flow.id.to_string());
+        let res = registry.tick_flow(&flow.id.to_string(), false);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code, "unsupported_runtime");
     }
@@ -3427,7 +3507,7 @@ mod tests {
             .project_runtime_set("proj", "opencode", "opencode", None, &[], &[], 1000)
             .unwrap();
 
-        let res = registry.tick_flow(&flow.id.to_string());
+        let res = registry.tick_flow(&flow.id.to_string(), false);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code, "project_has_no_repo");
     }
@@ -3468,7 +3548,7 @@ mod tests {
             )
             .unwrap();
 
-        let _ = registry.tick_flow(&flow.id.to_string()).unwrap();
+        let _ = registry.tick_flow(&flow.id.to_string(), false).unwrap();
 
         let events = registry.read_events(&EventFilter::all()).unwrap();
         assert!(events
