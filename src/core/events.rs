@@ -421,6 +421,13 @@ pub enum EventPayload {
         stream: RuntimeOutputStream,
         content: String,
     },
+    RuntimeInputProvided {
+        attempt_id: Uuid,
+        content: String,
+    },
+    RuntimeInterrupted {
+        attempt_id: Uuid,
+    },
     RuntimeExited {
         attempt_id: Uuid,
         exit_code: i32,

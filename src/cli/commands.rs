@@ -201,6 +201,9 @@ pub struct FlowStartArgs {
 pub struct FlowTickArgs {
     /// Flow ID
     pub flow_id: String,
+
+    #[arg(long)]
+    pub interactive: bool,
 }
 
 #[derive(Args)]
