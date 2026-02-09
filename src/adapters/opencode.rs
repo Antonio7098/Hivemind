@@ -274,13 +274,18 @@ impl RuntimeAdapter for OpenCodeAdapter {
 
         // Write input to stdin
         if let Some(ref mut stdin) = child.stdin {
-            stdin.write_all(formatted_input.as_bytes()).map_err(|e| {
-                RuntimeError::new(
-                    "stdin_write_failed",
-                    format!("Failed to write to stdin: {e}"),
-                    true,
-                )
-            })?;
+            if let Err(e) = stdin.write_all(formatted_input.as_bytes()) {
+                // Some runtimes may exit quickly (e.g. error paths); in that case stdin can be
+                // closed before we finish writing. Treat EPIPE as non-fatal and continue to
+                // collect exit status and output.
+                if e.kind() != std::io::ErrorKind::BrokenPipe {
+                    return Err(RuntimeError::new(
+                        "stdin_write_failed",
+                        format!("Failed to write to stdin: {e}"),
+                        true,
+                    ));
+                }
+            }
         }
         // Close stdin
         drop(child.stdin.take());
@@ -319,30 +324,27 @@ impl RuntimeAdapter for OpenCodeAdapter {
 
         let status = loop {
             let Some(ref mut process) = self.process else {
-                return Err(RuntimeError::new(
-                    "no_process",
-                    "No process to wait on",
-                    false,
-                ));
-            };
-
-            if let Some(status) = process.try_wait().map_err(|e| {
-                RuntimeError::new(
-                    "wait_failed",
-                    format!("Failed to wait for process: {e}"),
-                    true,
-                )
-            })? {
-                break status;
-            }
-
-            if start.elapsed() > timeout {
-                let _ = process.kill();
-                let _ = process.wait();
                 let _ = stdout_handle.join();
                 let _ = stderr_handle.join();
                 self.process = None;
                 return Err(RuntimeError::timeout(timeout));
+            };
+
+            if start.elapsed() > timeout {
+                let _ = stdout_handle.join();
+                let _ = stderr_handle.join();
+                self.process = None;
+                return Err(RuntimeError::timeout(timeout));
+            }
+
+            if let Some(status) = process.try_wait().map_err(|e| {
+                RuntimeError::new(
+                    "wait_failed",
+                    format!("Failed to wait on process: {e}"),
+                    false,
+                )
+            })? {
+                break status;
             }
 
             std::thread::sleep(Duration::from_millis(10));
