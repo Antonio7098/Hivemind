@@ -65,20 +65,15 @@ Everything runs **locally**.
 Start here:
 
 docs/overview/
+├── quickstart.md # How to run Hivemind end-to-end (Humans + LLM operators)
 ├── vision.md # Why Hivemind exists
 ├── principles.md # Design doctrine
 └── prd.md # Product guarantees
-
-kotlin
-Copy code
 
 Then continue to:
 
 docs/architecture/ # System shape & invariants
 docs/design/ # Concrete mechanics & semantics
-
-yaml
-Copy code
 
 ---
 

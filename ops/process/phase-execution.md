@@ -561,8 +561,71 @@ Before considering this phase complete, verify **nothing has been missed**:
 - Integration tests pass for affected modules
 - Edge cases tested explicitly
 - **Manual CLI testing completed** — all commands exercised end-to-end
+- **Manual end-to-end test project run completed** — run the bundled test project from a clean start and inspect logs/events
 - Error scenarios tested via CLI (invalid inputs, missing args, etc.)
 - CLI output verified matches expected format
+
+#### Manual end-to-end test project run (required)
+
+Use the bundled `hivemind-test/` project to exercise real execution surfaces, runtime output capture, filesystem observation, verification transitions, and the merge workflow.
+
+This procedure must run against a **fresh clone in a temp directory** so the main repo stays clean and no manual cleanup is required.
+
+1) Create a fresh temp clone
+
+```bash
+TMP_ROOT=$(mktemp -d)
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+git clone . "$TMP_ROOT/hivemind"
+cd "$TMP_ROOT/hivemind"
+```
+
+2) Build the binary you will test
+
+```bash
+cargo build --release
+```
+
+3) Run the smoke tests and capture stdout/stderr
+
+```bash
+set -euo pipefail
+
+./hivemind-test/test_worktree.sh 2>&1 | tee /tmp/hivemind-test_worktree.log
+./hivemind-test/test_execution.sh 2>&1 | tee /tmp/hivemind-test_execution.log
+```
+
+4) Inspect the event log for correctness
+
+The test scripts set `HOME` to a sandbox temp directory. Inspect its event store:
+
+```bash
+test -f /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl
+
+# High-signal checks (note: `rg` exits non-zero when there are no matches)
+rg '"type":"runtime_' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
+rg '"type":"task_execution_state_changed"' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
+rg '"type":"merge_' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
+```
+
+5) Inspect worktrees and filesystem changes
+
+```bash
+# Confirm the runtime observed filesystem changes
+rg '"type":"runtime_filesystem_observed"' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
+
+# Optionally, inspect the diff artifact for the attempt
+# (find the attempt id from events.jsonl, then run: hivemind attempt inspect <attempt-id> --diff --output)
+```
+
+6) If anything looks wrong, stop and debug before merging
+
+Minimum debugging artifacts to include in the PR discussion:
+
+- `/tmp/hivemind-test_worktree.log`
+- `/tmp/hivemind-test_execution.log`
+- the relevant excerpt from `hivemind-test/.hm_home/.hivemind/events.jsonl`
 
 ### Final Verification
 - **One final read-through** of all changed files

@@ -69,7 +69,7 @@ ProjectCreated:
 
 **Synopsis:**
 ```
-hivemind project list [--format json|table]
+hivemind [-f json|table|yaml] project list
 ```
 
 **Preconditions:** None
@@ -123,7 +123,7 @@ RepositoryAttachedToProject:
 
 **Synopsis:**
 ```
-hivemind project runtime-set <project> [--adapter <name>] [--binary-path <path>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>]
+hivemind project runtime-set <project> [--adapter <name>] [--binary-path <path>] [--model <model>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>]
 ```
 
 **Preconditions:**
@@ -139,6 +139,7 @@ ProjectRuntimeConfigured:
   project_id: <project_id>
   adapter_name: <name>
   binary_path: <path>
+  model: <model> | null
   args: [<args...>]
   env: { <key>: <value>, ... }
   timeout_ms: <ms>
@@ -189,7 +190,7 @@ TaskCreated:
 
 **Synopsis:**
 ```
-hivemind task list <project> [--state open|closed|all] [--format json|table]
+hivemind [-f json|table|yaml] task list <project> [--state <state>]
 ```
 
 **Preconditions:**
@@ -284,7 +285,7 @@ hivemind graph add-dependency <graph-id> <from-task> <to-task>
 
 **Effects:**
 - Dependency edge added to graph
-- `<from-task>` must complete before `<to-task>` can start
+- `<to-task>` must complete before `<from-task>` can start
 
 **Events:**
 ```
@@ -497,7 +498,7 @@ TaskFlowAborted:
 
 **Synopsis:**
 ```
-hivemind flow status <flow-id> [--format json|table|detail]
+hivemind flow status <flow-id>
 ```
 
 **Preconditions:**
@@ -1031,7 +1032,7 @@ MergeCompleted:
 
 **Synopsis:**
 ```
-hivemind events stream [--flow <flow-id>] [--task <task-id>] [--since <timestamp>]
+hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project-id>] [--graph <graph-id>] [--limit <n>]
 ```
 
 **Preconditions:** None
@@ -1055,7 +1056,7 @@ hivemind events stream [--flow <flow-id>] [--task <task-id>] [--since <timestamp
 
 **Synopsis:**
 ```
-hivemind events replay <flow-id> [--until <timestamp>] [--verify]
+hivemind events replay <flow-id> [--verify]
 ```
 
 **Preconditions:**
@@ -1086,22 +1087,24 @@ hivemind events replay <flow-id> [--until <timestamp>] [--verify]
 
 All commands support:
 ```
--f json    # Machine-readable JSON
--f table   # Human-readable table
--f yaml    # YAML output
+-f, --format json    # Machine-readable JSON
+-f, --format table   # Human-readable output
+-f, --format yaml    # YAML output
 ```
 
-Default: table for TTY, json for pipes
+Default: table
 
 ### 10.2 Error Output Format
 
 Errors are always structured:
 ```json
 {
+  "success": false,
   "error": {
-    "code": "TASK_NOT_FOUND",
+    "category": "user",
+    "code": "task_not_found",
     "message": "Task abc123 not found",
-    "details": {}
+    "hint": "Try again"
   }
 }
 ```

@@ -4,9 +4,39 @@
 //! from events, so the event store is the single source of truth.
 
 use crate::core::events::{Event, EventId};
+use fs2::FileExt;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
+
+fn normalize_concatenated_json_objects(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut chars = line.chars().peekable();
+    let mut in_string = false;
+    let mut escape = false;
+
+    while let Some(c) = chars.next() {
+        if in_string {
+            if escape {
+                escape = false;
+            } else if c == '\\' {
+                escape = true;
+            } else if c == '"' {
+                in_string = false;
+            }
+        } else if c == '"' {
+            in_string = true;
+        }
+
+        out.push(c);
+
+        if !in_string && c == '}' && chars.peek().copied() == Some('{') {
+            out.push('\n');
+        }
+    }
+
+    out
+}
 
 /// Errors that can occur in the event store.
 #[derive(Debug, thiserror::Error)]
@@ -165,19 +195,37 @@ impl FileEventStore {
     /// # Errors
     /// Returns an error if the file cannot be created or read.
     pub fn open(path: PathBuf) -> Result<Self> {
-        let cache = if path.exists() {
-            let content = std::fs::read_to_string(&path)?;
-            content
-                .lines()
-                .filter(|l| !l.trim().is_empty())
-                .map(serde_json::from_str)
-                .collect::<std::result::Result<Vec<Event>, _>>()?
-        } else {
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            Vec::new()
-        };
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)?;
+        file.lock_shared()?;
+
+        let mut content = String::new();
+        {
+            use std::io::Read;
+            let mut reader = std::io::BufReader::new(&file);
+            reader.read_to_string(&mut content)?;
+        }
+
+        file.unlock()?;
+
+        let cache = content
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .flat_map(|line| {
+                let normalized = normalize_concatenated_json_objects(line);
+                serde_json::Deserializer::from_str(&normalized)
+                    .into_iter::<Event>()
+                    .collect::<Vec<_>>()
+            })
+            .collect::<std::result::Result<Vec<Event>, _>>()?;
 
         Ok(Self {
             path,
@@ -198,16 +246,42 @@ impl EventStore for FileEventStore {
         use std::fs::OpenOptions;
         use std::io::Write;
 
+        let mut file = OpenOptions::new()
+            .read(true)
+            .create(true)
+            .append(true)
+            .open(&self.path)?;
+        file.lock_exclusive()?;
+
+        let mut content = String::new();
+        {
+            use std::io::{Read, Seek};
+            let _ = file.rewind();
+            let mut reader = std::io::BufReader::new(&file);
+            reader.read_to_string(&mut content)?;
+        }
+
+        let disk_events = content
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .flat_map(|line| {
+                let normalized = normalize_concatenated_json_objects(line);
+                serde_json::Deserializer::from_str(&normalized)
+                    .into_iter::<Event>()
+                    .collect::<Vec<_>>()
+            })
+            .collect::<std::result::Result<Vec<Event>, _>>()?;
+
         let mut cache = self.cache.write().expect("lock poisoned");
+        cache.clone_from(&disk_events);
+
         event.metadata.sequence = Some(cache.len() as u64);
         let id = event.id();
 
         let json = serde_json::to_string(&event)?;
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)?;
         writeln!(file, "{json}")?;
+        let _ = file.flush();
+        let _ = file.unlock();
 
         cache.push(event);
         Ok(id)
@@ -360,5 +434,33 @@ mod tests {
             assert_eq!(events.len(), 1);
             assert_eq!(events[0].payload, event.payload);
         }
+    }
+
+    #[test]
+    fn file_store_ignores_unknown_event_payload_types() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("events.jsonl");
+
+        let project_id = Uuid::new_v4();
+        let event = Event::new(
+            EventPayload::ProjectCreated {
+                id: project_id,
+                name: "persist-test".to_string(),
+                description: None,
+            },
+            CorrelationIds::for_project(project_id),
+        );
+
+        let mut value = serde_json::to_value(&event).unwrap();
+        value["payload"]["type"] = serde_json::json!("future_event_type");
+        value["payload"]["some_new_field"] = serde_json::json!("some_value");
+        let unknown_line = serde_json::to_string(&value).unwrap();
+
+        std::fs::write(&path, format!("{unknown_line}\n")).unwrap();
+
+        let store = FileEventStore::open(path).unwrap();
+        let events = store.read_all().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].payload, EventPayload::Unknown);
     }
 }

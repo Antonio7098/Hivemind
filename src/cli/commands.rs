@@ -8,7 +8,11 @@ use clap::{Args, Parser, Subcommand};
 /// Hivemind CLI - Structured orchestration for agentic coding workflows.
 #[derive(Parser)]
 #[command(name = "hivemind")]
-#[command(version, about, long_about = None)]
+#[command(
+    version,
+    about,
+    long_about = "CLI-first orchestration for agentic coding workflows.\n\nStart with: docs/overview/quickstart.md"
+)]
 #[command(propagate_version = true)]
 pub struct Cli {
     /// Output format
@@ -37,9 +41,11 @@ pub enum Commands {
     #[command(subcommand)]
     Task(TaskCommands),
 
+    /// Task graphs (planning): define tasks + dependencies as a DAG
     #[command(subcommand)]
     Graph(GraphCommands),
 
+    /// Task flows (execution): run a graph using a configured runtime adapter
     #[command(subcommand)]
     Flow(FlowCommands),
 
@@ -59,102 +65,148 @@ pub enum Commands {
     #[command(subcommand)]
     Attempt(AttemptCommands),
 
+    /// Inspect and manage git worktrees used for task execution
     #[command(subcommand)]
     Worktree(WorktreeCommands),
 }
 
 #[derive(Subcommand)]
 pub enum WorktreeCommands {
+    /// List worktree status for each task in a flow
     List(WorktreeListArgs),
+    /// Inspect the worktree path and git metadata for a single task
     Inspect(WorktreeInspectArgs),
+    /// Remove worktrees for a flow (best-effort)
     Cleanup(WorktreeCleanupArgs),
 }
 
 #[derive(Args)]
 pub struct WorktreeListArgs {
+    /// Flow ID
     pub flow_id: String,
 }
 
 #[derive(Args)]
 pub struct WorktreeInspectArgs {
+    /// Task ID
     pub task_id: String,
 }
 
 #[derive(Args)]
 pub struct WorktreeCleanupArgs {
+    /// Flow ID
     pub flow_id: String,
 }
 
 #[derive(Subcommand)]
 pub enum GraphCommands {
+    /// Create a new graph from a set of tasks
     Create(GraphCreateArgs),
+    /// Add a dependency edge to a graph
     AddDependency(GraphAddDependencyArgs),
+    /// Validate a graph (cycle detection, missing nodes)
     Validate(GraphValidateArgs),
 }
 
 #[derive(Args)]
 pub struct GraphCreateArgs {
+    /// Project ID or name
     pub project: String,
+    /// Human-friendly graph name
     pub name: String,
 
+    /// Task IDs to include in the graph
     #[arg(long, num_args = 1..)]
     pub from_tasks: Vec<String>,
 }
 
 #[derive(Args)]
 pub struct GraphAddDependencyArgs {
-    pub graph_id: String,
-    pub from_task: String,
-    pub to_task: String,
+    /// Graph ID (positional)
+    #[arg(index = 1)]
+    pub graph_id: Option<String>,
+    /// Dependent task (positional). Semantics: `from_task` depends on `to_task`.
+    #[arg(index = 2)]
+    pub from_task: Option<String>,
+    /// Dependency task (positional). Semantics: `from_task` depends on `to_task`.
+    #[arg(index = 3)]
+    pub to_task: Option<String>,
+
+    #[arg(long = "graph-id")]
+    pub graph_id_flag: Option<String>,
+    #[arg(long = "from-task")]
+    pub from_task_flag: Option<String>,
+    #[arg(long = "to-task")]
+    pub to_task_flag: Option<String>,
 }
 
 #[derive(Args)]
 pub struct GraphValidateArgs {
-    pub graph_id: String,
+    /// Graph ID (positional)
+    #[arg(index = 1)]
+    pub graph_id: Option<String>,
+
+    #[arg(long = "graph-id")]
+    pub graph_id_flag: Option<String>,
 }
 
 #[derive(Subcommand)]
 pub enum FlowCommands {
+    /// Create a new flow from a graph (locks the graph)
     Create(FlowCreateArgs),
+    /// Start a flow (transitions it into running state)
     Start(FlowStartArgs),
+    /// Advance execution by one scheduling/execution step
     Tick(FlowTickArgs),
+    /// Pause scheduling new tasks (running tasks may continue)
     Pause(FlowPauseArgs),
+    /// Resume a paused flow
     Resume(FlowResumeArgs),
+    /// Abort a flow
     Abort(FlowAbortArgs),
+    /// Show flow state and per-task execution state
     Status(FlowStatusArgs),
 }
 
 #[derive(Args)]
 pub struct FlowCreateArgs {
+    /// Graph ID
     pub graph_id: String,
+    /// Optional flow name
     #[arg(long)]
     pub name: Option<String>,
 }
 
 #[derive(Args)]
 pub struct FlowStartArgs {
+    /// Flow ID
     pub flow_id: String,
 }
 
 #[derive(Args)]
 pub struct FlowTickArgs {
+    /// Flow ID
     pub flow_id: String,
 }
 
 #[derive(Args)]
 pub struct FlowPauseArgs {
+    /// Flow ID
     pub flow_id: String,
+    /// If set, wait for running tasks to finish before returning
     #[arg(long)]
     pub wait: bool,
 }
 
 #[derive(Args)]
 pub struct FlowResumeArgs {
+    /// Flow ID
     pub flow_id: String,
 }
 
 #[derive(Args)]
 pub struct FlowAbortArgs {
+    /// Flow ID
     pub flow_id: String,
     #[arg(long)]
     pub force: bool,
@@ -178,6 +230,7 @@ pub struct TaskAbortArgs {
 
 #[derive(Args)]
 pub struct FlowStatusArgs {
+    /// Flow ID
     pub flow_id: String,
 }
 
@@ -196,6 +249,7 @@ pub enum ProjectCommands {
     /// Update a project
     Update(ProjectUpdateArgs),
 
+    /// Configure the runtime adapter used to execute `TaskFlows`
     RuntimeSet(ProjectRuntimeSetArgs),
 
     /// Attach a repository to a project
@@ -218,20 +272,30 @@ pub struct ProjectCreateArgs {
 
 #[derive(Args)]
 pub struct ProjectRuntimeSetArgs {
+    /// Project ID or name
     pub project: String,
 
+    /// Runtime adapter name (default: opencode)
     #[arg(long, default_value = "opencode")]
     pub adapter: String,
 
+    /// Path to the runtime binary (default: opencode)
     #[arg(long, default_value = "opencode")]
     pub binary_path: String,
 
+    /// Optional model identifier for the runtime (adapter-specific)
+    #[arg(long)]
+    pub model: Option<String>,
+
+    /// Extra args to pass to the runtime (repeatable)
     #[arg(long = "arg", allow_hyphen_values = true)]
     pub args: Vec<String>,
 
+    /// Extra environment variables for the runtime in KEY=VALUE form (repeatable)
     #[arg(long = "env")]
     pub env: Vec<String>,
 
+    /// Execution timeout in milliseconds
     #[arg(long, default_value = "600000")]
     pub timeout_ms: u64,
 }
@@ -304,10 +368,14 @@ pub enum TaskCommands {
     /// Close a task
     Close(TaskCloseArgs),
 
+    /// Start executing a ready task
     Start(TaskStartArgs),
+    /// Mark a running task as complete
     Complete(TaskCompleteArgs),
 
+    /// Request a retry for a failed task
     Retry(TaskRetryArgs),
+    /// Abort a task within its flow
     Abort(TaskAbortArgs),
 }
 
@@ -476,13 +544,13 @@ pub struct VerifyOverrideArgs {
 /// Merge subcommands.
 #[derive(Subcommand)]
 pub enum MergeCommands {
-    /// Prepare merge for a completed flow
+    /// Prepare a merge for a completed flow (creates an integration branch)
     Prepare(MergePrepareArgs),
 
-    /// Approve a prepared merge
+    /// Approve a prepared merge (explicit human gate)
     Approve(MergeApproveArgs),
 
-    /// Execute an approved merge
+    /// Execute an approved merge (fast-forward target branch)
     Execute(MergeExecuteArgs),
 }
 
@@ -492,7 +560,7 @@ pub struct MergePrepareArgs {
     /// Flow ID
     pub flow_id: String,
 
-    /// Target branch
+    /// Target branch (set explicitly if your default branch is not 'main')
     #[arg(long)]
     pub target: Option<String>,
 }

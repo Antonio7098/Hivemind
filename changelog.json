@@ -4,6 +4,33 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.6",
+      "date": "2026-02-09",
+      "phase": 22,
+      "changes": [
+        {
+          "type": "added",
+          "area": "docs",
+          "description": "Add end-to-end Quickstart guide (humans + LLM operators) covering setup, runtime configuration, task/graph/flow execution, event inspection, and merge protocol"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Improve CLI --help discoverability for core commands and clarify dependency and merge semantics"
+        },
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "Harden merge workflow to handle git identity configuration reliably and auto-resolve certain dependency-ordered conflicts during merge preparation"
+        },
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "Ensure merge preparation is safely re-runnable when previous runs recorded conflicts"
+        }
+      ]
+    },
+    {
       "version": "v0.1.5",
       "date": "2026-02-08",
       "phase": 14,
