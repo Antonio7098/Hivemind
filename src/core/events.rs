@@ -220,6 +220,8 @@ pub enum EventPayload {
         adapter_name: String,
         binary_path: String,
         #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
         args: Vec<String>,
         #[serde(default)]
         env: HashMap<String, String>,
@@ -437,6 +439,9 @@ pub enum EventPayload {
         #[serde(default)]
         files_deleted: Vec<PathBuf>,
     },
+
+    #[serde(other)]
+    Unknown,
 }
 
 /// Output stream for runtime output events.

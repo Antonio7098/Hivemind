@@ -27,6 +27,8 @@ pub struct ProjectRuntimeConfig {
     pub adapter_name: String,
     pub binary_path: String,
     #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
     pub args: Vec<String>,
     #[serde(default)]
     pub env: HashMap<String, String>,
@@ -165,6 +167,7 @@ impl AppState {
                 project_id,
                 adapter_name,
                 binary_path,
+                model,
                 args,
                 env,
                 timeout_ms,
@@ -173,6 +176,7 @@ impl AppState {
                     project.runtime = Some(ProjectRuntimeConfig {
                         adapter_name: adapter_name.clone(),
                         binary_path: binary_path.clone(),
+                        model: model.clone(),
                         args: args.clone(),
                         env: env.clone(),
                         timeout_ms: *timeout_ms,
@@ -488,7 +492,8 @@ impl AppState {
                 files_created: _,
                 files_modified: _,
                 files_deleted: _,
-            } => {}
+            }
+            | EventPayload::Unknown => {}
 
             EventPayload::TaskRetryRequested {
                 task_id,

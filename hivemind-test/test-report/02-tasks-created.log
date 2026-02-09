@@ -1,0 +1,8 @@
+ID                                    STATE     TITLE
+--------------------------------------------------------------------------------
+2d1bd82a-fe84-4637-acec-34f6a3b0cf12  open      Create project structure and main entry point
+c7a7066a-cac3-4599-9f34-f9b8a217af34  open      Implement add expense functionality
+3883bb57-75ed-4d2e-ac1c-2fbf49f3ee4b  open      Implement list expenses functionality
+ff651935-c96a-4728-950b-29e9638d5a68  open      Implement total calculation
+8487b3b3-5aff-4f24-ab86-3bc53e819dfe  open      Implement CSV export
+32d46c12-5526-4b69-8afb-528e52ea8483  open      Add data persistence with JSON

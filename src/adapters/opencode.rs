@@ -6,12 +6,37 @@
 use super::runtime::{
     AdapterConfig, ExecutionInput, ExecutionReport, RuntimeAdapter, RuntimeError,
 };
+use std::env;
 use std::fmt::Write as FmtWrite;
 use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
+
+fn status_with_retry(
+    binary: &std::path::Path,
+    arg: &str,
+) -> std::io::Result<std::process::ExitStatus> {
+    let mut last_err: Option<std::io::Error> = None;
+    for _ in 0..50 {
+        match Command::new(binary)
+            .arg(arg)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+        {
+            Ok(status) => return Ok(status),
+            Err(e) if e.raw_os_error() == Some(26) => {
+                last_err = Some(e);
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| std::io::Error::other("Executable remained busy")))
+}
 
 /// `OpenCode` adapter configuration.
 #[derive(Debug, Clone)]
@@ -27,10 +52,11 @@ pub struct OpenCodeConfig {
 impl OpenCodeConfig {
     /// Creates a new `OpenCode` config with default settings.
     pub fn new(binary_path: PathBuf) -> Self {
+        let model = env::var("HIVEMIND_OPENCODE_MODEL").ok();
         Self {
             base: AdapterConfig::new("opencode", binary_path)
                 .with_timeout(Duration::from_secs(600)), // 10 minutes
-            model: None,
+            model,
             verbose: false,
         }
     }
@@ -130,21 +156,13 @@ impl RuntimeAdapter for OpenCodeAdapter {
         let binary = &self.config.base.binary_path;
 
         // Try to run with --version or --help
-        let result = Command::new(binary)
-            .arg("--version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        let result = status_with_retry(binary, "--version");
 
         match result {
             Ok(status) if status.success() => Ok(()),
             Ok(_) => {
                 // Try --help as fallback
-                let help_result = Command::new(binary)
-                    .arg("--help")
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
+                let help_result = status_with_retry(binary, "--help");
 
                 match help_result {
                     Ok(status) if status.success() => Ok(()),
@@ -188,14 +206,55 @@ impl RuntimeAdapter for OpenCodeAdapter {
         let start = Instant::now();
         let timeout = self.config.base.timeout;
 
+        let formatted_input = self.format_input(&input);
+
         // Build and spawn the command
         let mut cmd = Command::new(&self.config.base.binary_path);
         cmd.current_dir(worktree)
-            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        if !self.config.base.args.is_empty() {
+        let is_opencode_binary = self
+            .config
+            .base
+            .binary_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s.contains("opencode"));
+
+        if is_opencode_binary {
+            cmd.stdin(Stdio::null());
+            cmd.arg("run");
+
+            let has_model_flag = self
+                .config
+                .base
+                .args
+                .iter()
+                .any(|a| a == "--model" || a == "-m" || a.starts_with("--model="));
+            if !has_model_flag {
+                if let Some(model) = &self.config.model {
+                    cmd.arg("--model").arg(model);
+                }
+            }
+
+            if self.config.verbose {
+                let has_print_logs = self.config.base.args.iter().any(|a| a == "--print-logs");
+                if !has_print_logs {
+                    cmd.arg("--print-logs");
+                }
+            }
+
+            cmd.args(&self.config.base.args);
+            cmd.arg(formatted_input.clone());
+        } else if self.config.base.args.is_empty() {
+            return Err(RuntimeError::new(
+                "missing_args",
+                "No runtime args configured; either point to the opencode binary or provide args",
+                true,
+            ));
+        } else {
+            cmd.stdin(Stdio::piped());
             cmd.args(&self.config.base.args);
         }
 
@@ -215,7 +274,6 @@ impl RuntimeAdapter for OpenCodeAdapter {
 
         // Write input to stdin
         if let Some(ref mut stdin) = child.stdin {
-            let formatted_input = self.format_input(&input);
             stdin.write_all(formatted_input.as_bytes()).map_err(|e| {
                 RuntimeError::new(
                     "stdin_write_failed",

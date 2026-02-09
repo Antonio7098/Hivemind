@@ -1,0 +1,61 @@
+=== Creating fresh test ===
+Initialized empty Git repository in /home/antonio/programming/hivemind-test/test-fresh/.git/
+[main (root-commit) e01731d] Initial commit
+ 1 file changed, 1 insertion(+)
+ create mode 100644 README.md
+=== Creating project ===
+ID:          b8635f52-044d-4835-862f-722904704b14
+Name:        test-fresh
+Description: Test project
+Created:     2026-02-08 16:09:07.661840599 UTC
+=== Attaching repository ===
+ID:          b8635f52-044d-4835-862f-722904704b14
+Name:        test-fresh
+Description: Test project
+Created:     2026-02-08 16:09:07.661840599 UTC
+Repositories:
+  - main (/home/antonio/programming/hivemind-test/test-fresh)
+=== Creating task ===
+ID:          d7ccb8a6-d4d2-413a-93ad-c6379fc73e8c
+Project:     b8635f52-044d-4835-862f-722904704b14
+Title:       Test task
+Description: A test task
+State:       Open
+Created:     2026-02-08 16:09:07.673730629 UTC
+Task ID: d7ccb8a6-d4d2-413a-93ad-c6379fc73e8c
+=== Creating graph ===
+Graph ID: e923da65-0cce-4301-a55e-2daa6558ffab
+Graph ID: e923da65-0cce-4301-a55e-2daa6558ffab
+=== Creating flow ===
+Flow ID: 6faa98f6-6fac-446f-be34-3c2efa6fae60
+Flow ID: 6faa98f6-6fac-446f-be34-3c2efa6fae60
+=== Checking worktrees before start ===
+[
+  {
+    "flow_id": "6faa98f6-6fac-446f-be34-3c2efa6fae60",
+    "task_id": "d7ccb8a6-d4d2-413a-93ad-c6379fc73e8c",
+    "path": "/home/antonio/programming/hivemind-test/test-fresh/.hivemind/worktrees/6faa98f6-6fac-446f-be34-3c2efa6fae60/d7ccb8a6-d4d2-413a-93ad-c6379fc73e8c",
+    "is_worktree": false,
+    "head_commit": null,
+    "branch": null
+  }
+]
+=== Starting flow ===
+Flow ID: 6faa98f6-6fac-446f-be34-3c2efa6fae60
+=== Checking worktrees after start ===
+[
+  {
+    "flow_id": "6faa98f6-6fac-446f-be34-3c2efa6fae60",
+    "task_id": "d7ccb8a6-d4d2-413a-93ad-c6379fc73e8c",
+    "path": "/home/antonio/programming/hivemind-test/test-fresh/.hivemind/worktrees/6faa98f6-6fac-446f-be34-3c2efa6fae60/d7ccb8a6-d4d2-413a-93ad-c6379fc73e8c",
+    "is_worktree": true,
+    "head_commit": "e01731d141cfe581b2eef3fdf0d1d423e1a493c1",
+    "branch": "exec/6faa98f6-6fac-446f-be34-3c2efa6fae60/d7ccb8a6-d4d2-413a-93ad-c6379fc73e8c"
+  }
+]
+=== Listing worktree directory ===
+total 12
+drwxrwxr-x 3 antonio antonio 4096 Feb  8 16:09 .
+drwxrwxr-x 3 antonio antonio 4096 Feb  8 16:09 ..
+drwxrwxr-x 3 antonio antonio 4096 Feb  8 16:09 6faa98f6-6fac-446f-be34-3c2efa6fae60
+=== Test complete ===

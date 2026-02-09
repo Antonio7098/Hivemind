@@ -1,3 +1,5 @@
 /target
 .hivemind/
+!/hivemind-test/test-fresh/.hivemind/
+!/hivemind-test/test-fresh/.hivemind/**
 lcov.info

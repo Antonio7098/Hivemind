@@ -16,10 +16,81 @@ use hivemind::core::state::{AttemptState, Project, Task, TaskState};
 use std::process;
 use uuid::Uuid;
 
+fn resolve_graph_arg(
+    positional: Option<&str>,
+    flag: Option<&str>,
+    name: &'static str,
+    origin: &'static str,
+    format: OutputFormat,
+) -> Result<String, ExitCode> {
+    match (positional, flag) {
+        (Some(p), None) => Ok(p.to_string()),
+        (None, Some(f)) => Ok(f.to_string()),
+        (Some(p), Some(f)) => {
+            if p == f {
+                Ok(p.to_string())
+            } else {
+                Err(output_error(
+                    &hivemind::core::error::HivemindError::user(
+                        "conflicting_args",
+                        format!("Conflicting values provided for '{name}'"),
+                        origin,
+                    ),
+                    format,
+                ))
+            }
+        }
+        (None, None) => Err(output_error(
+            &hivemind::core::error::HivemindError::user(
+                "missing_arg",
+                format!("Missing required argument '{name}'"),
+                origin,
+            ),
+            format,
+        )),
+    }
+}
+
 fn main() {
-    let cli = Cli::parse();
-    let exit_code = run(cli);
-    process::exit(i32::from(exit_code));
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let is_broken_pipe = info
+            .payload()
+            .downcast_ref::<&str>()
+            .is_some_and(|s| s.contains("Broken pipe"))
+            || info
+                .payload()
+                .downcast_ref::<String>()
+                .is_some_and(|s| s.contains("Broken pipe"));
+
+        if is_broken_pipe {
+            return;
+        }
+
+        default_hook(info);
+    }));
+
+    let result = std::panic::catch_unwind(|| {
+        let cli = Cli::parse();
+        run(cli)
+    });
+
+    match result {
+        Ok(exit_code) => process::exit(i32::from(exit_code)),
+        Err(payload) => {
+            let msg = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("panic");
+
+            if msg.contains("Broken pipe") {
+                process::exit(0);
+            }
+
+            std::panic::resume_unwind(payload);
+        }
+    }
 }
 
 fn handle_worktree(cmd: WorktreeCommands, format: OutputFormat) -> ExitCode {
@@ -142,6 +213,7 @@ fn print_flow_id(flow_id: Uuid, format: OutputFormat) {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
         return ExitCode::Error;
@@ -173,7 +245,39 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
             }
         }
         GraphCommands::AddDependency(args) => {
-            match registry.add_graph_dependency(&args.graph_id, &args.from_task, &args.to_task) {
+            let origin = "cli:graph:add-dependency";
+            let graph_id = match resolve_graph_arg(
+                args.graph_id.as_deref(),
+                args.graph_id_flag.as_deref(),
+                "graph_id",
+                origin,
+                format,
+            ) {
+                Ok(v) => v,
+                Err(code) => return code,
+            };
+            let from_task = match resolve_graph_arg(
+                args.from_task.as_deref(),
+                args.from_task_flag.as_deref(),
+                "from_task",
+                origin,
+                format,
+            ) {
+                Ok(v) => v,
+                Err(code) => return code,
+            };
+            let to_task = match resolve_graph_arg(
+                args.to_task.as_deref(),
+                args.to_task_flag.as_deref(),
+                "to_task",
+                origin,
+                format,
+            ) {
+                Ok(v) => v,
+                Err(code) => return code,
+            };
+
+            match registry.add_graph_dependency(&graph_id, &from_task, &to_task) {
                 Ok(graph) => {
                     print_graph_id(graph.id, format);
                     ExitCode::Success
@@ -181,34 +285,48 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        GraphCommands::Validate(args) => match registry.validate_graph(&args.graph_id) {
-            Ok(result) => match format {
-                OutputFormat::Json => {
-                    if let Ok(json) = serde_json::to_string_pretty(&result) {
-                        println!("{json}");
-                    }
-                    ExitCode::Success
-                }
-                OutputFormat::Yaml => {
-                    if let Ok(yaml) = serde_yaml::to_string(&result) {
-                        print!("{yaml}");
-                    }
-                    ExitCode::Success
-                }
-                OutputFormat::Table => {
-                    if result.valid {
-                        println!("valid");
-                    } else {
-                        println!("invalid");
-                        for issue in result.issues {
-                            println!("- {issue}");
+        GraphCommands::Validate(args) => {
+            let origin = "cli:graph:validate";
+            let graph_id = match resolve_graph_arg(
+                args.graph_id.as_deref(),
+                args.graph_id_flag.as_deref(),
+                "graph_id",
+                origin,
+                format,
+            ) {
+                Ok(v) => v,
+                Err(code) => return code,
+            };
+
+            match registry.validate_graph(&graph_id) {
+                Ok(result) => match format {
+                    OutputFormat::Json => {
+                        if let Ok(json) = serde_json::to_string_pretty(&result) {
+                            println!("{json}");
                         }
+                        ExitCode::Success
                     }
-                    ExitCode::Success
-                }
-            },
-            Err(e) => output_error(&e, format),
-        },
+                    OutputFormat::Yaml => {
+                        if let Ok(yaml) = serde_yaml::to_string(&result) {
+                            print!("{yaml}");
+                        }
+                        ExitCode::Success
+                    }
+                    OutputFormat::Table => {
+                        if result.valid {
+                            println!("valid");
+                        } else {
+                            println!("invalid");
+                            for issue in result.issues {
+                                println!("- {issue}");
+                            }
+                        }
+                        ExitCode::Success
+                    }
+                },
+                Err(e) => output_error(&e, format),
+            }
+        }
     }
 }
 
@@ -441,6 +559,7 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
             &args.project,
             &args.adapter,
             &args.binary_path,
+            args.model,
             &args.args,
             &args.env,
             args.timeout_ms,
@@ -769,6 +888,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::RuntimeExited { .. } => "runtime_exited",
         EventPayload::RuntimeTerminated { .. } => "runtime_terminated",
         EventPayload::RuntimeFilesystemObserved { .. } => "runtime_filesystem_observed",
+        EventPayload::Unknown => "unknown",
     }
 }
 
