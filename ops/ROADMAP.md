@@ -564,7 +564,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 > **Important:** Verifier is advisory, not authoritative.
 
 ### 18.1 Verifier Invocation
-- [ ] After checks, invoke verifier agent
+- [ ] After checks, invoke verifier agent (optional toggle)
 - [ ] Input: task definition, diff, check results
 - [ ] Output: PASS / SOFT_FAIL / HARD_FAIL + feedback
 

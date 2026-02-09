@@ -33,6 +33,8 @@ pub enum Commands {
     /// Show version information
     Version,
 
+    Serve(ServeArgs),
+
     /// Project management commands
     #[command(subcommand)]
     Project(ProjectCommands),
@@ -68,6 +70,18 @@ pub enum Commands {
     /// Inspect and manage git worktrees used for task execution
     #[command(subcommand)]
     Worktree(WorktreeCommands),
+}
+
+#[derive(Args)]
+pub struct ServeArgs {
+    #[arg(long, default_value = "127.0.0.1")]
+    pub host: String,
+
+    #[arg(long, default_value_t = 8787)]
+    pub port: u16,
+
+    #[arg(long, default_value_t = 200)]
+    pub events_limit: usize,
 }
 
 #[derive(Subcommand)]

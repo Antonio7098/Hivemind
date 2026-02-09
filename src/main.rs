@@ -3,9 +3,9 @@
 use clap::Parser;
 use hivemind::cli::commands::{
     AttemptCommands, AttemptInspectArgs, Cli, Commands, EventCommands, FlowCommands, GraphCommands,
-    MergeCommands, ProjectCommands, TaskAbortArgs, TaskCloseArgs, TaskCommands, TaskCompleteArgs,
-    TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs, TaskStartArgs, TaskUpdateArgs,
-    VerifyCommands, WorktreeCommands,
+    MergeCommands, ProjectCommands, ServeArgs, TaskAbortArgs, TaskCloseArgs, TaskCommands,
+    TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs, TaskStartArgs,
+    TaskUpdateArgs, VerifyCommands, WorktreeCommands,
 };
 use hivemind::cli::output::{output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
@@ -430,6 +430,7 @@ fn run(cli: Cli) -> ExitCode {
             println!("hivemind {}", env!("CARGO_PKG_VERSION"));
             ExitCode::Success
         }
+        Some(Commands::Serve(args)) => handle_serve(args, format),
         Some(Commands::Project(cmd)) => handle_project(cmd, format),
         Some(Commands::Task(cmd)) => handle_task(cmd, format),
         Some(Commands::Graph(cmd)) => handle_graph(cmd, format),
@@ -444,6 +445,23 @@ fn run(cli: Cli) -> ExitCode {
             println!("Use --help for usage information.");
             ExitCode::Success
         }
+    }
+}
+
+fn handle_serve(args: ServeArgs, format: OutputFormat) -> ExitCode {
+    if format != OutputFormat::Table {
+        eprintln!("Warning: 'serve' always logs to stderr; output format is ignored.");
+    }
+
+    let config = hivemind::server::ServeConfig {
+        host: args.host,
+        port: args.port,
+        events_limit: args.events_limit,
+    };
+
+    match hivemind::server::serve(&config) {
+        Ok(()) => ExitCode::Success,
+        Err(e) => output_error(&e, format),
     }
 }
 
