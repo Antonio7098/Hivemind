@@ -5,12 +5,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HIVEMIND="${HIVEMIND:-$REPO_ROOT/target/release/hivemind}"
 
-export HOME="$SCRIPT_DIR/.hm_home"
+TMP_BASE="${TMPDIR:-/tmp}/hivemind-test"
+
+export HOME="$TMP_BASE/.hm_home"
 rm -rf "$HOME"
 
-rm -rf "$SCRIPT_DIR/test-fresh"
-mkdir -p "$SCRIPT_DIR/test-fresh"
-cd "$SCRIPT_DIR/test-fresh"
+rm -rf "$TMP_BASE/test-fresh"
+mkdir -p "$TMP_BASE/test-fresh"
+cd "$TMP_BASE/test-fresh"
 
 git init
 echo "# Test Project" > README.md

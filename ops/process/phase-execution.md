@@ -569,16 +569,16 @@ Before considering this phase complete, verify **nothing has been missed**:
 
 Use the bundled `hivemind-test/` project to exercise real execution surfaces, runtime output capture, filesystem observation, verification transitions, and the merge workflow.
 
-1) Clean start
+This procedure must run against a **fresh clone in a temp directory** so the main repo stays clean and no manual cleanup is required.
+
+1) Create a fresh temp clone
 
 ```bash
-# From repo root
-rm -rf hivemind-test/test-fresh
-rm -rf hivemind-test/.hm_home
-rm -rf hivemind-test/.hm_home_verify
+TMP_ROOT=$(mktemp -d)
+trap 'rm -rf "$TMP_ROOT"' EXIT
 
-# Optional: clear any cached artifacts created by previous local runs
-rm -rf .hivemind
+git clone . "$TMP_ROOT/hivemind"
+cd "$TMP_ROOT/hivemind"
 ```
 
 2) Build the binary you will test
@@ -587,7 +587,7 @@ rm -rf .hivemind
 cargo build --release
 ```
 
-3) Update the smoke tests with new functionality if relevant and run the smoke tests and capture stdout/stderr
+3) Run the smoke tests and capture stdout/stderr
 
 ```bash
 set -euo pipefail
@@ -598,25 +598,22 @@ set -euo pipefail
 
 4) Inspect the event log for correctness
 
-The test scripts set `HOME` to a sandbox directory under `hivemind-test/`. Inspect its event store:
+The test scripts set `HOME` to a sandbox temp directory. Inspect its event store:
 
 ```bash
-test -f hivemind-test/.hm_home/.hivemind/events.jsonl
+test -f /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl
 
 # High-signal checks (note: `rg` exits non-zero when there are no matches)
-rg '"type":"runtime_' hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
-rg '"type":"task_execution_state_changed"' hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
-rg '"type":"merge_' hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
+rg '"type":"runtime_' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
+rg '"type":"task_execution_state_changed"' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
+rg '"type":"merge_' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
 ```
 
 5) Inspect worktrees and filesystem changes
 
 ```bash
-# Confirm worktrees exist and are valid worktrees
-find hivemind-test/test-fresh/.hivemind/worktrees -maxdepth 4 -type f -name .git -print | head
-
-# Confirm the runtime observed filesystem changes (worktrees may be cleaned up on success)
-rg '"type":"runtime_filesystem_observed"' hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
+# Confirm the runtime observed filesystem changes
+rg '"type":"runtime_filesystem_observed"' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
 
 # Optionally, inspect the diff artifact for the attempt
 # (find the attempt id from events.jsonl, then run: hivemind attempt inspect <attempt-id> --diff --output)

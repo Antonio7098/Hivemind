@@ -1,5 +1,5 @@
 /target
 .hivemind/
-!/hivemind-test/test-fresh/.hivemind/
-!/hivemind-test/test-fresh/.hivemind/**
+hivemind-test/.hm_home/
+hivemind-test/.hm_home_verify/
 lcov.info
