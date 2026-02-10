@@ -1,5 +1,6 @@
 //! Hivemind CLI entrypoint.
 
+use clap::error::ErrorKind;
 use clap::Parser;
 use hivemind::cli::commands::{
     AttemptCommands, AttemptInspectArgs, Cli, Commands, EventCommands, FlowCommands, GraphCommands,
@@ -7,47 +8,112 @@ use hivemind::cli::commands::{
     TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs, TaskStartArgs,
     TaskUpdateArgs, VerifyCommands, WorktreeCommands,
 };
-use hivemind::cli::output::{output_error, OutputFormat};
+use hivemind::cli::output::{output, output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
 use hivemind::core::registry::Registry;
 use hivemind::core::scope::RepoAccessMode;
 use hivemind::core::scope::Scope;
 use hivemind::core::state::{AttemptState, Project, Task, TaskState};
+use std::ffi::OsString;
 use std::process;
 use uuid::Uuid;
 
-fn resolve_graph_arg(
-    positional: Option<&str>,
-    flag: Option<&str>,
-    name: &'static str,
-    origin: &'static str,
-    format: OutputFormat,
-) -> Result<String, ExitCode> {
-    match (positional, flag) {
-        (Some(p), None) => Ok(p.to_string()),
-        (None, Some(f)) => Ok(f.to_string()),
-        (Some(p), Some(f)) => {
-            if p == f {
-                Ok(p.to_string())
-            } else {
-                Err(output_error(
-                    &hivemind::core::error::HivemindError::user(
-                        "conflicting_args",
-                        format!("Conflicting values provided for '{name}'"),
-                        origin,
-                    ),
-                    format,
-                ))
+fn parse_format_from_args(args: &[OsString]) -> OutputFormat {
+    let mut iter = args.iter().skip(1);
+    while let Some(arg) = iter.next() {
+        let s = arg.to_string_lossy();
+
+        if s == "-f" || s == "--format" {
+            if let Some(value) = iter.next() {
+                return parse_format_value(&value.to_string_lossy());
             }
         }
-        (None, None) => Err(output_error(
-            &hivemind::core::error::HivemindError::user(
-                "missing_arg",
-                format!("Missing required argument '{name}'"),
-                origin,
-            ),
-            format,
-        )),
+
+        if let Some(value) = s.strip_prefix("--format=") {
+            return parse_format_value(value);
+        }
+    }
+
+    OutputFormat::Table
+}
+
+fn parse_format_value(value: &str) -> OutputFormat {
+    let v = value.to_lowercase();
+    if v == "json" {
+        OutputFormat::Json
+    } else if v == "yaml" || v == "yml" {
+        OutputFormat::Yaml
+    } else {
+        OutputFormat::Table
+    }
+}
+
+fn output_help(help: &str, format: OutputFormat) {
+    match format {
+        OutputFormat::Table => {
+            print!("{help}");
+        }
+        OutputFormat::Json => {
+            let response = hivemind::cli::output::CliResponse::success(serde_json::json!({
+                "help": help
+            }));
+            if let Ok(json) = serde_json::to_string_pretty(&response) {
+                println!("{json}");
+            }
+        }
+        OutputFormat::Yaml => {
+            let response = hivemind::cli::output::CliResponse::success(serde_json::json!({
+                "help": help
+            }));
+            if let Ok(yaml) = serde_yaml::to_string(&response) {
+                print!("{yaml}");
+            }
+        }
+    }
+}
+
+fn output_version(format: OutputFormat) {
+    let version = env!("CARGO_PKG_VERSION");
+    match format {
+        OutputFormat::Table => {
+            println!("hivemind {version}");
+        }
+        OutputFormat::Json => {
+            let response = hivemind::cli::output::CliResponse::success(serde_json::json!({
+                "name": "hivemind",
+                "version": version
+            }));
+            if let Ok(json) = serde_json::to_string_pretty(&response) {
+                println!("{json}");
+            }
+        }
+        OutputFormat::Yaml => {
+            let response = hivemind::cli::output::CliResponse::success(serde_json::json!({
+                "name": "hivemind",
+                "version": version
+            }));
+            if let Ok(yaml) = serde_yaml::to_string(&response) {
+                print!("{yaml}");
+            }
+        }
+    }
+}
+
+fn handle_clap_error(err: &clap::Error, format: OutputFormat) -> ExitCode {
+    match err.kind() {
+        ErrorKind::DisplayHelp => {
+            let rendered = err.render().to_string();
+            output_help(&rendered, format);
+            ExitCode::Success
+        }
+        ErrorKind::DisplayVersion => {
+            output_version(format);
+            ExitCode::Success
+        }
+        _ => {
+            eprintln!("{}", err.render());
+            ExitCode::Error
+        }
     }
 }
 
@@ -70,13 +136,14 @@ fn main() {
         default_hook(info);
     }));
 
-    let result = std::panic::catch_unwind(|| {
-        let cli = Cli::parse();
-        run(cli)
-    });
+    let args: Vec<OsString> = std::env::args_os().collect();
+    let format = parse_format_from_args(&args);
+
+    let result = std::panic::catch_unwind(|| Cli::try_parse_from(&args).map(run));
 
     match result {
-        Ok(exit_code) => process::exit(i32::from(exit_code)),
+        Ok(Ok(exit_code)) => process::exit(i32::from(exit_code)),
+        Ok(Err(e)) => process::exit(i32::from(handle_clap_error(&e, format))),
         Err(payload) => {
             let msg = payload
                 .downcast_ref::<&str>()
@@ -245,39 +312,7 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
             }
         }
         GraphCommands::AddDependency(args) => {
-            let origin = "cli:graph:add-dependency";
-            let graph_id = match resolve_graph_arg(
-                args.graph_id.as_deref(),
-                args.graph_id_flag.as_deref(),
-                "graph_id",
-                origin,
-                format,
-            ) {
-                Ok(v) => v,
-                Err(code) => return code,
-            };
-            let from_task = match resolve_graph_arg(
-                args.from_task.as_deref(),
-                args.from_task_flag.as_deref(),
-                "from_task",
-                origin,
-                format,
-            ) {
-                Ok(v) => v,
-                Err(code) => return code,
-            };
-            let to_task = match resolve_graph_arg(
-                args.to_task.as_deref(),
-                args.to_task_flag.as_deref(),
-                "to_task",
-                origin,
-                format,
-            ) {
-                Ok(v) => v,
-                Err(code) => return code,
-            };
-
-            match registry.add_graph_dependency(&graph_id, &from_task, &to_task) {
+            match registry.add_graph_dependency(&args.graph_id, &args.from_task, &args.to_task) {
                 Ok(graph) => {
                     print_graph_id(graph.id, format);
                     ExitCode::Success
@@ -285,48 +320,34 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        GraphCommands::Validate(args) => {
-            let origin = "cli:graph:validate";
-            let graph_id = match resolve_graph_arg(
-                args.graph_id.as_deref(),
-                args.graph_id_flag.as_deref(),
-                "graph_id",
-                origin,
-                format,
-            ) {
-                Ok(v) => v,
-                Err(code) => return code,
-            };
-
-            match registry.validate_graph(&graph_id) {
-                Ok(result) => match format {
-                    OutputFormat::Json => {
-                        if let Ok(json) = serde_json::to_string_pretty(&result) {
-                            println!("{json}");
-                        }
-                        ExitCode::Success
+        GraphCommands::Validate(args) => match registry.validate_graph(&args.graph_id) {
+            Ok(result) => match format {
+                OutputFormat::Json => {
+                    if let Ok(json) = serde_json::to_string_pretty(&result) {
+                        println!("{json}");
                     }
-                    OutputFormat::Yaml => {
-                        if let Ok(yaml) = serde_yaml::to_string(&result) {
-                            print!("{yaml}");
-                        }
-                        ExitCode::Success
+                    ExitCode::Success
+                }
+                OutputFormat::Yaml => {
+                    if let Ok(yaml) = serde_yaml::to_string(&result) {
+                        print!("{yaml}");
                     }
-                    OutputFormat::Table => {
-                        if result.valid {
-                            println!("valid");
-                        } else {
-                            println!("invalid");
-                            for issue in result.issues {
-                                println!("- {issue}");
-                            }
+                    ExitCode::Success
+                }
+                OutputFormat::Table => {
+                    if result.valid {
+                        println!("valid");
+                    } else {
+                        println!("invalid");
+                        for issue in result.issues {
+                            println!("- {issue}");
                         }
-                        ExitCode::Success
                     }
-                },
-                Err(e) => output_error(&e, format),
-            }
-        }
+                    ExitCode::Success
+                }
+            },
+            Err(e) => output_error(&e, format),
+        },
     }
 }
 
@@ -427,7 +448,7 @@ fn run(cli: Cli) -> ExitCode {
 
     match cli.command {
         Some(Commands::Version) => {
-            println!("hivemind {}", env!("CARGO_PKG_VERSION"));
+            output_version(format);
             ExitCode::Success
         }
         Some(Commands::Serve(args)) => handle_serve(args, format),
@@ -477,16 +498,6 @@ fn get_registry(format: OutputFormat) -> Option<Registry> {
 
 fn print_project(project: &Project, format: OutputFormat) {
     match format {
-        OutputFormat::Json => {
-            if let Ok(json) = serde_json::to_string_pretty(project) {
-                println!("{json}");
-            }
-        }
-        OutputFormat::Yaml => {
-            if let Ok(yaml) = serde_yaml::to_string(project) {
-                print!("{yaml}");
-            }
-        }
         OutputFormat::Table => {
             println!("ID:          {}", project.id);
             println!("Name:        {}", project.name);
@@ -494,11 +505,21 @@ fn print_project(project: &Project, format: OutputFormat) {
                 println!("Description: {desc}");
             }
             println!("Created:     {}", project.created_at);
+            println!("Updated:     {}", project.updated_at);
             if !project.repositories.is_empty() {
                 println!("Repositories:");
                 for repo in &project.repositories {
-                    println!("  - {} ({})", repo.name, repo.path);
+                    let access = match repo.access_mode {
+                        RepoAccessMode::ReadOnly => "readonly",
+                        RepoAccessMode::ReadWrite => "readwrite",
+                    };
+                    println!("  - {} ({}) [{access}]", repo.name, repo.path);
                 }
+            }
+        }
+        _ => {
+            if let Err(err) = output(project, format) {
+                eprintln!("Failed to render project: {err}");
             }
         }
     }
@@ -506,16 +527,6 @@ fn print_project(project: &Project, format: OutputFormat) {
 
 fn print_projects(projects: &[Project], format: OutputFormat) {
     match format {
-        OutputFormat::Json => {
-            if let Ok(json) = serde_json::to_string_pretty(projects) {
-                println!("{json}");
-            }
-        }
-        OutputFormat::Yaml => {
-            if let Ok(yaml) = serde_yaml::to_string(projects) {
-                print!("{yaml}");
-            }
-        }
         OutputFormat::Table => {
             if projects.is_empty() {
                 println!("No projects found.");
@@ -526,6 +537,11 @@ fn print_projects(projects: &[Project], format: OutputFormat) {
             for p in projects {
                 let desc = p.description.as_deref().unwrap_or("");
                 println!("{:<36}  {:<20}  {}", p.id, p.name, desc);
+            }
+        }
+        _ => {
+            if let Err(err) = output(projects, format) {
+                eprintln!("Failed to render projects: {err}");
             }
         }
     }
@@ -628,16 +644,6 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
 
 fn print_task(task: &Task, format: OutputFormat) {
     match format {
-        OutputFormat::Json => {
-            if let Ok(json) = serde_json::to_string_pretty(task) {
-                println!("{json}");
-            }
-        }
-        OutputFormat::Yaml => {
-            if let Ok(yaml) = serde_yaml::to_string(task) {
-                print!("{yaml}");
-            }
-        }
         OutputFormat::Table => {
             println!("ID:          {}", task.id);
             println!("Project:     {}", task.project_id);
@@ -648,21 +654,16 @@ fn print_task(task: &Task, format: OutputFormat) {
             println!("State:       {:?}", task.state);
             println!("Created:     {}", task.created_at);
         }
+        _ => {
+            if let Err(err) = output(task, format) {
+                eprintln!("Failed to render task: {err}");
+            }
+        }
     }
 }
 
 fn print_tasks(tasks: &[Task], format: OutputFormat) {
     match format {
-        OutputFormat::Json => {
-            if let Ok(json) = serde_json::to_string_pretty(tasks) {
-                println!("{json}");
-            }
-        }
-        OutputFormat::Yaml => {
-            if let Ok(yaml) = serde_yaml::to_string(tasks) {
-                print!("{yaml}");
-            }
-        }
         OutputFormat::Table => {
             if tasks.is_empty() {
                 println!("No tasks found.");
@@ -676,6 +677,11 @@ fn print_tasks(tasks: &[Task], format: OutputFormat) {
                     TaskState::Closed => "closed",
                 };
                 println!("{:<36}  {:<8}  {}", t.id, state, t.title);
+            }
+        }
+        _ => {
+            if let Err(err) = output(tasks, format) {
+                eprintln!("Failed to render tasks: {err}");
             }
         }
     }
@@ -869,6 +875,7 @@ fn handle_task(cmd: TaskCommands, format: OutputFormat) -> ExitCode {
 fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static str {
     use hivemind::core::events::EventPayload;
     match payload {
+        EventPayload::ErrorOccurred { .. } => "error_occurred",
         EventPayload::ProjectCreated { .. } => "project_created",
         EventPayload::ProjectUpdated { .. } => "project_updated",
         EventPayload::ProjectRuntimeConfigured { .. } => "project_runtime_configured",

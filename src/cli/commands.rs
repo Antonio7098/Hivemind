@@ -33,6 +33,7 @@ pub enum Commands {
     /// Show version information
     Version,
 
+    /// Run the HTTP server (API + UI)
     Serve(ServeArgs),
 
     /// Project management commands
@@ -136,32 +137,18 @@ pub struct GraphCreateArgs {
 
 #[derive(Args)]
 pub struct GraphAddDependencyArgs {
-    /// Graph ID (positional)
-    #[arg(index = 1)]
-    pub graph_id: Option<String>,
-    /// Dependent task (positional). Semantics: `from_task` depends on `to_task`.
-    #[arg(index = 2)]
-    pub from_task: Option<String>,
-    /// Dependency task (positional). Semantics: `from_task` depends on `to_task`.
-    #[arg(index = 3)]
-    pub to_task: Option<String>,
-
-    #[arg(long = "graph-id")]
-    pub graph_id_flag: Option<String>,
-    #[arg(long = "from-task")]
-    pub from_task_flag: Option<String>,
-    #[arg(long = "to-task")]
-    pub to_task_flag: Option<String>,
+    /// Graph ID
+    pub graph_id: String,
+    /// Dependent task. Semantics: `from_task` depends on `to_task`.
+    pub from_task: String,
+    /// Dependency task. Semantics: `from_task` depends on `to_task`.
+    pub to_task: String,
 }
 
 #[derive(Args)]
 pub struct GraphValidateArgs {
-    /// Graph ID (positional)
-    #[arg(index = 1)]
-    pub graph_id: Option<String>,
-
-    #[arg(long = "graph-id")]
-    pub graph_id_flag: Option<String>,
+    /// Graph ID
+    pub graph_id: String,
 }
 
 #[derive(Subcommand)]
@@ -202,6 +189,7 @@ pub struct FlowTickArgs {
     /// Flow ID
     pub flow_id: String,
 
+    /// Enable interactive mode (prompt between steps)
     #[arg(long)]
     pub interactive: bool,
 }
@@ -419,6 +407,7 @@ pub struct TaskCreateArgs {
     #[arg(long, short = 'd')]
     pub description: Option<String>,
 
+    /// Scope contract as a JSON string
     #[arg(long)]
     pub scope: Option<String>,
 }

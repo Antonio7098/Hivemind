@@ -44,7 +44,7 @@ impl std::fmt::Display for ErrorCategory {
 }
 
 /// Structured error with full context.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HivemindError {
     /// Error category for classification.
     pub category: ErrorCategory,
@@ -171,8 +171,8 @@ pub enum ExitCode {
     Success = 0,
     Error = 1,
     NotFound = 2,
-    InvalidInput = 3,
-    Conflict = 4,
+    Conflict = 3,
+    PermissionDenied = 4,
 }
 
 impl From<ExitCode> for i32 {

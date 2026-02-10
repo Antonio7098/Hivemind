@@ -338,16 +338,23 @@ Errors are emitted as structured events.
 ```
 ErrorOccurred:
   error: Error (as defined above)
+```
+
+Correlation identifiers are carried in the event metadata (CorrelationIds):
+
+```
+metadata.correlation:
+  project_id: string | null
+  graph_id: string | null
+  flow_id: string | null
   task_id: string | null
   attempt_id: string | null
-  taskflow_id: string
-  project_id: string
 ```
 
 ### 7.2 Event Properties
 
-- ErrorOccurred events are **never suppressed**
-- ErrorOccurred events are correlated to execution context
+- ErrorOccurred events are emitted for failures from state-changing or side-effectful commands
+- ErrorOccurred events are correlated to execution context via event metadata correlation IDs
 - ErrorOccurred events may be followed by state transition events
 
 ---
@@ -379,7 +386,7 @@ Filter errors by TaskFlow, task, or attempt for debugging specific failures.
 
 The error model enforces:
 
-- Every failure emits an ErrorOccurred event
+- Every state-changing failure emits an ErrorOccurred event
 - Every error has a category
 - Every error has an origin
 - Every error has a code unique within its category

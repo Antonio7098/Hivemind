@@ -466,7 +466,8 @@ impl AppState {
                 }
             }
 
-            EventPayload::FileModified { .. }
+            EventPayload::ErrorOccurred { .. }
+            | EventPayload::FileModified { .. }
             | EventPayload::CheckpointCommitCreated { .. }
             | EventPayload::ScopeValidated { .. }
             | EventPayload::ScopeViolationDetected { .. }

@@ -105,6 +105,7 @@ pub struct UiEvent {
 
 fn payload_pascal_type(payload: &EventPayload) -> &'static str {
     match payload {
+        EventPayload::ErrorOccurred { .. } => "ErrorOccurred",
         EventPayload::ProjectCreated { .. } => "ProjectCreated",
         EventPayload::ProjectUpdated { .. } => "ProjectUpdated",
         EventPayload::ProjectRuntimeConfigured { .. } => "ProjectRuntimeConfigured",
@@ -152,6 +153,8 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
 
 fn payload_category(payload: &EventPayload) -> &'static str {
     match payload {
+        EventPayload::ErrorOccurred { .. } => "error",
+
         EventPayload::ProjectCreated { .. }
         | EventPayload::ProjectUpdated { .. }
         | EventPayload::ProjectRuntimeConfigured { .. }

@@ -206,26 +206,7 @@ fn cli_graph_flow_and_task_control_smoke() {
     );
     assert_eq!(code, 0, "{err}");
 
-    let (code, _out, err) = run_hivemind(
-        tmp.path(),
-        &[
-            "graph",
-            "add-dependency",
-            "--graph-id",
-            &graph_id,
-            "--from-task",
-            &t1_id,
-            "--to-task",
-            &t2_id,
-        ],
-    );
-    assert_eq!(code, 0, "{err}");
-
     let (code, _out, err) = run_hivemind(tmp.path(), &["graph", "validate", &graph_id]);
-    assert_eq!(code, 0, "{err}");
-
-    let (code, _out, err) =
-        run_hivemind(tmp.path(), &["graph", "validate", "--graph-id", &graph_id]);
     assert_eq!(code, 0, "{err}");
 
     let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);

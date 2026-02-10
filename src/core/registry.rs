@@ -145,6 +145,13 @@ impl Registry {
             .map_err(|e| HivemindError::system("event_append_failed", e.to_string(), origin))
     }
 
+    fn record_error_event(&self, err: &HivemindError, correlation: CorrelationIds) {
+        let _ = self.store.append(Event::new(
+            EventPayload::ErrorOccurred { error: err.clone() },
+            correlation,
+        ));
+    }
+
     fn flow_for_task(state: &AppState, task_id: Uuid, origin: &'static str) -> Result<TaskFlow> {
         state
             .flows
@@ -932,16 +939,29 @@ impl Registry {
     /// # Errors
     /// Returns an error if a project with that name already exists.
     pub fn create_project(&self, name: &str, description: Option<&str>) -> Result<Project> {
+        if name.trim().is_empty() {
+            let err = HivemindError::user(
+                "invalid_project_name",
+                "Project name cannot be empty",
+                "registry:create_project",
+            )
+            .with_hint("Provide a non-empty project name");
+            self.record_error_event(&err, CorrelationIds::none());
+            return Err(err);
+        }
+
         let state = self.state()?;
 
         // Check for duplicate name
         if state.projects.values().any(|p| p.name == name) {
-            return Err(HivemindError::user(
+            let err = HivemindError::user(
                 "project_exists",
                 format!("Project '{name}' already exists"),
                 "registry:create_project",
             )
-            .with_hint("Choose a different project name"));
+            .with_hint("Choose a different project name");
+            self.record_error_event(&err, CorrelationIds::none());
+            return Err(err);
         }
 
         let id = Uuid::new_v4();
@@ -1024,7 +1044,29 @@ impl Registry {
         name: Option<&str>,
         description: Option<&str>,
     ) -> Result<Project> {
-        let project = self.get_project(id_or_name)?;
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+
+        if let Some(new_name) = name {
+            if new_name.trim().is_empty() {
+                let err = HivemindError::user(
+                    "invalid_project_name",
+                    "Project name cannot be empty",
+                    "registry:update_project",
+                )
+                .with_hint("Provide a non-empty project name");
+                self.record_error_event(&err, CorrelationIds::for_project(project.id));
+                return Err(err);
+            }
+        }
+
+        let name = name.filter(|n| *n != project.name);
+        let description = description.filter(|d| project.description.as_deref() != Some(*d));
+
+        if name.is_none() && description.is_none() {
+            return Ok(project);
+        }
 
         // Check for name conflict if changing name
         if let Some(new_name) = name {
@@ -1034,11 +1076,13 @@ impl Registry {
                 .values()
                 .any(|p| p.name == new_name && p.id != project.id)
             {
-                return Err(HivemindError::user(
+                let err = HivemindError::user(
                     "project_name_conflict",
                     format!("Project name '{new_name}' is already taken"),
                     "registry:update_project",
-                ));
+                );
+                self.record_error_event(&err, CorrelationIds::for_project(project.id));
+                return Err(err);
             }
         }
 
@@ -1073,18 +1117,43 @@ impl Registry {
         env: &[String],
         timeout_ms: u64,
     ) -> Result<Project> {
-        let project = self.get_project(id_or_name)?;
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
 
         let mut env_map = HashMap::new();
         for pair in env {
             let Some((k, v)) = pair.split_once('=') else {
-                return Err(HivemindError::user(
+                let err = HivemindError::user(
                     "invalid_env",
                     format!("Invalid env var '{pair}'. Expected KEY=VALUE"),
                     "registry:project_runtime_set",
-                ));
+                );
+                self.record_error_event(&err, CorrelationIds::for_project(project.id));
+                return Err(err);
             };
+            if k.trim().is_empty() {
+                let err = HivemindError::user(
+                    "invalid_env",
+                    format!("Invalid env var '{pair}'. KEY cannot be empty"),
+                    "registry:project_runtime_set",
+                );
+                self.record_error_event(&err, CorrelationIds::for_project(project.id));
+                return Err(err);
+            }
             env_map.insert(k.to_string(), v.to_string());
+        }
+
+        let desired = crate::core::state::ProjectRuntimeConfig {
+            adapter_name: adapter.to_string(),
+            binary_path: binary_path.to_string(),
+            model: model.clone(),
+            args: args.to_vec(),
+            env: env_map.clone(),
+            timeout_ms,
+        };
+        if project.runtime.as_ref() == Some(&desired) {
+            return Ok(project);
         }
 
         let event = Event::new(
@@ -1606,29 +1675,58 @@ impl Registry {
         name: Option<&str>,
         access_mode: RepoAccessMode,
     ) -> Result<Project> {
-        let project = self.get_project(id_or_name)?;
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let path = path.trim().trim_matches(|c| c == '"' || c == '\'').trim();
         let path_buf = std::path::PathBuf::from(path);
+
+        if path.is_empty() {
+            let err = HivemindError::user(
+                "invalid_repository_path",
+                "Repository path cannot be empty",
+                "registry:attach_repo",
+            )
+            .with_hint("Provide a valid filesystem path to a git repository");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
+        }
+
+        if !path_buf.exists() {
+            let err = HivemindError::user(
+                "repo_path_not_found",
+                format!("Repository path '{path}' not found"),
+                "registry:attach_repo",
+            )
+            .with_hint("Provide an existing path to a git repository");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
+        }
 
         // Validate it's a git repository
         let git_dir = path_buf.join(".git");
         if !git_dir.exists() {
-            return Err(HivemindError::git(
+            let err = HivemindError::git(
                 "not_a_git_repo",
                 format!("'{path}' is not a git repository"),
                 "registry:attach_repo",
             )
-            .with_hint("Provide a path to a directory containing a .git folder"));
+            .with_hint("Provide a path to a directory containing a .git folder");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
         }
 
         // Check if already attached
         let canonical_path = path_buf
             .canonicalize()
             .map_err(|e| {
-                HivemindError::system(
+                let err = HivemindError::system(
                     "path_canonicalize_failed",
                     e.to_string(),
                     "registry:attach_repo",
-                )
+                );
+                self.record_error_event(&err, CorrelationIds::for_project(project.id));
+                err
             })?
             .to_string_lossy()
             .to_string();
@@ -1638,11 +1736,13 @@ impl Registry {
             .iter()
             .any(|r| r.path == canonical_path)
         {
-            return Err(HivemindError::user(
+            let err = HivemindError::user(
                 "repo_already_attached",
                 format!("Repository '{path}' is already attached to this project"),
                 "registry:attach_repo",
-            ));
+            );
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
         }
 
         // Derive repo name from arg or path
@@ -1656,7 +1756,7 @@ impl Registry {
             .unwrap_or_else(|| "repo".to_string());
 
         if project.repositories.iter().any(|r| r.name == repo_name) {
-            return Err(HivemindError::user(
+            let err = HivemindError::user(
                 "repo_name_already_attached",
                 format!(
                     "Repository name '{repo_name}' is already attached to project '{}'",
@@ -1664,7 +1764,9 @@ impl Registry {
                 ),
                 "registry:attach_repo",
             )
-            .with_hint("Use --name to provide a different repository name"));
+            .with_hint("Use --name to provide a different repository name");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
         }
 
         let event = Event::new(
@@ -1689,11 +1791,13 @@ impl Registry {
     /// # Errors
     /// Returns an error if the project or repository is not found.
     pub fn detach_repo(&self, id_or_name: &str, repo_name: &str) -> Result<Project> {
-        let project = self.get_project(id_or_name)?;
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
 
         // Check if repo exists
         if !project.repositories.iter().any(|r| r.name == repo_name) {
-            return Err(HivemindError::user(
+            let err = HivemindError::user(
                 "repo_not_found",
                 format!(
                     "Repository '{repo_name}' is not attached to project '{}'",
@@ -1701,7 +1805,9 @@ impl Registry {
                 ),
                 "registry:detach_repo",
             )
-            .with_hint("Use 'hivemind project inspect' to see attached repositories"));
+            .with_hint("Use 'hivemind project inspect' to see attached repositories");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
         }
 
         let event = Event::new(
@@ -1732,7 +1838,20 @@ impl Registry {
         description: Option<&str>,
         scope: Option<Scope>,
     ) -> Result<Task> {
-        let project = self.get_project(project_id_or_name)?;
+        let project = self
+            .get_project(project_id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+
+        if title.trim().is_empty() {
+            let err = HivemindError::user(
+                "invalid_task_title",
+                "Task title cannot be empty",
+                "registry:create_task",
+            )
+            .with_hint("Provide a non-empty task title");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
+        }
 
         let task_id = Uuid::new_v4();
         let event = Event::new(
@@ -1810,7 +1929,29 @@ impl Registry {
         title: Option<&str>,
         description: Option<&str>,
     ) -> Result<Task> {
-        let task = self.get_task(task_id)?;
+        let task = self
+            .get_task(task_id)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+
+        if let Some(new_title) = title {
+            if new_title.trim().is_empty() {
+                let err = HivemindError::user(
+                    "invalid_task_title",
+                    "Task title cannot be empty",
+                    "registry:update_task",
+                )
+                .with_hint("Provide a non-empty task title");
+                self.record_error_event(&err, CorrelationIds::for_task(task.project_id, task.id));
+                return Err(err);
+            }
+        }
+
+        let title = title.filter(|t| *t != task.title);
+        let description = description.filter(|d| task.description.as_deref() != Some(*d));
+
+        if title.is_none() && description.is_none() {
+            return Ok(task);
+        }
 
         let event = Event::new(
             EventPayload::TaskUpdated {
@@ -1833,7 +1974,9 @@ impl Registry {
     /// # Errors
     /// Returns an error if the task is not found or already closed.
     pub fn close_task(&self, task_id: &str, reason: Option<&str>) -> Result<Task> {
-        let task = self.get_task(task_id)?;
+        let task = self
+            .get_task(task_id)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
 
         let state = self.state()?;
         let in_active_flow = state.flows.values().any(|f| {
@@ -1841,11 +1984,13 @@ impl Registry {
                 && !matches!(f.state, FlowState::Completed | FlowState::Aborted)
         });
         if in_active_flow {
-            return Err(HivemindError::user(
+            let err = HivemindError::user(
                 "task_in_active_flow",
                 "Task is part of an active flow",
                 "registry:close_task",
-            ));
+            );
+            self.record_error_event(&err, CorrelationIds::for_task(task.project_id, task.id));
+            return Err(err);
         }
 
         if task.state == TaskState::Closed {
@@ -1893,24 +2038,30 @@ impl Registry {
         name: &str,
         from_tasks: &[Uuid],
     ) -> Result<TaskGraph> {
-        let project = self.get_project(project_id_or_name)?;
+        let project = self
+            .get_project(project_id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
         let state = self.state()?;
 
         let mut tasks_to_add = Vec::new();
         for tid in from_tasks {
             let task = state.tasks.get(tid).cloned().ok_or_else(|| {
-                HivemindError::user(
+                let err = HivemindError::user(
                     "task_not_found",
                     format!("Task '{tid}' not found"),
                     "registry:create_graph",
-                )
+                );
+                self.record_error_event(&err, CorrelationIds::for_project(project.id));
+                err
             })?;
             if task.state != TaskState::Open {
-                return Err(HivemindError::user(
+                let err = HivemindError::user(
                     "task_not_open",
                     format!("Task '{tid}' is not open"),
                     "registry:create_graph",
-                ));
+                );
+                self.record_error_event(&err, CorrelationIds::for_project(project.id));
+                return Err(err);
             }
             tasks_to_add.push(task);
         }
@@ -1969,50 +2120,62 @@ impl Registry {
         to_task: &str,
     ) -> Result<TaskGraph> {
         let gid = Uuid::parse_str(graph_id).map_err(|_| {
-            HivemindError::user(
+            let err = HivemindError::user(
                 "invalid_graph_id",
                 format!("'{graph_id}' is not a valid graph ID"),
                 "registry:add_graph_dependency",
-            )
+            );
+            self.record_error_event(&err, CorrelationIds::none());
+            err
         })?;
         let from = Uuid::parse_str(from_task).map_err(|_| {
-            HivemindError::user(
+            let err = HivemindError::user(
                 "invalid_task_id",
                 format!("'{from_task}' is not a valid task ID"),
                 "registry:add_graph_dependency",
-            )
+            );
+            self.record_error_event(&err, CorrelationIds::none());
+            err
         })?;
         let to = Uuid::parse_str(to_task).map_err(|_| {
-            HivemindError::user(
+            let err = HivemindError::user(
                 "invalid_task_id",
                 format!("'{to_task}' is not a valid task ID"),
                 "registry:add_graph_dependency",
-            )
+            );
+            self.record_error_event(&err, CorrelationIds::none());
+            err
         })?;
 
         let state = self.state()?;
         let graph = state.graphs.get(&gid).cloned().ok_or_else(|| {
-            HivemindError::user(
+            let err = HivemindError::user(
                 "graph_not_found",
                 format!("Graph '{graph_id}' not found"),
                 "registry:add_graph_dependency",
-            )
+            );
+            self.record_error_event(&err, CorrelationIds::none());
+            err
         })?;
 
         if graph.state != GraphState::Draft {
-            return Err(HivemindError::user(
+            let err = HivemindError::user(
                 "graph_immutable",
                 format!("Graph '{graph_id}' is immutable"),
                 "registry:add_graph_dependency",
-            ));
+            );
+            self.record_error_event(&err, CorrelationIds::for_graph(graph.project_id, gid));
+            return Err(err);
         }
 
         if !graph.tasks.contains_key(&from) || !graph.tasks.contains_key(&to) {
-            return Err(HivemindError::user(
+            let err = HivemindError::user(
                 "task_not_in_graph",
                 "One or more tasks are not in the graph",
                 "registry:add_graph_dependency",
-            ));
+            );
+            self.record_error_event(&err, CorrelationIds::for_graph(graph.project_id, gid));
+            return Err(err);
         }
 
         if graph
@@ -2025,11 +2188,13 @@ impl Registry {
 
         let mut graph_for_check = graph.clone();
         graph_for_check.add_dependency(to, from).map_err(|e| {
-            HivemindError::user(
+            let err = HivemindError::user(
                 "cycle_detected",
                 e.to_string(),
                 "registry:add_graph_dependency",
-            )
+            );
+            self.record_error_event(&err, CorrelationIds::for_graph(graph.project_id, gid));
+            err
         })?;
 
         let event = Event::new(
@@ -2146,15 +2311,19 @@ impl Registry {
     }
 
     pub fn create_flow(&self, graph_id: &str, name: Option<&str>) -> Result<TaskFlow> {
-        let graph = self.get_graph(graph_id)?;
+        let graph = self
+            .get_graph(graph_id)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
         let issues = Self::validate_graph_issues(&graph);
         if !issues.is_empty() {
-            return Err(HivemindError::user(
+            let err = HivemindError::user(
                 "graph_invalid",
                 "Graph validation failed",
                 "registry:create_flow",
             )
-            .with_context("graph_id", graph.id.to_string()));
+            .with_context("graph_id", graph.id.to_string());
+            self.record_error_event(&err, CorrelationIds::for_graph(graph.project_id, graph.id));
+            return Err(err);
         }
 
         let state = self.state()?;
@@ -2162,12 +2331,14 @@ impl Registry {
             f.graph_id == graph.id && !matches!(f.state, FlowState::Completed | FlowState::Aborted)
         });
         if has_active {
-            return Err(HivemindError::user(
+            let err = HivemindError::user(
                 "graph_in_use",
                 "Graph already used by an active flow",
                 "registry:create_flow",
             )
-            .with_context("graph_id", graph.id.to_string()));
+            .with_context("graph_id", graph.id.to_string());
+            self.record_error_event(&err, CorrelationIds::for_graph(graph.project_id, graph.id));
+            return Err(err);
         }
 
         let flow_id = Uuid::new_v4();
@@ -2191,7 +2362,9 @@ impl Registry {
     }
 
     pub fn start_flow(&self, flow_id: &str) -> Result<TaskFlow> {
-        let flow = self.get_flow(flow_id)?;
+        let flow = self
+            .get_flow(flow_id)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
         match flow.state {
             FlowState::Created => {}
             FlowState::Paused => {
@@ -2209,25 +2382,37 @@ impl Registry {
                 return self.get_flow(flow_id);
             }
             FlowState::Running => {
-                return Err(HivemindError::user(
+                let err = HivemindError::user(
                     "flow_already_running",
                     "Flow is already running",
                     "registry:start_flow",
-                ));
+                );
+                self.record_error_event(
+                    &err,
+                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                );
+                return Err(err);
             }
             FlowState::Completed => {
-                return Err(HivemindError::user(
+                let err = HivemindError::user(
                     "flow_completed",
                     "Flow has already completed",
                     "registry:start_flow",
-                ));
+                );
+                self.record_error_event(
+                    &err,
+                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                );
+                return Err(err);
             }
             FlowState::Aborted => {
-                return Err(HivemindError::user(
-                    "flow_aborted",
-                    "Flow was aborted",
-                    "registry:start_flow",
-                ));
+                let err =
+                    HivemindError::user("flow_aborted", "Flow was aborted", "registry:start_flow");
+                self.record_error_event(
+                    &err,
+                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                );
+                return Err(err);
             }
         }
 
@@ -3945,6 +4130,80 @@ mod tests {
 
         assert!(registry.retry_task(&t1.id.to_string(), false).is_err());
         assert!(registry.retry_task(&t1.id.to_string(), true).is_ok());
+    }
+
+    #[test]
+    fn error_occurred_emitted_on_close_task_in_active_flow() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let _ = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let res = registry.close_task(&t1.id.to_string(), None);
+        assert!(res.is_err());
+
+        let events = registry.store.read_all().unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(&e.payload, EventPayload::ErrorOccurred { error } if error.code == "task_in_active_flow")
+        }));
+    }
+
+    #[test]
+    fn error_occurred_emitted_on_runtime_set_invalid_env() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+
+        let res = registry.project_runtime_set(
+            "proj",
+            "opencode",
+            "opencode",
+            None,
+            &[],
+            &["=VALUE".to_string()],
+            1000,
+        );
+        assert!(res.is_err());
+
+        let events = registry.store.read_all().unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(&e.payload, EventPayload::ErrorOccurred { error } if error.code == "invalid_env")
+        }));
+    }
+
+    #[test]
+    fn error_occurred_emitted_on_attach_repo_missing_path() {
+        let registry = test_registry();
+        let project = registry.create_project("proj", None).unwrap();
+
+        let res = registry.attach_repo(
+            "proj",
+            "/path/does/not/exist",
+            None,
+            RepoAccessMode::ReadWrite,
+        );
+        assert!(res.is_err());
+
+        let events = registry.store.read_all().unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(&e.payload, EventPayload::ErrorOccurred { error } if error.code == "repo_path_not_found")
+                && e.metadata.correlation.project_id == Some(project.id)
+        }));
+    }
+
+    #[test]
+    fn error_occurred_not_emitted_for_read_only_get_task_failure() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+
+        let before = registry.store.read_all().unwrap().len();
+        let _ = registry
+            .get_task("00000000-0000-0000-0000-000000000000")
+            .err();
+        let after = registry.store.read_all().unwrap().len();
+        assert_eq!(before, after);
     }
 
     fn setup_flow_with_verifying_task(registry: &Registry) -> (TaskFlow, Uuid) {

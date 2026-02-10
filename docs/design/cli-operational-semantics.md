@@ -58,8 +58,8 @@ ProjectCreated:
 ```
 
 **Failures:**
-- `PROJECT_ALREADY_EXISTS`: Project with name exists
-- `INVALID_PROJECT_NAME`: Name contains invalid characters
+- `project_exists`: Project with name exists
+- `invalid_project_name`: Name is empty
 
 **Idempotence:** Not idempotent. Second call fails.
 
@@ -111,9 +111,12 @@ RepositoryAttachedToProject:
 ```
 
 **Failures:**
-- `PROJECT_NOT_FOUND`: Project doesn't exist
-- `INVALID_REPOSITORY`: Path is not a git repo
-- `REPO_ALREADY_ATTACHED`: Repo name already used
+- `project_not_found`: Project doesn't exist
+- `repo_path_not_found`: Path does not exist
+- `invalid_repository_path`: Empty path
+- `not_a_git_repo`: Path is not a git repo
+- `repo_already_attached`: Repo path already attached
+- `repo_name_already_attached`: Repo name already used
 
 **Idempotence:** Not idempotent. Second call fails.
 
@@ -146,10 +149,90 @@ ProjectRuntimeConfigured:
 ```
 
 **Failures:**
-- `PROJECT_NOT_FOUND`
-- `INVALID_ENV`: invalid env formatting
+- `project_not_found`
+- `invalid_env`: invalid env formatting
 
 **Idempotence:** Idempotent if config is unchanged. Otherwise emits a new configuration event.
+
+---
+
+### 2.5 project inspect
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project inspect <project>
+```
+
+**Preconditions:**
+- Project exists
+
+**Effects:** None (read-only)
+
+**Events:** None
+
+**Failures:**
+- `project_not_found`
+
+**Idempotence:** Idempotent.
+
+---
+
+### 2.6 project update
+
+**Synopsis:**
+```
+hivemind project update <project> [--name <name>] [--description <text>]
+```
+
+**Preconditions:**
+- Project exists
+
+**Effects:**
+- Project metadata updated
+
+**Events:**
+```
+ProjectUpdated:
+  project_id: <project_id>
+  name: <name> | null
+  description: <text> | null
+```
+
+**Failures:**
+- `project_not_found`
+- `invalid_project_name`: Name is empty
+- `project_name_conflict`: Name already taken
+
+**Idempotence:** Idempotent if no changes. Otherwise emits a new update event.
+
+---
+
+### 2.7 project detach-repo
+
+**Synopsis:**
+```
+hivemind project detach-repo <project> <repo-name>
+```
+
+**Preconditions:**
+- Project exists
+- Repository with `<repo-name>` is attached
+
+**Effects:**
+- Repository reference removed from project
+
+**Events:**
+```
+RepositoryDetached:
+  project_id: <project_id>
+  name: <repo-name>
+```
+
+**Failures:**
+- `project_not_found`
+- `repo_not_found`
+
+**Idempotence:** Not idempotent. Second call fails.
 
 ---
 
@@ -179,8 +262,9 @@ TaskCreated:
 ```
 
 **Failures:**
-- `PROJECT_NOT_FOUND`: Project doesn't exist
-- `INVALID_SCOPE`: Scope definition is malformed
+- `project_not_found`: Project doesn't exist
+- `invalid_task_title`: Title is empty
+- `invalid_scope`: Scope definition is malformed
 
 **Idempotence:** Not idempotent. Creates new task each time.
 
@@ -230,10 +314,63 @@ TaskClosed:
 ```
 
 **Failures:**
-- `TASK_NOT_FOUND`: Task doesn't exist
-- `TASK_IN_ACTIVE_FLOW`: Task is part of running TaskFlow
+- `task_not_found`: Task doesn't exist
+- `task_in_active_flow`: Task is part of running TaskFlow
 
 **Idempotence:** Idempotent. Closing closed task is no-op.
+
+---
+
+### 3.4 task inspect
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] task inspect <task-id>
+```
+
+**Preconditions:**
+- Task ID is a valid UUID
+- Task exists
+
+**Effects:** None (read-only)
+
+**Events:** None
+
+**Failures:**
+- `invalid_task_id`: Task ID is not a valid UUID
+- `task_not_found`: Task doesn't exist
+
+**Idempotence:** Idempotent.
+
+---
+
+### 3.5 task update
+
+**Synopsis:**
+```
+hivemind task update <task-id> [--title <text>] [--description <text>]
+```
+
+**Preconditions:**
+- Task exists
+
+**Effects:**
+- Task metadata updated
+
+**Events:**
+```
+TaskUpdated:
+  task_id: <task-id>
+  title: <text> | null
+  description: <text> | null
+```
+
+**Failures:**
+- `invalid_task_id`: Task ID is not a valid UUID
+- `task_not_found`: Task doesn't exist
+- `invalid_task_title`: Title is empty
+
+**Idempotence:** Idempotent if no changes. Otherwise emits a new update event.
 
 ---
 
@@ -1104,6 +1241,7 @@ Errors are always structured:
     "category": "user",
     "code": "task_not_found",
     "message": "Task abc123 not found",
+    "origin": "registry:get_task",
     "hint": "Try again"
   }
 }

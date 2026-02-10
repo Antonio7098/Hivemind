@@ -5,6 +5,7 @@
 
 use crate::core::diff::ChangeType;
 use crate::core::enforcement::ScopeViolation;
+use crate::core::error::HivemindError;
 use crate::core::flow::TaskExecState;
 use crate::core::graph::GraphTask;
 use crate::core::scope::{RepoAccessMode, Scope};
@@ -204,6 +205,11 @@ impl EventMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EventPayload {
+    /// A failure occurred and was recorded.
+    ErrorOccurred {
+        error: HivemindError,
+    },
+
     /// A new project was created.
     ProjectCreated {
         id: Uuid,
