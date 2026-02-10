@@ -10,4 +10,5 @@ pub mod registry;
 pub mod scheduler;
 pub mod scope;
 pub mod state;
+pub mod verification;
 pub mod worktree;

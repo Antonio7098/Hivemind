@@ -9,6 +9,7 @@ use crate::core::error::HivemindError;
 use crate::core::flow::TaskExecState;
 use crate::core::graph::GraphTask;
 use crate::core::scope::{RepoAccessMode, Scope};
+use crate::core::verification::CheckConfig;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -285,6 +286,11 @@ pub enum EventPayload {
         from_task: Uuid,
         to_task: Uuid,
     },
+    GraphTaskCheckAdded {
+        graph_id: Uuid,
+        task_id: Uuid,
+        check: CheckConfig,
+    },
     ScopeAssigned {
         graph_id: Uuid,
         task_id: Uuid,
@@ -373,6 +379,26 @@ pub enum EventPayload {
         diff_id: Uuid,
         baseline_id: Uuid,
         change_count: usize,
+    },
+
+    CheckStarted {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        check_name: String,
+        required: bool,
+    },
+
+    CheckCompleted {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        check_name: String,
+        passed: bool,
+        exit_code: i32,
+        output: String,
+        duration_ms: u64,
+        required: bool,
     },
 
     CheckpointCommitCreated {

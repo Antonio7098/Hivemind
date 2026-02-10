@@ -6,6 +6,7 @@ use super::events::{Event, EventPayload};
 use super::flow::{FlowState, TaskExecState, TaskExecution, TaskFlow};
 use super::graph::{GraphState, TaskGraph};
 use super::scope::{RepoAccessMode, Scope};
+use super::verification::CheckResult;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -20,6 +21,8 @@ pub struct AttemptState {
     pub started_at: DateTime<Utc>,
     pub baseline_id: Option<Uuid>,
     pub diff_id: Option<Uuid>,
+    #[serde(default)]
+    pub check_results: Vec<CheckResult>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -290,6 +293,18 @@ impl AppState {
                     graph.updated_at = timestamp;
                 }
             }
+            EventPayload::GraphTaskCheckAdded {
+                graph_id,
+                task_id,
+                check,
+            } => {
+                if let Some(graph) = self.graphs.get_mut(graph_id) {
+                    if let Some(task) = graph.tasks.get_mut(task_id) {
+                        task.criteria.checks.push(check.clone());
+                        graph.updated_at = timestamp;
+                    }
+                }
+            }
             EventPayload::ScopeAssigned {
                 graph_id,
                 task_id,
@@ -442,6 +457,7 @@ impl AppState {
                         started_at: timestamp,
                         baseline_id: None,
                         diff_id: None,
+                        check_results: Vec::new(),
                     },
                 );
             }
@@ -466,7 +482,30 @@ impl AppState {
                 }
             }
 
-            EventPayload::ErrorOccurred { .. }
+            EventPayload::CheckCompleted {
+                attempt_id,
+                check_name,
+                passed,
+                exit_code,
+                output,
+                duration_ms,
+                required,
+                ..
+            } => {
+                if let Some(attempt) = self.attempts.get_mut(attempt_id) {
+                    attempt.check_results.push(CheckResult {
+                        name: check_name.clone(),
+                        passed: *passed,
+                        exit_code: *exit_code,
+                        output: output.clone(),
+                        duration_ms: *duration_ms,
+                        required: *required,
+                    });
+                }
+            }
+
+            EventPayload::CheckStarted { .. }
+            | EventPayload::ErrorOccurred { .. }
             | EventPayload::FileModified { .. }
             | EventPayload::CheckpointCommitCreated { .. }
             | EventPayload::ScopeValidated { .. }

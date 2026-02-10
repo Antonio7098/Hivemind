@@ -117,6 +117,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::TaskGraphCreated { .. } => "TaskGraphCreated",
         EventPayload::TaskAddedToGraph { .. } => "TaskAddedToGraph",
         EventPayload::DependencyAdded { .. } => "DependencyAdded",
+        EventPayload::GraphTaskCheckAdded { .. } => "GraphTaskCheckAdded",
         EventPayload::ScopeAssigned { .. } => "ScopeAssigned",
         EventPayload::TaskFlowCreated { .. } => "TaskFlowCreated",
         EventPayload::TaskFlowStarted { .. } => "TaskFlowStarted",
@@ -131,6 +132,8 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::BaselineCaptured { .. } => "BaselineCaptured",
         EventPayload::FileModified { .. } => "FileModified",
         EventPayload::DiffComputed { .. } => "DiffComputed",
+        EventPayload::CheckStarted { .. } => "CheckStarted",
+        EventPayload::CheckCompleted { .. } => "CheckCompleted",
         EventPayload::CheckpointCommitCreated { .. } => "CheckpointCommitCreated",
         EventPayload::ScopeValidated { .. } => "ScopeValidated",
         EventPayload::ScopeViolationDetected { .. } => "ScopeViolationDetected",
@@ -168,6 +171,7 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         EventPayload::TaskGraphCreated { .. }
         | EventPayload::TaskAddedToGraph { .. }
         | EventPayload::DependencyAdded { .. }
+        | EventPayload::GraphTaskCheckAdded { .. }
         | EventPayload::ScopeAssigned { .. } => "graph",
 
         EventPayload::TaskFlowCreated { .. }
@@ -184,7 +188,9 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskRetryRequested { .. }
         | EventPayload::TaskAborted { .. } => "execution",
 
-        EventPayload::HumanOverride { .. } => "verification",
+        EventPayload::CheckStarted { .. }
+        | EventPayload::CheckCompleted { .. }
+        | EventPayload::HumanOverride { .. } => "verification",
 
         EventPayload::ScopeValidated { .. } | EventPayload::ScopeViolationDetected { .. } => {
             "scope"

@@ -115,11 +115,9 @@ pub struct WorktreeCleanupArgs {
 
 #[derive(Subcommand)]
 pub enum GraphCommands {
-    /// Create a new graph from a set of tasks
     Create(GraphCreateArgs),
-    /// Add a dependency edge to a graph
     AddDependency(GraphAddDependencyArgs),
-    /// Validate a graph (cycle detection, missing nodes)
+    AddCheck(GraphAddCheckArgs),
     Validate(GraphValidateArgs),
 }
 
@@ -143,6 +141,24 @@ pub struct GraphAddDependencyArgs {
     pub from_task: String,
     /// Dependency task. Semantics: `from_task` depends on `to_task`.
     pub to_task: String,
+}
+
+#[derive(Args)]
+pub struct GraphAddCheckArgs {
+    pub graph_id: String,
+    pub task_id: String,
+
+    #[arg(long)]
+    pub name: String,
+
+    #[arg(long)]
+    pub command: String,
+
+    #[arg(long, default_value_t = true)]
+    pub required: bool,
+
+    #[arg(long)]
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Args)]
@@ -529,8 +545,11 @@ pub struct EventReplayArgs {
 /// Verify subcommands.
 #[derive(Subcommand)]
 pub enum VerifyCommands {
-    /// Override verification for a task
     Override(VerifyOverrideArgs),
+
+    Run(VerifyRunArgs),
+
+    Results(VerifyResultsArgs),
 }
 
 /// Arguments for verify override.
@@ -545,6 +564,19 @@ pub struct VerifyOverrideArgs {
     /// Reason for override
     #[arg(long)]
     pub reason: String,
+}
+
+#[derive(Args)]
+pub struct VerifyRunArgs {
+    pub task_id: String,
+}
+
+#[derive(Args)]
+pub struct VerifyResultsArgs {
+    pub attempt_id: String,
+
+    #[arg(long)]
+    pub output: bool,
 }
 
 /// Merge subcommands.

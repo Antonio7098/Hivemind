@@ -4,6 +4,48 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.9",
+      "date": "2026-02-10",
+      "phase": 17,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add verification check types (CheckConfig, CheckResult) with backward-compatible deserialization"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Execute automated verification checks in task worktrees during verification, capturing exit code, combined output, and duration"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Emit check lifecycle events (CheckStarted, CheckCompleted) and store per-attempt check results in derived state"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add verification commands: verify run <task-id> and verify results <attempt-id>"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add graph command to configure checks on graph tasks: graph add-check <graph-id> <task-id>"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Block task success when required checks fail (transition to Retry/Failed based on retry policy)"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add CLI integration coverage asserting failed required checks are observable via events and surfaced via verify results"
+        }
+      ]
+    },
+    {
       "version": "v0.1.8",
       "date": "2026-02-09",
       "phase": 16,

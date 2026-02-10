@@ -16,11 +16,13 @@ use crate::storage::event_store::{EventFilter, EventStore, FileEventStore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
+use std::fmt::Write as _;
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::adapters::opencode::{OpenCodeAdapter, OpenCodeConfig};
@@ -287,17 +289,18 @@ impl Registry {
         let corr_task =
             CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, task_id);
 
-        if verification.passed {
+        if !verification.passed {
             if let Some(scope) = &task.scope {
                 self.append_event(
                     Event::new(
-                        EventPayload::ScopeValidated {
+                        EventPayload::ScopeViolationDetected {
                             flow_id: flow.id,
                             task_id,
                             attempt_id: attempt.id,
                             verification_id: verification.id,
                             verified_at: verification.verified_at,
                             scope: scope.clone(),
+                            violations: verification.violations.clone(),
                         },
                         CorrelationIds::for_graph_flow_task_attempt(
                             flow.project_id,
@@ -311,6 +314,132 @@ impl Registry {
                 )?;
             }
 
+            self.append_event(
+                Event::new(
+                    EventPayload::TaskExecutionStateChanged {
+                        flow_id: flow.id,
+                        task_id,
+                        from: TaskExecState::Verifying,
+                        to: TaskExecState::Failed,
+                    },
+                    corr_task,
+                ),
+                origin,
+            )?;
+
+            let violations = verification
+                .violations
+                .iter()
+                .map(|v| {
+                    let path = v.path.as_deref().unwrap_or("-");
+                    format!("{:?}: {path}: {}", v.violation_type, v.description)
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            return Err(HivemindError::scope(
+                "scope_violation",
+                format!("Scope violation detected:\n{violations}"),
+                origin,
+            )
+            .with_hint(format!(
+                "Worktree preserved at {}",
+                worktree_status.path.display()
+            )));
+        }
+
+        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
+            flow.project_id,
+            flow.graph_id,
+            flow.id,
+            task_id,
+            attempt.id,
+        );
+
+        if let Some(scope) = &task.scope {
+            self.append_event(
+                Event::new(
+                    EventPayload::ScopeValidated {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id: attempt.id,
+                        verification_id: verification.id,
+                        verified_at: verification.verified_at,
+                        scope: scope.clone(),
+                    },
+                    corr_attempt.clone(),
+                ),
+                origin,
+            )?;
+        }
+
+        let target_dir = self
+            .config
+            .data_dir
+            .join("cargo-target")
+            .join(flow.id.to_string())
+            .join(task_id.to_string())
+            .join(attempt.id.to_string())
+            .join("checks");
+        let _ = fs::create_dir_all(&target_dir);
+
+        let mut results = Vec::new();
+        for check in &task.criteria.checks {
+            self.append_event(
+                Event::new(
+                    EventPayload::CheckStarted {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id: attempt.id,
+                        check_name: check.name.clone(),
+                        required: check.required,
+                    },
+                    corr_attempt.clone(),
+                ),
+                origin,
+            )?;
+
+            let started = Instant::now();
+            let (exit_code, combined) = match Self::run_check_command(
+                &worktree_status.path,
+                &target_dir,
+                &check.command,
+                check.timeout_ms,
+            ) {
+                Ok((exit_code, output, _timed_out)) => (exit_code, output),
+                Err(e) => (127, e.to_string()),
+            };
+            let duration_ms =
+                u64::try_from(started.elapsed().as_millis().min(u128::from(u64::MAX)))
+                    .unwrap_or(u64::MAX);
+            let passed = exit_code == 0;
+
+            self.append_event(
+                Event::new(
+                    EventPayload::CheckCompleted {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id: attempt.id,
+                        check_name: check.name.clone(),
+                        passed,
+                        exit_code,
+                        output: combined.clone(),
+                        duration_ms,
+                        required: check.required,
+                    },
+                    corr_attempt.clone(),
+                ),
+                origin,
+            )?;
+
+            results.push((check.name.clone(), check.required, passed));
+        }
+
+        let required_failed = results
+            .iter()
+            .any(|(_, required, passed)| *required && !*passed);
+
+        if !required_failed {
             self.append_event(
                 Event::new(
                     EventPayload::TaskExecutionStateChanged {
@@ -356,29 +485,14 @@ impl Registry {
             return self.get_flow(flow_id);
         }
 
-        if let Some(scope) = &task.scope {
-            self.append_event(
-                Event::new(
-                    EventPayload::ScopeViolationDetected {
-                        flow_id: flow.id,
-                        task_id,
-                        attempt_id: attempt.id,
-                        verification_id: verification.id,
-                        verified_at: verification.verified_at,
-                        scope: scope.clone(),
-                        violations: verification.violations.clone(),
-                    },
-                    CorrelationIds::for_graph_flow_task_attempt(
-                        flow.project_id,
-                        flow.graph_id,
-                        flow.id,
-                        task_id,
-                        attempt.id,
-                    ),
-                ),
-                origin,
-            )?;
-        }
+        let max_retries = task.retry_policy.max_retries;
+        let max_attempts = max_retries.saturating_add(1);
+        let can_retry = exec.attempt_count < max_attempts;
+        let to = if can_retry {
+            TaskExecState::Retry
+        } else {
+            TaskExecState::Failed
+        };
 
         self.append_event(
             Event::new(
@@ -386,32 +500,140 @@ impl Registry {
                     flow_id: flow.id,
                     task_id,
                     from: TaskExecState::Verifying,
-                    to: TaskExecState::Failed,
+                    to,
                 },
                 corr_task,
             ),
             origin,
         )?;
 
-        let violations = verification
-            .violations
-            .iter()
-            .map(|v| {
-                let path = v.path.as_deref().unwrap_or("-");
-                format!("{:?}: {path}: {}", v.violation_type, v.description)
-            })
+        let failures = results
+            .into_iter()
+            .filter(|(_, required, passed)| *required && !*passed)
+            .map(|(name, _, _)| name)
             .collect::<Vec<_>>()
-            .join("\n");
+            .join(", ");
 
-        Err(HivemindError::scope(
-            "scope_violation",
-            format!("Scope violation detected:\n{violations}"),
+        Err(HivemindError::verification(
+            "required_checks_failed",
+            format!("Required checks failed: {failures}"),
             origin,
         )
         .with_hint(format!(
-            "Worktree preserved at {}",
+            "View check outputs via `hivemind verify results {}`. Worktree preserved at {}",
+            attempt.id,
             worktree_status.path.display()
         )))
+    }
+
+    pub fn verify_run(&self, task_id: &str) -> Result<TaskFlow> {
+        let origin = "registry:verify_run";
+        let id = Uuid::parse_str(task_id).map_err(|_| {
+            HivemindError::user(
+                "invalid_task_id",
+                format!("'{task_id}' is not a valid task ID"),
+                origin,
+            )
+        })?;
+
+        let state = self.state()?;
+        let flow = Self::flow_for_task(&state, id, origin)?;
+        let exec = flow.task_executions.get(&id).ok_or_else(|| {
+            HivemindError::system("task_exec_not_found", "Task execution not found", origin)
+        })?;
+        if exec.state != TaskExecState::Verifying {
+            return Err(HivemindError::user(
+                "task_not_verifying",
+                "Task is not in verifying state",
+                origin,
+            )
+            .with_hint(
+                "Complete the task execution first, or run `hivemind flow tick <flow-id>`",
+            ));
+        }
+
+        self.process_verifying_task(&flow.id.to_string(), id)
+    }
+
+    fn run_check_command(
+        workdir: &Path,
+        cargo_target_dir: &Path,
+        command: &str,
+        timeout_ms: Option<u64>,
+    ) -> std::io::Result<(i32, String, bool)> {
+        let started = Instant::now();
+
+        let mut cmd = std::process::Command::new("sh");
+        cmd.current_dir(workdir)
+            .env("CARGO_TARGET_DIR", cargo_target_dir)
+            .args(["-lc", command]);
+
+        if let Some(timeout_ms) = timeout_ms {
+            let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+
+            let mut out_buf = Vec::new();
+            let mut err_buf = Vec::new();
+
+            let stdout = child.stdout.take();
+            let stderr = child.stderr.take();
+
+            let out_handle = std::thread::spawn(move || {
+                if let Some(mut stdout) = stdout {
+                    let _ = stdout.read_to_end(&mut out_buf);
+                }
+                out_buf
+            });
+            let err_handle = std::thread::spawn(move || {
+                if let Some(mut stderr) = stderr {
+                    let _ = stderr.read_to_end(&mut err_buf);
+                }
+                err_buf
+            });
+
+            let timeout = Duration::from_millis(timeout_ms);
+            let mut timed_out = false;
+            let status = loop {
+                if let Some(status) = child.try_wait()? {
+                    break status;
+                }
+                if started.elapsed() >= timeout {
+                    timed_out = true;
+                    let _ = child.kill();
+                    break child.wait()?;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            };
+
+            let stdout_buf = out_handle.join().unwrap_or_default();
+            let stderr_buf = err_handle.join().unwrap_or_default();
+
+            let mut combined = String::new();
+            if timed_out {
+                let _ = writeln!(combined, "timed out after {timeout_ms}ms");
+            }
+            combined.push_str(&String::from_utf8_lossy(&stdout_buf));
+            if !combined.ends_with('\n') {
+                combined.push('\n');
+            }
+            combined.push_str(&String::from_utf8_lossy(&stderr_buf));
+
+            let exit_code = if timed_out {
+                124
+            } else {
+                status.code().unwrap_or(-1)
+            };
+
+            return Ok((exit_code, combined, timed_out));
+        }
+
+        let out = cmd.output()?;
+        let mut combined = String::new();
+        combined.push_str(&String::from_utf8_lossy(&out.stdout));
+        if !combined.ends_with('\n') {
+            combined.push('\n');
+        }
+        combined.push_str(&String::from_utf8_lossy(&out.stderr));
+        Ok((out.status.code().unwrap_or(-1), combined, false))
     }
 
     fn detect_git_operations(
@@ -2213,6 +2435,77 @@ impl Registry {
                 "registry:add_graph_dependency",
             )
         })?;
+
+        self.get_graph(graph_id)
+    }
+
+    pub fn add_graph_task_check(
+        &self,
+        graph_id: &str,
+        task_id: &str,
+        check: crate::core::verification::CheckConfig,
+    ) -> Result<TaskGraph> {
+        let origin = "registry:add_graph_task_check";
+        let gid = Uuid::parse_str(graph_id).map_err(|_| {
+            let err = HivemindError::user(
+                "invalid_graph_id",
+                format!("'{graph_id}' is not a valid graph ID"),
+                origin,
+            );
+            self.record_error_event(&err, CorrelationIds::none());
+            err
+        })?;
+        let tid = Uuid::parse_str(task_id).map_err(|_| {
+            let err = HivemindError::user(
+                "invalid_task_id",
+                format!("'{task_id}' is not a valid task ID"),
+                origin,
+            );
+            self.record_error_event(&err, CorrelationIds::none());
+            err
+        })?;
+
+        let state = self.state()?;
+        let graph = state.graphs.get(&gid).cloned().ok_or_else(|| {
+            let err = HivemindError::user(
+                "graph_not_found",
+                format!("Graph '{graph_id}' not found"),
+                origin,
+            );
+            self.record_error_event(&err, CorrelationIds::none());
+            err
+        })?;
+        if graph.state != GraphState::Draft {
+            let err = HivemindError::user(
+                "graph_immutable",
+                format!("Graph '{graph_id}' is immutable"),
+                origin,
+            )
+            .with_hint("Checks can only be added to draft graphs");
+            self.record_error_event(&err, CorrelationIds::for_graph(graph.project_id, graph.id));
+            return Err(err);
+        }
+        if !graph.tasks.contains_key(&tid) {
+            let err = HivemindError::user(
+                "task_not_in_graph",
+                format!("Task '{task_id}' is not part of graph '{graph_id}'"),
+                origin,
+            );
+            self.record_error_event(&err, CorrelationIds::for_graph(graph.project_id, graph.id));
+            return Err(err);
+        }
+
+        let event = Event::new(
+            EventPayload::GraphTaskCheckAdded {
+                graph_id: gid,
+                task_id: tid,
+                check,
+            },
+            CorrelationIds::for_graph(graph.project_id, gid),
+        );
+        self.store
+            .append(event)
+            .map_err(|e| HivemindError::system("event_append_failed", e.to_string(), origin))?;
 
         self.get_graph(graph_id)
     }
