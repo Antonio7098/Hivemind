@@ -895,6 +895,8 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::FileModified { .. } => "file_modified",
         EventPayload::DiffComputed { .. } => "diff_computed",
         EventPayload::CheckpointCommitCreated { .. } => "checkpoint_commit_created",
+        EventPayload::ScopeValidated { .. } => "scope_validated",
+        EventPayload::ScopeViolationDetected { .. } => "scope_violation_detected",
         EventPayload::TaskRetryRequested { .. } => "task_retry_requested",
         EventPayload::TaskAborted { .. } => "task_aborted",
         EventPayload::HumanOverride { .. } => "human_override",

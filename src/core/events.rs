@@ -4,6 +4,7 @@
 //! append-only, and form the single source of truth.
 
 use crate::core::diff::ChangeType;
+use crate::core::enforcement::ScopeViolation;
 use crate::core::flow::TaskExecState;
 use crate::core::graph::GraphTask;
 use crate::core::scope::{RepoAccessMode, Scope};
@@ -373,6 +374,26 @@ pub enum EventPayload {
         task_id: Uuid,
         attempt_id: Uuid,
         commit_sha: String,
+    },
+
+    ScopeValidated {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        verification_id: Uuid,
+        verified_at: DateTime<Utc>,
+        scope: Scope,
+    },
+
+    ScopeViolationDetected {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        verification_id: Uuid,
+        verified_at: DateTime<Utc>,
+        scope: Scope,
+        #[serde(default)]
+        violations: Vec<ScopeViolation>,
     },
 
     TaskRetryRequested {

@@ -131,6 +131,8 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::FileModified { .. } => "FileModified",
         EventPayload::DiffComputed { .. } => "DiffComputed",
         EventPayload::CheckpointCommitCreated { .. } => "CheckpointCommitCreated",
+        EventPayload::ScopeValidated { .. } => "ScopeValidated",
+        EventPayload::ScopeViolationDetected { .. } => "ScopeViolationDetected",
         EventPayload::TaskRetryRequested { .. } => "TaskRetryRequested",
         EventPayload::TaskAborted { .. } => "TaskAborted",
         EventPayload::HumanOverride { .. } => "HumanOverride",
@@ -180,6 +182,10 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskAborted { .. } => "execution",
 
         EventPayload::HumanOverride { .. } => "verification",
+
+        EventPayload::ScopeValidated { .. } | EventPayload::ScopeViolationDetected { .. } => {
+            "scope"
+        }
 
         EventPayload::MergePrepared { .. }
         | EventPayload::MergeApproved { .. }
