@@ -27,6 +27,16 @@
           "type": "added",
           "area": "tests",
           "description": "Add CLI integration coverage asserting scope violations are observable, fatal, and preserve worktrees"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Harden CLI JSON/YAML success envelopes and align error exit codes for beta Tier regression scripts (attach-repo, task inspect, runtime-set, etc.)"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update CLI operational semantics and error-model docs to reflect ErrorOccurred emission policy and structured error envelopes"
         }
       ]
     },
