@@ -49,6 +49,96 @@ fn init_git_repo(repo_dir: &std::path::Path) {
     );
 }
 
+#[test]
+fn cli_scope_violation_is_fatal_and_preserves_worktree() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--binary-path",
+            "/usr/bin/env",
+            "--arg",
+            "sh",
+            "--arg",
+            "-c",
+            "--arg",
+            "printf data > hm_scope_violation.txt",
+            "--timeout-ms",
+            "1000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let scope = r#"{"filesystem":{"rules":[{"pattern":"allowed","permission":"write"}]},"repositories":[],"git":{"permissions":[]},"execution":{"allowed":[],"denied":[]}}"#;
+    let (code, out, err) = run_hivemind(
+        tmp.path(),
+        &["task", "create", "proj", "t1", "--scope", scope],
+    );
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_ne!(code, 0, "expected fatal scope violation");
+    assert!(
+        err.contains("scope") || err.contains("scope_violation"),
+        "{err}"
+    );
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "events", "stream", "--flow", &flow_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        events_out.contains("scope_violation_detected"),
+        "{events_out}"
+    );
+
+    let (code, wt_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "worktree", "inspect", &t1_id]);
+    assert_eq!(code, 0, "{err}");
+    assert!(wt_out.contains("\"is_worktree\": true"), "{wt_out}");
+    assert!(wt_out.contains(".hivemind/worktrees"), "{wt_out}");
+}
+
 fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, String, String) {
     let output = Command::new(env!("CARGO_BIN_EXE_hivemind"))
         .env("HOME", home)

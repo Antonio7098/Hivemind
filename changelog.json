@@ -4,6 +4,33 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.8",
+      "date": "2026-02-09",
+      "phase": 16,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Emit scope enforcement outcome events (ScopeValidated, ScopeViolationDetected) after post-execution verification"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Enforce scope post-execution by verifying filesystem + git operations; violations are fatal to the attempt and preserve the worktree for debugging"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Extend baseline artifacts to capture local git branches for reliable git scope detection"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add CLI integration coverage asserting scope violations are observable, fatal, and preserve worktrees"
+        }
+      ]
+    },
+    {
       "version": "v0.1.7",
       "date": "2026-02-09",
       "phase": 15,

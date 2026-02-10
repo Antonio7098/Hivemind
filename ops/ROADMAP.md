@@ -514,21 +514,21 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 > **Honest:** Phase 1 is detection, not prevention.
 
 ### 16.1 Scope Verification
-- [ ] After execution, check all changes against scope
-- [ ] Filesystem scope: all modified files within allowed paths
-- [ ] Git scope: commits/branches only if permitted
+- [x] After execution, check all changes against scope
+- [x] Filesystem scope: all modified files within allowed paths
+- [x] Git scope: commits/branches only if permitted
 
 ### 16.2 Violation Handling
-- [ ] `ScopeViolationDetected` event
-- [ ] Attempt fails immediately on violation
-- [ ] Worktree preserved for debugging
-- [ ] Clear error message with violation details
+- [x] `ScopeViolationDetected` event
+- [x] Attempt fails immediately on violation
+- [x] Worktree preserved for debugging
+- [x] Clear error message with violation details
 
 ### 16.3 Exit Criteria
-- [ ] Violations detected reliably
-- [ ] Violations are fatal to attempt
-- [ ] Violations emit observable events
-- [ ] Honest: prevention is Phase 2+
+- [x] Violations detected reliably
+- [x] Violations are fatal to attempt
+- [x] Violations emit observable events
+- [x] Honest: prevention is Phase 2+
 
 ---
 

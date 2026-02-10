@@ -4,7 +4,7 @@
 //! operations that emit new events.
 
 use crate::core::diff::{unified_diff, Baseline, ChangeType, Diff, FileChange};
-use crate::core::enforcement::ScopeEnforcer;
+use crate::core::enforcement::{ScopeEnforcer, VerificationResult};
 use crate::core::error::{ErrorCategory, HivemindError, Result};
 use crate::core::events::{CorrelationIds, Event, EventPayload, RuntimeOutputStream};
 use crate::core::flow::{FlowState, TaskExecState, TaskFlow};
@@ -247,22 +247,63 @@ impl Registry {
         })?;
         let artifact = self.read_diff_artifact(diff_id)?;
 
+        let baseline_id = attempt.baseline_id.ok_or_else(|| {
+            HivemindError::system(
+                "baseline_not_found",
+                "Baseline not found for attempt",
+                origin,
+            )
+        })?;
+        let baseline = self.read_baseline_artifact(baseline_id)?;
+
+        let worktree_status = Self::inspect_task_worktree(&flow, &state, task_id, origin)?;
+
         let task = graph.tasks.get(&task_id).ok_or_else(|| {
             HivemindError::system("task_not_found", "Task not found in graph", origin)
         })?;
 
-        let passed = if let Some(scope) = &task.scope {
-            ScopeEnforcer::new(scope.clone())
-                .verify_diff(&artifact.diff, task_id, attempt.id)
-                .passed
+        let verification = if let Some(scope) = &task.scope {
+            let (commits_created, branches_created) =
+                Self::detect_git_operations(&worktree_status.path, &baseline, attempt.id);
+
+            ScopeEnforcer::new(scope.clone()).verify_all(
+                &artifact.diff,
+                commits_created,
+                branches_created,
+                task_id,
+                attempt.id,
+            )
         } else {
-            true
+            VerificationResult::pass(task_id, attempt.id)
         };
 
         let corr_task =
             CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, task_id);
 
-        if passed {
+        if verification.passed {
+            if let Some(scope) = &task.scope {
+                self.append_event(
+                    Event::new(
+                        EventPayload::ScopeValidated {
+                            flow_id: flow.id,
+                            task_id,
+                            attempt_id: attempt.id,
+                            verification_id: verification.id,
+                            verified_at: verification.verified_at,
+                            scope: scope.clone(),
+                        },
+                        CorrelationIds::for_graph_flow_task_attempt(
+                            flow.project_id,
+                            flow.graph_id,
+                            flow.id,
+                            task_id,
+                            attempt.id,
+                        ),
+                    ),
+                    origin,
+                )?;
+            }
+
             self.append_event(
                 Event::new(
                     EventPayload::TaskExecutionStateChanged {
@@ -308,19 +349,28 @@ impl Registry {
             return self.get_flow(flow_id);
         }
 
-        let max_attempts = task.retry_policy.max_retries.saturating_add(1);
-        if exec.attempt_count < max_attempts {
+        if let Some(scope) = &task.scope {
             self.append_event(
                 Event::new(
-                    EventPayload::TaskRetryRequested {
+                    EventPayload::ScopeViolationDetected {
+                        flow_id: flow.id,
                         task_id,
-                        reset_count: false,
+                        attempt_id: attempt.id,
+                        verification_id: verification.id,
+                        verified_at: verification.verified_at,
+                        scope: scope.clone(),
+                        violations: verification.violations.clone(),
                     },
-                    corr_task,
+                    CorrelationIds::for_graph_flow_task_attempt(
+                        flow.project_id,
+                        flow.graph_id,
+                        flow.id,
+                        task_id,
+                        attempt.id,
+                    ),
                 ),
                 origin,
             )?;
-            return self.get_flow(flow_id);
         }
 
         self.append_event(
@@ -335,7 +385,85 @@ impl Registry {
             ),
             origin,
         )?;
-        self.get_flow(flow_id)
+
+        let violations = verification
+            .violations
+            .iter()
+            .map(|v| {
+                let path = v.path.as_deref().unwrap_or("-");
+                format!("{:?}: {path}: {}", v.violation_type, v.description)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        Err(HivemindError::scope(
+            "scope_violation",
+            format!("Scope violation detected:\n{violations}"),
+            origin,
+        )
+        .with_hint(format!(
+            "Worktree preserved at {}",
+            worktree_status.path.display()
+        )))
+    }
+
+    fn detect_git_operations(
+        worktree_path: &Path,
+        baseline: &Baseline,
+        attempt_id: Uuid,
+    ) -> (bool, bool) {
+        let commits_created = Self::detect_commits_created(worktree_path, baseline, attempt_id);
+        let branches_created = Self::detect_branches_created(worktree_path, baseline);
+        (commits_created, branches_created)
+    }
+
+    fn detect_commits_created(worktree_path: &Path, baseline: &Baseline, attempt_id: Uuid) -> bool {
+        let Some(base) = baseline.git_head.as_deref() else {
+            return false;
+        };
+
+        let output = std::process::Command::new("git")
+            .current_dir(worktree_path)
+            .args(["log", "--format=%s", &format!("{base}..HEAD")])
+            .output();
+
+        let Ok(output) = output else {
+            return false;
+        };
+        if !output.status.success() {
+            return false;
+        }
+
+        let mut subjects: Vec<String> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        subjects.retain(|s| s != &format!("hivemind checkpoint {attempt_id}"));
+        !subjects.is_empty()
+    }
+
+    fn detect_branches_created(worktree_path: &Path, baseline: &Baseline) -> bool {
+        let output = std::process::Command::new("git")
+            .current_dir(worktree_path)
+            .args(["for-each-ref", "refs/heads", "--format=%(refname:short)"])
+            .output();
+
+        let Ok(output) = output else {
+            return false;
+        };
+        if !output.status.success() {
+            return false;
+        }
+
+        let current: std::collections::HashSet<String> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        let base: std::collections::HashSet<String> =
+            baseline.git_branches.iter().cloned().collect();
+        current.difference(&base).next().is_some()
     }
 
     fn emit_task_execution_completion_events(

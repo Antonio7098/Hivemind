@@ -35,6 +35,8 @@ pub struct Baseline {
     pub root: PathBuf,
     /// Git HEAD commit at baseline time.
     pub git_head: Option<String>,
+    #[serde(default)]
+    pub git_branches: Vec<String>,
     /// File snapshots by relative path.
     pub files: HashMap<PathBuf, FileSnapshot>,
     /// Timestamp when baseline was captured.
@@ -48,11 +50,13 @@ impl Baseline {
         capture_recursive(root, root, &mut files)?;
 
         let git_head = get_git_head(root).ok();
+        let git_branches = get_git_branches(root).ok().unwrap_or_default();
 
         Ok(Self {
             id: Uuid::new_v4(),
             root: root.to_path_buf(),
             git_head,
+            git_branches,
             files,
             captured_at: chrono::Utc::now(),
         })
@@ -67,6 +71,28 @@ impl Baseline {
     pub fn file_count(&self) -> usize {
         self.files.len()
     }
+}
+
+fn get_git_branches(path: &Path) -> io::Result<Vec<String>> {
+    use std::process::Command;
+
+    let output = Command::new("git")
+        .current_dir(path)
+        .args(["for-each-ref", "refs/heads", "--format=%(refname:short)"])
+        .output()?;
+
+    if !output.status.success() {
+        return Err(io::Error::other("Failed to list git branches"));
+    }
+
+    let mut branches: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    branches.sort();
+    branches.dedup();
+    Ok(branches)
 }
 
 fn capture_recursive(
