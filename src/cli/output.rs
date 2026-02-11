@@ -2,7 +2,7 @@
 //!
 //! All CLI output supports structured formats for machine consumption.
 
-use crate::core::error::{ExitCode, HivemindError};
+use crate::core::error::{ErrorCategory, ExitCode, HivemindError};
 use comfy_table::{Cell, Table};
 use serde::Serialize;
 
@@ -34,6 +34,7 @@ pub struct ErrorOutput {
     pub category: String,
     pub code: String,
     pub message: String,
+    pub origin: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hint: Option<String>,
 }
@@ -44,6 +45,7 @@ impl From<&HivemindError> for ErrorOutput {
             category: err.category.to_string(),
             code: err.code.clone(),
             message: err.message.clone(),
+            origin: err.origin.clone(),
             hint: err.recovery_hint.clone(),
         }
     }
@@ -94,7 +96,7 @@ pub fn output_error(err: &HivemindError, format: OutputFormat) -> ExitCode {
     match format {
         OutputFormat::Json => {
             let response = CliResponse::<()>::error(err);
-            if let Ok(json) = serde_json::to_string_pretty(&response) {
+            if let Ok(json) = serde_json::to_string(&response) {
                 eprintln!("{json}");
             }
         }
@@ -109,6 +111,11 @@ pub fn output_error(err: &HivemindError, format: OutputFormat) -> ExitCode {
             if let Some(hint) = &err.recovery_hint {
                 eprintln!("Hint: {hint}");
             }
+
+            let response = CliResponse::<()>::error(err);
+            if let Ok(json) = serde_json::to_string(&response) {
+                eprintln!("{json}");
+            }
         }
     }
     error_to_exit_code(err)
@@ -116,11 +123,17 @@ pub fn output_error(err: &HivemindError, format: OutputFormat) -> ExitCode {
 
 /// Maps error codes to exit codes per CLI operational semantics.
 fn error_to_exit_code(err: &HivemindError) -> ExitCode {
+    if matches!(err.category, ErrorCategory::Scope) {
+        return ExitCode::PermissionDenied;
+    }
+
     match err.code.as_str() {
         c if c.contains("not_found") => ExitCode::NotFound,
         c if c.contains("conflict")
             || c.contains("immutable")
             || c.contains("in_use")
+            || c.contains("in_active_flow")
+            || c.contains("already_attached")
             || c.contains("already_terminal")
             || c.contains("already_running")
             || c.contains("not_running")
@@ -128,7 +141,7 @@ fn error_to_exit_code(err: &HivemindError) -> ExitCode {
         {
             ExitCode::Conflict
         }
-        "override_not_permitted" => ExitCode::Conflict,
+        "override_not_permitted" => ExitCode::PermissionDenied,
         _ => ExitCode::Error,
     }
 }

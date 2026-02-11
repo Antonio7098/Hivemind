@@ -4,6 +4,7 @@
 //! It represents what should happen, not what has happened.
 
 use super::scope::Scope;
+use super::verification::CheckConfig;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -33,7 +34,7 @@ pub struct SuccessCriteria {
     /// Human-readable description of success.
     pub description: String,
     /// Automated checks to run (command patterns).
-    pub checks: Vec<String>,
+    pub checks: Vec<CheckConfig>,
 }
 
 impl SuccessCriteria {
@@ -48,7 +49,7 @@ impl SuccessCriteria {
 
     /// Adds an automated check.
     #[must_use]
-    pub fn with_check(mut self, check: impl Into<String>) -> Self {
+    pub fn with_check(mut self, check: impl Into<CheckConfig>) -> Self {
         self.checks.push(check.into());
         self
     }

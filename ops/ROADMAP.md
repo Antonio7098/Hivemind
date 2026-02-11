@@ -537,23 +537,23 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Automated checks are the primary gate.
 
 ### 17.1 Check Execution
-- [ ] Run configured checks (test commands)
-- [ ] Capture exit code, output, duration
-- [ ] `CheckStarted`, `CheckCompleted` events
+- [x] Run configured checks (test commands)
+- [x] Capture exit code, output, duration
+- [x] `CheckStarted`, `CheckCompleted` events
 
 ### 17.2 Check Results
-- [ ] Define CheckResult struct
-- [ ] Required vs optional checks
-- [ ] Aggregation: all required must pass
+- [x] Define CheckResult struct
+- [x] Required vs optional checks
+- [x] Aggregation: all required must pass
 
 ### 17.3 Verification Commands
-- [ ] `hivemind verify run <task-id>` (manual verification)
-- [ ] `hivemind verify results <attempt-id>`
+- [x] `hivemind verify run <task-id>` (manual verification)
+- [x] `hivemind verify results <attempt-id>`
 
 ### 17.4 Exit Criteria
-- [ ] Checks run in worktree
-- [ ] Results captured and observable
-- [ ] Required check failures block success
+- [x] Checks run in worktree
+- [x] Results captured and observable
+- [x] Required check failures block success
 
 ---
 
