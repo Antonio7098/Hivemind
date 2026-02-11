@@ -563,24 +563,26 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 > **Important:** Verifier is advisory, not authoritative.
 
+**Completed:** 2025-02-11
+
 ### 18.1 Verifier Invocation
-- [ ] After checks, invoke verifier agent (optional toggle)
-- [ ] Input: task definition, diff, check results
-- [ ] Output: PASS / SOFT_FAIL / HARD_FAIL + feedback
+- [x] After checks, invoke verifier agent (optional toggle)
+- [x] Input: task definition, diff, check results
+- [x] Output: PASS / SOFT_FAIL / HARD_FAIL + feedback
 
 ### 18.2 Verifier Events
-- [ ] `VerificationStarted`
-- [ ] `VerificationCompleted`
+- [x] `VerificationStarted`
+- [x] `VerificationCompleted`
 
 ### 18.3 Integration
-- [ ] Verifier decision informs retry/fail
-- [ ] Verifier cannot override failed checks
-- [ ] Verifier feedback included in retry context
+- [x] Verifier decision informs retry/fail
+- [x] Verifier cannot override failed checks
+- [x] Verifier feedback included in retry context
 
 ### 18.4 Exit Criteria
-- [ ] Verifier produces structured decision
-- [ ] Verifier is advisory only
-- [ ] Feedback captured for retry
+- [x] Verifier produces structured decision
+- [x] Verifier is advisory only
+- [x] Feedback captured for retry
 
 ---
 
