@@ -589,25 +589,25 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 **Goal:** Enable intelligent retries with explicit context.
 
 ### 19.1 Retry Context Assembly
-- [ ] Gather prior attempt outcomes
-- [ ] Gather check results
-- [ ] Gather verifier feedback
-- [ ] Compute actionable feedback
+- [x] Gather prior attempt outcomes
+- [x] Gather check results
+- [x] Gather verifier feedback
+- [x] Compute actionable feedback
 
 ### 19.2 Retry Context Delivery
-- [ ] Context is explicit input (not hidden memory)
-- [ ] Context visible in attempt events
-- [ ] Mechanical feedback prioritized over advisory
+- [x] Context is explicit input (not hidden memory)
+- [x] Context visible in attempt events
+- [x] Mechanical feedback prioritized over advisory
 
 ### 19.3 Retry Policy
-- [ ] Max attempts per task
-- [ ] Retry on soft fail, not on hard fail
-- [ ] Bounded retries (no infinite loops)
+- [x] Max attempts per task
+- [x] Retry on soft fail, not on hard fail
+- [x] Bounded retries (no infinite loops)
 
 ### 19.4 Exit Criteria
-- [ ] Retries receive explicit context
-- [ ] Context is observable
-- [ ] Retries are bounded
+- [x] Retries receive explicit context
+- [x] Context is observable
+- [x] Retries are bounded
 
 ---
 
@@ -632,6 +632,8 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 - [ ] Humans can override any automated decision
 - [ ] Overrides are audited
 - [ ] Overrides require reason
+
+Note: admin token/login?
 
 ---
 
