@@ -174,6 +174,7 @@ impl Registry {
         Ok((exit_code, terminated))
     }
 
+    #[allow(clippy::type_complexity, clippy::too_many_lines, clippy::unnecessary_wraps)]
     fn build_retry_context(
         &self,
         state: &AppState,
@@ -288,9 +289,8 @@ impl Registry {
         let mut required_failures: Vec<String> = Vec::new();
         let mut optional_failures: Vec<String> = Vec::new();
         let mut exit_code: Option<i32> = None;
-        let mut terminated_reason: Option<String> = None;
-
-        if let Some(last) = latest {
+        #[allow(clippy::useless_let_if_seq, clippy::option_if_let_else)]
+        let terminated_reason = if let Some(last) = latest {
             required_failures = last
                 .check_results
                 .iter()
@@ -308,9 +308,12 @@ impl Registry {
                 .attempt_runtime_outcome(last.id)
                 .unwrap_or((None, None));
             exit_code = ec;
-            terminated_reason = term;
-        }
+            term
+        } else {
+            None
+        };
 
+        #[allow(clippy::items_after_statements)]
         fn truncate(s: &str, max_len: usize) -> String {
             if s.len() <= max_len {
                 return s.to_string();
