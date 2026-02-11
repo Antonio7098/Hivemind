@@ -137,6 +137,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::CheckpointCommitCreated { .. } => "CheckpointCommitCreated",
         EventPayload::ScopeValidated { .. } => "ScopeValidated",
         EventPayload::ScopeViolationDetected { .. } => "ScopeViolationDetected",
+        EventPayload::RetryContextAssembled { .. } => "RetryContextAssembled",
         EventPayload::TaskRetryRequested { .. } => "TaskRetryRequested",
         EventPayload::TaskAborted { .. } => "TaskAborted",
         EventPayload::HumanOverride { .. } => "HumanOverride",
@@ -185,6 +186,7 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskBlocked { .. }
         | EventPayload::TaskExecutionStateChanged { .. }
         | EventPayload::AttemptStarted { .. }
+        | EventPayload::RetryContextAssembled { .. }
         | EventPayload::TaskRetryRequested { .. }
         | EventPayload::TaskAborted { .. } => "execution",
 

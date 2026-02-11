@@ -428,6 +428,25 @@ pub enum EventPayload {
         violations: Vec<ScopeViolation>,
     },
 
+    RetryContextAssembled {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        attempt_number: u32,
+        max_attempts: u32,
+        #[serde(default)]
+        prior_attempt_ids: Vec<Uuid>,
+        #[serde(default)]
+        required_check_failures: Vec<String>,
+        #[serde(default)]
+        optional_check_failures: Vec<String>,
+        #[serde(default)]
+        runtime_exit_code: Option<i32>,
+        #[serde(default)]
+        runtime_terminated_reason: Option<String>,
+        context: String,
+    },
+
     TaskRetryRequested {
         task_id: Uuid,
         reset_count: bool,
