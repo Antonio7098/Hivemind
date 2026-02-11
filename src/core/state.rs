@@ -510,6 +510,7 @@ impl AppState {
             | EventPayload::CheckpointCommitCreated { .. }
             | EventPayload::ScopeValidated { .. }
             | EventPayload::ScopeViolationDetected { .. }
+            | EventPayload::RetryContextAssembled { .. }
             | EventPayload::RuntimeStarted {
                 adapter_name: _,
                 task_id: _,

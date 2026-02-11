@@ -923,6 +923,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::CheckpointCommitCreated { .. } => "checkpoint_commit_created",
         EventPayload::ScopeValidated { .. } => "scope_validated",
         EventPayload::ScopeViolationDetected { .. } => "scope_violation_detected",
+        EventPayload::RetryContextAssembled { .. } => "retry_context_assembled",
         EventPayload::TaskRetryRequested { .. } => "task_retry_requested",
         EventPayload::TaskAborted { .. } => "task_aborted",
         EventPayload::HumanOverride { .. } => "human_override",

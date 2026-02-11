@@ -26,7 +26,7 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::adapters::opencode::{OpenCodeAdapter, OpenCodeConfig};
-use crate::adapters::runtime::{ExecutionInput, RuntimeAdapter};
+use crate::adapters::runtime::{AttemptSummary, ExecutionInput, RuntimeAdapter};
 
 /// Configuration for the registry.
 #[derive(Debug, Clone)]
@@ -145,6 +145,274 @@ impl Registry {
             .append(event)
             .map(|_| ())
             .map_err(|e| HivemindError::system("event_append_failed", e.to_string(), origin))
+    }
+
+    fn attempt_runtime_outcome(&self, attempt_id: Uuid) -> Result<(Option<i32>, Option<String>)> {
+        let filter = EventFilter {
+            attempt_id: Some(attempt_id),
+            ..EventFilter::default()
+        };
+        let events = self.read_events(&filter)?;
+
+        let mut exit_code: Option<i32> = None;
+        let mut terminated: Option<String> = None;
+        for ev in events {
+            match ev.payload {
+                EventPayload::RuntimeExited { exit_code: ec, .. } => {
+                    exit_code = Some(ec);
+                }
+                EventPayload::RuntimeTerminated { reason, .. } => {
+                    terminated = Some(reason);
+                }
+                _ => {}
+            }
+        }
+
+        if exit_code.is_none() && terminated.is_none() {
+            return Ok((None, None));
+        }
+        Ok((exit_code, terminated))
+    }
+
+    fn build_retry_context(
+        &self,
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt_number: u32,
+        max_attempts: u32,
+        _origin: &'static str,
+    ) -> Result<(
+        String,
+        Vec<AttemptSummary>,
+        Vec<Uuid>,
+        Vec<String>,
+        Vec<String>,
+        Option<i32>,
+        Option<String>,
+    )> {
+        let mut attempts: Vec<AttemptState> = state
+            .attempts
+            .values()
+            .filter(|a| a.flow_id == flow.id && a.task_id == task_id)
+            .cloned()
+            .collect();
+        attempts.sort_by_key(|a| a.attempt_number);
+
+        let prior_attempt_ids: Vec<Uuid> = attempts.iter().map(|a| a.id).collect();
+
+        let mut prior_attempts: Vec<AttemptSummary> = Vec::new();
+        for prior in &attempts {
+            let (exit_code, terminated_reason) = self
+                .attempt_runtime_outcome(prior.id)
+                .unwrap_or((None, None));
+
+            let required_failed: Vec<String> = prior
+                .check_results
+                .iter()
+                .filter(|r| r.required && !r.passed)
+                .map(|r| r.name.clone())
+                .collect();
+            let optional_failed: Vec<String> = prior
+                .check_results
+                .iter()
+                .filter(|r| !r.required && !r.passed)
+                .map(|r| r.name.clone())
+                .collect();
+
+            let mut summary = String::new();
+            if let Some(diff_id) = prior.diff_id {
+                if let Ok(artifact) = self.read_diff_artifact(diff_id) {
+                    let _ = write!(summary, "change_count={} ", artifact.diff.change_count());
+                }
+            }
+
+            if required_failed.is_empty() && optional_failed.is_empty() {
+                if let Some(ec) = exit_code {
+                    let _ = write!(summary, "runtime_exit_code={ec} ");
+                }
+                if let Some(ref reason) = terminated_reason {
+                    let _ = write!(summary, "runtime_terminated={reason} ");
+                }
+            }
+
+            if !required_failed.is_empty() {
+                let _ = write!(
+                    summary,
+                    "required_checks_failed={} ",
+                    required_failed.join(", ")
+                );
+            }
+            if !optional_failed.is_empty() {
+                let _ = write!(
+                    summary,
+                    "optional_checks_failed={} ",
+                    optional_failed.join(", ")
+                );
+            }
+
+            if summary.trim().is_empty() {
+                summary = "no recorded outcomes".to_string();
+            }
+
+            let failure_reason = if !required_failed.is_empty() {
+                Some(format!(
+                    "Required checks failed: {}",
+                    required_failed.join(", ")
+                ))
+            } else if !optional_failed.is_empty() {
+                Some(format!(
+                    "Optional checks failed: {}",
+                    optional_failed.join(", ")
+                ))
+            } else if let Some(ec) = exit_code {
+                if ec != 0 {
+                    Some(format!("Runtime exited with code {ec}"))
+                } else {
+                    None
+                }
+            } else if terminated_reason.is_some() {
+                Some("Runtime terminated".to_string())
+            } else {
+                None
+            };
+
+            prior_attempts.push(AttemptSummary {
+                attempt_number: prior.attempt_number,
+                summary: summary.trim().to_string(),
+                failure_reason,
+            });
+        }
+
+        let latest = attempts.last();
+        let mut required_failures: Vec<String> = Vec::new();
+        let mut optional_failures: Vec<String> = Vec::new();
+        let mut exit_code: Option<i32> = None;
+        let mut terminated_reason: Option<String> = None;
+
+        if let Some(last) = latest {
+            required_failures = last
+                .check_results
+                .iter()
+                .filter(|r| r.required && !r.passed)
+                .map(|r| r.name.clone())
+                .collect();
+            optional_failures = last
+                .check_results
+                .iter()
+                .filter(|r| !r.required && !r.passed)
+                .map(|r| r.name.clone())
+                .collect();
+
+            let (ec, term) = self
+                .attempt_runtime_outcome(last.id)
+                .unwrap_or((None, None));
+            exit_code = ec;
+            terminated_reason = term;
+        }
+
+        fn truncate(s: &str, max_len: usize) -> String {
+            if s.len() <= max_len {
+                return s.to_string();
+            }
+            s.chars().take(max_len).collect()
+        }
+
+        let mut ctx = String::new();
+        let _ = writeln!(
+            ctx,
+            "Retry attempt {attempt_number}/{max_attempts} for task {task_id}"
+        );
+
+        if let Some(last) = latest {
+            let _ = writeln!(ctx, "Previous attempt: {}", last.id);
+
+            if !required_failures.is_empty() {
+                let _ = writeln!(
+                    ctx,
+                    "Required check failures (must fix): {}",
+                    required_failures.join(", ")
+                );
+                for r in last
+                    .check_results
+                    .iter()
+                    .filter(|r| r.required && !r.passed)
+                {
+                    let _ = writeln!(ctx, "--- Check: {}", r.name);
+                    let _ = writeln!(ctx, "exit_code={}", r.exit_code);
+                    let _ = writeln!(ctx, "output:\n{}", truncate(&r.output, 2000));
+                }
+            }
+
+            if !optional_failures.is_empty() {
+                let _ = writeln!(
+                    ctx,
+                    "Optional check failures: {}",
+                    optional_failures.join(", ")
+                );
+            }
+
+            if let Some(ec) = exit_code {
+                let _ = writeln!(ctx, "Runtime exit code: {ec}");
+            }
+            if let Some(ref reason) = terminated_reason {
+                let _ = writeln!(ctx, "Runtime terminated: {reason}");
+            }
+
+            if let Some(diff_id) = last.diff_id {
+                if let Ok(artifact) = self.read_diff_artifact(diff_id) {
+                    let created: Vec<String> = artifact
+                        .diff
+                        .changes
+                        .iter()
+                        .filter(|c| c.change_type == ChangeType::Created)
+                        .map(|c| c.path.to_string_lossy().to_string())
+                        .collect();
+                    let modified: Vec<String> = artifact
+                        .diff
+                        .changes
+                        .iter()
+                        .filter(|c| c.change_type == ChangeType::Modified)
+                        .map(|c| c.path.to_string_lossy().to_string())
+                        .collect();
+                    let deleted: Vec<String> = artifact
+                        .diff
+                        .changes
+                        .iter()
+                        .filter(|c| c.change_type == ChangeType::Deleted)
+                        .map(|c| c.path.to_string_lossy().to_string())
+                        .collect();
+
+                    let _ = writeln!(
+                        ctx,
+                        "Filesystem changes observed (from diff): change_count={} created={} modified={} deleted={}",
+                        artifact.diff.change_count(),
+                        created.len(),
+                        modified.len(),
+                        deleted.len()
+                    );
+                    if !created.is_empty() {
+                        let _ = writeln!(ctx, "Created:\n{}", created.join("\n"));
+                    }
+                    if !modified.is_empty() {
+                        let _ = writeln!(ctx, "Modified:\n{}", modified.join("\n"));
+                    }
+                    if !deleted.is_empty() {
+                        let _ = writeln!(ctx, "Deleted:\n{}", deleted.join("\n"));
+                    }
+                }
+            }
+        }
+
+        Ok((
+            ctx,
+            prior_attempts,
+            prior_attempt_ids,
+            required_failures,
+            optional_failures,
+            exit_code,
+            terminated_reason,
+        ))
     }
 
     fn record_error_event(&self, err: &HivemindError, correlation: CorrelationIds) {
@@ -514,7 +782,7 @@ impl Registry {
             .collect::<Vec<_>>()
             .join(", ");
 
-        Err(HivemindError::verification(
+        let err = HivemindError::verification(
             "required_checks_failed",
             format!("Required checks failed: {failures}"),
             origin,
@@ -523,7 +791,11 @@ impl Registry {
             "View check outputs via `hivemind verify results {}`. Worktree preserved at {}",
             attempt.id,
             worktree_status.path.display()
-        )))
+        ));
+
+        self.record_error_event(&err, corr_attempt);
+
+        Err(err)
     }
 
     pub fn verify_run(&self, task_id: &str) -> Result<TaskFlow> {
@@ -1465,9 +1737,14 @@ impl Registry {
         }
 
         let flow = self.get_flow(flow_id)?;
+        let mut retrying = flow.tasks_in_state(TaskExecState::Retry);
+        retrying.sort();
         let mut ready = flow.tasks_in_state(TaskExecState::Ready);
         ready.sort();
-        let Some(task_id) = ready.first().copied() else {
+
+        let task_to_run = retrying.first().copied().or_else(|| ready.first().copied());
+
+        let Some(task_id) = task_to_run else {
             let all_success = flow
                 .task_executions
                 .values()
@@ -1594,6 +1871,16 @@ impl Registry {
             }
         }
 
+        let exec = flow.task_executions.get(&task_id).ok_or_else(|| {
+            HivemindError::system(
+                "task_exec_not_found",
+                "Task execution not found",
+                "registry:tick_flow",
+            )
+        })?;
+
+        let next_attempt_number = exec.attempt_count.saturating_add(1);
+
         // Use the canonical task lifecycle so we persist baselines, compute diffs, and create
         // checkpoint commits. This is required for dependency propagation.
         let attempt_id = self.start_task_execution(&task_id.to_string())?;
@@ -1604,6 +1891,51 @@ impl Registry {
             task_id,
             attempt_id,
         );
+
+        let task = graph.tasks.get(&task_id).ok_or_else(|| {
+            HivemindError::system(
+                "task_not_found",
+                "Task not found in graph",
+                "registry:tick_flow",
+            )
+        })?;
+
+        let max_attempts = task.retry_policy.max_retries.saturating_add(1);
+
+        let (retry_context, prior_attempts) = if next_attempt_number > 1 {
+            let (ctx, priors, ids, req, opt, ec, term) = self.build_retry_context(
+                &state,
+                &flow,
+                task_id,
+                next_attempt_number,
+                max_attempts,
+                "registry:tick_flow",
+            )?;
+
+            self.append_event(
+                Event::new(
+                    EventPayload::RetryContextAssembled {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id,
+                        attempt_number: next_attempt_number,
+                        max_attempts,
+                        prior_attempt_ids: ids,
+                        required_check_failures: req,
+                        optional_check_failures: opt,
+                        runtime_exit_code: ec,
+                        runtime_terminated_reason: term,
+                        context: ctx.clone(),
+                    },
+                    attempt_corr.clone(),
+                ),
+                "registry:tick_flow",
+            )?;
+
+            (Some(ctx), priors)
+        } else {
+            (None, Vec::new())
+        };
 
         self.store
             .append(Event::new(
@@ -1675,22 +2007,14 @@ impl Registry {
             return self.get_flow(flow_id);
         }
 
-        let task = graph.tasks.get(&task_id).ok_or_else(|| {
-            HivemindError::system(
-                "task_not_found",
-                "Task not found in graph",
-                "registry:tick_flow",
-            )
-        })?;
-
         let input = ExecutionInput {
             task_description: task
                 .description
                 .clone()
                 .unwrap_or_else(|| task.title.clone()),
             success_criteria: task.criteria.description.clone(),
-            context: None,
-            prior_attempts: Vec::new(),
+            context: retry_context,
+            prior_attempts,
             verifier_feedback: None,
         };
 
