@@ -174,7 +174,11 @@ impl Registry {
         Ok((exit_code, terminated))
     }
 
-    #[allow(clippy::type_complexity, clippy::too_many_lines, clippy::unnecessary_wraps)]
+    #[allow(
+        clippy::type_complexity,
+        clippy::too_many_lines,
+        clippy::unnecessary_wraps
+    )]
     fn build_retry_context(
         &self,
         state: &AppState,
