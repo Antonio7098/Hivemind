@@ -10,6 +10,7 @@ use hivemind::cli::commands::{
 };
 use hivemind::cli::output::{output, output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
+use hivemind::core::flow::RetryMode;
 use hivemind::core::registry::Registry;
 use hivemind::core::scope::RepoAccessMode;
 use hivemind::core::scope::Scope;
@@ -851,7 +852,12 @@ fn handle_task_complete(
 }
 
 fn handle_task_retry(registry: &Registry, args: &TaskRetryArgs, format: OutputFormat) -> ExitCode {
-    match registry.retry_task(&args.task_id, args.reset_count) {
+    let mode = match args.mode {
+        hivemind::cli::commands::TaskRetryMode::Clean => RetryMode::Clean,
+        hivemind::cli::commands::TaskRetryMode::Continue => RetryMode::Continue,
+    };
+
+    match registry.retry_task(&args.task_id, args.reset_count, mode) {
         Ok(flow) => {
             print_flow_id(flow.id, format);
             ExitCode::Success

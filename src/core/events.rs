@@ -6,7 +6,7 @@
 use crate::core::diff::ChangeType;
 use crate::core::enforcement::ScopeViolation;
 use crate::core::error::HivemindError;
-use crate::core::flow::TaskExecState;
+use crate::core::flow::{RetryMode, TaskExecState};
 use crate::core::graph::GraphTask;
 use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::verification::CheckConfig;
@@ -331,6 +331,8 @@ pub enum EventPayload {
     },
     TaskFlowStarted {
         flow_id: Uuid,
+        #[serde(default)]
+        base_revision: Option<String>,
     },
     TaskFlowPaused {
         flow_id: Uuid,
@@ -495,6 +497,8 @@ pub enum EventPayload {
     TaskRetryRequested {
         task_id: Uuid,
         reset_count: bool,
+        #[serde(default)]
+        retry_mode: RetryMode,
     },
     TaskAborted {
         task_id: Uuid,

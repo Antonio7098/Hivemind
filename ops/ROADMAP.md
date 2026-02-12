@@ -648,24 +648,28 @@ Note: admin token/login?
 **Goal:** Git artifacts support observability and rollback.
 
 ### 21.1 Execution Branches
-- [ ] One branch per task: `exec/<flow>/<task>`
-- [ ] Created from TaskFlow base revision
-- [ ] Never merged directly
+- [x] One branch per task: `exec/<flow>/<task>`
+- [x] Created from TaskFlow base revision
+- [x] Never merged directly
 
 ### 21.2 Checkpoint Commits
-- [ ] Commits created during/after execution
-- [ ] Owned by task, ephemeral
-- [ ] Used for diffs, rollback, retry
+- [x] Commits created during/after execution
+- [x] Owned by task, ephemeral
+- [x] Used for diffs, rollback, retry
 
 ### 21.3 Branch Lifecycle
-- [ ] Create on task start
-- [ ] Reset on retry
-- [ ] Archive/delete on completion
+- [x] Create on task start
+- [x] Reset on retry
+- [x] Archive/delete on completion
 
-### 21.4 Exit Criteria
-- [ ] Execution branches are task-isolated
-- [ ] Checkpoints enable rollback
-- [ ] Clean separation from integration commits
+### 21.4 Flow Base Revision & Flow Branch
+- [x] Record TaskFlow base revision at flow start (deterministic execution base)
+- [x] Materialize/refreshed flow integration branch: `flow/<flow-id>`
+
+### 21.5 Exit Criteria
+- [x] Execution branches are task-isolated
+- [x] Checkpoints enable rollback
+- [x] Clean separation from integration commits
 
 ---
 
@@ -678,6 +682,8 @@ Note: admin token/login?
 - [ ] Compute integration commits
 - [ ] Test merge against target
 - [ ] Report conflicts
+
+Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branches and produce/refine the flow integration branch `flow/<flow-id>`.
 
 ### 22.2 Merge Commands
 - [ ] `hivemind merge prepare <flow-id>`

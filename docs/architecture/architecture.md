@@ -216,8 +216,21 @@ Hidden runtime context is never relied upon.
 Task execution produces explicit, inspectable artifacts:
 
 - **Execution branches** (one per task by default)
+- **Flow integration branch** (one per flow, merge boundary)
 - **Checkpoint (execution) commits**
 - **Diffs and filesystem changes**
+
+By default, each TaskFlow records a **base revision** at flow start. That base revision is used to deterministically create:
+
+- per-task execution branches: `exec/<flow-id>/<task-id>`
+- the flow integration branch: `flow/<flow-id>`
+
+On retry, the task execution branch/worktree is reset to the recorded base revision.
+
+Retries have an explicit mode:
+
+- `clean` (default): reset the task execution branch/worktree to the recorded base revision.
+- `continue`: preserve the existing task execution worktree contents.
 
 These artifacts are:
 - Owned by the task

@@ -7,7 +7,7 @@ use crate::core::diff::{unified_diff, Baseline, ChangeType, Diff, FileChange};
 use crate::core::enforcement::{ScopeEnforcer, VerificationResult};
 use crate::core::error::{ErrorCategory, HivemindError, Result};
 use crate::core::events::{CorrelationIds, Event, EventPayload, RuntimeOutputStream};
-use crate::core::flow::{FlowState, TaskExecState, TaskFlow};
+use crate::core::flow::{FlowState, RetryMode, TaskExecState, TaskFlow};
 use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, TaskGraph};
 use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::state::{AppState, AttemptState, Project, Task, TaskState};
@@ -138,6 +138,45 @@ impl Registry {
             return None;
         }
         Some(String::from_utf8_lossy(&head.stdout).trim().to_string())
+    }
+
+    fn checkout_and_clean_worktree(
+        worktree_path: &Path,
+        branch: &str,
+        base: &str,
+        origin: &'static str,
+    ) -> Result<()> {
+        let checkout = std::process::Command::new("git")
+            .current_dir(worktree_path)
+            .args(["checkout", "-f", "-B", branch, base])
+            .output();
+        if !checkout.as_ref().is_ok_and(|o| o.status.success()) {
+            return Err(HivemindError::git(
+                "git_checkout_failed",
+                checkout.map_or_else(
+                    |e| e.to_string(),
+                    |o| String::from_utf8_lossy(&o.stderr).to_string(),
+                ),
+                origin,
+            ));
+        }
+
+        let clean = std::process::Command::new("git")
+            .current_dir(worktree_path)
+            .args(["clean", "-fdx"])
+            .output();
+        if !clean.as_ref().is_ok_and(|o| o.status.success()) {
+            return Err(HivemindError::git(
+                "git_clean_failed",
+                clean.map_or_else(
+                    |e| e.to_string(),
+                    |o| String::from_utf8_lossy(&o.stderr).to_string(),
+                ),
+                origin,
+            ));
+        }
+
+        Ok(())
     }
 
     fn append_event(&self, event: Event, origin: &'static str) -> Result<()> {
@@ -1352,44 +1391,40 @@ impl Registry {
             .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_manager_for_flow"))
     }
 
-    fn maybe_provision_worktrees_for_flow_tasks(
+    fn ensure_task_worktree(
         flow: &TaskFlow,
         state: &AppState,
-        task_ids: &[Uuid],
-    ) -> Result<()> {
-        let project = state.projects.get(&flow.project_id).ok_or_else(|| {
-            HivemindError::system(
-                "project_not_found",
-                format!("Project '{}' not found", flow.project_id),
-                "registry:maybe_provision_worktrees_for_flow_tasks",
-            )
-        })?;
-
-        if project.repositories.len() != 1 {
-            return Ok(());
+        task_id: Uuid,
+        origin: &'static str,
+    ) -> Result<WorktreeStatus> {
+        let manager = Self::worktree_manager_for_flow(flow, state)?;
+        let status = manager
+            .inspect(flow.id, task_id)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, origin))?;
+        if status.is_worktree {
+            return Ok(status);
         }
 
-        let manager = WorktreeManager::new(
-            PathBuf::from(&project.repositories[0].path),
-            WorktreeConfig::default(),
-        )
-        .map_err(|e| {
-            Self::worktree_error_to_hivemind(e, "registry:maybe_provision_worktrees_for_flow_tasks")
-        })?;
+        let base = flow.base_revision.as_deref().unwrap_or("HEAD");
+        manager
+            .create(flow.id, task_id, Some(base))
+            .map_err(|e| Self::worktree_error_to_hivemind(e, origin))?;
+        let status = manager
+            .inspect(flow.id, task_id)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, origin))?;
 
-        for task_id in task_ids {
-            match manager.create(flow.id, *task_id, Some("HEAD")) {
-                Ok(_) | Err(WorktreeError::AlreadyExists(_)) => {}
-                Err(e) => {
-                    return Err(Self::worktree_error_to_hivemind(
-                        e,
-                        "registry:maybe_provision_worktrees_for_flow_tasks",
-                    ))
-                }
-            }
+        if !status.is_worktree {
+            return Err(HivemindError::git(
+                "worktree_create_failed",
+                format!(
+                    "Worktree path exists but is not a git worktree: {}",
+                    status.path.display()
+                ),
+                origin,
+            ));
         }
 
-        Ok(())
+        Ok(status)
     }
 
     /// Opens or creates a registry at the default location.
@@ -1910,17 +1945,29 @@ impl Registry {
             ));
         }
 
-        let manager = Self::worktree_manager_for_flow(&flow, &state)?;
-        let worktree_status = manager
-            .inspect(flow.id, task_id)
-            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:tick_flow"))?;
-        if !worktree_status.is_worktree {
-            return Err(HivemindError::user(
-                "worktree_not_found",
-                "Worktree not found for task",
+        let worktree_status =
+            Self::ensure_task_worktree(&flow, &state, task_id, "registry:tick_flow")?;
+
+        let exec = flow.task_executions.get(&task_id).ok_or_else(|| {
+            HivemindError::system(
+                "task_exec_not_found",
+                "Task execution not found",
                 "registry:tick_flow",
-            ));
+            )
+        })?;
+
+        if exec.state == TaskExecState::Retry && exec.retry_mode == RetryMode::Clean {
+            let base = flow.base_revision.as_deref().unwrap_or("HEAD");
+            let branch = format!("exec/{}/{task_id}", flow.id);
+            Self::checkout_and_clean_worktree(
+                &worktree_status.path,
+                &branch,
+                base,
+                "registry:tick_flow",
+            )?;
         }
+
+        let next_attempt_number = exec.attempt_count.saturating_add(1);
 
         // Ensure this worktree contains the latest changes from dependency tasks.
         // Each task runs in its own worktree/branch (`exec/<flow>/<task>`), so dependent
@@ -1988,16 +2035,6 @@ impl Registry {
                 }
             }
         }
-
-        let exec = flow.task_executions.get(&task_id).ok_or_else(|| {
-            HivemindError::system(
-                "task_exec_not_found",
-                "Task execution not found",
-                "registry:tick_flow",
-            )
-        })?;
-
-        let next_attempt_number = exec.attempt_count.saturating_add(1);
 
         // Use the canonical task lifecycle so we persist baselines, compute diffs, and create
         // checkpoint commits. This is required for dependency propagation.
@@ -3130,6 +3167,7 @@ impl Registry {
         self.get_flow(&flow_id.to_string())
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn start_flow(&self, flow_id: &str) -> Result<TaskFlow> {
         let flow = self
             .get_flow(flow_id)
@@ -3186,11 +3224,40 @@ impl Registry {
         }
 
         let state = self.state()?;
-        let all_task_ids: Vec<Uuid> = flow.task_executions.keys().copied().collect();
-        Self::maybe_provision_worktrees_for_flow_tasks(&flow, &state, &all_task_ids)?;
+
+        let base_revision = state
+            .projects
+            .get(&flow.project_id)
+            .and_then(|p| p.repositories.first())
+            .and_then(|repo| {
+                std::process::Command::new("git")
+                    .current_dir(&repo.path)
+                    .args(["rev-parse", "HEAD"])
+                    .output()
+                    .ok()
+                    .filter(|o| o.status.success())
+                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    .filter(|s| !s.is_empty())
+            });
+
+        if let Some(project) = state.projects.get(&flow.project_id) {
+            if project.repositories.len() == 1 {
+                if let (Some(base), Some(repo)) =
+                    (base_revision.as_deref(), project.repositories.first())
+                {
+                    let _ = std::process::Command::new("git")
+                        .current_dir(&repo.path)
+                        .args(["branch", "-f", &format!("flow/{}", flow.id), base])
+                        .output();
+                }
+            }
+        }
 
         let event = Event::new(
-            EventPayload::TaskFlowStarted { flow_id: flow.id },
+            EventPayload::TaskFlowStarted {
+                flow_id: flow.id,
+                base_revision,
+            },
             CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
         );
         self.store.append(event).map_err(|e| {
@@ -3368,7 +3435,12 @@ impl Registry {
         self.get_flow(flow_id)
     }
 
-    pub fn retry_task(&self, task_id: &str, reset_count: bool) -> Result<TaskFlow> {
+    pub fn retry_task(
+        &self,
+        task_id: &str,
+        reset_count: bool,
+        retry_mode: RetryMode,
+    ) -> Result<TaskFlow> {
         let id = Uuid::parse_str(task_id).map_err(|_| {
             HivemindError::user(
                 "invalid_task_id",
@@ -3426,10 +3498,32 @@ impl Registry {
             ));
         }
 
+        if matches!(retry_mode, RetryMode::Clean) {
+            if let Ok(manager) = Self::worktree_manager_for_flow(&flow, &state) {
+                let base = flow.base_revision.as_deref().unwrap_or("HEAD");
+                let mut status = manager.inspect(flow.id, id).ok();
+                if status.as_ref().is_none_or(|s| !s.is_worktree) {
+                    let _ = manager.create(flow.id, id, Some(base));
+                    status = manager.inspect(flow.id, id).ok();
+                }
+
+                if let Some(status) = status.filter(|s| s.is_worktree) {
+                    let branch = format!("exec/{}/{id}", flow.id);
+                    Self::checkout_and_clean_worktree(
+                        &status.path,
+                        &branch,
+                        base,
+                        "registry:retry_task",
+                    )?;
+                }
+            }
+        }
+
         let event = Event::new(
             EventPayload::TaskRetryRequested {
                 task_id: id,
                 reset_count,
+                retry_mode,
             },
             CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
         );
@@ -3472,7 +3566,7 @@ impl Registry {
             ));
         }
 
-        let status = Self::inspect_task_worktree(&flow, &state, id, origin)?;
+        let status = Self::ensure_task_worktree(&flow, &state, id, origin)?;
         let attempt_id = Uuid::new_v4();
         let attempt_number = exec.attempt_count.saturating_add(1);
         let baseline = self.capture_and_store_baseline(&status.path, origin)?;
@@ -3851,7 +3945,7 @@ impl Registry {
             if project.repositories.len() == 1 {
                 let manager = Self::worktree_manager_for_flow(&flow, &state)?;
                 let base_ref = target_branch.unwrap_or("HEAD");
-                let merge_branch = format!("integrate/{}", flow.id);
+                let merge_branch = format!("flow/{}", flow.id);
                 let merge_path = manager
                     .config()
                     .base_dir
@@ -4244,7 +4338,7 @@ impl Registry {
                     .with_hint("Re-run with --target <branch> or checkout a branch"));
                 }
 
-                let merge_branch = format!("integrate/{}", flow.id);
+                let merge_branch = format!("flow/{}", flow.id);
                 let merge_ref = format!("refs/heads/{merge_branch}");
                 let merge_ref_exists = std::process::Command::new("git")
                     .current_dir(repo_path)
@@ -4364,6 +4458,24 @@ impl Registry {
                         ])
                         .output();
                     let _ = fs::remove_dir_all(&merge_path);
+                }
+
+                if manager.config().cleanup_on_success {
+                    for task_id in flow.task_executions.keys() {
+                        let branch = format!("exec/{}/{task_id}", flow.id);
+                        let _ = std::process::Command::new("git")
+                            .current_dir(repo_path)
+                            .args(["branch", "-D", &branch])
+                            .output();
+                    }
+
+                    let flow_branch = format!("flow/{}", flow.id);
+                    if current_branch != flow_branch {
+                        let _ = std::process::Command::new("git")
+                            .current_dir(repo_path)
+                            .args(["branch", "-D", &flow_branch])
+                            .output();
+                    }
                 }
             }
         }
@@ -4891,7 +5003,9 @@ mod tests {
             Some(TaskExecState::Failed)
         );
 
-        let flow = registry.retry_task(&t1.id.to_string(), true).unwrap();
+        let flow = registry
+            .retry_task(&t1.id.to_string(), true, RetryMode::Clean)
+            .unwrap();
         assert_eq!(
             flow.task_executions.get(&t1.id).map(|e| e.state),
             Some(TaskExecState::Pending)
@@ -4950,8 +5064,12 @@ mod tests {
         );
         registry.store.append(event).unwrap();
 
-        assert!(registry.retry_task(&t1.id.to_string(), false).is_err());
-        assert!(registry.retry_task(&t1.id.to_string(), true).is_ok());
+        assert!(registry
+            .retry_task(&t1.id.to_string(), false, RetryMode::Clean)
+            .is_err());
+        assert!(registry
+            .retry_task(&t1.id.to_string(), true, RetryMode::Clean)
+            .is_ok());
     }
 
     #[test]

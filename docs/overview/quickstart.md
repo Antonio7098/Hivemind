@@ -222,6 +222,24 @@ $HM -f json worktree inspect <task-id>
 
 ---
 
+## 9) Retrying a task
+
+If a task ends up in `retry` or `failed`, you can request a retry.
+
+`clean` retries (default) reset the task execution worktree back to the flow base revision:
+
+```bash
+$HM task retry <task-id> --mode clean
+```
+
+`continue` retries preserve the task execution worktree so the next attempt can pick up where the previous one left off:
+
+```bash
+$HM task retry <task-id> --mode continue
+```
+
+---
+
 ## 9) Merge workflow (explicit, gated)
 
 When a flow is `completed`, merge is a separate, explicit protocol.

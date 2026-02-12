@@ -51,8 +51,14 @@ $HIVEMIND worktree list "$FLOW_ID" 2>&1
 echo "=== Starting flow ==="
 $HIVEMIND flow start "$FLOW_ID" 2>&1
 
-echo "=== Checking worktrees after start ==="
+echo "=== Starting task (creates worktree) ==="
+$HIVEMIND task start "$TASK_ID" 2>&1
+
+echo "=== Checking worktrees after task start ==="
 $HIVEMIND worktree list "$FLOW_ID" 2>&1
+
+echo "=== Inspecting worktree ==="
+$HIVEMIND worktree inspect "$TASK_ID" 2>&1
 
 echo "=== Listing worktree directory ==="
 ls -la "$PWD/.hivemind/worktrees/" 2>&1 || echo "Directory does not exist"

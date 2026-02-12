@@ -162,6 +162,7 @@ ESCALATED
 ### Includes
 - Current state
 - Attempt count
+- Retry mode (`clean`|`continue`)
 - Verifier outcomes
 - Blocking reason (if any)
 

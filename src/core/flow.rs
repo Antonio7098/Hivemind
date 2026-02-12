@@ -46,6 +46,14 @@ pub enum TaskExecState {
     Escalated,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RetryMode {
+    #[default]
+    Clean,
+    Continue,
+}
+
 /// Execution state for a single task within a flow.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskExecution {
@@ -55,6 +63,8 @@ pub struct TaskExecution {
     pub state: TaskExecState,
     /// Number of attempts made.
     pub attempt_count: u32,
+    #[serde(default)]
+    pub retry_mode: RetryMode,
     /// Last state change timestamp.
     pub updated_at: DateTime<Utc>,
     /// Blocking reason (if blocked).
@@ -69,6 +79,7 @@ impl TaskExecution {
             task_id,
             state: TaskExecState::Pending,
             attempt_count: 0,
+            retry_mode: RetryMode::default(),
             updated_at: Utc::now(),
             blocked_reason: None,
         }
@@ -119,6 +130,8 @@ pub struct TaskFlow {
     pub graph_id: Uuid,
     /// Associated project ID.
     pub project_id: Uuid,
+    #[serde(default)]
+    pub base_revision: Option<String>,
     /// Current flow state.
     pub state: FlowState,
     /// Task execution states.
@@ -148,6 +161,7 @@ impl TaskFlow {
             id: Uuid::new_v4(),
             graph_id,
             project_id,
+            base_revision: None,
             state: FlowState::Created,
             task_executions,
             created_at: now,
