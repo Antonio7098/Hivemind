@@ -27,6 +27,17 @@ impl EventId {
         Self(Uuid::new_v4())
     }
 
+    /// Creates a unique event ID that is ordered by the provided sequence.
+    ///
+    /// This preserves UUID wire format while allowing stores to guarantee a
+    /// monotonic ordering property for event IDs within a log.
+    #[must_use]
+    pub fn from_ordered_u64(sequence: u64) -> Self {
+        let mut bytes = *Uuid::new_v4().as_bytes();
+        bytes[..8].copy_from_slice(&sequence.to_be_bytes());
+        Self(Uuid::from_bytes(bytes))
+    }
+
     /// Returns the inner UUID.
     #[must_use]
     pub fn as_uuid(&self) -> Uuid {
@@ -297,6 +308,19 @@ pub enum EventPayload {
         scope: Scope,
     },
 
+    TaskGraphValidated {
+        graph_id: Uuid,
+        project_id: Uuid,
+        valid: bool,
+        #[serde(default)]
+        issues: Vec<String>,
+    },
+
+    TaskGraphLocked {
+        graph_id: Uuid,
+        project_id: Uuid,
+    },
+
     TaskFlowCreated {
         flow_id: Uuid,
         graph_id: Uuid,
@@ -341,6 +365,27 @@ pub enum EventPayload {
         task_id: Uuid,
         from: TaskExecState,
         to: TaskExecState,
+    },
+
+    TaskExecutionStarted {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        attempt_number: u32,
+    },
+    TaskExecutionSucceeded {
+        flow_id: Uuid,
+        task_id: Uuid,
+        #[serde(default)]
+        attempt_id: Option<Uuid>,
+    },
+    TaskExecutionFailed {
+        flow_id: Uuid,
+        task_id: Uuid,
+        #[serde(default)]
+        attempt_id: Option<Uuid>,
+        #[serde(default)]
+        reason: Option<String>,
     },
 
     AttemptStarted {

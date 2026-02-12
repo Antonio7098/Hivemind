@@ -133,6 +133,26 @@ impl HivemindError {
         Self::new(ErrorCategory::Git, code, message, origin)
     }
 
+    /// Creates a runtime adapter error.
+    #[must_use]
+    pub fn runtime(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        origin: impl Into<String>,
+    ) -> Self {
+        Self::new(ErrorCategory::Runtime, code, message, origin).recoverable(true)
+    }
+
+    /// Creates an agent execution error.
+    #[must_use]
+    pub fn agent(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        origin: impl Into<String>,
+    ) -> Self {
+        Self::new(ErrorCategory::Agent, code, message, origin).recoverable(true)
+    }
+
     /// Creates a scope violation error.
     #[must_use]
     pub fn scope(
@@ -151,6 +171,16 @@ impl HivemindError {
         origin: impl Into<String>,
     ) -> Self {
         Self::new(ErrorCategory::Verification, code, message, origin).recoverable(true)
+    }
+
+    /// Creates a policy violation error.
+    #[must_use]
+    pub fn policy(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        origin: impl Into<String>,
+    ) -> Self {
+        Self::new(ErrorCategory::Policy, code, message, origin)
     }
 }
 
