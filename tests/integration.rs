@@ -169,6 +169,24 @@ fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, String, String) 
     )
 }
 
+fn run_hivemind_with_env(
+    home: &std::path::Path,
+    args: &[&str],
+    extra_env: &[(&str, &str)],
+) -> (i32, String, String) {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_hivemind"));
+    cmd.env("HOME", home).args(args);
+    for (k, v) in extra_env {
+        cmd.env(k, v);
+    }
+    let output = cmd.output().expect("run hivemind");
+    (
+        output.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&output.stdout).to_string(),
+        String::from_utf8_lossy(&output.stderr).to_string(),
+    )
+}
+
 #[test]
 fn cli_verify_run_and_results_capture_check_outcomes() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -284,6 +302,144 @@ fn cli_verify_run_and_results_capture_check_outcomes() {
     );
     assert_eq!(code, 0, "{err}");
     assert!(results_out.contains("fail_check"), "{results_out}");
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_verify_override_can_force_success_after_check_failure_and_is_audited() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--binary-path",
+            "/usr/bin/env",
+            "--arg",
+            "sh",
+            "--arg",
+            "-c",
+            "--arg",
+            "echo runtime_ok",
+            "--timeout-ms",
+            "1000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out1, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out1
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "graph",
+            "add-check",
+            &graph_id,
+            &t1_id,
+            "--name",
+            "fail_check",
+            "--command",
+            "exit 1",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, _err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 1, "expected verification failure on required check");
+
+    let reason = "manual override";
+    let (code, _out, err) = run_hivemind_with_env(
+        tmp.path(),
+        &["verify", "override", &t1_id, "pass", "--reason", reason],
+        &[("HIVEMIND_USER", "tester")],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "200",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let events_json: serde_json::Value = serde_json::from_str(&events_out).expect("events json");
+    let data = events_json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .expect("events data");
+
+    let override_payload = data
+        .iter()
+        .find_map(|ev| {
+            let payload = ev.get("payload")?;
+            let typ = payload.get("type")?.as_str()?;
+            if typ != "human_override" {
+                return None;
+            }
+            let task_id = payload.get("task_id")?.as_str()?;
+            if task_id != t1_id {
+                return None;
+            }
+            Some(payload)
+        })
+        .expect("expected human_override event");
+
+    assert_eq!(
+        override_payload.get("reason").and_then(|v| v.as_str()),
+        Some(reason)
+    );
+    assert_eq!(
+        override_payload.get("user").and_then(|v| v.as_str()),
+        Some("tester")
+    );
+
+    let (code, flow_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "flow", "status", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_json: serde_json::Value = serde_json::from_str(&flow_out).expect("flow json");
+    assert_eq!(
+        flow_json.get("state").and_then(|s| s.as_str()),
+        Some("completed")
+    );
 }
 
 #[test]
