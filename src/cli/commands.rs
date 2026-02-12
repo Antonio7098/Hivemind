@@ -235,11 +235,19 @@ pub struct FlowAbortArgs {
     pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum TaskRetryMode {
+    Clean,
+    Continue,
+}
+
 #[derive(Args)]
 pub struct TaskRetryArgs {
     pub task_id: String,
     #[arg(long)]
     pub reset_count: bool,
+    #[arg(long, value_enum, default_value_t = TaskRetryMode::Clean)]
+    pub mode: TaskRetryMode,
 }
 
 #[derive(Args)]

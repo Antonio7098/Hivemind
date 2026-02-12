@@ -752,7 +752,8 @@ hivemind task start <task-id>
 - Task exists and is part of a TaskFlow
 - Flow is RUNNING
 - Task execution state is READY or RETRY
-- Worktree exists for the task
+
+Note: the task worktree is created/ensured as part of this command.
 
 **Effects:**
 - Task execution state transitions to RUNNING
@@ -848,7 +849,7 @@ CheckpointCommitCreated:
 
 **Synopsis:**
 ```
-hivemind task retry <task-id> [--reset-count]
+hivemind task retry <task-id> [--reset-count] [--mode clean|continue]
 ```
 
 **Preconditions:**
@@ -860,12 +861,15 @@ hivemind task retry <task-id> [--reset-count]
 - Task state changes to PENDING (if dependencies met) or appropriate state
 - New attempt will be scheduled
 - With --reset-count: retry counter reset to 0
+- With --mode clean (default): execution worktree is reset to the flow base revision
+- With --mode continue: execution worktree is preserved (no reset)
 
 **Events:**
 ```
 TaskRetryRequested:
   task_id: <task-id>
   reset_count: <boolean>
+  retry_mode: clean|continue
 ```
 
 **Failures:**
@@ -873,6 +877,8 @@ TaskRetryRequested:
 - `TASK_NOT_IN_FLOW`: Task is not part of any TaskFlow
 - `TASK_NOT_RETRIABLE`: Task is not in retriable state
 - `RETRY_LIMIT_EXCEEDED`: And --reset-count not specified
+- `git_checkout_failed`: Clean retry failed to reset the execution branch/worktree
+- `git_clean_failed`: Clean retry failed to clean untracked files in the execution worktree
 
 **Idempotence:** Not idempotent. Each call queues a retry.
 
@@ -1090,6 +1096,10 @@ hivemind merge prepare <flow-id> [--target <branch>]
 - Conflict check performed
 - Merge preview generated
 
+**Git Artifacts (deterministic):**
+- A flow-scoped integration branch is materialized/refreshed: `flow/<flow-id>`
+- Successful task execution branches are consumed as inputs: `exec/<flow-id>/<task-id>`
+
 **Events:**
 ```
 MergePrepared:
@@ -1154,6 +1164,9 @@ hivemind merge execute <flow-id>
 - Integration commits pushed to target branches
 - Execution branches cleaned up (per policy)
 - Flow marked as merged
+
+**Git Artifacts (deterministic):**
+- The prepared flow integration branch `flow/<flow-id>` is merged into the selected target branch.
 
 **Events:**
 ```

@@ -3,7 +3,7 @@
 //! All state in Hivemind is derived by replaying events. This ensures
 //! determinism, idempotency, and complete observability.
 use super::events::{Event, EventPayload};
-use super::flow::{FlowState, TaskExecState, TaskExecution, TaskFlow};
+use super::flow::{FlowState, RetryMode, TaskExecState, TaskExecution, TaskFlow};
 use super::graph::{GraphState, TaskGraph};
 use super::scope::{RepoAccessMode, Scope};
 use super::verification::CheckResult;
@@ -361,6 +361,7 @@ impl AppState {
                             task_id: *task_id,
                             state: TaskExecState::Pending,
                             attempt_count: 0,
+                            retry_mode: RetryMode::default(),
                             updated_at: timestamp,
                             blocked_reason: None,
                         },
@@ -373,6 +374,7 @@ impl AppState {
                         id: *flow_id,
                         graph_id: *graph_id,
                         project_id: *project_id,
+                        base_revision: None,
                         state: FlowState::Created,
                         task_executions,
                         created_at: timestamp,
@@ -382,10 +384,14 @@ impl AppState {
                     },
                 );
             }
-            EventPayload::TaskFlowStarted { flow_id } => {
+            EventPayload::TaskFlowStarted {
+                flow_id,
+                base_revision,
+            } => {
                 if let Some(flow) = self.flows.get_mut(flow_id) {
                     flow.state = FlowState::Running;
                     flow.started_at = Some(timestamp);
+                    flow.base_revision.clone_from(base_revision);
                     flow.updated_at = timestamp;
                 }
             }
@@ -573,6 +579,7 @@ impl AppState {
             EventPayload::TaskRetryRequested {
                 task_id,
                 reset_count,
+                retry_mode,
             } => {
                 let flow_id = event.metadata.correlation.flow_id;
                 let mut candidate_flow_ids = Vec::new();
@@ -593,6 +600,7 @@ impl AppState {
                             exec.state = TaskExecState::Pending;
                             exec.blocked_reason = None;
                             exec.updated_at = timestamp;
+                            exec.retry_mode = *retry_mode;
                             if *reset_count {
                                 exec.attempt_count = 0;
                             }

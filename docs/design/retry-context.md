@@ -153,6 +153,11 @@ If limits are exceeded, prioritize:
 
 Retry context is delivered as **explicit input** to the worker agent.
 
+Note: retry context is independent of the retry mode used for worktree handling.
+
+- `clean` retries reset the execution worktree back to the TaskFlow base revision.
+- `continue` retries preserve the execution worktree contents so the next attempt can resume from the previous state.
+
 It is NOT:
 - Injected into model context invisibly
 - Stored in runtime memory

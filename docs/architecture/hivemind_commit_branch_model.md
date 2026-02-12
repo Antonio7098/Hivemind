@@ -79,8 +79,19 @@ By default:
 
 Example naming (illustrative):
 ```
-exec/taskflow-42/task-add-auth
+exec/<flow-id>/<task-id>
 ```
+
+In addition, each flow has a dedicated **integration branch** that acts as the merge boundary:
+
+```
+flow/<flow-id>
+```
+
+This branch exists to:
+- provide a stable integration surface for the flow
+- keep execution branches isolated and rewritable
+- make rollback and inspection mechanical (drop the flow branch)
 
 ---
 
@@ -163,7 +174,9 @@ Checkpoints allow:
 
 On retry:
 
-- Branch is reset to last accepted checkpoint
+- Branch/worktree retry behavior is explicit and recorded:
+  - `clean` (default): reset the task execution branch/worktree to the TaskFlow base revision (or another explicitly recorded reset point)
+  - `continue`: preserve the existing task execution worktree contents and resume from the current state
 - New execution commits overwrite prior ones
 - Failed attempts remain visible via events
 
@@ -185,6 +198,8 @@ On task success:
 Integration commits may be:
 - One per task (default)
 - Multiple (advanced, explicit)
+
+In the default merge protocol, successful task execution branches are incorporated into the flow’s integration branch (`flow/<flow-id>`) as part of merge preparation. The flow branch is the only branch intended to be merged into long-lived project branches.
 
 ---
 

@@ -97,8 +97,10 @@ Set up the execution environment for a specific task attempt.
 ### 4.2 Operations
 
 1. **Create Worktree**
-   - `git worktree add <path> <base_revision>`
+   - `git worktree add -B exec/<flow-id>/<task-id> <path> <base_revision>`
    - Set as working directory for subprocess
+
+   `base_revision` is the TaskFlow base revision recorded at flow start.
 
 2. **Prepare Environment**
    ```

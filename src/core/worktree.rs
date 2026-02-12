@@ -166,6 +166,9 @@ impl WorktreeManager {
         let base_commit = self.get_commit_hash(base)?;
 
         // Create worktree with new branch
+        let worktree_path_str = worktree_path.to_str().ok_or_else(|| {
+            WorktreeError::GitError("Worktree path is not valid UTF-8".to_string())
+        })?;
         let output = Command::new("git")
             .current_dir(&self.repo_path)
             .args([
@@ -173,7 +176,7 @@ impl WorktreeManager {
                 "add",
                 "-B",
                 &branch_name,
-                worktree_path.to_str().unwrap_or(""),
+                worktree_path_str,
                 base,
             ])
             .output()?;
@@ -322,7 +325,21 @@ impl WorktreeManager {
 
     /// Checks if a path is a valid worktree.
     pub fn is_worktree(&self, path: &Path) -> bool {
-        path.join(".git").exists()
+        if !path.join(".git").exists() {
+            return false;
+        }
+
+        let output = Command::new("git")
+            .current_dir(path)
+            .args(["rev-parse", "--is-inside-work-tree"])
+            .output();
+
+        match output {
+            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+                .trim()
+                .eq_ignore_ascii_case("true"),
+            _ => false,
+        }
     }
 
     /// Gets the HEAD commit of a worktree.

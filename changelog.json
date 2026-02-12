@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.11",
+      "date": "2026-02-12",
+      "phase": 21,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Introduce explicit retry modes (clean vs continue), persist selection on TaskExecution, and include retry_mode on TaskRetryRequested events"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Conditionally reset execution worktrees/branches during retry based on retry_mode and default automatic retries to clean"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Extend task retry command with --mode clean|continue flag"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add integration coverage verifying clean retries wipe worktrees while continue retries preserve them and that events capture retry_mode"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update architecture, design, and quickstart docs to describe retry mode semantics"
+        }
+      ]
+    },
+    {
       "version": "v0.1.10",
       "date": "2026-02-12",
       "phase": 20,

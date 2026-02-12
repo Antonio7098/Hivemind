@@ -186,6 +186,11 @@ Retry transitions are explicit and bounded.
 
 When retrying, agents receive **explicit retry context** (not implicit memory) including prior attempt diffs, check results, and verifier feedback. See `docs/design/retry-context.md` for retry context assembly.
 
+Retry behavior also defines a **retry mode** for worktree handling:
+
+- `clean` (default): reset the task execution branch/worktree back to the flow base revision, discarding local modifications and untracked files.
+- `continue`: preserve the existing task execution worktree so the next attempt can pick up where the previous attempt left off.
+
 ---
 
 ## 8. Execution Artifacts
@@ -201,6 +206,14 @@ During execution, TaskFlow may create **execution commits**:
 Execution commits:
 - Are never merged directly
 - Are discarded or archived on completion
+
+In addition to execution commits, TaskFlow materializes deterministic git surfaces for isolation:
+
+- TaskFlow records a **base revision** at flow start
+- Each task execution runs in a dedicated worktree on a dedicated branch: `exec/<flow-id>/<task-id>`
+- On retry:
+  - `clean` retries reset the execution branch/worktree back to the recorded base revision
+  - `continue` retries preserve the current state of the execution worktree
 
 ---
 
