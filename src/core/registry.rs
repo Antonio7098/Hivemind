@@ -3702,11 +3702,13 @@ impl Registry {
     }
 
     pub fn verify_override(&self, task_id: &str, decision: &str, reason: &str) -> Result<TaskFlow> {
+        let origin = "registry:verify_override";
+
         let id = Uuid::parse_str(task_id).map_err(|_| {
             HivemindError::user(
                 "invalid_task_id",
                 format!("'{task_id}' is not a valid task ID"),
-                "registry:verify_override",
+                origin,
             )
         })?;
 
@@ -3714,42 +3716,51 @@ impl Registry {
             return Err(HivemindError::user(
                 "invalid_decision",
                 "Decision must be 'pass' or 'fail'",
-                "registry:verify_override",
+                origin,
             ));
         }
+
+        if reason.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_reason",
+                "Reason must be non-empty",
+                origin,
+            ));
+        }
+
+        let user = env::var("HIVEMIND_USER")
+            .or_else(|_| env::var("USER"))
+            .ok()
+            .filter(|u| !u.trim().is_empty());
 
         let state = self.state()?;
-        let mut candidates: Vec<TaskFlow> = state
-            .flows
-            .values()
-            .filter(|f| f.task_executions.contains_key(&id))
-            .cloned()
-            .collect();
+        let flow = Self::flow_for_task(&state, id, origin)?;
 
-        if candidates.is_empty() {
+        if matches!(flow.state, FlowState::Completed | FlowState::Aborted) {
             return Err(HivemindError::user(
-                "task_not_in_flow",
-                "Task is not part of any flow",
-                "registry:verify_override",
+                "flow_not_active",
+                "Cannot override verification for a completed or aborted flow",
+                origin,
             ));
         }
 
-        candidates.sort_by_key(|f| std::cmp::Reverse(f.updated_at));
-        let flow = candidates[0].clone();
-
         let exec = flow.task_executions.get(&id).ok_or_else(|| {
-            HivemindError::system(
-                "task_exec_not_found",
-                "Task execution not found",
-                "registry:verify_override",
-            )
+            HivemindError::system("task_exec_not_found", "Task execution not found", origin)
         })?;
 
-        if exec.state != TaskExecState::Verifying {
+        // Allow overrides both during verification and after automated decisions.
+        // This supports overriding failed checks/verifier outcomes (Retry/Failed/Escalated).
+        if !matches!(
+            exec.state,
+            TaskExecState::Verifying
+                | TaskExecState::Retry
+                | TaskExecState::Failed
+                | TaskExecState::Escalated
+        ) {
             return Err(HivemindError::user(
-                "task_not_verifying",
-                "Task is not in verification state",
-                "registry:verify_override",
+                "task_not_overridable",
+                "Task is not in an overridable state",
+                origin,
             ));
         }
 
@@ -3759,28 +3770,44 @@ impl Registry {
                 override_type: "VERIFICATION_OVERRIDE".to_string(),
                 decision: decision.to_string(),
                 reason: reason.to_string(),
-                user: None,
+                user,
             },
             CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
         );
 
-        self.store.append(event).map_err(|e| {
-            HivemindError::system(
-                "event_append_failed",
-                e.to_string(),
-                "registry:verify_override",
-            )
-        })?;
+        self.store
+            .append(event)
+            .map_err(|e| HivemindError::system("event_append_failed", e.to_string(), origin))?;
+
+        let updated = self.get_flow(&flow.id.to_string())?;
 
         if decision == "pass" {
-            if let Ok(manager) = Self::worktree_manager_for_flow(&flow, &state) {
+            if let Ok(manager) = Self::worktree_manager_for_flow(&updated, &state) {
                 if manager.config().cleanup_on_success {
-                    if let Ok(status) = manager.inspect(flow.id, id) {
+                    if let Ok(status) = manager.inspect(updated.id, id) {
                         if status.is_worktree {
                             let _ = manager.remove(&status.path);
                         }
                     }
                 }
+            }
+
+            let all_success = updated
+                .task_executions
+                .values()
+                .all(|e| e.state == TaskExecState::Success);
+            if all_success {
+                let event = Event::new(
+                    EventPayload::TaskFlowCompleted {
+                        flow_id: updated.id,
+                    },
+                    CorrelationIds::for_graph_flow(
+                        updated.project_id,
+                        updated.graph_id,
+                        updated.id,
+                    ),
+                );
+                let _ = self.store.append(event);
             }
         }
 
@@ -5073,7 +5100,17 @@ mod tests {
 
         let res = registry.verify_override(&t1.id.to_string(), "pass", "reason");
         assert!(res.is_err());
-        assert_eq!(res.unwrap_err().code, "task_not_verifying");
+        assert_eq!(res.unwrap_err().code, "task_not_overridable");
+    }
+
+    #[test]
+    fn verify_override_rejects_empty_reason() {
+        let registry = test_registry();
+        let (_, t1_id) = setup_flow_with_verifying_task(&registry);
+
+        let res = registry.verify_override(&t1_id.to_string(), "pass", "   ");
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "invalid_reason");
     }
 
     #[test]

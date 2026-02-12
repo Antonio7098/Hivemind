@@ -619,23 +619,25 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 **Goal:** Humans are ultimate authority.
 
+**Completed:** 2026-02-12
+
 ### 20.1 Override Actions
-- [ ] Override check failures
-- [ ] Override verifier decision
-- [ ] Direct approval/rejection
-- [ ] Manual retry with reset count
+- [x] Override check failures
+- [x] Override verifier decision
+- [x] Direct approval/rejection
+- [x] Manual retry with reset count
 
 ### 20.2 Override Events
-- [ ] `HumanOverride` with attribution and reason
+- [x] `HumanOverride` with attribution and reason
 
 ### 20.3 Override Commands
-- [ ] `hivemind verify override <task-id> pass|fail --reason <text>`
-- [ ] `hivemind task retry <task-id> --reset-count`
+- [x] `hivemind verify override <task-id> pass|fail --reason <text>`
+- [x] `hivemind task retry <task-id> --reset-count`
 
 ### 20.4 Exit Criteria
-- [ ] Humans can override any automated decision
-- [ ] Overrides are audited
-- [ ] Overrides require reason
+- [x] Humans can override any automated decision
+- [x] Overrides are audited
+- [x] Overrides require reason
 
 Note: admin token/login?
 
