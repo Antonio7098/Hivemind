@@ -12,7 +12,7 @@ use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, Ta
 use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::state::{AppState, AttemptState, Project, Task, TaskState};
 use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
-use crate::storage::event_store::{EventFilter, EventStore, FileEventStore};
+use crate::storage::event_store::{EventFilter, EventStore, IndexedEventStore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
@@ -602,6 +602,25 @@ impl Registry {
                 origin,
             )?;
 
+            self.append_event(
+                Event::new(
+                    EventPayload::TaskExecutionFailed {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id: Some(attempt.id),
+                        reason: Some("scope_violation".to_string()),
+                    },
+                    CorrelationIds::for_graph_flow_task_attempt(
+                        flow.project_id,
+                        flow.graph_id,
+                        flow.id,
+                        task_id,
+                        attempt.id,
+                    ),
+                ),
+                origin,
+            )?;
+
             let violations = verification
                 .violations
                 .iter()
@@ -728,6 +747,18 @@ impl Registry {
                 origin,
             )?;
 
+            self.append_event(
+                Event::new(
+                    EventPayload::TaskExecutionSucceeded {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id: Some(attempt.id),
+                    },
+                    corr_attempt,
+                ),
+                origin,
+            )?;
+
             if let Ok(manager) = Self::worktree_manager_for_flow(&flow, &state) {
                 if manager.config().cleanup_on_success {
                     if let Ok(status) = manager.inspect(flow.id, task_id) {
@@ -781,6 +812,21 @@ impl Registry {
             ),
             origin,
         )?;
+
+        if matches!(to, TaskExecState::Retry | TaskExecState::Failed) {
+            self.append_event(
+                Event::new(
+                    EventPayload::TaskExecutionFailed {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id: Some(attempt.id),
+                        reason: Some("required_checks_failed".to_string()),
+                    },
+                    corr_attempt.clone(),
+                ),
+                origin,
+            )?;
+        }
 
         let failures = results
             .into_iter()
@@ -1359,7 +1405,7 @@ impl Registry {
     /// # Errors
     /// Returns an error if the event store cannot be opened.
     pub fn open_with_config(config: RegistryConfig) -> Result<Self> {
-        let store = FileEventStore::open(config.events_path()).map_err(|e| {
+        let store = IndexedEventStore::open(&config.data_dir).map_err(|e| {
             HivemindError::system("store_open_failed", e.to_string(), "registry:open")
         })?;
 
@@ -1403,6 +1449,16 @@ impl Registry {
     pub fn read_events(&self, filter: &EventFilter) -> Result<Vec<Event>> {
         self.store.read(filter).map_err(|e| {
             HivemindError::system("event_read_failed", e.to_string(), "registry:read_events")
+        })
+    }
+
+    pub fn stream_events(&self, filter: &EventFilter) -> Result<std::sync::mpsc::Receiver<Event>> {
+        self.store.stream(filter).map_err(|e| {
+            HivemindError::system(
+                "event_stream_failed",
+                e.to_string(),
+                "registry:stream_events",
+            )
         })
     }
 
@@ -1704,6 +1760,7 @@ impl Registry {
         }
 
         let mut newly_ready = Vec::new();
+        let mut newly_blocked: Vec<(Uuid, String)> = Vec::new();
         for task_id in graph.tasks.keys() {
             let Some(exec) = flow.task_executions.get(task_id) else {
                 continue;
@@ -1722,7 +1779,61 @@ impl Registry {
 
             if deps_satisfied {
                 newly_ready.push(*task_id);
+            } else {
+                let mut missing: Vec<Uuid> = graph
+                    .dependencies
+                    .get(task_id)
+                    .map(|deps| {
+                        deps.iter()
+                            .filter(|dep| {
+                                flow.task_executions
+                                    .get(dep)
+                                    .is_none_or(|e| e.state != TaskExecState::Success)
+                            })
+                            .copied()
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                missing.sort();
+
+                let preview = missing
+                    .iter()
+                    .take(5)
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let reason = if missing.len() <= 5 {
+                    format!("Waiting on dependencies: {preview}")
+                } else {
+                    format!(
+                        "Waiting on dependencies: {preview} (+{} more)",
+                        missing.len().saturating_sub(5)
+                    )
+                };
+
+                if exec.blocked_reason.as_deref() != Some(reason.as_str()) {
+                    newly_blocked.push((*task_id, reason));
+                }
             }
+        }
+
+        for (task_id, reason) in newly_blocked {
+            let event = Event::new(
+                EventPayload::TaskBlocked {
+                    flow_id: flow.id,
+                    task_id,
+                    reason: Some(reason),
+                },
+                CorrelationIds::for_graph_flow_task(
+                    flow.project_id,
+                    flow.graph_id,
+                    flow.id,
+                    task_id,
+                ),
+            );
+            self.store.append(event).map_err(|e| {
+                HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
+            })?;
         }
 
         for task_id in newly_ready {
@@ -2939,6 +3050,40 @@ impl Registry {
             .get_graph(graph_id)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
         let issues = Self::validate_graph_issues(&graph);
+
+        if graph.state == GraphState::Draft {
+            let valid = issues.is_empty();
+            let event = Event::new(
+                EventPayload::TaskGraphValidated {
+                    graph_id: graph.id,
+                    project_id: graph.project_id,
+                    valid,
+                    issues: issues.clone(),
+                },
+                CorrelationIds::for_graph(graph.project_id, graph.id),
+            );
+            self.store.append(event).map_err(|e| {
+                HivemindError::system("event_append_failed", e.to_string(), "registry:create_flow")
+            })?;
+
+            if valid {
+                let event = Event::new(
+                    EventPayload::TaskGraphLocked {
+                        graph_id: graph.id,
+                        project_id: graph.project_id,
+                    },
+                    CorrelationIds::for_graph(graph.project_id, graph.id),
+                );
+                self.store.append(event).map_err(|e| {
+                    HivemindError::system(
+                        "event_append_failed",
+                        e.to_string(),
+                        "registry:create_flow",
+                    )
+                })?;
+            }
+        }
+
         if !issues.is_empty() {
             let err = HivemindError::user(
                 "graph_invalid",
@@ -3370,6 +3515,19 @@ impl Registry {
 
         self.append_event(
             Event::new(
+                EventPayload::TaskExecutionStarted {
+                    flow_id: flow.id,
+                    task_id: id,
+                    attempt_id,
+                    attempt_number,
+                },
+                corr_attempt.clone(),
+            ),
+            origin,
+        )?;
+
+        self.append_event(
+            Event::new(
                 EventPayload::BaselineCaptured {
                     flow_id: flow.id,
                     task_id: id,
@@ -3523,6 +3681,19 @@ impl Registry {
             CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
         );
 
+        self.store.append(event).map_err(|e| {
+            HivemindError::system("event_append_failed", e.to_string(), "registry:abort_task")
+        })?;
+
+        let event = Event::new(
+            EventPayload::TaskExecutionFailed {
+                flow_id: flow.id,
+                task_id: id,
+                attempt_id: None,
+                reason: Some("aborted".to_string()),
+            },
+            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
+        );
         self.store.append(event).map_err(|e| {
             HivemindError::system("event_append_failed", e.to_string(), "registry:abort_task")
         })?;

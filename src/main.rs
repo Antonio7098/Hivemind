@@ -905,6 +905,8 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::DependencyAdded { .. } => "graph_dependency_added",
         EventPayload::GraphTaskCheckAdded { .. } => "graph_task_check_added",
         EventPayload::ScopeAssigned { .. } => "graph_scope_assigned",
+        EventPayload::TaskGraphValidated { .. } => "graph_validated",
+        EventPayload::TaskGraphLocked { .. } => "graph_locked",
         EventPayload::TaskFlowCreated { .. } => "flow_created",
         EventPayload::TaskFlowStarted { .. } => "flow_started",
         EventPayload::TaskFlowPaused { .. } => "flow_paused",
@@ -913,7 +915,10 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::TaskFlowAborted { .. } => "flow_aborted",
         EventPayload::TaskReady { .. } => "task_ready",
         EventPayload::TaskBlocked { .. } => "task_blocked",
-        EventPayload::TaskExecutionStateChanged { .. } => "task_exec_state_changed",
+        EventPayload::TaskExecutionStateChanged { .. } => "task_execution_state_changed",
+        EventPayload::TaskExecutionStarted { .. } => "task_execution_started",
+        EventPayload::TaskExecutionSucceeded { .. } => "task_execution_succeeded",
+        EventPayload::TaskExecutionFailed { .. } => "task_execution_failed",
         EventPayload::AttemptStarted { .. } => "attempt_started",
         EventPayload::BaselineCaptured { .. } => "baseline_captured",
         EventPayload::FileModified { .. } => "file_modified",
@@ -1086,10 +1091,19 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
                 }
             }
 
-            let events = match registry.read_events(&filter) {
-                Ok(evs) => evs,
+            let rx = match registry.stream_events(&filter) {
+                Ok(r) => r,
                 Err(e) => return output_error(&e, format),
             };
+
+            let mut events = Vec::new();
+            let idle_timeout = std::time::Duration::from_millis(1000);
+            while let Ok(ev) = rx.recv_timeout(idle_timeout) {
+                events.push(ev);
+                if events.len() >= args.limit {
+                    break;
+                }
+            }
 
             match format {
                 OutputFormat::Json => {

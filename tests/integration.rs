@@ -377,6 +377,171 @@ fn cli_graph_flow_and_task_control_smoke() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
+fn scheduler_emits_task_blocked_and_respects_dependency_order() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--binary-path",
+            "/usr/bin/env",
+            "--arg",
+            "sh",
+            "--arg",
+            "-c",
+            "--arg",
+            "exit 0",
+            "--timeout-ms",
+            "1000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out1, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out1
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, out2, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t2"]);
+    assert_eq!(code, 0, "{err}");
+    let t2_id = out2
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "graph",
+            "create",
+            "proj",
+            "g1",
+            "--from-tasks",
+            &t1_id,
+            &t2_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "add-dependency", &graph_id, &t1_id, &t2_id],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["graph", "validate", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "200",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let events_json: serde_json::Value = serde_json::from_str(&events_out).expect("events json");
+    let data = events_json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .expect("events data");
+
+    let blocked_idx = data
+        .iter()
+        .enumerate()
+        .find_map(|(idx, ev)| {
+            let payload = ev.get("payload")?;
+            let typ = payload.get("type")?.as_str()?;
+            if typ != "task_blocked" {
+                return None;
+            }
+            let task_id = payload.get("task_id")?.as_str()?;
+            if task_id != t2_id {
+                return None;
+            }
+            Some(idx)
+        })
+        .expect("expected task_blocked for t2");
+
+    let started_t1 = data
+        .iter()
+        .enumerate()
+        .find_map(|(idx, ev)| {
+            let payload = ev.get("payload")?;
+            let typ = payload.get("type")?.as_str()?;
+            if typ != "task_execution_started" {
+                return None;
+            }
+            let task_id = payload.get("task_id")?.as_str()?;
+            if task_id != t1_id {
+                return None;
+            }
+            Some(idx)
+        })
+        .expect("expected task_execution_started for t1");
+
+    let started_t2 = data
+        .iter()
+        .enumerate()
+        .find_map(|(idx, ev)| {
+            let payload = ev.get("payload")?;
+            let typ = payload.get("type")?.as_str()?;
+            if typ != "task_execution_started" {
+                return None;
+            }
+            let task_id = payload.get("task_id")?.as_str()?;
+            if task_id != t2_id {
+                return None;
+            }
+            Some(idx)
+        })
+        .expect("expected task_execution_started for t2");
+
+    assert!(
+        blocked_idx < started_t1,
+        "t1 should be blocked before it starts"
+    );
+    assert!(started_t1 < started_t2, "t1 must start before t2");
+}
+
+#[test]
 fn cli_attempt_inspect_diff_after_manual_execution() {
     let tmp = tempfile::tempdir().expect("tempdir");
 

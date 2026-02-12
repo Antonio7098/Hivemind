@@ -119,6 +119,8 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::DependencyAdded { .. } => "DependencyAdded",
         EventPayload::GraphTaskCheckAdded { .. } => "GraphTaskCheckAdded",
         EventPayload::ScopeAssigned { .. } => "ScopeAssigned",
+        EventPayload::TaskGraphValidated { .. } => "TaskGraphValidated",
+        EventPayload::TaskGraphLocked { .. } => "TaskGraphLocked",
         EventPayload::TaskFlowCreated { .. } => "TaskFlowCreated",
         EventPayload::TaskFlowStarted { .. } => "TaskFlowStarted",
         EventPayload::TaskFlowPaused { .. } => "TaskFlowPaused",
@@ -128,6 +130,9 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::TaskReady { .. } => "TaskReady",
         EventPayload::TaskBlocked { .. } => "TaskBlocked",
         EventPayload::TaskExecutionStateChanged { .. } => "TaskExecutionStateChanged",
+        EventPayload::TaskExecutionStarted { .. } => "TaskExecutionStarted",
+        EventPayload::TaskExecutionSucceeded { .. } => "TaskExecutionSucceeded",
+        EventPayload::TaskExecutionFailed { .. } => "TaskExecutionFailed",
         EventPayload::AttemptStarted { .. } => "AttemptStarted",
         EventPayload::BaselineCaptured { .. } => "BaselineCaptured",
         EventPayload::FileModified { .. } => "FileModified",
@@ -173,7 +178,9 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskAddedToGraph { .. }
         | EventPayload::DependencyAdded { .. }
         | EventPayload::GraphTaskCheckAdded { .. }
-        | EventPayload::ScopeAssigned { .. } => "graph",
+        | EventPayload::ScopeAssigned { .. }
+        | EventPayload::TaskGraphValidated { .. }
+        | EventPayload::TaskGraphLocked { .. } => "graph",
 
         EventPayload::TaskFlowCreated { .. }
         | EventPayload::TaskFlowStarted { .. }
@@ -185,6 +192,9 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         EventPayload::TaskReady { .. }
         | EventPayload::TaskBlocked { .. }
         | EventPayload::TaskExecutionStateChanged { .. }
+        | EventPayload::TaskExecutionStarted { .. }
+        | EventPayload::TaskExecutionSucceeded { .. }
+        | EventPayload::TaskExecutionFailed { .. }
         | EventPayload::AttemptStarted { .. }
         | EventPayload::RetryContextAssembled { .. }
         | EventPayload::TaskRetryRequested { .. }

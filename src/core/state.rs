@@ -317,6 +317,30 @@ impl AppState {
                     }
                 }
             }
+
+            EventPayload::TaskGraphValidated {
+                graph_id,
+                project_id: _,
+                valid,
+                issues: _,
+            } => {
+                if *valid {
+                    if let Some(graph) = self.graphs.get_mut(graph_id) {
+                        graph.state = GraphState::Validated;
+                        graph.updated_at = timestamp;
+                    }
+                }
+            }
+
+            EventPayload::TaskGraphLocked {
+                graph_id,
+                project_id: _,
+            } => {
+                if let Some(graph) = self.graphs.get_mut(graph_id) {
+                    graph.state = GraphState::Locked;
+                    graph.updated_at = timestamp;
+                }
+            }
             EventPayload::TaskFlowCreated {
                 flow_id,
                 graph_id,
@@ -505,6 +529,9 @@ impl AppState {
             }
 
             EventPayload::CheckStarted { .. }
+            | EventPayload::TaskExecutionStarted { .. }
+            | EventPayload::TaskExecutionSucceeded { .. }
+            | EventPayload::TaskExecutionFailed { .. }
             | EventPayload::ErrorOccurred { .. }
             | EventPayload::FileModified { .. }
             | EventPayload::CheckpointCommitCreated { .. }
