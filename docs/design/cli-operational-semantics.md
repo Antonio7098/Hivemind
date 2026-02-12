@@ -1035,13 +1035,16 @@ hivemind verify override <task-id> <pass|fail> --reason <text>
 ```
 
 **Preconditions:**
-- Task exists and is in VERIFYING state
+- Task exists and is part of a TaskFlow
+- Task execution state is `verifying`, `retry`, `failed`, or `escalated`
+- `--reason` is non-empty
 - User has override authority
 
 **Effects:**
 - Verification outcome overridden
 - Task transitions based on override (SUCCESS or FAILED)
 - Override recorded with attribution
+- If the override causes all tasks in the flow to be `success`, the flow may complete
 
 **Events:**
 ```
@@ -1053,12 +1056,18 @@ HumanOverride:
   user: <current-user>
 ```
 
-**Failures:**
-- `TASK_NOT_FOUND`
-- `TASK_NOT_VERIFYING`: Task is not in verification state
-- `OVERRIDE_NOT_PERMITTED`: Policy forbids override
+**Attribution:**
+- The CLI/registry will attribute the override to `HIVEMIND_USER` if set, otherwise `USER`.
 
-**Idempotence:** Not idempotent. Only valid during VERIFYING state.
+**Failures:**
+- `invalid_task_id`
+- `task_not_in_flow`: Task is not part of any flow
+- `flow_not_active`: Flow is completed or aborted
+- `invalid_decision`: Decision must be `pass` or `fail`
+- `invalid_reason`: Reason must be non-empty
+- `task_not_overridable`: Task is not in an overridable state
+
+**Idempotence:** Not idempotent. Only valid while the task is in an overridable execution state.
 
 ---
 

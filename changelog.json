@@ -4,6 +4,28 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.10",
+      "date": "2026-02-12",
+      "phase": 20,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Require reason + record attribution for human verification overrides and allow overriding automated outcomes"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add CLI integration coverage asserting human overrides can force success after failed required checks and are audited via events"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Align CLI operational semantics for verify override with expanded override states and required reason"
+        }
+      ]
+    },
+    {
       "version": "v0.1.9",
       "date": "2026-02-10",
       "phase": 17,
