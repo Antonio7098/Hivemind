@@ -679,6 +679,7 @@ fn list_ui_events(registry: &Registry, limit: usize) -> Result<Vec<UiEvent>> {
     Ok(ui_events)
 }
 
+#[allow(clippy::too_many_lines)]
 fn handle_api_request_inner(
     method: ApiMethod,
     url: &str,
@@ -790,7 +791,7 @@ fn handle_api_request_inner(
                     "server:verify:results",
                 )
             })?;
-            let output = query.get("output").map(|v| v == "true").unwrap_or(false);
+            let output = query.get("output").is_some_and(|v| v == "true");
             let attempt = registry.get_attempt(attempt_id)?;
             let check_results = attempt
                 .check_results
@@ -830,7 +831,7 @@ fn handle_api_request_inner(
                     "server:attempts:inspect",
                 )
             })?;
-            let include_diff = query.get("diff").map(|v| v == "true").unwrap_or(false);
+            let include_diff = query.get("diff").is_some_and(|v| v == "true");
             let attempt = registry.get_attempt(attempt_id)?;
             let diff = if include_diff {
                 registry.get_attempt_diff(attempt_id)?
@@ -1239,8 +1240,8 @@ fn handle_api_request_inner(
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
-        "/health" => method_not_allowed(path, method, "GET"),
-        "/api/version"
+        "/health"
+        | "/api/version"
         | "/api/catalog"
         | "/api/state"
         | "/api/projects"
