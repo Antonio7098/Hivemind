@@ -269,6 +269,11 @@ Capabilities:
 Capabilities:
 - Inspect adapter logs
 - Test adapter health
+- Inspect runtime observational projection events (commands, tools, todo snapshots, narrative)
+
+Constraints:
+- Projection events are telemetry only and never authoritative execution state
+- Absence of projection events must not imply runtime failure
 
 ---
 

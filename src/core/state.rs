@@ -586,6 +586,10 @@ impl AppState {
             | EventPayload::RuntimeExited { .. }
             | EventPayload::RuntimeTerminated { .. }
             | EventPayload::RuntimeFilesystemObserved { .. }
+            | EventPayload::RuntimeCommandObserved { .. }
+            | EventPayload::RuntimeToolCallObserved { .. }
+            | EventPayload::RuntimeTodoSnapshotUpdated { .. }
+            | EventPayload::RuntimeNarrativeOutputObserved { .. }
             | EventPayload::FileModified { .. }
             | EventPayload::CheckpointCommitCreated { .. }
             | EventPayload::ScopeValidated { .. }

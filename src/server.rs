@@ -163,6 +163,10 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::RuntimeExited { .. } => "RuntimeExited",
         EventPayload::RuntimeTerminated { .. } => "RuntimeTerminated",
         EventPayload::RuntimeFilesystemObserved { .. } => "RuntimeFilesystemObserved",
+        EventPayload::RuntimeCommandObserved { .. } => "RuntimeCommandObserved",
+        EventPayload::RuntimeToolCallObserved { .. } => "RuntimeToolCallObserved",
+        EventPayload::RuntimeTodoSnapshotUpdated { .. } => "RuntimeTodoSnapshotUpdated",
+        EventPayload::RuntimeNarrativeOutputObserved { .. } => "RuntimeNarrativeOutputObserved",
         EventPayload::Unknown => "Unknown",
     }
 }
@@ -233,6 +237,10 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::RuntimeExited { .. }
         | EventPayload::RuntimeTerminated { .. }
         | EventPayload::RuntimeFilesystemObserved { .. }
+        | EventPayload::RuntimeCommandObserved { .. }
+        | EventPayload::RuntimeToolCallObserved { .. }
+        | EventPayload::RuntimeTodoSnapshotUpdated { .. }
+        | EventPayload::RuntimeNarrativeOutputObserved { .. }
         | EventPayload::Unknown => "runtime",
 
         EventPayload::FileModified { .. }

@@ -955,6 +955,10 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::RuntimeExited { .. } => "runtime_exited",
         EventPayload::RuntimeTerminated { .. } => "runtime_terminated",
         EventPayload::RuntimeFilesystemObserved { .. } => "runtime_filesystem_observed",
+        EventPayload::RuntimeCommandObserved { .. } => "runtime_command_observed",
+        EventPayload::RuntimeToolCallObserved { .. } => "runtime_tool_call_observed",
+        EventPayload::RuntimeTodoSnapshotUpdated { .. } => "runtime_todo_snapshot_updated",
+        EventPayload::RuntimeNarrativeOutputObserved { .. } => "runtime_narrative_output_observed",
         EventPayload::Unknown => "unknown",
     }
 }

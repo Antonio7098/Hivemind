@@ -7,6 +7,7 @@ pub mod events;
 pub mod flow;
 pub mod graph;
 pub mod registry;
+pub mod runtime_event_projection;
 pub mod scheduler;
 pub mod scope;
 pub mod state;

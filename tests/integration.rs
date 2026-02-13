@@ -1116,7 +1116,7 @@ fn cli_runtime_config_and_flow_tick() {
             "--arg",
             "-c",
             "--arg",
-            "echo stdout_line; echo stderr_line 1>&2; printf data > hm_phase14.txt",
+            "echo '$ cargo test'; echo 'Tool: grep'; echo '- [ ] collect logs'; echo '- [x] collect logs'; echo 'I will verify outputs'; echo stderr_line 1>&2; printf data > hm_phase14.txt",
             "--timeout-ms",
             "1000",
         ],
@@ -1165,4 +1165,8 @@ fn cli_runtime_config_and_flow_tick() {
         "{out}"
     );
     assert!(out.contains("runtime_filesystem_observed"), "{out}");
+    assert!(out.contains("runtime_command_observed"), "{out}");
+    assert!(out.contains("runtime_tool_call_observed"), "{out}");
+    assert!(out.contains("runtime_todo_snapshot_updated"), "{out}");
+    assert!(out.contains("runtime_narrative_output_observed"), "{out}");
 }

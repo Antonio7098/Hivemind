@@ -160,10 +160,26 @@ RuntimeOutputChunk:
   content: "Running tests..."  ← Captured output
 
 RuntimeStarted:
-  pid: 12345
+  attempt_id: "..."
+
+RuntimeCommandObserved:
+  command: "cargo test"
+
+RuntimeToolCallObserved:
+  tool_name: "grep"
+
+RuntimeTodoSnapshotUpdated:
+  items: ["[ ] collect logs", "[x] collect logs"]
+
+RuntimeNarrativeOutputObserved:
+  content: "I will verify outputs"
 ```
 
-These are useful for debugging but not for state reconstruction.
+These are useful for debugging and UX projections but not for state reconstruction.
+
+Projection-specific runtime events are non-authoritative observations. They must
+never influence scheduler release, verification outcomes, retry policy, or
+merge decisions.
 
 ---
 
