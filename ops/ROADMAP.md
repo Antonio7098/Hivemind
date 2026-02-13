@@ -758,37 +758,39 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 > **Invariant:** Checkpoints are orchestration state transitions derived from events, not parsed runtime output.
 
+**Completed:** 2026-02-13
+
 ### 24.1 Checkpoint Lifecycle Model
-- [ ] Add ordered checkpoint model on graph tasks/attempts
-- [ ] Emit checkpoint lifecycle events: `CheckpointDeclared`, `CheckpointActivated`, `CheckpointCompleted`, `AllCheckpointsCompleted`
-- [ ] Ensure attempt start declares all checkpoints and activates the first
+- [x] Add ordered checkpoint model on graph tasks/attempts
+- [x] Emit checkpoint lifecycle events: `CheckpointDeclared`, `CheckpointActivated`, `CheckpointCompleted`, `AllCheckpointsCompleted`
+- [x] Ensure attempt start declares all checkpoints and activates the first
 
 ### 24.2 CLI & Commit Semantics
-- [ ] Add CLI command: `hivemind checkpoint complete --attempt-id <attempt-id> --id <checkpoint-id> [--summary "..."]`
-- [ ] Validate completion preconditions (exists, active, running, ordered)
-- [ ] Create canonical checkpoint commits with structured metadata header/body
+- [x] Add CLI command: `hivemind checkpoint complete --attempt-id <attempt-id> --id <checkpoint-id> [--summary "..."]`
+- [x] Validate completion preconditions (exists, active, running, ordered)
+- [x] Create canonical checkpoint commits with structured metadata header/body
 
 ### 24.3 Execution Integration
-- [ ] Prevent task completion while checkpoints remain incomplete
-- [ ] Emit `CheckpointCommitCreated` on checkpoint completion
-- [ ] Integrate checkpoint guidance/context into runtime execution input
+- [x] Prevent task completion while checkpoints remain incomplete
+- [x] Emit `CheckpointCommitCreated` on checkpoint completion
+- [x] Integrate checkpoint guidance/context into runtime execution input
 
 ### 24.4 Retry & Replay
-- [ ] Retry creates fresh attempt checkpoint sequence (no reuse)
-- [ ] Replay deterministically reconstructs checkpoint state per attempt
-- [ ] Preserve historical checkpoint lifecycle across attempts
+- [x] Retry creates fresh attempt checkpoint sequence (no reuse)
+- [x] Replay deterministically reconstructs checkpoint state per attempt
+- [x] Preserve historical checkpoint lifecycle across attempts
 
 ### 24.5 Testing
-- [ ] Unit/integration coverage for checkpoint declaration, activation, completion, ordering, and guards
-- [ ] Manual OpenCode run with `opencode/big-pickle` demonstrating checkpoint usage
-- [ ] Validate projected runtime events remain observable (`runtime_command_observed`, `runtime_tool_call_observed`, `runtime_todo_snapshot_updated`, `runtime_narrative_output_observed`)
+- [x] Unit/integration coverage for checkpoint declaration, activation, completion, ordering, and guards
+- [x] Manual OpenCode run with `opencode/big-pickle` demonstrating checkpoint usage
+- [x] Validate projected runtime events remain observable (`runtime_command_observed`, `runtime_tool_call_observed`, `runtime_todo_snapshot_updated`, `runtime_narrative_output_observed`)
 
 ### 24.6 Exit Criteria
-- [ ] Agent/runtime can complete checkpoints via CLI during execution
-- [ ] Event log fully captures checkpoint lifecycle
-- [ ] Canonical checkpoint commits are deterministic and attributable
-- [ ] Task completion is blocked until all checkpoints complete
-- [ ] Automated and manual validation pass
+- [x] Agent/runtime can complete checkpoints via CLI during execution
+- [x] Event log fully captures checkpoint lifecycle
+- [x] Canonical checkpoint commits are deterministic and attributable
+- [x] Task completion is blocked until all checkpoints complete
+- [x] Automated and manual validation pass
 
 ---
 
