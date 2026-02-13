@@ -12,6 +12,28 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AttemptCheckpointState {
+    Declared,
+    Active,
+    Completed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttemptCheckpoint {
+    pub checkpoint_id: String,
+    pub order: u32,
+    pub total: u32,
+    pub state: AttemptCheckpointState,
+    #[serde(default)]
+    pub commit_hash: Option<String>,
+    #[serde(default)]
+    pub completed_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub summary: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttemptState {
     pub id: Uuid,
@@ -23,6 +45,10 @@ pub struct AttemptState {
     pub diff_id: Option<Uuid>,
     #[serde(default)]
     pub check_results: Vec<CheckResult>,
+    #[serde(default)]
+    pub checkpoints: Vec<AttemptCheckpoint>,
+    #[serde(default)]
+    pub all_checkpoints_completed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -525,8 +551,81 @@ impl AppState {
                         baseline_id: None,
                         diff_id: None,
                         check_results: Vec::new(),
+                        checkpoints: Vec::new(),
+                        all_checkpoints_completed: false,
                     },
                 );
+            }
+
+            EventPayload::CheckpointDeclared {
+                attempt_id,
+                checkpoint_id,
+                order,
+                total,
+                ..
+            } => {
+                if let Some(attempt) = self.attempts.get_mut(attempt_id) {
+                    let exists = attempt
+                        .checkpoints
+                        .iter()
+                        .any(|cp| cp.checkpoint_id == *checkpoint_id);
+                    if !exists {
+                        attempt.checkpoints.push(AttemptCheckpoint {
+                            checkpoint_id: checkpoint_id.clone(),
+                            order: *order,
+                            total: *total,
+                            state: AttemptCheckpointState::Declared,
+                            commit_hash: None,
+                            completed_at: None,
+                            summary: None,
+                        });
+                        attempt.checkpoints.sort_by_key(|cp| cp.order);
+                    }
+                }
+            }
+
+            EventPayload::CheckpointActivated {
+                attempt_id,
+                checkpoint_id,
+                ..
+            } => {
+                if let Some(attempt) = self.attempts.get_mut(attempt_id) {
+                    for cp in &mut attempt.checkpoints {
+                        if cp.checkpoint_id == *checkpoint_id {
+                            cp.state = AttemptCheckpointState::Active;
+                        } else if cp.state != AttemptCheckpointState::Completed {
+                            cp.state = AttemptCheckpointState::Declared;
+                        }
+                    }
+                }
+            }
+
+            EventPayload::CheckpointCompleted {
+                attempt_id,
+                checkpoint_id,
+                commit_hash,
+                timestamp,
+                summary,
+                ..
+            } => {
+                if let Some(attempt) = self.attempts.get_mut(attempt_id) {
+                    if let Some(cp) = attempt
+                        .checkpoints
+                        .iter_mut()
+                        .find(|cp| cp.checkpoint_id == *checkpoint_id)
+                    {
+                        cp.state = AttemptCheckpointState::Completed;
+                        cp.commit_hash = Some(commit_hash.clone());
+                        cp.completed_at = Some(*timestamp);
+                        cp.summary.clone_from(summary);
+                    }
+                }
+            }
+
+            EventPayload::AllCheckpointsCompleted { attempt_id, .. } => {
+                if let Some(attempt) = self.attempts.get_mut(attempt_id) {
+                    attempt.all_checkpoints_completed = true;
+                }
             }
 
             EventPayload::BaselineCaptured {

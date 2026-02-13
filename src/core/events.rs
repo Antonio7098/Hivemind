@@ -498,6 +498,41 @@ pub enum EventPayload {
         operation: String,
     },
 
+    CheckpointDeclared {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        checkpoint_id: String,
+        order: u32,
+        total: u32,
+    },
+
+    CheckpointActivated {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        checkpoint_id: String,
+        order: u32,
+    },
+
+    CheckpointCompleted {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        checkpoint_id: String,
+        order: u32,
+        commit_hash: String,
+        timestamp: DateTime<Utc>,
+        #[serde(default)]
+        summary: Option<String>,
+    },
+
+    AllCheckpointsCompleted {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+    },
+
     CheckpointCommitCreated {
         flow_id: Uuid,
         task_id: Uuid,

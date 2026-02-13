@@ -752,13 +752,53 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 ---
 
-## Phase 24: Single-Repo End-to-End
+## Phase 24: Execution Checkpoints
+
+**Goal:** Introduce first-class, replay-safe execution checkpoints within task attempts.
+
+> **Invariant:** Checkpoints are orchestration state transitions derived from events, not parsed runtime output.
+
+### 24.1 Checkpoint Lifecycle Model
+- [ ] Add ordered checkpoint model on graph tasks/attempts
+- [ ] Emit checkpoint lifecycle events: `CheckpointDeclared`, `CheckpointActivated`, `CheckpointCompleted`, `AllCheckpointsCompleted`
+- [ ] Ensure attempt start declares all checkpoints and activates the first
+
+### 24.2 CLI & Commit Semantics
+- [ ] Add CLI command: `hivemind checkpoint complete --attempt-id <attempt-id> --id <checkpoint-id> [--summary "..."]`
+- [ ] Validate completion preconditions (exists, active, running, ordered)
+- [ ] Create canonical checkpoint commits with structured metadata header/body
+
+### 24.3 Execution Integration
+- [ ] Prevent task completion while checkpoints remain incomplete
+- [ ] Emit `CheckpointCommitCreated` on checkpoint completion
+- [ ] Integrate checkpoint guidance/context into runtime execution input
+
+### 24.4 Retry & Replay
+- [ ] Retry creates fresh attempt checkpoint sequence (no reuse)
+- [ ] Replay deterministically reconstructs checkpoint state per attempt
+- [ ] Preserve historical checkpoint lifecycle across attempts
+
+### 24.5 Testing
+- [ ] Unit/integration coverage for checkpoint declaration, activation, completion, ordering, and guards
+- [ ] Manual OpenCode run with `opencode/big-pickle` demonstrating checkpoint usage
+- [ ] Validate projected runtime events remain observable (`runtime_command_observed`, `runtime_tool_call_observed`, `runtime_todo_snapshot_updated`, `runtime_narrative_output_observed`)
+
+### 24.6 Exit Criteria
+- [ ] Agent/runtime can complete checkpoints via CLI during execution
+- [ ] Event log fully captures checkpoint lifecycle
+- [ ] Canonical checkpoint commits are deterministic and attributable
+- [ ] Task completion is blocked until all checkpoints complete
+- [ ] Automated and manual validation pass
+
+---
+
+## Phase 25: Single-Repo End-to-End
 
 **Goal:** Complete workflow for single-repo projects.
 
 > **User Story 3:** Structured TaskFlow end-to-end.
 
-### 24.1 Integration Test
+### 25.1 Integration Test
 - [ ] Create project with repo
 - [ ] Create tasks with scopes
 - [ ] Build TaskGraph
@@ -768,7 +808,7 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 - [ ] Retry on failure
 - [ ] Merge on success
 
-### 24.2 Exit Criteria
+### 25.2 Exit Criteria
 - [ ] Full workflow works end-to-end
 - [ ] All events emitted correctly
 - [ ] State derived purely from events
@@ -777,22 +817,22 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 ---
 
-## Phase 25: Parallel Execution
+## Phase 26: Parallel Execution
 
 **Goal:** Safe parallel agent execution.
 
 > **User Story 5:** Parallel scoped agents.
 
-### 25.1 Scope-Based Parallelism
+### 26.1 Scope-Based Parallelism
 - [ ] Scheduler allows parallel tasks if scopes compatible
 - [ ] Hard conflicts → serialize or isolate
 - [ ] Soft conflicts → warn or isolate
 
-### 25.2 Parallel Worktrees
+### 26.2 Parallel Worktrees
 - [ ] Multiple worktrees active simultaneously
 - [ ] Each task has isolated worktree
 
-### 25.3 Exit Criteria
+### 26.3 Exit Criteria
 - [ ] Compatible tasks run in parallel
 - [ ] Conflicts handled correctly
 - [ ] No corruption from parallel execution
@@ -800,26 +840,26 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 ---
 
-## Phase 26: Multi-Repo Support
+## Phase 27: Multi-Repo Support
 
 **Goal:** TaskFlows spanning multiple repositories.
 
 > **User Story 7:** Multi-repo project execution.
 
-### 26.1 Multi-Repo Worktrees
+### 27.1 Multi-Repo Worktrees
 - [ ] Worktree per repo per task
 - [ ] Agent receives all repo paths
 
-### 26.2 Multi-Repo Scope
+### 27.2 Multi-Repo Scope
 - [ ] Scope evaluated per repo
 - [ ] Violation in any repo fails task
 
-### 26.3 Multi-Repo Merge
+### 27.3 Multi-Repo Merge
 - [ ] Atomicity at TaskFlow level (default)
 - [ ] All repos merge or none merge
 - [ ] Partial failure handling
 
-### 26.4 Exit Criteria
+### 27.4 Exit Criteria
 - [ ] Tasks can modify multiple repos
 - [ ] Scope enforced per repo
 - [ ] Merge is atomic across repos
@@ -827,73 +867,73 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 ---
 
-## Phase 27: Additional Runtime Adapters
+## Phase 28: Additional Runtime Adapters
 
 **Goal:** Support multiple runtimes.
 
-### 27.1 Claude Code Adapter
+### 28.1 Claude Code Adapter
 - [ ] Implement ClaudeCodeAdapter
 - [ ] Test integration
 
-### 27.2 Codex CLI Adapter
+### 28.2 Codex CLI Adapter
 - [ ] Implement CodexAdapter
 - [ ] Test integration
 
-### 27.3 Gemini CLI Adapter
+### 28.3 Gemini CLI Adapter
 - [ ] Implement GeminiAdapter
 - [ ] Test integration
 
-### 27.4 Runtime Selection
+### 28.4 Runtime Selection
 - [ ] Per-project default runtime
 - [ ] Per-task override
 - [ ] `hivemind runtime list`
 - [ ] `hivemind runtime health`
 
-### 27.5 Exit Criteria
+### 28.5 Exit Criteria
 - [ ] Multiple runtimes work
 - [ ] Runtime selection works
 - [ ] Same TaskFlow semantics across runtimes
 
 ---
 
-## Phase 28: Event Streaming & Observability
+## Phase 29: Event Streaming & Observability
 
 **Goal:** Real-time observability.
 
-### 28.1 Event Stream Command
+### 29.1 Event Stream Command
 - [ ] `hivemind events stream` (real-time)
 - [ ] Filters: --flow, --task, --since
 
-### 28.2 Event Query Command
+### 29.2 Event Query Command
 - [ ] `hivemind events list` (historical)
 - [ ] `hivemind events inspect <event-id>`
 - [ ] Correlation filtering
 - [ ] Time range filtering
 
-### 28.3 Exit Criteria
+### 29.3 Exit Criteria
 - [ ] Real-time event stream works
 - [ ] Historical queries work
 - [ ] Events are the complete record
 
 ---
 
-## Phase 29: Automation & Scheduling
+## Phase 30: Automation & Scheduling
 
 **Goal:** Triggered TaskFlows.
 
 > **User Story 9:** Scheduled TaskFlows.
 
-### 29.1 Automation Events
+### 30.1 Automation Events
 - [ ] `AutomationCreated`
 - [ ] `AutomationTriggered`
 
-### 29.2 Automation Commands
+### 30.2 Automation Commands
 - [ ] `hivemind automation create <flow> --schedule <cron>`
 - [ ] `hivemind automation list`
 - [ ] `hivemind automation disable`
 - [ ] `hivemind automation trigger` (manual)
 
-### 29.3 Exit Criteria
+### 30.3 Exit Criteria
 - [ ] Scheduled triggers work
 - [ ] Manual triggers work
 - [ ] Automations are observable
@@ -901,68 +941,68 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 ---
 
-## Phase 30: Agent Meta-Operation
+## Phase 31: Agent Meta-Operation
 
 **Goal:** Agents can operate Hivemind itself.
 
-### 30.1 CLI as API
+### 31.1 CLI as API
 - [ ] All commands scriptable
 - [ ] JSON output reliable
 - [ ] Exit codes semantic
 
-### 30.2 Attribution
+### 31.2 Attribution
 - [ ] Agent actions attributed in events
 - [ ] Scope applies to meta-operations
 
-### 30.3 Exit Criteria
+### 31.3 Exit Criteria
 - [ ] Agents can invoke CLI commands
 - [ ] Actions are audited
 - [ ] Meta-orchestration possible
 
 ---
 
-## Phase 31: UI Foundation (Optional)
+## Phase 32: UI Foundation (Optional)
 
 **Goal:** UI is a projection over CLI-accessible state.
 
-### 31.1 Views
+### 32.1 Views
 - [ ] Project overview
 - [ ] Task list / Kanban
 - [ ] TaskFlow document view
 - [ ] Dependency graph
 - [ ] Diff and verification views
 
-### 31.2 Principles
+### 32.2 Principles
 - [ ] UI reads via CLI/events only
 - [ ] UI does not modify state directly
 - [ ] UI is secondary to CLI
 
-### 31.3 Exit Criteria
+### 32.3 Exit Criteria
 - [ ] UI reflects CLI state accurately
 - [ ] No UI-only features
 
 ---
 
-## Phase 32: Production Hardening
+## Phase 33: Production Hardening
 
 **Goal:** Production-ready quality.
 
-### 32.1 Error Handling
+### 33.1 Error Handling
 - [ ] All error paths tested
 - [ ] Recovery hints useful
 - [ ] No silent failures
 
-### 32.2 Performance
+### 33.2 Performance
 - [ ] Event replay scales to 10k+ events
 - [ ] CLI response time < 100ms for reads
 - [ ] Parallel execution efficient
 
-### 32.3 Documentation
+### 33.3 Documentation
 - [ ] CLI help complete
 - [ ] Architecture docs match implementation
 - [ ] User guide written
 
-### 32.4 Exit Criteria
+### 33.4 Exit Criteria
 - [ ] All user stories achievable
 - [ ] All principles upheld
 - [ ] Ready for real use
@@ -974,14 +1014,14 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 | User Story | Phase |
 |------------|-------|
 | US1: Simple Todo Tracking | Phase 6 |
-| US2: Manual Agent Assistance | Phase 24 |
-| US3: Structured TaskFlow | Phase 24 |
+| US2: Manual Agent Assistance | Phase 25 |
+| US3: Structured TaskFlow | Phase 25 |
 | US4: Verification Failure & Retry | Phase 19 |
-| US5: Parallel Scoped Agents | Phase 25 |
-| US6: Scope Conflict Handling | Phase 25 |
-| US7: Multi-Repo Project Execution | Phase 26 |
-| US8: Shared Repo Across Projects | Phase 26 |
-| US9: Automation | Phase 29 |
+| US5: Parallel Scoped Agents | Phase 26 |
+| US6: Scope Conflict Handling | Phase 26 |
+| US7: Multi-Repo Project Execution | Phase 27 |
+| US8: Shared Repo Across Projects | Phase 27 |
+| US9: Automation | Phase 30 |
 | US10: Pause & Resume | Phase 9 |
 
 ---

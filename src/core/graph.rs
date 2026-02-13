@@ -68,11 +68,18 @@ pub struct GraphTask {
     pub criteria: SuccessCriteria,
     /// Retry policy.
     pub retry_policy: RetryPolicy,
+    /// Ordered checkpoint IDs for attempt execution.
+    #[serde(default = "GraphTask::default_checkpoints")]
+    pub checkpoints: Vec<String>,
     /// Required scope (optional at graph creation).
     pub scope: Option<Scope>,
 }
 
 impl GraphTask {
+    fn default_checkpoints() -> Vec<String> {
+        vec!["checkpoint-1".to_string()]
+    }
+
     /// Creates a new graph task.
     #[must_use]
     pub fn new(title: impl Into<String>, criteria: SuccessCriteria) -> Self {
@@ -82,6 +89,7 @@ impl GraphTask {
             description: None,
             criteria,
             retry_policy: RetryPolicy::default(),
+            checkpoints: Self::default_checkpoints(),
             scope: None,
         }
     }
@@ -97,6 +105,17 @@ impl GraphTask {
     #[must_use]
     pub fn with_retry_policy(mut self, policy: RetryPolicy) -> Self {
         self.retry_policy = policy;
+        self
+    }
+
+    /// Sets ordered checkpoints for this task.
+    #[must_use]
+    pub fn with_checkpoints(mut self, checkpoints: Vec<String>) -> Self {
+        self.checkpoints = if checkpoints.is_empty() {
+            Self::default_checkpoints()
+        } else {
+            checkpoints
+        };
         self
     }
 
