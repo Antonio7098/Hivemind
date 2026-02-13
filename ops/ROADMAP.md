@@ -800,22 +800,35 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 > **User Story 3:** Structured TaskFlow end-to-end.
 
-### 25.1 Integration Test
-- [ ] Create project with repo
-- [ ] Create tasks with scopes
-- [ ] Build TaskGraph
-- [ ] Create and start TaskFlow
-- [ ] Execute tasks via Opencode adapter
-- [ ] Verify with checks
-- [ ] Retry on failure
-- [ ] Merge on success
+**Execution Note (2026-02-13):** Original checklist was too narrow and did not reflect Phase 24 checkpoint semantics or full US2/US3/US4 beta validation scope.
+
+### 25.1 Comprehensive End-to-End Beta Checklist
+- [x] Build and validate CLI binary (`make validate`, `hivemind --help`, subcommand help surfaces)
+- [x] Create single-repo project, attach/detach repository, update/inspect/list project metadata
+- [x] Configure runtime adapters for both deterministic local shell execution and real OpenCode runtime (`opencode/big-pickle`)
+- [x] Create/update/inspect/list/close tasks (simple todo path; US1 baseline)
+- [x] Build TaskGraph with multiple tasks, dependencies, and required checks
+- [x] Create/start flow and drive execution via `flow tick`
+- [x] Validate checkpoint lifecycle (`checkpoint_declared`, `checkpoint_activated`, `checkpoint_completed`, `all_checkpoints_completed`)
+- [x] Validate runtime telemetry (`runtime_started`, `runtime_output_chunk`, `runtime_filesystem_observed`, `runtime_exited`)
+- [x] Validate runtime projection events (`runtime_command_observed`, `runtime_tool_call_observed`, `runtime_todo_snapshot_updated`, `runtime_narrative_output_observed`)
+- [x] Validate verification failure path + `verify results` inspection
+- [x] Validate human override path (`verify override ... pass --reason ...`) and resulting completion behavior (US2/US4)
+- [x] Validate retry mechanics (`task retry --mode continue|clean`) and event audit (`task_retry_requested`)
+- [x] Validate scope enforcement failure path (`scope_violation_detected`) with preserved worktree
+- [x] Validate flow lifecycle controls (`flow pause`, `flow resume`, `flow abort`) and corresponding events
+- [x] Validate merge protocol (`merge prepare`, `merge approve`, `merge execute`) and sentinel merge events
+- [x] Validate observability commands (`events list/inspect/stream`, `events replay --verify`, `attempt inspect`, `worktree list/inspect/cleanup`)
+- [ ] Validate interactive runtime input/interrupt events (`runtime_input_provided`, `runtime_interrupted`) in CI-friendly automation harness
 
 ### 25.2 Exit Criteria
-- [ ] Full workflow works end-to-end
-- [ ] All events emitted correctly
-- [ ] State derived purely from events
-- [ ] Human can pause, resume, abort
-- [ ] User Stories 2, 3, 4 achievable
+- [x] Full single-repo workflow runs end-to-end (project → graph/flow → execution → verification/override/retry → merge)
+- [x] Key orchestration and telemetry events are emitted and queryable
+- [x] Replay verification confirms state is derived from events (`events replay --verify`)
+- [x] Human controls (pause/resume/abort/override) are operational
+- [x] User Stories 2, 3, and 4 are demonstrably achievable
+- [ ] Legacy `hivemind-test` scripts are updated for checkpoint-aware execution (currently stale)
+- [ ] Interactive runtime input/interrupt event path is fully covered by automated beta harness
 
 ---
 
