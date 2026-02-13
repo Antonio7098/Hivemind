@@ -13,11 +13,14 @@ use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::state::{AppState, AttemptState, Project, Task, TaskState};
 use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
 use crate::storage::event_store::{EventFilter, EventStore, IndexedEventStore};
+use chrono::Utc;
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -184,6 +187,135 @@ impl Registry {
             .append(event)
             .map(|_| ())
             .map_err(|e| HivemindError::system("event_append_failed", e.to_string(), origin))
+    }
+
+    fn acquire_flow_integration_lock(
+        &self,
+        flow_id: Uuid,
+        origin: &'static str,
+    ) -> Result<std::fs::File> {
+        let lock_dir = self.config.data_dir.join("locks");
+        fs::create_dir_all(&lock_dir)
+            .map_err(|e| HivemindError::system("create_dir_failed", e.to_string(), origin))?;
+
+        let lock_path = lock_dir.join(format!("flow_integration_{flow_id}.lock"));
+        let file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&lock_path)
+            .map_err(|e| HivemindError::system("lock_open_failed", e.to_string(), origin))?;
+
+        file.try_lock_exclusive().map_err(|e| {
+            HivemindError::user(
+                "integration_in_progress",
+                "Another integration operation is already in progress for this flow",
+                origin,
+            )
+            .with_context("flow_id", flow_id.to_string())
+            .with_context("lock_error", e.to_string())
+        })?;
+
+        Ok(file)
+    }
+
+    fn resolve_git_ref(repo_path: &Path, reference: &str) -> Option<String> {
+        let output = std::process::Command::new("git")
+            .current_dir(repo_path)
+            .args(["rev-parse", reference])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+
+        let sha = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if sha.is_empty() {
+            return None;
+        }
+        Some(sha)
+    }
+
+    fn resolve_task_frozen_commit_sha(
+        flow: &TaskFlow,
+        state: &AppState,
+        task_id: Uuid,
+    ) -> Option<String> {
+        let manager = Self::worktree_manager_for_flow(flow, state).ok()?;
+        let branch_ref = format!("refs/heads/exec/{}/{task_id}", flow.id);
+        Self::resolve_git_ref(manager.repo_path(), &branch_ref).or_else(|| {
+            let status = manager.inspect(flow.id, task_id).ok()?;
+            if !status.is_worktree {
+                return None;
+            }
+            status
+                .head_commit
+                .or_else(|| Self::resolve_git_ref(&status.path, "HEAD"))
+        })
+    }
+
+    fn emit_task_execution_frozen(
+        &self,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        commit_sha: Option<String>,
+        origin: &'static str,
+    ) -> Result<()> {
+        self.append_event(
+            Event::new(
+                EventPayload::TaskExecutionFrozen {
+                    flow_id: flow.id,
+                    task_id,
+                    commit_sha,
+                },
+                CorrelationIds::for_graph_flow_task(
+                    flow.project_id,
+                    flow.graph_id,
+                    flow.id,
+                    task_id,
+                ),
+            ),
+            origin,
+        )
+    }
+
+    fn emit_integration_lock_acquired(
+        &self,
+        flow: &TaskFlow,
+        operation: &str,
+        origin: &'static str,
+    ) -> Result<()> {
+        self.append_event(
+            Event::new(
+                EventPayload::FlowIntegrationLockAcquired {
+                    flow_id: flow.id,
+                    operation: operation.to_string(),
+                },
+                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            ),
+            origin,
+        )
+    }
+
+    fn emit_merge_conflict(
+        &self,
+        flow: &TaskFlow,
+        task_id: Option<Uuid>,
+        details: String,
+        origin: &'static str,
+    ) -> Result<()> {
+        self.append_event(
+            Event::new(
+                EventPayload::MergeConflictDetected {
+                    flow_id: flow.id,
+                    task_id,
+                    details,
+                },
+                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            ),
+            origin,
+        )
     }
 
     fn attempt_runtime_outcome(&self, attempt_id: Uuid) -> Result<(Option<i32>, Option<String>)> {
@@ -797,6 +929,9 @@ impl Registry {
                 ),
                 origin,
             )?;
+
+            let frozen_commit_sha = Self::resolve_task_frozen_commit_sha(&flow, &state, task_id);
+            self.emit_task_execution_frozen(&flow, task_id, frozen_commit_sha, origin)?;
 
             if let Ok(manager) = Self::worktree_manager_for_flow(&flow, &state) {
                 if manager.config().cleanup_on_success {
@@ -2682,7 +2817,10 @@ impl Registry {
         let state = self.state()?;
         let in_active_flow = state.flows.values().any(|f| {
             f.task_executions.contains_key(&task.id)
-                && !matches!(f.state, FlowState::Completed | FlowState::Aborted)
+                && !matches!(
+                    f.state,
+                    FlowState::Completed | FlowState::Merged | FlowState::Aborted
+                )
         });
         if in_active_flow {
             let err = HivemindError::user(
@@ -3134,7 +3272,11 @@ impl Registry {
 
         let state = self.state()?;
         let has_active = state.flows.values().any(|f| {
-            f.graph_id == graph.id && !matches!(f.state, FlowState::Completed | FlowState::Aborted)
+            f.graph_id == graph.id
+                && !matches!(
+                    f.state,
+                    FlowState::Completed | FlowState::Merged | FlowState::Aborted
+                )
         });
         if has_active {
             let err = HivemindError::user(
@@ -3204,6 +3346,30 @@ impl Registry {
                 let err = HivemindError::user(
                     "flow_completed",
                     "Flow has already completed",
+                    "registry:start_flow",
+                );
+                self.record_error_event(
+                    &err,
+                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                );
+                return Err(err);
+            }
+            FlowState::FrozenForMerge => {
+                let err = HivemindError::user(
+                    "flow_frozen",
+                    "Flow is frozen for merge",
+                    "registry:start_flow",
+                );
+                self.record_error_event(
+                    &err,
+                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                );
+                return Err(err);
+            }
+            FlowState::Merged => {
+                let err = HivemindError::user(
+                    "flow_merged",
+                    "Flow has already been merged",
                     "registry:start_flow",
                 );
                 self.record_error_event(
@@ -3795,6 +3961,7 @@ impl Registry {
         self.get_flow(&flow.id.to_string())
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn verify_override(&self, task_id: &str, decision: &str, reason: &str) -> Result<TaskFlow> {
         let origin = "registry:verify_override";
 
@@ -3830,7 +3997,13 @@ impl Registry {
         let state = self.state()?;
         let flow = Self::flow_for_task(&state, id, origin)?;
 
-        if matches!(flow.state, FlowState::Completed | FlowState::Aborted) {
+        if matches!(
+            flow.state,
+            FlowState::Completed
+                | FlowState::FrozenForMerge
+                | FlowState::Merged
+                | FlowState::Aborted
+        ) {
             return Err(HivemindError::user(
                 "flow_not_active",
                 "Cannot override verification for a completed or aborted flow",
@@ -3876,6 +4049,9 @@ impl Registry {
         let updated = self.get_flow(&flow.id.to_string())?;
 
         if decision == "pass" {
+            let frozen_commit_sha = Self::resolve_task_frozen_commit_sha(&updated, &state, id);
+            self.emit_task_execution_frozen(&updated, id, frozen_commit_sha, origin)?;
+
             if let Ok(manager) = Self::worktree_manager_for_flow(&updated, &state) {
                 if manager.config().cleanup_on_success {
                     if let Ok(status) = manager.inspect(updated.id, id) {
@@ -3914,21 +4090,37 @@ impl Registry {
         flow_id: &str,
         target_branch: Option<&str>,
     ) -> Result<crate::core::state::MergeState> {
-        let flow = self.get_flow(flow_id)?;
+        let origin = "registry:merge_prepare";
+        let mut flow = self.get_flow(flow_id)?;
 
-        if flow.state != FlowState::Completed {
+        if !matches!(flow.state, FlowState::Completed | FlowState::FrozenForMerge) {
             return Err(HivemindError::user(
                 "flow_not_completed",
                 "Flow has not completed successfully",
-                "registry:merge_prepare",
+                origin,
             ));
         }
 
-        let state = self.state()?;
+        let mut state = self.state()?;
         if let Some(ms) = state.merge_states.get(&flow.id) {
             if ms.status == crate::core::state::MergeStatus::Prepared && ms.conflicts.is_empty() {
                 return Ok(ms.clone());
             }
+        }
+
+        let _integration_lock = self.acquire_flow_integration_lock(flow.id, origin)?;
+        self.emit_integration_lock_acquired(&flow, "merge_prepare", origin)?;
+
+        if flow.state == FlowState::Completed {
+            self.append_event(
+                Event::new(
+                    EventPayload::FlowFrozenForMerge { flow_id: flow.id },
+                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                ),
+                origin,
+            )?;
+            flow = self.get_flow(flow_id)?;
+            state = self.state()?;
         }
 
         let graph = state.graphs.get(&flow.graph_id).ok_or_else(|| {
@@ -3940,67 +4132,354 @@ impl Registry {
         })?;
 
         let mut conflicts = Vec::new();
+        let mut integrated_tasks: Vec<(Uuid, Option<String>)> = Vec::new();
 
-        if let Some(project) = state.projects.get(&flow.project_id) {
-            if project.repositories.len() == 1 {
-                let manager = Self::worktree_manager_for_flow(&flow, &state)?;
-                let base_ref = target_branch.unwrap_or("HEAD");
-                let merge_branch = format!("flow/{}", flow.id);
-                let merge_path = manager
-                    .config()
-                    .base_dir
-                    .join(flow.id.to_string())
-                    .join("_merge");
+        let project = state.projects.get(&flow.project_id).ok_or_else(|| {
+            HivemindError::system(
+                "project_not_found",
+                "Project not found",
+                "registry:merge_prepare",
+            )
+        })?;
+        if project.repositories.is_empty() {
+            return Err(HivemindError::user(
+                "project_has_no_repo",
+                "Project has no attached repository",
+                "registry:merge_prepare",
+            ));
+        }
+        if project.repositories.len() != 1 {
+            return Err(HivemindError::user(
+                "multiple_repos_unsupported",
+                "Merge protocol currently supports exactly one repository",
+                "registry:merge_prepare",
+            )
+            .with_hint("Multi-repo merge is not implemented yet"));
+        }
 
-                if merge_path.exists() {
-                    let _ = std::process::Command::new("git")
-                        .current_dir(manager.repo_path())
-                        .args([
-                            "worktree",
-                            "remove",
-                            "--force",
-                            merge_path.to_str().unwrap_or(""),
-                        ])
-                        .output();
-                    let _ = fs::remove_dir_all(&merge_path);
-                }
+        let prepared_target_branch = {
+            let manager = Self::worktree_manager_for_flow(&flow, &state)?;
+            let repo_path = manager.repo_path();
+            let current_branch = std::process::Command::new("git")
+                .current_dir(repo_path)
+                .args(["rev-parse", "--abbrev-ref", "HEAD"])
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map_or_else(
+                    || "HEAD".to_string(),
+                    |o| String::from_utf8_lossy(&o.stdout).trim().to_string(),
+                );
 
-                if let Some(parent) = merge_path.parent() {
-                    fs::create_dir_all(parent).map_err(|e| {
-                        HivemindError::system(
-                            "create_dir_failed",
-                            e.to_string(),
-                            "registry:merge_prepare",
-                        )
-                    })?;
-                }
+            let main_exists = std::process::Command::new("git")
+                .current_dir(repo_path)
+                .args(["show-ref", "--verify", "--quiet", "refs/heads/main"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
 
-                let add = std::process::Command::new("git")
+            let target = target_branch.map_or_else(
+                || {
+                    if main_exists {
+                        "main".to_string()
+                    } else {
+                        current_branch
+                    }
+                },
+                ToString::to_string,
+            );
+            if target == "HEAD" {
+                return Err(HivemindError::user(
+                    "detached_head",
+                    "Cannot prepare merge from detached HEAD",
+                    "registry:merge_prepare",
+                )
+                .with_hint("Re-run with --target <branch> or checkout a branch"));
+            }
+            let base_ref = target.as_str();
+
+            let merge_branch = format!("integration/{}/prepare", flow.id);
+            let merge_path = manager
+                .config()
+                .base_dir
+                .join(flow.id.to_string())
+                .join("_integration_prepare");
+
+            if merge_path.exists() {
+                let _ = std::process::Command::new("git")
                     .current_dir(manager.repo_path())
                     .args([
                         "worktree",
-                        "add",
-                        "-B",
-                        &merge_branch,
+                        "remove",
+                        "--force",
                         merge_path.to_str().unwrap_or(""),
-                        base_ref,
                     ])
+                    .output();
+                let _ = fs::remove_dir_all(&merge_path);
+            }
+
+            if let Some(parent) = merge_path.parent() {
+                fs::create_dir_all(parent).map_err(|e| {
+                    HivemindError::system(
+                        "create_dir_failed",
+                        e.to_string(),
+                        "registry:merge_prepare",
+                    )
+                })?;
+            }
+
+            let add = std::process::Command::new("git")
+                .current_dir(manager.repo_path())
+                .args([
+                    "worktree",
+                    "add",
+                    "-B",
+                    &merge_branch,
+                    merge_path.to_str().unwrap_or(""),
+                    base_ref,
+                ])
+                .output()
+                .map_err(|e| {
+                    HivemindError::system(
+                        "git_worktree_add_failed",
+                        e.to_string(),
+                        "registry:merge_prepare",
+                    )
+                })?;
+            if !add.status.success() {
+                return Err(HivemindError::git(
+                    "git_worktree_add_failed",
+                    String::from_utf8_lossy(&add.stderr).to_string(),
+                    "registry:merge_prepare",
+                ));
+            }
+
+            for task_id in graph.topological_order() {
+                if flow
+                    .task_executions
+                    .get(&task_id)
+                    .is_none_or(|e| e.state != TaskExecState::Success)
+                {
+                    continue;
+                }
+
+                let task_branch = format!("exec/{}/{task_id}", flow.id);
+                let task_ref = format!("refs/heads/{task_branch}");
+
+                let ref_exists = std::process::Command::new("git")
+                    .current_dir(&merge_path)
+                    .args(["show-ref", "--verify", "--quiet", &task_ref])
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false);
+
+                if !ref_exists {
+                    let details = format!("task {task_id}: missing branch '{task_branch}'");
+                    conflicts.push(details.clone());
+                    self.emit_merge_conflict(&flow, Some(task_id), details, origin)?;
+                    break;
+                }
+
+                let _ = std::process::Command::new("git")
+                    .current_dir(&merge_path)
+                    .args(["checkout", &merge_branch])
+                    .output();
+
+                if let Some(deps) = graph.dependencies.get(&task_id) {
+                    for dep in deps {
+                        let dep_branch = format!("exec/{}/{dep}", flow.id);
+                        let Some(dep_sha) = Self::resolve_git_ref(&merge_path, &dep_branch) else {
+                            let details = format!(
+                                "task {task_id}: dependency branch missing for {dep_branch}"
+                            );
+                            conflicts.push(details.clone());
+                            self.emit_merge_conflict(&flow, Some(task_id), details, origin)?;
+                            break;
+                        };
+
+                        let contains_dependency = std::process::Command::new("git")
+                            .current_dir(&merge_path)
+                            .args(["merge-base", "--is-ancestor", &dep_sha, &task_branch])
+                            .status()
+                            .map(|s| s.success())
+                            .unwrap_or(false);
+                        if !contains_dependency {
+                            let details = format!(
+                                "task {task_id}: drift detected (missing prerequisite integrated changes)"
+                            );
+                            conflicts.push(details.clone());
+                            self.emit_merge_conflict(&flow, Some(task_id), details, origin)?;
+                            break;
+                        }
+                    }
+
+                    if !conflicts.is_empty() {
+                        break;
+                    }
+                }
+
+                let sandbox_branch = format!("integration/{}/{task_id}", flow.id);
+                let checkout = std::process::Command::new("git")
+                    .current_dir(&merge_path)
+                    .args(["checkout", "-B", &sandbox_branch, &merge_branch])
                     .output()
                     .map_err(|e| {
                         HivemindError::system(
-                            "git_worktree_add_failed",
+                            "git_checkout_failed",
                             e.to_string(),
                             "registry:merge_prepare",
                         )
                     })?;
-                if !add.status.success() {
+                if !checkout.status.success() {
                     return Err(HivemindError::git(
-                        "git_worktree_add_failed",
-                        String::from_utf8_lossy(&add.stderr).to_string(),
+                        "git_checkout_failed",
+                        String::from_utf8_lossy(&checkout.stderr).to_string(),
                         "registry:merge_prepare",
                     ));
                 }
 
+                let merge = std::process::Command::new("git")
+                    .current_dir(&merge_path)
+                    .env("GIT_AUTHOR_NAME", "Hivemind")
+                    .env("GIT_AUTHOR_EMAIL", "hivemind@example.com")
+                    .env("GIT_COMMITTER_NAME", "Hivemind")
+                    .env("GIT_COMMITTER_EMAIL", "hivemind@example.com")
+                    .args([
+                        "-c",
+                        "user.name=Hivemind",
+                        "-c",
+                        "user.email=hivemind@example.com",
+                        "-c",
+                        "commit.gpgsign=false",
+                        "merge",
+                        "--no-commit",
+                        "--no-ff",
+                        &task_branch,
+                    ])
+                    .output()
+                    .map_err(|e| {
+                        HivemindError::system(
+                            "git_merge_failed",
+                            e.to_string(),
+                            "registry:merge_prepare",
+                        )
+                    })?;
+
+                if !merge.status.success() {
+                    let unmerged = std::process::Command::new("git")
+                        .current_dir(&merge_path)
+                        .args(["diff", "--name-only", "--diff-filter=U"])
+                        .output()
+                        .ok()
+                        .filter(|o| o.status.success())
+                        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                        .unwrap_or_default();
+
+                    let details = if unmerged.is_empty() {
+                        String::from_utf8_lossy(&merge.stderr).to_string()
+                    } else {
+                        format!("conflicts in: {unmerged}")
+                    };
+                    conflicts.push(format!("task {task_id}: {details}"));
+                    self.emit_merge_conflict(&flow, Some(task_id), details, origin)?;
+
+                    let _ = std::process::Command::new("git")
+                        .current_dir(&merge_path)
+                        .args(["merge", "--abort"])
+                        .output();
+                    let _ = std::process::Command::new("git")
+                        .current_dir(&merge_path)
+                        .args(["checkout", &merge_branch])
+                        .output();
+                    break;
+                }
+
+                let merge_in_progress = std::process::Command::new("git")
+                    .current_dir(&merge_path)
+                    .args(["rev-parse", "-q", "--verify", "MERGE_HEAD"])
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false);
+                if !merge_in_progress {
+                    continue;
+                }
+
+                let commit_msg = format!(
+                        "Integrate task {task_id}\n\nFlow: {}\nTask: {task_id}\nTarget: {target}\nVerification-Summary: task_checks_passed\nTimestamp: {}\nHivemind-Version: {}",
+                        flow.id,
+                        Utc::now().to_rfc3339(),
+                        env!("CARGO_PKG_VERSION")
+                    );
+                let commit = std::process::Command::new("git")
+                    .current_dir(&merge_path)
+                    .env("GIT_AUTHOR_NAME", "Hivemind")
+                    .env("GIT_AUTHOR_EMAIL", "hivemind@example.com")
+                    .env("GIT_COMMITTER_NAME", "Hivemind")
+                    .env("GIT_COMMITTER_EMAIL", "hivemind@example.com")
+                    .args([
+                        "-c",
+                        "user.name=Hivemind",
+                        "-c",
+                        "user.email=hivemind@example.com",
+                        "-c",
+                        "commit.gpgsign=false",
+                        "commit",
+                        "-m",
+                        &commit_msg,
+                    ])
+                    .output()
+                    .map_err(|e| {
+                        HivemindError::system(
+                            "git_commit_failed",
+                            e.to_string(),
+                            "registry:merge_prepare",
+                        )
+                    })?;
+                if !commit.status.success() {
+                    return Err(HivemindError::git(
+                        "git_commit_failed",
+                        String::from_utf8_lossy(&commit.stderr).to_string(),
+                        "registry:merge_prepare",
+                    ));
+                }
+
+                let _ = std::process::Command::new("git")
+                    .current_dir(&merge_path)
+                    .args(["checkout", &merge_branch])
+                    .output();
+                let promote = std::process::Command::new("git")
+                    .current_dir(&merge_path)
+                    .args(["merge", "--ff-only", &sandbox_branch])
+                    .output()
+                    .map_err(|e| {
+                        HivemindError::system(
+                            "git_merge_failed",
+                            e.to_string(),
+                            "registry:merge_prepare",
+                        )
+                    })?;
+                if !promote.status.success() {
+                    let details = String::from_utf8_lossy(&promote.stderr).trim().to_string();
+                    conflicts.push(format!("task {task_id}: {details}"));
+                    self.emit_merge_conflict(&flow, Some(task_id), details, origin)?;
+                    break;
+                }
+
+                let integrated_sha = Self::resolve_git_ref(&merge_path, "HEAD");
+                integrated_tasks.push((task_id, integrated_sha));
+            }
+
+            if conflicts.is_empty() {
+                let target_dir = self
+                    .config
+                    .data_dir
+                    .join("cargo-target")
+                    .join(flow.id.to_string())
+                    .join("_integration_prepare")
+                    .join("checks");
+                let _ = fs::create_dir_all(&target_dir);
+
+                let mut unique_checks: Vec<crate::core::verification::CheckConfig> = Vec::new();
                 for task_id in graph.topological_order() {
                     if flow
                         .task_executions
@@ -4009,171 +4488,151 @@ impl Registry {
                     {
                         continue;
                     }
+                    if let Some(task) = graph.tasks.get(&task_id) {
+                        for check in &task.criteria.checks {
+                            if let Some(existing) = unique_checks
+                                .iter_mut()
+                                .find(|c| c.name == check.name && c.command == check.command)
+                            {
+                                existing.required = existing.required || check.required;
+                                if existing.timeout_ms.is_none() {
+                                    existing.timeout_ms = check.timeout_ms;
+                                }
+                            } else {
+                                unique_checks.push(check.clone());
+                            }
+                        }
+                    }
+                }
 
-                    let task_branch = format!("exec/{}/{task_id}", flow.id);
-                    let task_ref = format!("refs/heads/{task_branch}");
+                for check in &unique_checks {
+                    self.append_event(
+                        Event::new(
+                            EventPayload::MergeCheckStarted {
+                                flow_id: flow.id,
+                                task_id: None,
+                                check_name: check.name.clone(),
+                                required: check.required,
+                            },
+                            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                        ),
+                        "registry:merge_prepare",
+                    )?;
 
-                    let ref_exists = std::process::Command::new("git")
-                        .current_dir(&merge_path)
-                        .args(["show-ref", "--verify", "--quiet", &task_ref])
-                        .status()
-                        .map(|s| s.success())
-                        .unwrap_or(false);
+                    let started = Instant::now();
+                    let (exit_code, combined) = match Self::run_check_command(
+                        &merge_path,
+                        &target_dir,
+                        &check.command,
+                        check.timeout_ms,
+                    ) {
+                        Ok((exit_code, output, _timed_out)) => (exit_code, output),
+                        Err(e) => (127, e.to_string()),
+                    };
+                    let duration_ms =
+                        u64::try_from(started.elapsed().as_millis().min(u128::from(u64::MAX)))
+                            .unwrap_or(u64::MAX);
+                    let passed = exit_code == 0;
 
-                    if !ref_exists {
-                        conflicts.push(format!("task {task_id}: missing branch '{task_branch}'"));
+                    let safe_name = check
+                        .name
+                        .chars()
+                        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                        .collect::<String>();
+                    let out_path = target_dir.join(format!("merge_check_{safe_name}.log"));
+                    if let Err(e) = fs::write(&out_path, &combined) {
+                        let details = format!(
+                            "failed to write check output for {} to {}: {}",
+                            check.name,
+                            out_path.display(),
+                            e
+                        );
+                        conflicts.push(details.clone());
+                        self.emit_merge_conflict(&flow, None, details, origin)?;
                         break;
                     }
 
-                    let merge = std::process::Command::new("git")
-                        .current_dir(&merge_path)
-                        .env("GIT_AUTHOR_NAME", "Hivemind")
-                        .env("GIT_AUTHOR_EMAIL", "hivemind@example.com")
-                        .env("GIT_COMMITTER_NAME", "Hivemind")
-                        .env("GIT_COMMITTER_EMAIL", "hivemind@example.com")
-                        .args([
-                            "-c",
-                            "user.name=Hivemind",
-                            "-c",
-                            "user.email=hivemind@example.com",
-                            "-c",
-                            "commit.gpgsign=false",
-                            "merge",
-                            "--squash",
-                            "--no-commit",
-                            &task_branch,
-                        ])
-                        .output()
-                        .map_err(|e| {
-                            HivemindError::system(
-                                "git_merge_failed",
-                                e.to_string(),
-                                "registry:merge_prepare",
-                            )
-                        })?;
+                    self.append_event(
+                        Event::new(
+                            EventPayload::MergeCheckCompleted {
+                                flow_id: flow.id,
+                                task_id: None,
+                                check_name: check.name.clone(),
+                                passed,
+                                exit_code,
+                                output: combined.clone(),
+                                duration_ms,
+                                required: check.required,
+                            },
+                            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                        ),
+                        "registry:merge_prepare",
+                    )?;
 
-                    if !merge.status.success() {
-                        let unmerged = std::process::Command::new("git")
-                            .current_dir(&merge_path)
-                            .args(["diff", "--name-only", "--diff-filter=U"])
-                            .output()
-                            .ok()
-                            .filter(|o| o.status.success())
-                            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                            .unwrap_or_default();
-
-                        let can_auto_resolve = graph
-                            .dependencies
-                            .get(&task_id)
-                            .is_some_and(|deps| !deps.is_empty());
-
-                        if can_auto_resolve && !unmerged.is_empty() {
-                            let mut ok = true;
-                            for path in unmerged.lines().map(str::trim).filter(|s| !s.is_empty()) {
-                                let checkout = std::process::Command::new("git")
-                                    .current_dir(&merge_path)
-                                    .args(["checkout", "--theirs", "--", path])
-                                    .output();
-                                if !checkout.as_ref().is_ok_and(|o| o.status.success()) {
-                                    ok = false;
-                                    break;
-                                }
-
-                                let add = std::process::Command::new("git")
-                                    .current_dir(&merge_path)
-                                    .args(["add", "--", path])
-                                    .output();
-                                if !add.as_ref().is_ok_and(|o| o.status.success()) {
-                                    ok = false;
-                                    break;
-                                }
-                            }
-
-                            if ok {
-                                let still_unmerged = std::process::Command::new("git")
-                                    .current_dir(&merge_path)
-                                    .args(["diff", "--name-only", "--diff-filter=U"])
-                                    .output()
-                                    .ok()
-                                    .filter(|o| o.status.success())
-                                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                                    .unwrap_or_default();
-
-                                if still_unmerged.is_empty() {
-                                    // Proceed with commit after auto-resolving using task branch versions.
-                                } else {
-                                    ok = false;
-                                }
-                            }
-
-                            if ok {
-                                // Continue to commit for this task.
-                            } else {
-                                conflicts.push(format!("task {task_id}: conflicts in: {unmerged}"));
-                                let _ = std::process::Command::new("git")
-                                    .current_dir(&merge_path)
-                                    .args(["merge", "--abort"])
-                                    .output();
-                                break;
-                            }
-                        } else {
-                            let details = if unmerged.is_empty() {
-                                String::from_utf8_lossy(&merge.stderr).to_string()
-                            } else {
-                                format!("conflicts in: {unmerged}")
-                            };
-                            conflicts.push(format!("task {task_id}: {details}"));
-
-                            let _ = std::process::Command::new("git")
-                                .current_dir(&merge_path)
-                                .args(["merge", "--abort"])
-                                .output();
-                            break;
+                    if check.required && !passed {
+                        let details = format!(
+                            "required check failed: {} (exit={exit_code}, duration={}ms)",
+                            check.name, duration_ms
+                        );
+                        conflicts.push(details.clone());
+                        self.emit_merge_conflict(&flow, None, details, origin)?;
+                        if !combined.trim().is_empty() {
+                            let snippet = combined.lines().take(10).collect::<Vec<_>>().join("\n");
+                            conflicts.push(format!("check output (first lines): {snippet}"));
                         }
-                    }
-
-                    let commit_msg = format!("Integrate task {task_id}");
-                    let commit = std::process::Command::new("git")
-                        .current_dir(&merge_path)
-                        .env("GIT_AUTHOR_NAME", "Hivemind")
-                        .env("GIT_AUTHOR_EMAIL", "hivemind@example.com")
-                        .env("GIT_COMMITTER_NAME", "Hivemind")
-                        .env("GIT_COMMITTER_EMAIL", "hivemind@example.com")
-                        .args([
-                            "-c",
-                            "user.name=Hivemind",
-                            "-c",
-                            "user.email=hivemind@example.com",
-                            "-c",
-                            "commit.gpgsign=false",
-                            "commit",
-                            "-m",
-                            &commit_msg,
-                            "--allow-empty",
-                        ])
-                        .output()
-                        .map_err(|e| {
-                            HivemindError::system(
-                                "git_commit_failed",
-                                e.to_string(),
-                                "registry:merge_prepare",
-                            )
-                        })?;
-                    if !commit.status.success() {
-                        return Err(HivemindError::git(
-                            "git_commit_failed",
-                            String::from_utf8_lossy(&commit.stderr).to_string(),
-                            "registry:merge_prepare",
-                        ));
+                        break;
                     }
                 }
             }
-        }
+
+            if conflicts.is_empty() {
+                let flow_branch = format!("flow/{}", flow.id);
+                let update = std::process::Command::new("git")
+                    .current_dir(manager.repo_path())
+                    .args(["branch", "-f", &flow_branch, &merge_branch])
+                    .output()
+                    .map_err(|e| {
+                        HivemindError::system(
+                            "git_branch_update_failed",
+                            e.to_string(),
+                            "registry:merge_prepare",
+                        )
+                    })?;
+                if !update.status.success() {
+                    return Err(HivemindError::git(
+                        "git_branch_update_failed",
+                        String::from_utf8_lossy(&update.stderr).to_string(),
+                        "registry:merge_prepare",
+                    ));
+                }
+
+                for (task_id, commit_sha) in &integrated_tasks {
+                    self.append_event(
+                        Event::new(
+                            EventPayload::TaskIntegratedIntoFlow {
+                                flow_id: flow.id,
+                                task_id: *task_id,
+                                commit_sha: commit_sha.clone(),
+                            },
+                            CorrelationIds::for_graph_flow_task(
+                                flow.project_id,
+                                flow.graph_id,
+                                flow.id,
+                                *task_id,
+                            ),
+                        ),
+                        origin,
+                    )?;
+                }
+            }
+
+            target
+        };
 
         let event = Event::new(
             EventPayload::MergePrepared {
                 flow_id: flow.id,
-                target_branch: target_branch.map(String::from),
+                target_branch: Some(prepared_target_branch),
                 conflicts,
             },
             CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
@@ -4221,10 +4680,15 @@ impl Registry {
             ));
         }
 
+        let user = env::var("HIVEMIND_USER")
+            .or_else(|_| env::var("USER"))
+            .ok()
+            .filter(|u| !u.trim().is_empty());
+
         let event = Event::new(
             EventPayload::MergeApproved {
                 flow_id: flow.id,
-                user: None,
+                user,
             },
             CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
         );
@@ -4249,6 +4713,7 @@ impl Registry {
 
     #[allow(clippy::too_many_lines)]
     pub fn merge_execute(&self, flow_id: &str) -> Result<crate::core::state::MergeState> {
+        let origin = "registry:merge_execute";
         let flow = self.get_flow(flow_id)?;
 
         let state = self.state()?;
@@ -4267,6 +4732,17 @@ impl Registry {
                 "registry:merge_execute",
             ));
         }
+
+        if flow.state != FlowState::FrozenForMerge {
+            return Err(HivemindError::user(
+                "flow_not_frozen_for_merge",
+                "Flow must be frozen for merge before execution",
+                origin,
+            ));
+        }
+
+        let _integration_lock = self.acquire_flow_integration_lock(flow.id, origin)?;
+        self.emit_integration_lock_acquired(&flow, "merge_execute", origin)?;
 
         let mut commits = Vec::new();
         if let Some(project) = state.projects.get(&flow.project_id) {
@@ -4338,7 +4814,7 @@ impl Registry {
                     .with_hint("Re-run with --target <branch> or checkout a branch"));
                 }
 
-                let merge_branch = format!("flow/{}", flow.id);
+                let merge_branch = format!("integration/{}/prepare", flow.id);
                 let merge_ref = format!("refs/heads/{merge_branch}");
                 let merge_ref_exists = std::process::Command::new("git")
                     .current_dir(repo_path)
@@ -4460,12 +4936,42 @@ impl Registry {
                     let _ = fs::remove_dir_all(&merge_path);
                 }
 
+                let prepare_path = manager
+                    .config()
+                    .base_dir
+                    .join(flow.id.to_string())
+                    .join("_integration_prepare");
+                if prepare_path.exists() {
+                    let _ = std::process::Command::new("git")
+                        .current_dir(repo_path)
+                        .args([
+                            "worktree",
+                            "remove",
+                            "--force",
+                            prepare_path.to_str().unwrap_or(""),
+                        ])
+                        .output();
+                    let _ = fs::remove_dir_all(&prepare_path);
+                }
+
+                let prepare_branch = format!("integration/{}/prepare", flow.id);
+                let _ = std::process::Command::new("git")
+                    .current_dir(repo_path)
+                    .args(["branch", "-D", &prepare_branch])
+                    .output();
+
                 if manager.config().cleanup_on_success {
                     for task_id in flow.task_executions.keys() {
                         let branch = format!("exec/{}/{task_id}", flow.id);
                         let _ = std::process::Command::new("git")
                             .current_dir(repo_path)
                             .args(["branch", "-D", &branch])
+                            .output();
+
+                        let integration_branch = format!("integration/{}/{task_id}", flow.id);
+                        let _ = std::process::Command::new("git")
+                            .current_dir(repo_path)
+                            .args(["branch", "-D", &integration_branch])
                             .output();
                     }
 
@@ -4610,6 +5116,11 @@ mod tests {
             "git commit: {}",
             String::from_utf8_lossy(&out.stderr)
         );
+
+        let _ = Command::new("git")
+            .args(["branch", "-M", "main"])
+            .current_dir(repo_dir)
+            .output();
     }
 
     #[test]
@@ -5191,6 +5702,14 @@ mod tests {
             updated.task_executions.get(&t1_id).map(|e| e.state),
             Some(TaskExecState::Success)
         );
+
+        let events = registry.store.read_all().unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::TaskExecutionFrozen { task_id, .. } if *task_id == t1_id
+            )
+        }));
     }
 
     #[test]
@@ -5241,12 +5760,36 @@ mod tests {
         assert_eq!(res.unwrap_err().code, "invalid_decision");
     }
 
-    fn setup_completed_flow(registry: &Registry) -> TaskFlow {
+    fn setup_completed_flow_with_repo(registry: &Registry) -> (tempfile::TempDir, TaskFlow) {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
         registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                repo_dir.to_string_lossy().as_ref(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
         let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
         let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let exec_branch = format!("exec/{}/{t1_id}", flow.id, t1_id = t1.id);
+        let out = Command::new("git")
+            .args(["branch", "-f", &exec_branch, "main"])
+            .current_dir(&repo_dir)
+            .output()
+            .expect("create exec branch");
+        assert!(
+            out.status.success(),
+            "git branch: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
 
         for (from, to) in [
             (TaskExecState::Ready, TaskExecState::Running),
@@ -5271,13 +5814,13 @@ mod tests {
         );
         registry.store.append(event).unwrap();
 
-        registry.get_flow(&flow.id.to_string()).unwrap()
+        (tmp, registry.get_flow(&flow.id.to_string()).unwrap())
     }
 
     #[test]
     fn merge_lifecycle_prepare_approve_execute() {
         let registry = test_registry();
-        let flow = setup_completed_flow(&registry);
+        let (_tmp, flow) = setup_completed_flow_with_repo(&registry);
 
         let ms = registry
             .merge_prepare(&flow.id.to_string(), Some("main"))
@@ -5285,17 +5828,47 @@ mod tests {
         assert_eq!(ms.status, crate::core::state::MergeStatus::Prepared);
         assert_eq!(ms.target_branch, Some("main".to_string()));
 
+        let frozen = registry.get_flow(&flow.id.to_string()).unwrap();
+        assert_eq!(frozen.state, FlowState::FrozenForMerge);
+
+        let events = registry.store.read_all().unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::FlowFrozenForMerge { flow_id } if *flow_id == flow.id
+            )
+        }));
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::FlowIntegrationLockAcquired { flow_id, operation }
+                    if *flow_id == flow.id && operation == "merge_prepare"
+            )
+        }));
+
         let ms = registry.merge_approve(&flow.id.to_string()).unwrap();
         assert_eq!(ms.status, crate::core::state::MergeStatus::Approved);
 
         let ms = registry.merge_execute(&flow.id.to_string()).unwrap();
         assert_eq!(ms.status, crate::core::state::MergeStatus::Completed);
+
+        let merged = registry.get_flow(&flow.id.to_string()).unwrap();
+        assert_eq!(merged.state, FlowState::Merged);
+
+        let events = registry.store.read_all().unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::FlowIntegrationLockAcquired { flow_id, operation }
+                    if *flow_id == flow.id && operation == "merge_execute"
+            )
+        }));
     }
 
     #[test]
     fn merge_prepare_idempotent() {
         let registry = test_registry();
-        let flow = setup_completed_flow(&registry);
+        let (_tmp, flow) = setup_completed_flow_with_repo(&registry);
 
         let ms1 = registry
             .merge_prepare(&flow.id.to_string(), Some("main"))
@@ -5309,7 +5882,7 @@ mod tests {
     #[test]
     fn merge_approve_idempotent() {
         let registry = test_registry();
-        let flow = setup_completed_flow(&registry);
+        let (_tmp, flow) = setup_completed_flow_with_repo(&registry);
 
         registry.merge_prepare(&flow.id.to_string(), None).unwrap();
         let ms1 = registry.merge_approve(&flow.id.to_string()).unwrap();
@@ -5334,7 +5907,7 @@ mod tests {
     #[test]
     fn merge_execute_rejects_unapproved() {
         let registry = test_registry();
-        let flow = setup_completed_flow(&registry);
+        let (_tmp, flow) = setup_completed_flow_with_repo(&registry);
 
         registry.merge_prepare(&flow.id.to_string(), None).unwrap();
         let res = registry.merge_execute(&flow.id.to_string());
@@ -5345,7 +5918,7 @@ mod tests {
     #[test]
     fn merge_execute_rejects_unprepared() {
         let registry = test_registry();
-        let flow = setup_completed_flow(&registry);
+        let (_tmp, flow) = setup_completed_flow_with_repo(&registry);
 
         let res = registry.merge_execute(&flow.id.to_string());
         assert!(res.is_err());
@@ -5378,8 +5951,8 @@ mod tests {
         registry
             .add_graph_dependency(
                 &graph.id.to_string(),
-                t2.id.to_string().as_str(),
                 t1.id.to_string().as_str(),
+                t2.id.to_string().as_str(),
             )
             .unwrap();
 
@@ -5418,6 +5991,17 @@ mod tests {
             .output()
             .unwrap();
         assert!(out.status.success());
+
+        let out = Command::new("git")
+            .current_dir(&wt2_path)
+            .args(["merge", "--ff-only", &format!("exec/{}/{}", flow.id, t1.id)])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git merge --ff-only: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
 
         std::fs::write(wt2_path.join("t2.txt"), "t2\n").unwrap();
         let out = Command::new("git")
@@ -5465,7 +6049,19 @@ mod tests {
         registry.store.append(event).unwrap();
 
         let ms = registry.merge_prepare(&flow.id.to_string(), None).unwrap();
-        assert!(ms.conflicts.is_empty());
+        assert!(ms.conflicts.is_empty(), "conflicts: {:?}", ms.conflicts);
+
+        let events = registry.store.read_all().unwrap();
+        let integrated = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    &e.payload,
+                    EventPayload::TaskIntegratedIntoFlow { flow_id, .. } if *flow_id == flow.id
+                )
+            })
+            .count();
+        assert_eq!(integrated, 2);
 
         registry.merge_approve(&flow.id.to_string()).unwrap();
         let ms = registry.merge_execute(&flow.id.to_string()).unwrap();

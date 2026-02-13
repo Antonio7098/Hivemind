@@ -18,8 +18,12 @@ pub enum FlowState {
     Running,
     /// Flow is paused (can be resumed).
     Paused,
+    /// Flow is frozen for merge preparation/execution.
+    FrozenForMerge,
     /// Flow completed successfully.
     Completed,
+    /// Flow was merged into the target branch.
+    Merged,
     /// Flow was aborted.
     Aborted,
 }
@@ -65,6 +69,10 @@ pub struct TaskExecution {
     pub attempt_count: u32,
     #[serde(default)]
     pub retry_mode: RetryMode,
+    #[serde(default)]
+    pub frozen_commit_sha: Option<String>,
+    #[serde(default)]
+    pub integrated_commit_sha: Option<String>,
     /// Last state change timestamp.
     pub updated_at: DateTime<Utc>,
     /// Blocking reason (if blocked).
@@ -80,6 +88,8 @@ impl TaskExecution {
             state: TaskExecState::Pending,
             attempt_count: 0,
             retry_mode: RetryMode::default(),
+            frozen_commit_sha: None,
+            integrated_commit_sha: None,
             updated_at: Utc::now(),
             blocked_reason: None,
         }
@@ -216,7 +226,10 @@ impl TaskFlow {
 
     /// Aborts the flow.
     pub fn abort(&mut self) -> Result<(), FlowError> {
-        if matches!(self.state, FlowState::Completed | FlowState::Aborted) {
+        if matches!(
+            self.state,
+            FlowState::Completed | FlowState::Merged | FlowState::Aborted
+        ) {
             return Err(FlowError::InvalidFlowTransition {
                 from: self.state,
                 to: FlowState::Aborted,
@@ -284,7 +297,10 @@ impl TaskFlow {
     /// Checks if the flow is in a terminal state.
     #[must_use]
     pub fn is_terminal(&self) -> bool {
-        matches!(self.state, FlowState::Completed | FlowState::Aborted)
+        matches!(
+            self.state,
+            FlowState::Completed | FlowState::Merged | FlowState::Aborted
+        )
     }
 
     /// Gets tasks in a particular state.

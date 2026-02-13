@@ -139,6 +139,8 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::DiffComputed { .. } => "DiffComputed",
         EventPayload::CheckStarted { .. } => "CheckStarted",
         EventPayload::CheckCompleted { .. } => "CheckCompleted",
+        EventPayload::MergeCheckStarted { .. } => "MergeCheckStarted",
+        EventPayload::MergeCheckCompleted { .. } => "MergeCheckCompleted",
         EventPayload::CheckpointCommitCreated { .. } => "CheckpointCommitCreated",
         EventPayload::ScopeValidated { .. } => "ScopeValidated",
         EventPayload::ScopeViolationDetected { .. } => "ScopeViolationDetected",
@@ -147,6 +149,11 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::TaskAborted { .. } => "TaskAborted",
         EventPayload::HumanOverride { .. } => "HumanOverride",
         EventPayload::MergePrepared { .. } => "MergePrepared",
+        EventPayload::TaskExecutionFrozen { .. } => "TaskExecutionFrozen",
+        EventPayload::TaskIntegratedIntoFlow { .. } => "TaskIntegratedIntoFlow",
+        EventPayload::MergeConflictDetected { .. } => "MergeConflictDetected",
+        EventPayload::FlowFrozenForMerge { .. } => "FlowFrozenForMerge",
+        EventPayload::FlowIntegrationLockAcquired { .. } => "FlowIntegrationLockAcquired",
         EventPayload::MergeApproved { .. } => "MergeApproved",
         EventPayload::MergeCompleted { .. } => "MergeCompleted",
         EventPayload::RuntimeStarted { .. } => "RuntimeStarted",
@@ -209,6 +216,13 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         }
 
         EventPayload::MergePrepared { .. }
+        | EventPayload::MergeCheckStarted { .. }
+        | EventPayload::MergeCheckCompleted { .. }
+        | EventPayload::TaskExecutionFrozen { .. }
+        | EventPayload::TaskIntegratedIntoFlow { .. }
+        | EventPayload::MergeConflictDetected { .. }
+        | EventPayload::FlowFrozenForMerge { .. }
+        | EventPayload::FlowIntegrationLockAcquired { .. }
         | EventPayload::MergeApproved { .. }
         | EventPayload::MergeCompleted { .. } => "merge",
 

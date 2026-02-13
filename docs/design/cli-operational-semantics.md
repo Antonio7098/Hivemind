@@ -1088,30 +1088,74 @@ hivemind merge prepare <flow-id> [--target <branch>]
 
 **Preconditions:**
 - Flow exists
-- Flow state is COMPLETED (success)
+- Flow state is COMPLETED (success) or already FROZEN_FOR_MERGE
 - No pending merge preparation
 
 **Effects:**
-- Integration commits computed
-- Conflict check performed
-- Merge preview generated
+- Flow is frozen for merge (`FlowFrozenForMerge`) if not already frozen
+- Per-flow integration lock acquired (`FlowIntegrationLockAcquired`)
+- Integration sandbox created/refreshed (`integration/<flow-id>/prepare` + `_integration_prepare` worktree)
+- Per-task integration sandboxes created (`integration/<flow-id>/<task-id>`) and promoted into the flow prepare branch
+- Drift checks enforce dependency ancestry before task integration
+- Integration branch `flow/<flow-id>` rewritten from prepared sandbox result
+- Conflict check performed (no auto-resolution)
+- Graph-level integration checks run inside the sandbox (required checks gate success)
 
 **Git Artifacts (deterministic):**
-- A flow-scoped integration branch is materialized/refreshed: `flow/<flow-id>`
-- Successful task execution branches are consumed as inputs: `exec/<flow-id>/<task-id>`
+- Flow-scoped integration sandbox branch: `integration/<flow-id>/prepare`
+- Flow-scoped integration sandbox worktree: `<data-dir>/<flow-id>/_integration_prepare`
+- Task-scoped integration branches: `integration/<flow-id>/<task-id>`
+- Flow integration branch refreshed: `flow/<flow-id>`
+- Successful task execution branches consumed as inputs: `exec/<flow-id>/<task-id>`
 
 **Events:**
 ```
+FlowFrozenForMerge:
+  flow_id: <flow-id>
+
+FlowIntegrationLockAcquired:
+  flow_id: <flow-id>
+  operation: merge_prepare
+
+TaskIntegratedIntoFlow:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  commit_sha: <integration-commit>
+
+MergeConflictDetected:
+  flow_id: <flow-id>
+  task_id: <task-id|null>
+  details: <conflict-detail>
+
+MergeCheckStarted:
+  flow_id: <flow-id>
+  check_name: <name>
+  required: <bool>
+
+MergeCheckCompleted:
+  flow_id: <flow-id>
+  check_name: <name>
+  passed: <bool>
+  exit_code: <int>
+  output: <captured stdout/stderr>
+  duration_ms: <uint>
+  required: <bool>
+
 MergePrepared:
   flow_id: <flow-id>
   repos: [<repo-statuses>]
   conflicts: [<conflicts>]
+  target_branch: <branch>
 ```
 
 **Failures:**
 - `FLOW_NOT_FOUND`
 - `FLOW_NOT_COMPLETED`: Flow hasn't completed successfully
-- `MERGE_ALREADY_PREPARED`: Preparation exists
+- `MERGE_ALREADY_PREPARED`: Preparation exists without conflicts
+- `PROJECT_HAS_NO_REPO`
+- `MULTIPLE_REPOS_UNSUPPORTED`
+- `DETACHED_HEAD`: Target cannot be inferred (default prefers `main` when present)
+- `UNRESOLVED_CONFLICTS`: Conflicts or required check failures
 
 **Idempotence:** Idempotent if no conflicts. Re-preparation refreshes.
 
@@ -1144,6 +1188,7 @@ MergeApproved:
 - `FLOW_NOT_FOUND`
 - `MERGE_NOT_PREPARED`: No merge preparation
 - `UNRESOLVED_CONFLICTS`: Conflicts exist
+- `MERGE_ALREADY_APPROVED`: Approval is idempotent but enforced server-side
 
 **Idempotence:** Idempotent. Approving approved merge is no-op.
 
@@ -1159,17 +1204,24 @@ hivemind merge execute <flow-id>
 **Preconditions:**
 - Flow exists
 - Merge is approved
+- Flow is frozen for merge
 
 **Effects:**
-- Integration commits pushed to target branches
-- Execution branches cleaned up (per policy)
+- Per-flow integration lock acquired (`FlowIntegrationLockAcquired`)
+- Target branch fast-forward applied from prepared integration branch `integration/<flow>/prepare`
+- Sandbox worktrees/branches cleaned up (`_integration_prepare`, `integration/<flow>/prepare`, `integration/<flow>/<task>`, `_merge`)
+- Execution branches cleaned up (per project policy)
 - Flow marked as merged
 
 **Git Artifacts (deterministic):**
-- The prepared flow integration branch `flow/<flow-id>` is merged into the selected target branch.
+- The prepared integration branch `integration/<flow-id>/prepare` is merged into the selected target branch.
 
 **Events:**
 ```
+FlowIntegrationLockAcquired:
+  flow_id: <flow-id>
+  operation: merge_execute
+
 MergeCompleted:
   flow_id: <flow-id>
   commits: [<commit-refs>]
@@ -1177,9 +1229,11 @@ MergeCompleted:
 
 **Failures:**
 - `FLOW_NOT_FOUND`
-- `MERGE_NOT_APPROVED`: Merge not approved
-- `MERGE_CONFLICT`: Conflict occurred during merge
-- `PUSH_FAILED`: Could not push to remote
+- `MERGE_NOT_PREPARED`
+- `MERGE_NOT_APPROVED`
+- `FLOW_NOT_FROZEN_FOR_MERGE`
+- `MERGE_CONFLICT`: Conflict occurred during final fast-forward
+- `PUSH_FAILED`: Could not update target
 
 **Idempotence:** Not idempotent. Cannot merge twice.
 

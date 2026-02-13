@@ -590,13 +590,22 @@ pub struct VerifyResultsArgs {
 /// Merge subcommands.
 #[derive(Subcommand)]
 pub enum MergeCommands {
-    /// Prepare a merge for a completed flow (creates an integration branch)
+    #[command(
+        about = "Prepare a completed flow for integration (sandbox merge)",
+        long_about = "Freeze the flow for merge, acquire the per-flow integration lock, materialize integration/<flow>/prepare + _integration_prepare worktree, integrate each successful exec/<flow>/<task> through integration/<flow>/<task> sandboxes with --no-commit --no-ff, run required integration checks, and emit MergePrepared/MergeCheck/TaskIntegratedIntoFlow events."
+    )]
     Prepare(MergePrepareArgs),
 
-    /// Approve a prepared merge (explicit human gate)
+    #[command(
+        about = "Approve a prepared merge (explicit human gate)",
+        long_about = "Record the approving HUMAN user (HIVEMIND_USER or USER), ensure no unresolved conflicts/check failures remain, and emit MergeApproved so execute can proceed."
+    )]
     Approve(MergeApproveArgs),
 
-    /// Execute an approved merge (fast-forward target branch)
+    #[command(
+        about = "Execute an approved merge (fast-forward target)",
+        long_about = "Acquire the per-flow integration lock and fast-forward the chosen target branch from integration/<flow>/prepare, then clean up integration/<flow>/prepare, integration/<flow>/<task>, _integration_prepare, and exec branches. Emits MergeCompleted."
+    )]
     Execute(MergeExecuteArgs),
 }
 

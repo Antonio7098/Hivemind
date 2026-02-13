@@ -448,6 +448,56 @@ pub enum EventPayload {
         required: bool,
     },
 
+    MergeCheckStarted {
+        flow_id: Uuid,
+        #[serde(default)]
+        task_id: Option<Uuid>,
+        check_name: String,
+        required: bool,
+    },
+
+    MergeCheckCompleted {
+        flow_id: Uuid,
+        #[serde(default)]
+        task_id: Option<Uuid>,
+        check_name: String,
+        passed: bool,
+        exit_code: i32,
+        output: String,
+        duration_ms: u64,
+        required: bool,
+    },
+
+    TaskExecutionFrozen {
+        flow_id: Uuid,
+        task_id: Uuid,
+        #[serde(default)]
+        commit_sha: Option<String>,
+    },
+
+    TaskIntegratedIntoFlow {
+        flow_id: Uuid,
+        task_id: Uuid,
+        #[serde(default)]
+        commit_sha: Option<String>,
+    },
+
+    MergeConflictDetected {
+        flow_id: Uuid,
+        #[serde(default)]
+        task_id: Option<Uuid>,
+        details: String,
+    },
+
+    FlowFrozenForMerge {
+        flow_id: Uuid,
+    },
+
+    FlowIntegrationLockAcquired {
+        flow_id: Uuid,
+        operation: String,
+    },
+
     CheckpointCommitCreated {
         flow_id: Uuid,
         task_id: Uuid,
