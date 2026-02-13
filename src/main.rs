@@ -3,10 +3,10 @@
 use clap::error::ErrorKind;
 use clap::Parser;
 use hivemind::cli::commands::{
-    AttemptCommands, AttemptInspectArgs, Cli, Commands, EventCommands, FlowCommands, GraphCommands,
-    MergeCommands, ProjectCommands, ServeArgs, TaskAbortArgs, TaskCloseArgs, TaskCommands,
-    TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs, TaskStartArgs,
-    TaskUpdateArgs, VerifyCommands, WorktreeCommands,
+    AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, EventCommands,
+    FlowCommands, GraphCommands, MergeCommands, ProjectCommands, ServeArgs, TaskAbortArgs,
+    TaskCloseArgs, TaskCommands, TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs,
+    TaskRetryArgs, TaskStartArgs, TaskUpdateArgs, VerifyCommands, WorktreeCommands,
 };
 use hivemind::cli::output::{output, output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
@@ -477,6 +477,7 @@ fn run(cli: Cli) -> ExitCode {
         Some(Commands::Verify(cmd)) => handle_verify(cmd, format),
         Some(Commands::Merge(cmd)) => handle_merge(cmd, format),
         Some(Commands::Attempt(cmd)) => handle_attempt(cmd, format),
+        Some(Commands::Checkpoint(cmd)) => handle_checkpoint(cmd, format),
         Some(Commands::Worktree(cmd)) => handle_worktree(cmd, format),
         None => {
             println!("hivemind {}", env!("CARGO_PKG_VERSION"));
@@ -933,6 +934,10 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::CheckCompleted { .. } => "check_completed",
         EventPayload::MergeCheckStarted { .. } => "merge_check_started",
         EventPayload::MergeCheckCompleted { .. } => "merge_check_completed",
+        EventPayload::CheckpointDeclared { .. } => "checkpoint_declared",
+        EventPayload::CheckpointActivated { .. } => "checkpoint_activated",
+        EventPayload::CheckpointCompleted { .. } => "checkpoint_completed",
+        EventPayload::AllCheckpointsCompleted { .. } => "all_checkpoints_completed",
         EventPayload::CheckpointCommitCreated { .. } => "checkpoint_commit_created",
         EventPayload::ScopeValidated { .. } => "scope_validated",
         EventPayload::ScopeViolationDetected { .. } => "scope_violation_detected",
@@ -1393,6 +1398,65 @@ fn handle_attempt(cmd: AttemptCommands, format: OutputFormat) -> ExitCode {
 
     match cmd {
         AttemptCommands::Inspect(args) => handle_attempt_inspect(&registry, &args, format),
+    }
+}
+
+fn handle_checkpoint(cmd: CheckpointCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        CheckpointCommands::Complete(args) => {
+            let attempt_id = args
+                .attempt_id
+                .or_else(|| std::env::var("HIVEMIND_ATTEMPT_ID").ok())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+
+            let Some(attempt_id) = attempt_id else {
+                return output_error(
+                    &hivemind::core::error::HivemindError::user(
+                        "attempt_id_required",
+                        "Attempt ID is required (pass --attempt-id or set HIVEMIND_ATTEMPT_ID)",
+                        "cli:checkpoint:complete",
+                    ),
+                    format,
+                );
+            };
+
+            match registry.checkpoint_complete(
+                &attempt_id,
+                &args.checkpoint_id,
+                args.summary.as_deref(),
+            ) {
+                Ok(result) => {
+                    match format {
+                        OutputFormat::Json | OutputFormat::Yaml => {
+                            if let Err(err) = output(&result, format) {
+                                eprintln!("Failed to render checkpoint result: {err}");
+                            }
+                        }
+                        OutputFormat::Table => {
+                            println!("Attempt:    {}", result.attempt_id);
+                            println!(
+                                "Checkpoint: {} ({}/{})",
+                                result.checkpoint_id, result.order, result.total
+                            );
+                            println!("Commit:     {}", result.commit_hash);
+                            if let Some(next) = result.next_checkpoint_id {
+                                println!("Next:       {next}");
+                            } else {
+                                println!("Next:       none");
+                            }
+                            println!("All done:   {}", result.all_completed);
+                        }
+                    }
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
     }
 }
 

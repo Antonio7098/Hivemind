@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.14",
+      "date": "2026-02-13",
+      "phase": 24,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Implement checkpoint lifecycle model with AttemptCheckpoint state, checkpoint events (Declared/Activated/Completed/AllCompleted), and canonical checkpoint commit generation"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Introduce `hivemind checkpoint complete --attempt-id <id> --id <checkpoint>` for agents/runtimes to mark checkpoints done with optional summaries"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Gate task completion on checkpoints, inject checkpoint guidance/env vars into runtime execution, and emit checkpoint lifecycle + commit events"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update ops/ROADMAP.md for Phase 24 Execution Checkpoints and renumber subsequent phases; add detailed exit criteria"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add checkpoint lifecycle integration coverage and adapt real OpenCode projection script to perform checkpoint completion"
+        }
+      ]
+    },
+    {
       "version": "v0.1.13",
       "date": "2026-02-13",
       "phase": 23,

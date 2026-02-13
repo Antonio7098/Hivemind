@@ -68,9 +68,36 @@ pub enum Commands {
     #[command(subcommand)]
     Attempt(AttemptCommands),
 
+    /// Checkpoint lifecycle commands
+    #[command(subcommand)]
+    Checkpoint(CheckpointCommands),
+
     /// Inspect and manage git worktrees used for task execution
     #[command(subcommand)]
     Worktree(WorktreeCommands),
+}
+
+/// Checkpoint subcommands.
+#[derive(Subcommand)]
+pub enum CheckpointCommands {
+    /// Complete the currently active checkpoint for an attempt
+    Complete(CheckpointCompleteArgs),
+}
+
+/// Arguments for checkpoint completion.
+#[derive(Args)]
+pub struct CheckpointCompleteArgs {
+    /// Attempt ID (optional when `HIVEMIND_ATTEMPT_ID` is set)
+    #[arg(long)]
+    pub attempt_id: Option<String>,
+
+    /// Checkpoint ID
+    #[arg(long = "id")]
+    pub checkpoint_id: String,
+
+    /// Optional completion summary
+    #[arg(long)]
+    pub summary: Option<String>,
 }
 
 #[derive(Args)]

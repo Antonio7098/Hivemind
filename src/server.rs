@@ -141,6 +141,10 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::CheckCompleted { .. } => "CheckCompleted",
         EventPayload::MergeCheckStarted { .. } => "MergeCheckStarted",
         EventPayload::MergeCheckCompleted { .. } => "MergeCheckCompleted",
+        EventPayload::CheckpointDeclared { .. } => "CheckpointDeclared",
+        EventPayload::CheckpointActivated { .. } => "CheckpointActivated",
+        EventPayload::CheckpointCompleted { .. } => "CheckpointCompleted",
+        EventPayload::AllCheckpointsCompleted { .. } => "AllCheckpointsCompleted",
         EventPayload::CheckpointCommitCreated { .. } => "CheckpointCommitCreated",
         EventPayload::ScopeValidated { .. } => "ScopeValidated",
         EventPayload::ScopeViolationDetected { .. } => "ScopeViolationDetected",
@@ -207,6 +211,10 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskExecutionSucceeded { .. }
         | EventPayload::TaskExecutionFailed { .. }
         | EventPayload::AttemptStarted { .. }
+        | EventPayload::CheckpointDeclared { .. }
+        | EventPayload::CheckpointActivated { .. }
+        | EventPayload::CheckpointCompleted { .. }
+        | EventPayload::AllCheckpointsCompleted { .. }
         | EventPayload::RetryContextAssembled { .. }
         | EventPayload::TaskRetryRequested { .. }
         | EventPayload::TaskAborted { .. } => "execution",

@@ -77,7 +77,7 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
             "--arg",
             "-c",
             "--arg",
-            "printf data > hm_scope_violation.txt",
+            "printf data > hm_scope_violation.txt; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
             "--timeout-ms",
             "1000",
         ],
@@ -261,7 +261,7 @@ fn cli_verify_run_and_results_capture_check_outcomes() {
             "--arg",
             "-c",
             "--arg",
-            "echo runtime_ok",
+            "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
             "--timeout-ms",
             "1000",
         ],
@@ -337,7 +337,7 @@ fn cli_verify_override_can_force_success_after_check_failure_and_is_audited() {
             "--arg",
             "-c",
             "--arg",
-            "echo runtime_ok",
+            "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
             "--timeout-ms",
             "1000",
         ],
@@ -671,7 +671,7 @@ fn scheduler_emits_task_blocked_and_respects_dependency_order() {
             "--arg",
             "-c",
             "--arg",
-            "exit 0",
+            "\"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
             "--timeout-ms",
             "1000",
         ],
@@ -862,6 +862,19 @@ fn cli_attempt_inspect_diff_after_manual_execution() {
         .join(&t1_id)
         .join("README.md");
     std::fs::write(&worktree_readme, "changed\n").expect("modify worktree file");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "checkpoint",
+            "complete",
+            "--attempt-id",
+            &attempt_id,
+            "--id",
+            "checkpoint-1",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
 
     let (code, _out, err) = run_hivemind(tmp.path(), &["task", "complete", &t1_id]);
     assert_eq!(code, 0, "{err}");
@@ -1116,7 +1129,7 @@ fn cli_runtime_config_and_flow_tick() {
             "--arg",
             "-c",
             "--arg",
-            "echo '$ cargo test'; echo 'Tool: grep'; echo '- [ ] collect logs'; echo '- [x] collect logs'; echo 'I will verify outputs'; echo stderr_line 1>&2; printf data > hm_phase14.txt",
+            "echo '$ cargo test'; echo 'Tool: grep'; echo '- [ ] collect logs'; echo '- [x] collect logs'; echo 'I will verify outputs'; echo stderr_line 1>&2; printf data > hm_phase14.txt; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
             "--timeout-ms",
             "1000",
         ],
@@ -1169,4 +1182,137 @@ fn cli_runtime_config_and_flow_tick() {
     assert!(out.contains("runtime_tool_call_observed"), "{out}");
     assert!(out.contains("runtime_todo_snapshot_updated"), "{out}");
     assert!(out.contains("runtime_narrative_output_observed"), "{out}");
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_checkpoint_complete_unblocks_attempt_and_emits_lifecycle_events() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--binary-path",
+            "/usr/bin/env",
+            "--arg",
+            "sh",
+            "--arg",
+            "-c",
+            "--arg",
+            "echo runtime_ok",
+            "--timeout-ms",
+            "1000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("checkpoints_incomplete"), "{err}");
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "200",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(events_out.contains("checkpoint_declared"), "{events_out}");
+    assert!(events_out.contains("checkpoint_activated"), "{events_out}");
+
+    let events_json: serde_json::Value = serde_json::from_str(&events_out).expect("events json");
+    let data = events_json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .expect("events data");
+    let attempt_id = data
+        .iter()
+        .find_map(|ev| {
+            let payload = ev.get("payload")?;
+            let typ = payload.get("type")?.as_str()?;
+            if typ != "attempt_started" {
+                return None;
+            }
+            payload
+                .get("attempt_id")?
+                .as_str()
+                .map(std::string::ToString::to_string)
+        })
+        .expect("attempt id");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "checkpoint",
+            "complete",
+            "--attempt-id",
+            &attempt_id,
+            "--id",
+            "checkpoint-1",
+            "--summary",
+            "checkpoint done",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "300",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(events_out.contains("checkpoint_completed"), "{events_out}");
+    assert!(
+        events_out.contains("all_checkpoints_completed"),
+        "{events_out}"
+    );
+    assert!(
+        events_out.contains("checkpoint_commit_created"),
+        "{events_out}"
+    );
 }
