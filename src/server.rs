@@ -1,11 +1,13 @@
 use crate::cli::output::CliResponse;
 use crate::core::error::{HivemindError, Result};
 use crate::core::events::{CorrelationIds, Event, EventPayload};
+use crate::core::flow::RetryMode;
 use crate::core::registry::Registry;
 use crate::core::state::{MergeState, Project, Task};
+use crate::core::verification::CheckConfig;
 use crate::core::{flow::TaskFlow, graph::TaskGraph};
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -30,14 +32,16 @@ pub fn handle_api_request(
     method: ApiMethod,
     url: &str,
     default_events_limit: usize,
+    body: Option<&[u8]>,
 ) -> Result<ApiResponse> {
     let registry = Registry::open()?;
-    handle_api_request_inner(method, url, default_events_limit, &registry)
+    handle_api_request_inner(method, url, default_events_limit, body, &registry)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApiMethod {
     Get,
+    Post,
     Options,
 }
 
@@ -45,6 +49,7 @@ impl ApiMethod {
     fn from_http(method: &tiny_http::Method) -> Option<Self> {
         match method {
             tiny_http::Method::Get => Some(Self::Get),
+            tiny_http::Method::Post => Some(Self::Post),
             tiny_http::Method::Options => Some(Self::Options),
             _ => None,
         }
@@ -347,11 +352,292 @@ fn cors_headers() -> Vec<tiny_http::Header> {
     vec![
         tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
             .expect("static header"),
-        tiny_http::Header::from_bytes(&b"Access-Control-Allow-Methods"[..], &b"GET, OPTIONS"[..])
+        tiny_http::Header::from_bytes(&b"Access-Control-Allow-Methods"[..], &b"GET, POST, OPTIONS"[..])
             .expect("static header"),
         tiny_http::Header::from_bytes(&b"Access-Control-Allow-Headers"[..], &b"Content-Type"[..])
             .expect("static header"),
     ]
+}
+
+fn parse_json_body<T: for<'de> Deserialize<'de>>(body: Option<&[u8]>, origin: &str) -> Result<T> {
+    let raw = body.ok_or_else(|| {
+        HivemindError::user(
+            "request_body_required",
+            "Request body is required",
+            origin,
+        )
+    })?;
+
+    serde_json::from_slice(raw).map_err(|e| {
+        HivemindError::user(
+            "invalid_json_body",
+            format!("Invalid JSON body: {e}"),
+            origin,
+        )
+    })
+}
+
+fn method_not_allowed(path: &str, method: ApiMethod, allowed: &'static str) -> Result<ApiResponse> {
+    let err = HivemindError::user(
+        "method_not_allowed",
+        format!("Method '{method:?}' is not allowed for '{path}'"),
+        "server:handle_api_request",
+    )
+    .with_hint(format!("Allowed method(s): {allowed}"));
+    let wrapped = CliResponse::<()>::error(&err);
+    let mut resp = ApiResponse::json(405, &wrapped)?;
+    resp.extra_headers.extend(cors_headers());
+    Ok(resp)
+}
+
+#[derive(Debug, Deserialize)]
+struct ProjectCreateRequest {
+    name: String,
+    description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProjectUpdateRequest {
+    project: String,
+    name: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProjectRuntimeRequest {
+    project: String,
+    adapter: Option<String>,
+    binary_path: Option<String>,
+    model: Option<String>,
+    args: Option<Vec<String>>,
+    env: Option<HashMap<String, String>>,
+    timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProjectAttachRepoRequest {
+    project: String,
+    path: String,
+    name: Option<String>,
+    access: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProjectDetachRepoRequest {
+    project: String,
+    repo_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskCreateRequest {
+    project: String,
+    title: String,
+    description: Option<String>,
+    scope: Option<crate::core::scope::Scope>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskUpdateRequest {
+    task_id: String,
+    title: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskCloseRequest {
+    task_id: String,
+    reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskIdRequest {
+    task_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskRetryRequest {
+    task_id: String,
+    reset_count: Option<bool>,
+    mode: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskAbortRequest {
+    task_id: String,
+    reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphCreateRequest {
+    project: String,
+    name: String,
+    from_tasks: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphDependencyRequest {
+    graph_id: String,
+    from_task: String,
+    to_task: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphAddCheckRequest {
+    graph_id: String,
+    task_id: String,
+    name: String,
+    command: String,
+    required: Option<bool>,
+    timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphValidateRequest {
+    graph_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FlowCreateRequest {
+    graph_id: String,
+    name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FlowIdRequest {
+    flow_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FlowTickRequest {
+    flow_id: String,
+    interactive: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FlowAbortRequest {
+    flow_id: String,
+    reason: Option<String>,
+    force: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct VerifyOverrideRequest {
+    task_id: String,
+    decision: String,
+    reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct VerifyRunRequest {
+    task_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct MergePrepareRequest {
+    flow_id: String,
+    target: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MergeApproveRequest {
+    flow_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct MergeExecuteRequest {
+    flow_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CheckpointCompleteRequest {
+    attempt_id: String,
+    checkpoint_id: String,
+    summary: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct WorktreeCleanupRequest {
+    flow_id: String,
+}
+
+#[derive(Debug, Serialize)]
+struct VerifyResultsView {
+    attempt_id: String,
+    task_id: String,
+    flow_id: String,
+    attempt_number: u32,
+    check_results: Vec<Value>,
+}
+
+#[derive(Debug, Serialize)]
+struct AttemptInspectView {
+    attempt_id: String,
+    task_id: String,
+    flow_id: String,
+    attempt_number: u32,
+    started_at: DateTime<Utc>,
+    baseline_id: Option<String>,
+    diff_id: Option<String>,
+    diff: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ApiCatalog {
+    read_endpoints: Vec<&'static str>,
+    write_endpoints: Vec<&'static str>,
+}
+
+fn api_catalog() -> ApiCatalog {
+    ApiCatalog {
+        read_endpoints: vec![
+            "/api/version",
+            "/api/state",
+            "/api/projects",
+            "/api/tasks",
+            "/api/graphs",
+            "/api/flows",
+            "/api/merges",
+            "/api/events",
+            "/api/events/inspect?event_id=<id>",
+            "/api/verify/results?attempt_id=<id>&output=true|false",
+            "/api/attempts/inspect?attempt_id=<id>&diff=true|false",
+            "/api/attempts/diff?attempt_id=<id>",
+            "/api/flows/replay?flow_id=<id>",
+            "/api/worktrees?flow_id=<id>",
+            "/api/worktrees/inspect?task_id=<id>",
+        ],
+        write_endpoints: vec![
+            "/api/projects/create",
+            "/api/projects/update",
+            "/api/projects/runtime",
+            "/api/projects/repos/attach",
+            "/api/projects/repos/detach",
+            "/api/tasks/create",
+            "/api/tasks/update",
+            "/api/tasks/close",
+            "/api/tasks/start",
+            "/api/tasks/complete",
+            "/api/tasks/retry",
+            "/api/tasks/abort",
+            "/api/graphs/create",
+            "/api/graphs/dependencies/add",
+            "/api/graphs/checks/add",
+            "/api/graphs/validate",
+            "/api/flows/create",
+            "/api/flows/start",
+            "/api/flows/tick",
+            "/api/flows/pause",
+            "/api/flows/resume",
+            "/api/flows/abort",
+            "/api/verify/override",
+            "/api/verify/run",
+            "/api/merge/prepare",
+            "/api/merge/approve",
+            "/api/merge/execute",
+            "/api/checkpoints/complete",
+            "/api/worktrees/cleanup",
+        ],
+    }
 }
 
 fn list_tasks(registry: &Registry) -> Result<Vec<Task>> {
@@ -398,6 +684,7 @@ fn handle_api_request_inner(
     method: ApiMethod,
     url: &str,
     default_events_limit: usize,
+    body: Option<&[u8]>,
     registry: &Registry,
 ) -> Result<ApiResponse> {
     if method == ApiMethod::Options {
@@ -409,19 +696,25 @@ fn handle_api_request_inner(
     let (path, _qs) = url.split_once('?').unwrap_or((url, ""));
 
     match path {
-        "/health" => {
+        "/health" if method == ApiMethod::Get => {
             let mut resp = ApiResponse::text(200, "text/plain", "ok\n");
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
-        "/api/version" => {
+        "/api/version" if method == ApiMethod::Get => {
             let value = serde_json::json!({"version": env!("CARGO_PKG_VERSION")});
             let wrapped = CliResponse::success(value);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
-        "/api/state" => {
+        "/api/catalog" if method == ApiMethod::Get => {
+            let wrapped = CliResponse::success(api_catalog());
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/state" if method == ApiMethod::Get => {
             let query = parse_query(url);
             let events_limit = query
                 .get("events_limit")
@@ -434,37 +727,37 @@ fn handle_api_request_inner(
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
-        "/api/projects" => {
+        "/api/projects" if method == ApiMethod::Get => {
             let wrapped = CliResponse::success(registry.list_projects()?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
-        "/api/tasks" => {
+        "/api/tasks" if method == ApiMethod::Get => {
             let wrapped = CliResponse::success(list_tasks(registry)?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
-        "/api/graphs" => {
+        "/api/graphs" if method == ApiMethod::Get => {
             let wrapped = CliResponse::success(list_graphs(registry)?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
-        "/api/flows" => {
+        "/api/flows" if method == ApiMethod::Get => {
             let wrapped = CliResponse::success(list_flows(registry)?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
-        "/api/merges" => {
+        "/api/merges" if method == ApiMethod::Get => {
             let wrapped = CliResponse::success(list_merge_states(registry)?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
-        "/api/events" => {
+        "/api/events" if method == ApiMethod::Get => {
             let query = parse_query(url);
             let limit = query
                 .get("limit")
@@ -475,6 +768,535 @@ fn handle_api_request_inner(
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
+        "/api/events/inspect" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let event_id = query.get("event_id").ok_or_else(|| {
+                HivemindError::user(
+                    "missing_event_id",
+                    "Query parameter 'event_id' is required",
+                    "server:events:inspect",
+                )
+            })?;
+            let wrapped = CliResponse::success(registry.get_event(event_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/verify/results" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let attempt_id = query.get("attempt_id").ok_or_else(|| {
+                HivemindError::user(
+                    "missing_attempt_id",
+                    "Query parameter 'attempt_id' is required",
+                    "server:verify:results",
+                )
+            })?;
+            let output = query
+                .get("output")
+                .map(|v| v == "true")
+                .unwrap_or(false);
+            let attempt = registry.get_attempt(attempt_id)?;
+            let check_results = attempt
+                .check_results
+                .iter()
+                .map(|r| {
+                    if output {
+                        serde_json::json!(r)
+                    } else {
+                        serde_json::json!({
+                            "name": r.name,
+                            "passed": r.passed,
+                            "exit_code": r.exit_code,
+                            "duration_ms": r.duration_ms,
+                            "required": r.required,
+                        })
+                    }
+                })
+                .collect::<Vec<_>>();
+            let view = VerifyResultsView {
+                attempt_id: attempt.id.to_string(),
+                task_id: attempt.task_id.to_string(),
+                flow_id: attempt.flow_id.to_string(),
+                attempt_number: attempt.attempt_number,
+                check_results,
+            };
+            let wrapped = CliResponse::success(view);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/attempts/inspect" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let attempt_id = query.get("attempt_id").ok_or_else(|| {
+                HivemindError::user(
+                    "missing_attempt_id",
+                    "Query parameter 'attempt_id' is required",
+                    "server:attempts:inspect",
+                )
+            })?;
+            let include_diff = query.get("diff").map(|v| v == "true").unwrap_or(false);
+            let attempt = registry.get_attempt(attempt_id)?;
+            let diff = if include_diff {
+                registry.get_attempt_diff(attempt_id)?
+            } else {
+                None
+            };
+            let view = AttemptInspectView {
+                attempt_id: attempt.id.to_string(),
+                task_id: attempt.task_id.to_string(),
+                flow_id: attempt.flow_id.to_string(),
+                attempt_number: attempt.attempt_number,
+                started_at: attempt.started_at,
+                baseline_id: attempt.baseline_id.map(|v| v.to_string()),
+                diff_id: attempt.diff_id.map(|v| v.to_string()),
+                diff,
+            };
+            let wrapped = CliResponse::success(view);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/attempts/diff" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let attempt_id = query.get("attempt_id").ok_or_else(|| {
+                HivemindError::user(
+                    "missing_attempt_id",
+                    "Query parameter 'attempt_id' is required",
+                    "server:attempts:diff",
+                )
+            })?;
+            let wrapped = CliResponse::success(serde_json::json!({
+                "attempt_id": attempt_id,
+                "diff": registry.get_attempt_diff(attempt_id)?,
+            }));
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/flows/replay" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let flow_id = query.get("flow_id").ok_or_else(|| {
+                HivemindError::user(
+                    "missing_flow_id",
+                    "Query parameter 'flow_id' is required",
+                    "server:flows:replay",
+                )
+            })?;
+            let wrapped = CliResponse::success(registry.replay_flow(flow_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/worktrees" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let flow_id = query.get("flow_id").ok_or_else(|| {
+                HivemindError::user(
+                    "missing_flow_id",
+                    "Query parameter 'flow_id' is required",
+                    "server:worktrees:list",
+                )
+            })?;
+            let wrapped = CliResponse::success(registry.worktree_list(flow_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/worktrees/inspect" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let task_id = query.get("task_id").ok_or_else(|| {
+                HivemindError::user(
+                    "missing_task_id",
+                    "Query parameter 'task_id' is required",
+                    "server:worktrees:inspect",
+                )
+            })?;
+            let wrapped = CliResponse::success(registry.worktree_inspect(task_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/projects/create" if method == ApiMethod::Post => {
+            let req: ProjectCreateRequest =
+                parse_json_body(body, "server:projects:create")?;
+            let wrapped = CliResponse::success(
+                registry.create_project(&req.name, req.description.as_deref())?,
+            );
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/projects/update" if method == ApiMethod::Post => {
+            let req: ProjectUpdateRequest =
+                parse_json_body(body, "server:projects:update")?;
+            let wrapped = CliResponse::success(registry.update_project(
+                &req.project,
+                req.name.as_deref(),
+                req.description.as_deref(),
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/projects/runtime" if method == ApiMethod::Post => {
+            let req: ProjectRuntimeRequest =
+                parse_json_body(body, "server:projects:runtime")?;
+            let mut env_pairs = Vec::new();
+            if let Some(env) = req.env {
+                for (k, v) in env {
+                    env_pairs.push(format!("{k}={v}"));
+                }
+            }
+            let wrapped = CliResponse::success(registry.project_runtime_set(
+                &req.project,
+                req.adapter.as_deref().unwrap_or("opencode"),
+                req.binary_path.as_deref().unwrap_or("opencode"),
+                req.model,
+                &req.args.unwrap_or_default(),
+                &env_pairs,
+                req.timeout_ms.unwrap_or(600_000),
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/projects/repos/attach" if method == ApiMethod::Post => {
+            let req: ProjectAttachRepoRequest =
+                parse_json_body(body, "server:projects:repos:attach")?;
+            let access_mode = match req
+                .access
+                .as_deref()
+                .unwrap_or("rw")
+                .to_lowercase()
+                .as_str()
+            {
+                "ro" | "readonly" => crate::core::scope::RepoAccessMode::ReadOnly,
+                "rw" | "readwrite" => crate::core::scope::RepoAccessMode::ReadWrite,
+                other => {
+                    return Err(HivemindError::user(
+                        "invalid_access_mode",
+                        format!("Invalid access mode '{other}'"),
+                        "server:projects:repos:attach",
+                    ));
+                }
+            };
+            let wrapped = CliResponse::success(registry.attach_repo(
+                &req.project,
+                &req.path,
+                req.name.as_deref(),
+                access_mode,
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/projects/repos/detach" if method == ApiMethod::Post => {
+            let req: ProjectDetachRepoRequest =
+                parse_json_body(body, "server:projects:repos:detach")?;
+            let wrapped = CliResponse::success(registry.detach_repo(&req.project, &req.repo_name)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/tasks/create" if method == ApiMethod::Post => {
+            let req: TaskCreateRequest = parse_json_body(body, "server:tasks:create")?;
+            let wrapped = CliResponse::success(registry.create_task(
+                &req.project,
+                &req.title,
+                req.description.as_deref(),
+                req.scope,
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/tasks/update" if method == ApiMethod::Post => {
+            let req: TaskUpdateRequest = parse_json_body(body, "server:tasks:update")?;
+            let wrapped = CliResponse::success(registry.update_task(
+                &req.task_id,
+                req.title.as_deref(),
+                req.description.as_deref(),
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/tasks/close" if method == ApiMethod::Post => {
+            let req: TaskCloseRequest = parse_json_body(body, "server:tasks:close")?;
+            let wrapped = CliResponse::success(registry.close_task(&req.task_id, req.reason.as_deref())?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/tasks/start" if method == ApiMethod::Post => {
+            let req: TaskIdRequest = parse_json_body(body, "server:tasks:start")?;
+            let wrapped = CliResponse::success(serde_json::json!({
+                "attempt_id": registry.start_task_execution(&req.task_id)?,
+            }));
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/tasks/complete" if method == ApiMethod::Post => {
+            let req: TaskIdRequest = parse_json_body(body, "server:tasks:complete")?;
+            let wrapped = CliResponse::success(registry.complete_task_execution(&req.task_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/tasks/retry" if method == ApiMethod::Post => {
+            let req: TaskRetryRequest = parse_json_body(body, "server:tasks:retry")?;
+            let mode = match req
+                .mode
+                .as_deref()
+                .unwrap_or("clean")
+                .to_lowercase()
+                .as_str()
+            {
+                "clean" => RetryMode::Clean,
+                "continue" => RetryMode::Continue,
+                other => {
+                    return Err(HivemindError::user(
+                        "invalid_retry_mode",
+                        format!("Invalid retry mode '{other}'"),
+                        "server:tasks:retry",
+                    ));
+                }
+            };
+            let wrapped = CliResponse::success(registry.retry_task(
+                &req.task_id,
+                req.reset_count.unwrap_or(false),
+                mode,
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/tasks/abort" if method == ApiMethod::Post => {
+            let req: TaskAbortRequest = parse_json_body(body, "server:tasks:abort")?;
+            let wrapped = CliResponse::success(registry.abort_task(&req.task_id, req.reason.as_deref())?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/graphs/create" if method == ApiMethod::Post => {
+            let req: GraphCreateRequest = parse_json_body(body, "server:graphs:create")?;
+            let wrapped = CliResponse::success(registry.create_graph(
+                &req.project,
+                &req.name,
+                &req
+                    .from_tasks
+                    .iter()
+                    .map(|s| {
+                        uuid::Uuid::parse_str(s).map_err(|_| {
+                            HivemindError::user(
+                                "invalid_task_id",
+                                format!("'{s}' is not a valid task ID"),
+                                "server:graphs:create",
+                            )
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/graphs/dependencies/add" if method == ApiMethod::Post => {
+            let req: GraphDependencyRequest =
+                parse_json_body(body, "server:graphs:dependencies:add")?;
+            let wrapped = CliResponse::success(registry.add_graph_dependency(
+                &req.graph_id,
+                &req.from_task,
+                &req.to_task,
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/graphs/checks/add" if method == ApiMethod::Post => {
+            let req: GraphAddCheckRequest =
+                parse_json_body(body, "server:graphs:checks:add")?;
+            let mut check = CheckConfig::new(req.name, req.command);
+            check.required = req.required.unwrap_or(true);
+            check.timeout_ms = req.timeout_ms;
+            let wrapped = CliResponse::success(registry.add_graph_task_check(
+                &req.graph_id,
+                &req.task_id,
+                check,
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/graphs/validate" if method == ApiMethod::Post => {
+            let req: GraphValidateRequest = parse_json_body(body, "server:graphs:validate")?;
+            let wrapped = CliResponse::success(registry.validate_graph(&req.graph_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/flows/create" if method == ApiMethod::Post => {
+            let req: FlowCreateRequest = parse_json_body(body, "server:flows:create")?;
+            let wrapped = CliResponse::success(registry.create_flow(
+                &req.graph_id,
+                req.name.as_deref(),
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/flows/start" if method == ApiMethod::Post => {
+            let req: FlowIdRequest = parse_json_body(body, "server:flows:start")?;
+            let wrapped = CliResponse::success(registry.start_flow(&req.flow_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/flows/tick" if method == ApiMethod::Post => {
+            let req: FlowTickRequest = parse_json_body(body, "server:flows:tick")?;
+            let wrapped = CliResponse::success(registry.tick_flow(
+                &req.flow_id,
+                req.interactive.unwrap_or(false),
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/flows/pause" if method == ApiMethod::Post => {
+            let req: FlowIdRequest = parse_json_body(body, "server:flows:pause")?;
+            let wrapped = CliResponse::success(registry.pause_flow(&req.flow_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/flows/resume" if method == ApiMethod::Post => {
+            let req: FlowIdRequest = parse_json_body(body, "server:flows:resume")?;
+            let wrapped = CliResponse::success(registry.resume_flow(&req.flow_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/flows/abort" if method == ApiMethod::Post => {
+            let req: FlowAbortRequest = parse_json_body(body, "server:flows:abort")?;
+            let wrapped = CliResponse::success(registry.abort_flow(
+                &req.flow_id,
+                req.reason.as_deref(),
+                req.force.unwrap_or(false),
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/verify/override" if method == ApiMethod::Post => {
+            let req: VerifyOverrideRequest =
+                parse_json_body(body, "server:verify:override")?;
+            let wrapped = CliResponse::success(registry.verify_override(
+                &req.task_id,
+                &req.decision,
+                &req.reason,
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/verify/run" if method == ApiMethod::Post => {
+            let req: VerifyRunRequest = parse_json_body(body, "server:verify:run")?;
+            let wrapped = CliResponse::success(registry.verify_run(&req.task_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/merge/prepare" if method == ApiMethod::Post => {
+            let req: MergePrepareRequest = parse_json_body(body, "server:merge:prepare")?;
+            let wrapped = CliResponse::success(registry.merge_prepare(
+                &req.flow_id,
+                req.target.as_deref(),
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/merge/approve" if method == ApiMethod::Post => {
+            let req: MergeApproveRequest = parse_json_body(body, "server:merge:approve")?;
+            let wrapped = CliResponse::success(registry.merge_approve(&req.flow_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/merge/execute" if method == ApiMethod::Post => {
+            let req: MergeExecuteRequest = parse_json_body(body, "server:merge:execute")?;
+            let wrapped = CliResponse::success(registry.merge_execute(&req.flow_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/checkpoints/complete" if method == ApiMethod::Post => {
+            let req: CheckpointCompleteRequest =
+                parse_json_body(body, "server:checkpoints:complete")?;
+            let wrapped = CliResponse::success(registry.checkpoint_complete(
+                &req.attempt_id,
+                &req.checkpoint_id,
+                req.summary.as_deref(),
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/worktrees/cleanup" if method == ApiMethod::Post => {
+            let req: WorktreeCleanupRequest =
+                parse_json_body(body, "server:worktrees:cleanup")?;
+            registry.worktree_cleanup(&req.flow_id)?;
+            let wrapped = CliResponse::success(serde_json::json!({ "ok": true }));
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/health" => method_not_allowed(path, method, "GET"),
+        "/api/version"
+        | "/api/catalog"
+        | "/api/state"
+        | "/api/projects"
+        | "/api/tasks"
+        | "/api/graphs"
+        | "/api/flows"
+        | "/api/merges"
+        | "/api/events"
+        | "/api/events/inspect"
+        | "/api/verify/results"
+        | "/api/attempts/inspect"
+        | "/api/attempts/diff"
+        | "/api/flows/replay"
+        | "/api/worktrees"
+        | "/api/worktrees/inspect" => method_not_allowed(path, method, "GET"),
+        "/api/projects/create"
+        | "/api/projects/update"
+        | "/api/projects/runtime"
+        | "/api/projects/repos/attach"
+        | "/api/projects/repos/detach"
+        | "/api/tasks/create"
+        | "/api/tasks/update"
+        | "/api/tasks/close"
+        | "/api/tasks/start"
+        | "/api/tasks/complete"
+        | "/api/tasks/retry"
+        | "/api/tasks/abort"
+        | "/api/graphs/create"
+        | "/api/graphs/dependencies/add"
+        | "/api/graphs/checks/add"
+        | "/api/graphs/validate"
+        | "/api/flows/create"
+        | "/api/flows/start"
+        | "/api/flows/tick"
+        | "/api/flows/pause"
+        | "/api/flows/resume"
+        | "/api/flows/abort"
+        | "/api/verify/override"
+        | "/api/verify/run"
+        | "/api/merge/prepare"
+        | "/api/merge/approve"
+        | "/api/merge/execute"
+        | "/api/checkpoints/complete"
+        | "/api/worktrees/cleanup" => method_not_allowed(path, method, "POST"),
         _ => {
             let err = HivemindError::user(
                 "endpoint_not_found",
@@ -496,13 +1318,27 @@ pub fn serve(config: &ServeConfig) -> Result<()> {
 
     eprintln!("hivemind serve listening on http://{addr}");
 
-    for req in server.incoming_requests() {
+    for mut req in server.incoming_requests() {
         let Some(method) = ApiMethod::from_http(req.method()) else {
             let _ = req.respond(tiny_http::Response::empty(405));
             continue;
         };
 
-        let response = match handle_api_request(method, req.url(), config.events_limit) {
+        let mut request_body = Vec::new();
+        if method == ApiMethod::Post {
+            let _ = req.as_reader().read_to_end(&mut request_body);
+        }
+
+        let response = match handle_api_request(
+            method,
+            req.url(),
+            config.events_limit,
+            if request_body.is_empty() {
+                None
+            } else {
+                Some(request_body.as_slice())
+            },
+        ) {
             Ok(r) => r,
             Err(e) => {
                 let wrapped = CliResponse::<()>::error(&e);
@@ -539,11 +1375,14 @@ pub fn serve(config: &ServeConfig) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::mem;
     use crate::core::registry::{Registry, RegistryConfig};
 
     fn test_registry() -> Registry {
         let tmp = tempfile::tempdir().expect("tempdir");
-        let config = RegistryConfig::with_dir(tmp.path().to_path_buf());
+        let data_dir = tmp.path().to_path_buf();
+        mem::forget(tmp);
+        let config = RegistryConfig::with_dir(data_dir);
         Registry::open_with_config(config).expect("registry")
     }
 
@@ -554,7 +1393,8 @@ mod tests {
     #[test]
     fn api_version_ok() {
         let reg = test_registry();
-        let resp = handle_api_request_inner(ApiMethod::Get, "/api/version", 10, &reg).unwrap();
+        let resp =
+            handle_api_request_inner(ApiMethod::Get, "/api/version", 10, None, &reg).unwrap();
         assert_eq!(resp.status_code, 200);
         let v = json_value(&resp.body);
         assert_eq!(v["success"], true);
@@ -564,7 +1404,8 @@ mod tests {
     #[test]
     fn api_state_ok_empty() {
         let reg = test_registry();
-        let resp = handle_api_request_inner(ApiMethod::Get, "/api/state", 10, &reg).unwrap();
+        let resp = handle_api_request_inner(ApiMethod::Get, "/api/state", 10, None, &reg)
+            .unwrap();
         assert_eq!(resp.status_code, 200);
         let v = json_value(&resp.body);
         assert_eq!(v["success"], true);
@@ -574,10 +1415,33 @@ mod tests {
     #[test]
     fn api_unknown_endpoint_404() {
         let reg = test_registry();
-        let resp = handle_api_request_inner(ApiMethod::Get, "/api/nope", 10, &reg).unwrap();
+        let resp =
+            handle_api_request_inner(ApiMethod::Get, "/api/nope", 10, None, &reg).unwrap();
         assert_eq!(resp.status_code, 404);
         let v = json_value(&resp.body);
         assert_eq!(v["success"], false);
         assert_eq!(v["error"]["code"], "endpoint_not_found");
+    }
+
+    #[test]
+    fn api_post_project_create_ok() {
+        let reg = test_registry();
+        let body = serde_json::json!({
+            "name": "proj-a",
+            "description": "project from api"
+        });
+        let body = serde_json::to_vec(&body).expect("json body");
+        let resp = handle_api_request_inner(
+            ApiMethod::Post,
+            "/api/projects/create",
+            10,
+            Some(&body),
+            &reg,
+        )
+        .unwrap();
+        assert_eq!(resp.status_code, 200);
+        let v = json_value(&resp.body);
+        assert_eq!(v["success"], true);
+        assert_eq!(v["data"]["name"], "proj-a");
     }
 }
