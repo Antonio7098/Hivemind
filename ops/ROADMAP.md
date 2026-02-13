@@ -678,27 +678,36 @@ Note: admin token/login?
 **Goal:** Explicit, human-approved integration.
 
 ### 22.1 Merge Preparation
-- [ ] Collect successful task branches
-- [ ] Compute integration commits
-- [ ] Test merge against target
-- [ ] Report conflicts
+- [x] Collect successful task branches
+- [x] Compute integration commits via sandbox branch/worktree (`integration/<flow>/prepare`)
+- [x] Test merge against target (`git merge --no-commit --no-ff`)
+- [x] Report conflicts + integration check failures (persisted outputs)
+- [x] Freeze flow state at start of merge preparation (`FlowFrozenForMerge`)
+- [x] Acquire per-flow integration lock before sandbox work (`FlowIntegrationLockAcquired`)
+- [x] Replay each successful `exec/<flow>/<task>` via dedicated `integration/<flow>/<task>` sandboxes with deterministic metadata
+- [x] Detect dependency drift before integrating each task branch
 
 Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branches and produce/refine the flow integration branch `flow/<flow-id>`.
 
 ### 22.2 Merge Commands
-- [ ] `hivemind merge prepare <flow-id>`
-- [ ] `hivemind merge approve <flow-id>`
-- [ ] `hivemind merge execute <flow-id>`
+- [x] `hivemind merge prepare <flow-id>`
+- [x] `hivemind merge approve <flow-id>`
+- [x] `hivemind merge execute <flow-id>`
 
 ### 22.3 Merge Events
-- [ ] `MergePrepared`
-- [ ] `MergeApproved`
-- [ ] `MergeCompleted`
+- [x] `MergePrepared` (includes target branch & conflicts)
+- [x] `MergeApproved` (with user attribution)
+- [x] `MergeCompleted`
+- [x] `MergeCheckStarted` / `MergeCheckCompleted` (integration check telemetry)
+- [x] `TaskExecutionFrozen` (exec branch head recorded at success/override)
+- [x] `FlowIntegrationLockAcquired` (emitted for prepare + execute)
+- [x] `TaskIntegratedIntoFlow` (task-level integration audit trail)
 
 ### 22.4 Exit Criteria
-- [ ] Merge is explicit and human-approved
-- [ ] Conflicts detected before execution
-- [ ] Integration commits clean
+- [x] Merge is explicit and human-approved
+- [x] Conflicts detected before execution (incl. required check failures)
+- [x] Integration commits clean and produced from sandbox
+- [x] Manual `hivemind-test/test_merge.sh` run verifies FrozenForMerge → Merged transitions and emits sentinel events (`task_execution_frozen`, `flow_frozen_for_merge`, `flow_integration_lock_acquired`, `task_integrated_into_flow`, `merge_*`)
 
 ---
 

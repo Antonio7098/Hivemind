@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.12",
+      "date": "2026-02-13",
+      "phase": 22,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Emit TaskExecutionFrozen, TaskIntegratedIntoFlow, and FlowIntegrationLockAcquired events to enforce deterministic merge sequencing"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Freeze flows at merge prepare, enforce per-flow integration token, and integrate tasks via dedicated integration/<flow>/<task> sandboxes with drift detection"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Update merge command help to describe flow freeze, per-task sandboxes, and integration lock semantics"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Refresh quickstart, CLI operational semantics, and roadmap with tightened merge protocol details and manual test requirements"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Extend hivemind-test/test_merge.sh to assert FrozenForMerge → Merged transitions and sentinel merge events"
+        }
+      ]
+    },
+    {
       "version": "v0.1.11",
       "date": "2026-02-12",
       "phase": 21,

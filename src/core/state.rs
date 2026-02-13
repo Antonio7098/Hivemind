@@ -166,6 +166,34 @@ impl AppState {
                     project.updated_at = timestamp;
                 }
             }
+
+            EventPayload::TaskExecutionFrozen {
+                flow_id,
+                task_id,
+                commit_sha,
+            } => {
+                if let Some(flow) = self.flows.get_mut(flow_id) {
+                    if let Some(exec) = flow.task_executions.get_mut(task_id) {
+                        exec.frozen_commit_sha.clone_from(commit_sha);
+                        exec.updated_at = timestamp;
+                        flow.updated_at = timestamp;
+                    }
+                }
+            }
+
+            EventPayload::TaskIntegratedIntoFlow {
+                flow_id,
+                task_id,
+                commit_sha,
+            } => {
+                if let Some(flow) = self.flows.get_mut(flow_id) {
+                    if let Some(exec) = flow.task_executions.get_mut(task_id) {
+                        exec.integrated_commit_sha.clone_from(commit_sha);
+                        exec.updated_at = timestamp;
+                        flow.updated_at = timestamp;
+                    }
+                }
+            }
             EventPayload::ProjectRuntimeConfigured {
                 project_id,
                 adapter_name,
@@ -362,6 +390,8 @@ impl AppState {
                             state: TaskExecState::Pending,
                             attempt_count: 0,
                             retry_mode: RetryMode::default(),
+                            frozen_commit_sha: None,
+                            integrated_commit_sha: None,
                             updated_at: timestamp,
                             blocked_reason: None,
                         },
@@ -414,6 +444,13 @@ impl AppState {
                 if let Some(flow) = self.flows.get_mut(flow_id) {
                     flow.state = FlowState::Completed;
                     flow.completed_at = Some(timestamp);
+                    flow.updated_at = timestamp;
+                }
+            }
+
+            EventPayload::FlowFrozenForMerge { flow_id } => {
+                if let Some(flow) = self.flows.get_mut(flow_id) {
+                    flow.state = FlowState::FrozenForMerge;
                     flow.updated_at = timestamp;
                 }
             }
@@ -535,45 +572,26 @@ impl AppState {
             }
 
             EventPayload::CheckStarted { .. }
+            | EventPayload::ErrorOccurred { .. }
             | EventPayload::TaskExecutionStarted { .. }
             | EventPayload::TaskExecutionSucceeded { .. }
             | EventPayload::TaskExecutionFailed { .. }
-            | EventPayload::ErrorOccurred { .. }
+            | EventPayload::MergeConflictDetected { .. }
+            | EventPayload::MergeCheckStarted { .. }
+            | EventPayload::MergeCheckCompleted { .. }
+            | EventPayload::RuntimeStarted { .. }
+            | EventPayload::RuntimeOutputChunk { .. }
+            | EventPayload::RuntimeInputProvided { .. }
+            | EventPayload::RuntimeInterrupted { .. }
+            | EventPayload::RuntimeExited { .. }
+            | EventPayload::RuntimeTerminated { .. }
+            | EventPayload::RuntimeFilesystemObserved { .. }
             | EventPayload::FileModified { .. }
             | EventPayload::CheckpointCommitCreated { .. }
             | EventPayload::ScopeValidated { .. }
             | EventPayload::ScopeViolationDetected { .. }
             | EventPayload::RetryContextAssembled { .. }
-            | EventPayload::RuntimeStarted {
-                adapter_name: _,
-                task_id: _,
-                attempt_id: _,
-            }
-            | EventPayload::RuntimeOutputChunk {
-                attempt_id: _,
-                stream: _,
-                content: _,
-            }
-            | EventPayload::RuntimeInputProvided {
-                attempt_id: _,
-                content: _,
-            }
-            | EventPayload::RuntimeInterrupted { attempt_id: _ }
-            | EventPayload::RuntimeExited {
-                attempt_id: _,
-                exit_code: _,
-                duration_ms: _,
-            }
-            | EventPayload::RuntimeTerminated {
-                attempt_id: _,
-                reason: _,
-            }
-            | EventPayload::RuntimeFilesystemObserved {
-                attempt_id: _,
-                files_created: _,
-                files_modified: _,
-                files_deleted: _,
-            }
+            | EventPayload::FlowIntegrationLockAcquired { .. }
             | EventPayload::Unknown => {}
 
             EventPayload::TaskRetryRequested {
@@ -705,6 +723,12 @@ impl AppState {
                     ms.status = MergeStatus::Completed;
                     commits.clone_into(&mut ms.commits);
                     ms.updated_at = timestamp;
+                }
+
+                if let Some(flow) = self.flows.get_mut(flow_id) {
+                    flow.state = FlowState::Merged;
+                    flow.completed_at = Some(timestamp);
+                    flow.updated_at = timestamp;
                 }
             }
         }
