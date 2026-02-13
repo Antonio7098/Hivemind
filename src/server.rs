@@ -352,8 +352,11 @@ fn cors_headers() -> Vec<tiny_http::Header> {
     vec![
         tiny_http::Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
             .expect("static header"),
-        tiny_http::Header::from_bytes(&b"Access-Control-Allow-Methods"[..], &b"GET, POST, OPTIONS"[..])
-            .expect("static header"),
+        tiny_http::Header::from_bytes(
+            &b"Access-Control-Allow-Methods"[..],
+            &b"GET, POST, OPTIONS"[..],
+        )
+        .expect("static header"),
         tiny_http::Header::from_bytes(&b"Access-Control-Allow-Headers"[..], &b"Content-Type"[..])
             .expect("static header"),
     ]
@@ -361,11 +364,7 @@ fn cors_headers() -> Vec<tiny_http::Header> {
 
 fn parse_json_body<T: for<'de> Deserialize<'de>>(body: Option<&[u8]>, origin: &str) -> Result<T> {
     let raw = body.ok_or_else(|| {
-        HivemindError::user(
-            "request_body_required",
-            "Request body is required",
-            origin,
-        )
+        HivemindError::user("request_body_required", "Request body is required", origin)
     })?;
 
     serde_json::from_slice(raw).map_err(|e| {
@@ -791,10 +790,7 @@ fn handle_api_request_inner(
                     "server:verify:results",
                 )
             })?;
-            let output = query
-                .get("output")
-                .map(|v| v == "true")
-                .unwrap_or(false);
+            let output = query.get("output").map(|v| v == "true").unwrap_or(false);
             let attempt = registry.get_attempt(attempt_id)?;
             let check_results = attempt
                 .check_results
@@ -916,8 +912,7 @@ fn handle_api_request_inner(
             Ok(resp)
         }
         "/api/projects/create" if method == ApiMethod::Post => {
-            let req: ProjectCreateRequest =
-                parse_json_body(body, "server:projects:create")?;
+            let req: ProjectCreateRequest = parse_json_body(body, "server:projects:create")?;
             let wrapped = CliResponse::success(
                 registry.create_project(&req.name, req.description.as_deref())?,
             );
@@ -926,8 +921,7 @@ fn handle_api_request_inner(
             Ok(resp)
         }
         "/api/projects/update" if method == ApiMethod::Post => {
-            let req: ProjectUpdateRequest =
-                parse_json_body(body, "server:projects:update")?;
+            let req: ProjectUpdateRequest = parse_json_body(body, "server:projects:update")?;
             let wrapped = CliResponse::success(registry.update_project(
                 &req.project,
                 req.name.as_deref(),
@@ -938,8 +932,7 @@ fn handle_api_request_inner(
             Ok(resp)
         }
         "/api/projects/runtime" if method == ApiMethod::Post => {
-            let req: ProjectRuntimeRequest =
-                parse_json_body(body, "server:projects:runtime")?;
+            let req: ProjectRuntimeRequest = parse_json_body(body, "server:projects:runtime")?;
             let mut env_pairs = Vec::new();
             if let Some(env) = req.env {
                 for (k, v) in env {
@@ -1022,7 +1015,8 @@ fn handle_api_request_inner(
         }
         "/api/tasks/close" if method == ApiMethod::Post => {
             let req: TaskCloseRequest = parse_json_body(body, "server:tasks:close")?;
-            let wrapped = CliResponse::success(registry.close_task(&req.task_id, req.reason.as_deref())?);
+            let wrapped =
+                CliResponse::success(registry.close_task(&req.task_id, req.reason.as_deref())?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
@@ -1073,30 +1067,32 @@ fn handle_api_request_inner(
         }
         "/api/tasks/abort" if method == ApiMethod::Post => {
             let req: TaskAbortRequest = parse_json_body(body, "server:tasks:abort")?;
-            let wrapped = CliResponse::success(registry.abort_task(&req.task_id, req.reason.as_deref())?);
+            let wrapped =
+                CliResponse::success(registry.abort_task(&req.task_id, req.reason.as_deref())?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
         "/api/graphs/create" if method == ApiMethod::Post => {
             let req: GraphCreateRequest = parse_json_body(body, "server:graphs:create")?;
-            let wrapped = CliResponse::success(registry.create_graph(
-                &req.project,
-                &req.name,
-                &req
-                    .from_tasks
-                    .iter()
-                    .map(|s| {
-                        uuid::Uuid::parse_str(s).map_err(|_| {
-                            HivemindError::user(
-                                "invalid_task_id",
-                                format!("'{s}' is not a valid task ID"),
-                                "server:graphs:create",
-                            )
+            let wrapped = CliResponse::success(
+                registry.create_graph(
+                    &req.project,
+                    &req.name,
+                    &req.from_tasks
+                        .iter()
+                        .map(|s| {
+                            uuid::Uuid::parse_str(s).map_err(|_| {
+                                HivemindError::user(
+                                    "invalid_task_id",
+                                    format!("'{s}' is not a valid task ID"),
+                                    "server:graphs:create",
+                                )
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<_>>>()?,
-            )?);
+                        .collect::<Result<Vec<_>>>()?,
+                )?,
+            );
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
@@ -1114,8 +1110,7 @@ fn handle_api_request_inner(
             Ok(resp)
         }
         "/api/graphs/checks/add" if method == ApiMethod::Post => {
-            let req: GraphAddCheckRequest =
-                parse_json_body(body, "server:graphs:checks:add")?;
+            let req: GraphAddCheckRequest = parse_json_body(body, "server:graphs:checks:add")?;
             let mut check = CheckConfig::new(req.name, req.command);
             check.required = req.required.unwrap_or(true);
             check.timeout_ms = req.timeout_ms;
@@ -1137,10 +1132,8 @@ fn handle_api_request_inner(
         }
         "/api/flows/create" if method == ApiMethod::Post => {
             let req: FlowCreateRequest = parse_json_body(body, "server:flows:create")?;
-            let wrapped = CliResponse::success(registry.create_flow(
-                &req.graph_id,
-                req.name.as_deref(),
-            )?);
+            let wrapped =
+                CliResponse::success(registry.create_flow(&req.graph_id, req.name.as_deref())?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
@@ -1154,10 +1147,9 @@ fn handle_api_request_inner(
         }
         "/api/flows/tick" if method == ApiMethod::Post => {
             let req: FlowTickRequest = parse_json_body(body, "server:flows:tick")?;
-            let wrapped = CliResponse::success(registry.tick_flow(
-                &req.flow_id,
-                req.interactive.unwrap_or(false),
-            )?);
+            let wrapped = CliResponse::success(
+                registry.tick_flow(&req.flow_id, req.interactive.unwrap_or(false))?,
+            );
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
@@ -1188,8 +1180,7 @@ fn handle_api_request_inner(
             Ok(resp)
         }
         "/api/verify/override" if method == ApiMethod::Post => {
-            let req: VerifyOverrideRequest =
-                parse_json_body(body, "server:verify:override")?;
+            let req: VerifyOverrideRequest = parse_json_body(body, "server:verify:override")?;
             let wrapped = CliResponse::success(registry.verify_override(
                 &req.task_id,
                 &req.decision,
@@ -1208,10 +1199,8 @@ fn handle_api_request_inner(
         }
         "/api/merge/prepare" if method == ApiMethod::Post => {
             let req: MergePrepareRequest = parse_json_body(body, "server:merge:prepare")?;
-            let wrapped = CliResponse::success(registry.merge_prepare(
-                &req.flow_id,
-                req.target.as_deref(),
-            )?);
+            let wrapped =
+                CliResponse::success(registry.merge_prepare(&req.flow_id, req.target.as_deref())?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
@@ -1243,8 +1232,7 @@ fn handle_api_request_inner(
             Ok(resp)
         }
         "/api/worktrees/cleanup" if method == ApiMethod::Post => {
-            let req: WorktreeCleanupRequest =
-                parse_json_body(body, "server:worktrees:cleanup")?;
+            let req: WorktreeCleanupRequest = parse_json_body(body, "server:worktrees:cleanup")?;
             registry.worktree_cleanup(&req.flow_id)?;
             let wrapped = CliResponse::success(serde_json::json!({ "ok": true }));
             let mut resp = ApiResponse::json(200, &wrapped)?;
@@ -1375,8 +1363,8 @@ pub fn serve(config: &ServeConfig) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::mem;
     use crate::core::registry::{Registry, RegistryConfig};
+    use std::mem;
 
     fn test_registry() -> Registry {
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -1404,8 +1392,7 @@ mod tests {
     #[test]
     fn api_state_ok_empty() {
         let reg = test_registry();
-        let resp = handle_api_request_inner(ApiMethod::Get, "/api/state", 10, None, &reg)
-            .unwrap();
+        let resp = handle_api_request_inner(ApiMethod::Get, "/api/state", 10, None, &reg).unwrap();
         assert_eq!(resp.status_code, 200);
         let v = json_value(&resp.body);
         assert_eq!(v["success"], true);
@@ -1415,8 +1402,7 @@ mod tests {
     #[test]
     fn api_unknown_endpoint_404() {
         let reg = test_registry();
-        let resp =
-            handle_api_request_inner(ApiMethod::Get, "/api/nope", 10, None, &reg).unwrap();
+        let resp = handle_api_request_inner(ApiMethod::Get, "/api/nope", 10, None, &reg).unwrap();
         assert_eq!(resp.status_code, 404);
         let v = json_value(&resp.body);
         assert_eq!(v["success"], false);
