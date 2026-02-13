@@ -2928,6 +2928,25 @@ impl Registry {
             .get_project(id_or_name)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
 
+        let state = self.state()?;
+        let has_active_flow = state.flows.values().any(|flow| {
+            flow.project_id == project.id
+                && !matches!(
+                    flow.state,
+                    FlowState::Completed | FlowState::Merged | FlowState::Aborted
+                )
+        });
+        if has_active_flow {
+            let err = HivemindError::user(
+                "project_in_active_flow",
+                "Cannot detach repositories while project has active flows",
+                "registry:detach_repo",
+            )
+            .with_hint("Abort, complete, or merge all active flows before detaching repositories");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
+        }
+
         // Check if repo exists
         if !project.repositories.iter().any(|r| r.name == repo_name) {
             let err = HivemindError::user(
@@ -6176,6 +6195,33 @@ mod tests {
     }
 
     #[test]
+    fn detach_repo_disallowed_with_active_flow() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                repo_dir.to_string_lossy().as_ref(),
+                Some("main"),
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let _ = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let res = registry.detach_repo("proj", "main");
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code, "project_in_active_flow");
+    }
+
+    #[test]
     fn retry_limit_exceeded_requires_reset_count() {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
@@ -6233,6 +6279,38 @@ mod tests {
         let events = registry.store.read_all().unwrap();
         assert!(events.iter().any(|e| {
             matches!(&e.payload, EventPayload::ErrorOccurred { error } if error.code == "task_in_active_flow")
+        }));
+    }
+
+    #[test]
+    fn error_occurred_emitted_on_detach_repo_with_active_flow() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        let project = registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                repo_dir.to_string_lossy().as_ref(),
+                Some("main"),
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let _ = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let res = registry.detach_repo("proj", "main");
+        assert!(res.is_err());
+
+        let events = registry.store.read_all().unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(&e.payload, EventPayload::ErrorOccurred { error } if error.code == "project_in_active_flow")
+                && e.metadata.correlation.project_id == Some(project.id)
         }));
     }
 

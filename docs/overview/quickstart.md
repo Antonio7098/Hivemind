@@ -13,6 +13,7 @@ Hivemind is **local-first** and **event-sourced**:
 ## 0) Prerequisites
 
 - Rust toolchain installed (`cargo`, `rustc`).
+- Rustup default toolchain configured (for example: `rustup default stable`).
 - Git installed.
 - A git repository you want to operate on.
 - A runtime adapter binary installed (example: `opencode`).

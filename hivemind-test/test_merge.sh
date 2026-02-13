@@ -61,7 +61,30 @@ $HIVEMIND flow start "$FLOW_ID" 2>&1
 
 echo "=== Ticking flow until completed ==="
 for i in $(seq 1 10); do
-  $HIVEMIND flow tick "$FLOW_ID" 2>&1 || true
+  set +e
+  TICK_OUT=$($HIVEMIND flow tick "$FLOW_ID" 2>&1)
+  TICK_RC=$?
+  set -e
+  echo "$TICK_OUT"
+
+  if [ "$TICK_RC" -ne 0 ]; then
+    if echo "$TICK_OUT" | grep -q "checkpoints_incomplete"; then
+      echo "=== Completing checkpoint and retrying tick ==="
+      EVENTS_JSON="$($HIVEMIND -f json events stream --flow "$FLOW_ID" --limit 500)"
+      ATTEMPT_ID="$(echo "$EVENTS_JSON" | sed -n 's/.*"attempt_id": "\([0-9a-f-]\{36\}\)".*/\1/p' | head -n1)"
+      if [ -z "$ATTEMPT_ID" ]; then
+        echo "Failed to find attempt_id for checkpoint completion" >&2
+        exit 1
+      fi
+      $HIVEMIND checkpoint complete --attempt-id "$ATTEMPT_ID" --id checkpoint-1 --summary "legacy merge script" 2>&1
+      $HIVEMIND task complete "$TASK_ID" 2>&1
+      $HIVEMIND flow tick "$FLOW_ID" 2>&1
+    else
+      echo "$TICK_OUT" >&2
+      exit "$TICK_RC"
+    fi
+  fi
+
   STATUS_OUT=$($HIVEMIND flow status "$FLOW_ID" 2>&1)
   echo "$STATUS_OUT"
   if echo "$STATUS_OUT" | grep -q "State:" && echo "$STATUS_OUT" | grep -q "Completed"; then
