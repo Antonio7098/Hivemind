@@ -676,6 +676,7 @@ hivemind flow tick <flow-id> [--interactive]
 - Transitions any dependency-satisfied `PENDING` tasks to `READY`
 - Executes a single `READY` task attempt using the configured runtime adapter
 - Emits runtime lifecycle events correlated by attempt ID
+- Optionally emits projected runtime observational events from stdout/stderr parsing
 
 If `--interactive` is provided and the selected adapter supports interactive execution:
 
@@ -704,6 +705,27 @@ RuntimeOutputChunk:
   stream: stdout|stderr
   content: <text>
 
+RuntimeCommandObserved:
+  attempt_id: <attempt-id>
+  stream: stdout|stderr
+  command: <text>
+
+RuntimeToolCallObserved:
+  attempt_id: <attempt-id>
+  stream: stdout|stderr
+  tool_name: <text>
+  details: <text>
+
+RuntimeTodoSnapshotUpdated:
+  attempt_id: <attempt-id>
+  stream: stdout|stderr
+  items: [<todo-lines...>]
+
+RuntimeNarrativeOutputObserved:
+  attempt_id: <attempt-id>
+  stream: stdout|stderr
+  content: <text>
+
 RuntimeInputProvided:
   attempt_id: <attempt-id>
   content: <text>
@@ -726,6 +748,11 @@ TaskExecutionStateChanged:
   from: RUNNING
   to: VERIFYING
 ```
+
+**Projection invariant:**
+- Runtime projection events are observational telemetry only
+- They must never drive scheduling, verification outcomes, retry policy, or merge decisions
+- Projection failure must not fail task execution
 
 **Failures:**
 - `FLOW_NOT_FOUND`

@@ -167,6 +167,14 @@ During execution:
 - Stream stdout to capture buffer
 - Stream stderr to capture buffer
 - Emit RuntimeOutputChunk events periodically
+- Optionally project deterministic output markers into observational events:
+  - `RuntimeCommandObserved`
+  - `RuntimeToolCallObserved`
+  - `RuntimeTodoSnapshotUpdated`
+  - `RuntimeNarrativeOutputObserved`
+
+Projection is best-effort telemetry only. It must never affect scheduler,
+verification, retry, or merge decisions.
 
 ### 5.5 Timeout Enforcement
 
@@ -281,6 +289,10 @@ Attempt to extract structured information from runtime output:
 - Tool invocations (if logged)
 - Error messages
 - Completion status
+
+When projection is enabled, parsing must be constrained to deterministic
+markers (e.g. explicit command/tool/todo patterns). Narrative extraction is
+advisory context only.
 
 Output parsing is **best-effort**. Hivemind never depends on parsing success.
 
@@ -489,6 +501,10 @@ No code changes required for basic support.
 | RuntimeInterrupted | User interrupted runtime (interactive mode only) |
 | RuntimeExited | Process terminated |
 | RuntimeTerminated | Cleanup complete |
+| RuntimeCommandObserved | Deterministic command marker observed in runtime output |
+| RuntimeToolCallObserved | Deterministic tool-call marker observed in runtime output |
+| RuntimeTodoSnapshotUpdated | Runtime todo snapshot changed (observed) |
+| RuntimeNarrativeOutputObserved | Narrative runtime output observed (non-authoritative) |
 | FileModified | Per changed file |
 | DiffComputed | After observation |
 | CheckpointCommitCreated | If runtime committed |

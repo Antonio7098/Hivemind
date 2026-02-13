@@ -264,6 +264,11 @@ In the wrapper model, Hivemind:
 - Observes filesystem and process behavior
 - Derives diffs and execution commits mechanically
 
+Wrapper adapters may also project deterministic stdout/stderr markers into
+observational runtime events (command/tool/todo/narrative observations).
+These projected events are telemetry only and never authoritative state
+transitions.
+
 This approach prioritizes leverage, speed, and replaceability.
 
 ---

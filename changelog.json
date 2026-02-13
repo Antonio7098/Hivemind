@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.13",
+      "date": "2026-02-13",
+      "phase": 23,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Project deterministic runtime stdout/stderr markers into observational events (RuntimeCommandObserved, RuntimeToolCallObserved, RuntimeTodoSnapshotUpdated, RuntimeNarrativeOutputObserved)"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Integrate runtime projection in flow execution for both interactive and non-interactive paths while preserving existing runtime lifecycle/output events"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Surface new runtime observational event labels in CLI and server event renderers"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add unit and integration coverage for runtime projection parsing, chunk boundaries, stderr handling, and end-to-end event emission"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update roadmap, architecture, and design docs to define projection invariants: telemetry-only, non-authoritative, best-effort"
+        }
+      ]
+    },
+    {
       "version": "v0.1.12",
       "date": "2026-02-13",
       "phase": 22,

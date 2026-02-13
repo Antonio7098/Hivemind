@@ -180,9 +180,31 @@ Examples:
 - `RuntimeInterrupted`
 - `RuntimeFilesystemObserved`
 - `RuntimeExited`
-- `RuntimeError`
+- `RuntimeTerminated`
+- `RuntimeCommandObserved`
+- `RuntimeToolCallObserved`
+- `RuntimeTodoSnapshotUpdated`
+- `RuntimeNarrativeOutputObserved`
 
 Runtime events are intentionally coarse-grained.
+
+### Runtime Observation Invariant
+
+Events derived from parsing runtime output (`RuntimeCommandObserved`, `RuntimeToolCallObserved`,
+`RuntimeTodoSnapshotUpdated`, `RuntimeNarrativeOutputObserved`) are **observational telemetry**.
+
+They are:
+
+- attempt-correlated
+- replay-safe as historical context
+- useful for UX/debugging
+
+They are **not authoritative state transitions** and must never drive:
+
+- scheduler decisions
+- verification outcomes
+- retry policy
+- merge governance
 
 ---
 

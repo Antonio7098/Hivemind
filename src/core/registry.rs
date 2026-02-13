@@ -9,6 +9,7 @@ use crate::core::error::{ErrorCategory, HivemindError, Result};
 use crate::core::events::{CorrelationIds, Event, EventPayload, RuntimeOutputStream};
 use crate::core::flow::{FlowState, RetryMode, TaskExecState, TaskFlow};
 use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, TaskGraph};
+use crate::core::runtime_event_projection::{ProjectedRuntimeObservation, RuntimeEventProjector};
 use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::state::{AppState, AttemptState, Project, Task, TaskState};
 use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
@@ -187,6 +188,64 @@ impl Registry {
             .append(event)
             .map(|_| ())
             .map_err(|e| HivemindError::system("event_append_failed", e.to_string(), origin))
+    }
+
+    fn projected_runtime_event_payload(
+        attempt_id: Uuid,
+        observation: ProjectedRuntimeObservation,
+    ) -> EventPayload {
+        match observation {
+            ProjectedRuntimeObservation::CommandObserved { stream, command } => {
+                EventPayload::RuntimeCommandObserved {
+                    attempt_id,
+                    stream,
+                    command,
+                }
+            }
+            ProjectedRuntimeObservation::ToolCallObserved {
+                stream,
+                tool_name,
+                details,
+            } => EventPayload::RuntimeToolCallObserved {
+                attempt_id,
+                stream,
+                tool_name,
+                details,
+            },
+            ProjectedRuntimeObservation::TodoSnapshotUpdated { stream, items } => {
+                EventPayload::RuntimeTodoSnapshotUpdated {
+                    attempt_id,
+                    stream,
+                    items,
+                }
+            }
+            ProjectedRuntimeObservation::NarrativeOutputObserved { stream, content } => {
+                EventPayload::RuntimeNarrativeOutputObserved {
+                    attempt_id,
+                    stream,
+                    content,
+                }
+            }
+        }
+    }
+
+    fn append_projected_runtime_observations(
+        &self,
+        attempt_id: Uuid,
+        correlation: &CorrelationIds,
+        observations: Vec<ProjectedRuntimeObservation>,
+        origin: &'static str,
+    ) -> Result<()> {
+        for observation in observations {
+            self.append_event(
+                Event::new(
+                    Self::projected_runtime_event_payload(attempt_id, observation),
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+        }
+        Ok(())
     }
 
     fn acquire_flow_integration_lock(
@@ -2308,23 +2367,32 @@ impl Registry {
             verifier_feedback: None,
         };
 
+        let mut runtime_projector = RuntimeEventProjector::new();
+
         let (report, terminated_reason) = if interactive {
             let mut stdout = std::io::stdout();
 
             let res = adapter.execute_interactive(&input, |evt| {
                 match evt {
                     crate::adapters::opencode::InteractiveAdapterEvent::Output { content } => {
-                        let _ = stdout.write_all(content.as_bytes());
+                        let chunk = content;
+                        let _ = stdout.write_all(chunk.as_bytes());
                         let _ = stdout.flush();
                         let event = Event::new(
                             EventPayload::RuntimeOutputChunk {
                                 attempt_id,
                                 stream: RuntimeOutputStream::Stdout,
-                                content,
+                                content: chunk.clone(),
                             },
                             attempt_corr.clone(),
                         );
                         self.store.append(event).map_err(|e| e.to_string())?;
+                        let _ = self.append_projected_runtime_observations(
+                            attempt_id,
+                            &attempt_corr,
+                            runtime_projector.observe_chunk(RuntimeOutputStream::Stdout, &chunk),
+                            "registry:tick_flow",
+                        );
                     }
                     crate::adapters::opencode::InteractiveAdapterEvent::Input { content } => {
                         let event = Event::new(
@@ -2434,11 +2502,12 @@ impl Registry {
 
         if !interactive {
             for chunk in report.stdout.lines() {
+                let content = chunk.to_string();
                 let event = Event::new(
                     EventPayload::RuntimeOutputChunk {
                         attempt_id,
                         stream: RuntimeOutputStream::Stdout,
-                        content: chunk.to_string(),
+                        content: content.clone(),
                     },
                     attempt_corr.clone(),
                 );
@@ -2449,13 +2518,22 @@ impl Registry {
                         "registry:tick_flow",
                     )
                 })?;
+
+                let _ = self.append_projected_runtime_observations(
+                    attempt_id,
+                    &attempt_corr,
+                    runtime_projector
+                        .observe_chunk(RuntimeOutputStream::Stdout, &format!("{content}\n")),
+                    "registry:tick_flow",
+                );
             }
             for chunk in report.stderr.lines() {
+                let content = chunk.to_string();
                 let event = Event::new(
                     EventPayload::RuntimeOutputChunk {
                         attempt_id,
                         stream: RuntimeOutputStream::Stderr,
-                        content: chunk.to_string(),
+                        content: content.clone(),
                     },
                     attempt_corr.clone(),
                 );
@@ -2466,8 +2544,23 @@ impl Registry {
                         "registry:tick_flow",
                     )
                 })?;
+
+                let _ = self.append_projected_runtime_observations(
+                    attempt_id,
+                    &attempt_corr,
+                    runtime_projector
+                        .observe_chunk(RuntimeOutputStream::Stderr, &format!("{content}\n")),
+                    "registry:tick_flow",
+                );
             }
         }
+
+        let _ = self.append_projected_runtime_observations(
+            attempt_id,
+            &attempt_corr,
+            runtime_projector.flush(),
+            "registry:tick_flow",
+        );
 
         if let Some(reason) = terminated_reason {
             let _ = self.store.append(Event::new(
@@ -5298,7 +5391,7 @@ mod tests {
                 &[
                     "sh".to_string(),
                     "-c".to_string(),
-                    "echo unit_stdout; echo unit_stderr 1>&2; printf data > hm_unit.txt"
+                    "echo '$ cargo test'; echo 'Tool: grep'; echo '- [ ] collect logs'; echo '- [x] collect logs'; echo 'I will verify outputs'; echo unit_stderr 1>&2; printf data > hm_unit.txt"
                         .to_string(),
                 ],
                 &[],
@@ -5318,6 +5411,19 @@ mod tests {
         assert!(events
             .iter()
             .any(|e| matches!(e.payload, EventPayload::RuntimeFilesystemObserved { .. })));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::RuntimeCommandObserved { .. })));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::RuntimeToolCallObserved { .. })));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::RuntimeTodoSnapshotUpdated { .. })));
+        assert!(events.iter().any(|e| matches!(
+            e.payload,
+            EventPayload::RuntimeNarrativeOutputObserved { .. }
+        )));
         assert!(events
             .iter()
             .any(|e| matches!(e.payload, EventPayload::RuntimeExited { .. })));

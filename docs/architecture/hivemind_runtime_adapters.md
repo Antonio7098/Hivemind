@@ -94,7 +94,18 @@ Every runtime adapter **must** provide the following capabilities.
 - Emit structured runtime events
 - Attribute outputs to task and attempt
 
+Adapters may additionally project deterministic markers from stdout/stderr into
+observational events such as:
+
+- `RuntimeCommandObserved`
+- `RuntimeToolCallObserved`
+- `RuntimeTodoSnapshotUpdated`
+- `RuntimeNarrativeOutputObserved`
+
 Hivemind does not parse reasoning, only observable output.
+
+If projection parsing fails or is unavailable, execution must still proceed
+correctly with core runtime lifecycle and output chunk events.
 
 ---
 
@@ -142,6 +153,9 @@ Wrapper adapters:
 - Pass task instructions
 - Allow the runtime to operate freely within scope
 - Observe outputs and filesystem changes
+
+Wrapper adapters may enrich runtime output with best-effort projected
+observational events, but this enrichment is optional and non-authoritative.
 
 Wrapper adapters may optionally support **interactive execution** for runtimes that require follow-up input.
 
@@ -256,6 +270,9 @@ The adapter:
 - Allows TaskFlow to retry or escalate
 
 Runtime failure is treated as an execution failure, not a system failure.
+
+Projection failure is treated as telemetry degradation only. It must not alter
+task outcomes, retries, verification decisions, or merge behavior.
 
 ---
 

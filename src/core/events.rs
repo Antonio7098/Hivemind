@@ -617,6 +617,28 @@ pub enum EventPayload {
         #[serde(default)]
         files_deleted: Vec<PathBuf>,
     },
+    RuntimeCommandObserved {
+        attempt_id: Uuid,
+        stream: RuntimeOutputStream,
+        command: String,
+    },
+    RuntimeToolCallObserved {
+        attempt_id: Uuid,
+        stream: RuntimeOutputStream,
+        tool_name: String,
+        details: String,
+    },
+    RuntimeTodoSnapshotUpdated {
+        attempt_id: Uuid,
+        stream: RuntimeOutputStream,
+        #[serde(default)]
+        items: Vec<String>,
+    },
+    RuntimeNarrativeOutputObserved {
+        attempt_id: Uuid,
+        stream: RuntimeOutputStream,
+        content: String,
+    },
 
     #[serde(other)]
     Unknown,
