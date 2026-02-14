@@ -132,7 +132,8 @@ impl RuntimeEventProjector {
         stream: RuntimeOutputStream,
         raw_line: &str,
     ) -> Vec<ProjectedRuntimeObservation> {
-        let line = raw_line.trim();
+        let normalized = normalize_projection_line(raw_line);
+        let line = normalized.trim();
         if line.is_empty() {
             return Vec::new();
         }
@@ -187,6 +188,19 @@ impl RuntimeEventProjector {
 }
 
 fn parse_command(line: &str) -> Option<String> {
+    if let Some(rest) = line.find("Command: ").map(|idx| &line[idx..]) {
+        let cmd = rest.trim_start_matches("Command: ").trim();
+        if !cmd.is_empty() {
+            return Some(cmd.to_string());
+        }
+    }
+    if let Some(rest) = line.find("Running command: ").map(|idx| &line[idx..]) {
+        let cmd = rest.trim_start_matches("Running command: ").trim();
+        if !cmd.is_empty() {
+            return Some(cmd.to_string());
+        }
+    }
+
     for prefix in [
         "$ ",
         "> ",
@@ -207,6 +221,13 @@ fn parse_command(line: &str) -> Option<String> {
 }
 
 fn parse_tool_name(line: &str) -> Option<String> {
+    if let Some(rest) = line.find("Tool: ").map(|idx| &line[idx..]) {
+        let name = rest
+            .trim_start_matches("Tool: ")
+            .split_whitespace()
+            .next()?;
+        return Some(name.to_string());
+    }
     if let Some(rest) = line.strip_prefix("Tool: ") {
         let name = rest.split_whitespace().next()?;
         return Some(name.to_string());
@@ -258,6 +279,37 @@ fn is_narrative_line(line: &str) -> bool {
         || lower.starts_with("plan:")
         || lower.starts_with("because")
         || lower.starts_with("thinking:")
+}
+
+fn normalize_projection_line(raw: &str) -> String {
+    let no_ansi = strip_ansi_sequences(raw);
+    no_ansi
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\r' || *c == '\t')
+        .collect::<String>()
+}
+
+fn strip_ansi_sequences(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            if chars.peek().is_some_and(|c| *c == '[') {
+                let _ = chars.next();
+                for next in chars.by_ref() {
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            continue;
+        }
+        out.push(ch);
+    }
+
+    out
 }
 
 #[cfg(test)]
@@ -372,5 +424,27 @@ mod tests {
         );
 
         assert!(observed.is_empty());
+    }
+
+    #[test]
+    fn projects_markers_with_ansi_prefixes() {
+        let mut projector = RuntimeEventProjector::new();
+        let observed = projector.observe_chunk(
+            RuntimeOutputStream::Stderr,
+            "\u{1b}[0m→ Tool: git status\n\u{1b}[91mCommand: cargo test\u{1b}[0m\n",
+        );
+
+        assert!(observed.iter().any(|obs| {
+            matches!(
+                obs,
+                ProjectedRuntimeObservation::ToolCallObserved { tool_name, .. } if tool_name == "git"
+            )
+        }));
+        assert!(observed.iter().any(|obs| {
+            matches!(
+                obs,
+                ProjectedRuntimeObservation::CommandObserved { command, .. } if command == "cargo test"
+            )
+        }));
     }
 }

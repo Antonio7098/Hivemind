@@ -29,6 +29,11 @@
           "description": "Runtime execution now resolves effective runtime per task (override or project default) while preserving existing TaskFlow event semantics and projection behavior"
         },
         {
+          "type": "changed",
+          "area": "core",
+          "description": "Harden runtime event projection by normalizing ANSI/control-prefixed output so command/tool markers are observable from real runtime streams"
+        },
+        {
           "type": "added",
           "area": "tests",
           "description": "Extend registry tests for runtime catalog coverage, codex adapter execution, and task runtime override precedence"

@@ -29,6 +29,10 @@ Implemented Phase 28 in `ops/ROADMAP.md`:
   - task override if present
   - otherwise project runtime
 - Preserved runtime lifecycle/events and runtime output projection pipeline.
+- Hardened runtime projection parsing for real runtime output:
+  - strip ANSI escape sequences and control artifacts before marker parsing
+  - detect `Command:` / `Tool:` markers even when prefixed by runtime UI glyphs
+  - added unit test: `projects_markers_with_ansi_prefixes`
 
 ## Validation
 Executed:
@@ -65,9 +69,9 @@ Observed:
 Notes:
 - Kilo model alias `opencode/kimi-k2.5-free` was not accepted by Kilo in this environment; a Kilo-native free model is required (for example entries reported by `kilo models`).
 - A follow-up long-running Kilo attempt was stopped to avoid unnecessary runtime credit usage.
+- `runtime_output_chunk` capture was confirmed from real Kilo runs (stderr/stdout chunks persisted in events). Projection marker extraction is now robust against ANSI-prefixed lines.
 
 ## Principle Checkpoint
 - Observability preserved: runtime output and lifecycle events remain event-sourced.
 - CLI-first preserved: runtime discovery/health and per-task override are CLI-native.
 - Modularity improved: runtime adapters are replaceable and selected without changing taskflow semantics.
-
