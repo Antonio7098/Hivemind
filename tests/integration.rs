@@ -441,7 +441,16 @@ fn cli_verify_override_can_force_success_after_check_failure_and_is_audited() {
     assert_eq!(code, 0, "{err}");
     let flow_json: serde_json::Value = serde_json::from_str(&flow_out).expect("flow json");
     assert_eq!(
-        flow_json.get("state").and_then(|s| s.as_str()),
+        flow_json
+            .get("success")
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        flow_json
+            .get("data")
+            .and_then(|d| d.get("state"))
+            .and_then(|s| s.as_str()),
         Some("completed")
     );
 }
@@ -995,6 +1004,119 @@ fn cli_yaml_output_format() {
     let (code, out, err) = run_hivemind(tmp.path(), &["-f", "json", "project", "list"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("\"proj\""));
+}
+
+#[test]
+#[allow(clippy::similar_names)]
+fn cli_graph_and_flow_list_support_project_filter() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let (code, project_a_out, err) = run_hivemind(tmp.path(), &["project", "create", "proj-a"]);
+    assert_eq!(code, 0, "{err}");
+    let project_a_id = project_a_out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("project a id");
+
+    let (code, project_b_out, err) = run_hivemind(tmp.path(), &["project", "create", "proj-b"]);
+    assert_eq!(code, 0, "{err}");
+    let project_b_id = project_b_out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("project b id");
+
+    let (code, task_a_out, err) = run_hivemind(tmp.path(), &["task", "create", "proj-a", "ta"]);
+    assert_eq!(code, 0, "{err}");
+    let task_a_id = task_a_out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task a id");
+
+    let (code, task_b_out, err) = run_hivemind(tmp.path(), &["task", "create", "proj-b", "tb"]);
+    assert_eq!(code, 0, "{err}");
+    let task_b_id = task_b_out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task b id");
+
+    let (code, graph_a_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "graph",
+            "create",
+            "proj-a",
+            "ga",
+            "--from-tasks",
+            &task_a_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_a_id = graph_a_out
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph a id");
+
+    let (code, graph_b_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "graph",
+            "create",
+            "proj-b",
+            "gb",
+            "--from-tasks",
+            &task_b_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_b_id = graph_b_out
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph b id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_a_id]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_b_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "graph", "list", "--project", "proj-a"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let json: serde_json::Value = serde_json::from_str(&out).expect("graph list json");
+    assert_eq!(
+        json.get("success").and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    let graphs = json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .expect("graph list data array");
+    assert_eq!(graphs.len(), 1);
+    assert_eq!(
+        graphs[0].get("project_id").and_then(|v| v.as_str()),
+        Some(project_a_id.as_str())
+    );
+
+    let (code, out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "flow", "list", "--project", "proj-b"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let json: serde_json::Value = serde_json::from_str(&out).expect("flow list json");
+    assert_eq!(
+        json.get("success").and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    let flows = json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .expect("flow list data array");
+    assert_eq!(flows.len(), 1);
+    assert_eq!(
+        flows[0].get("project_id").and_then(|v| v.as_str()),
+        Some(project_b_id.as_str())
+    );
 }
 
 #[test]

@@ -281,6 +281,60 @@ fn print_flow_id(flow_id: Uuid, format: OutputFormat) {
     }
 }
 
+fn print_graphs(graphs: &[hivemind::core::graph::TaskGraph], format: OutputFormat) {
+    match format {
+        OutputFormat::Table => {
+            if graphs.is_empty() {
+                println!("No graphs found.");
+                return;
+            }
+            println!("{:<36}  {:<36}  {:<10}  NAME", "ID", "PROJECT", "STATE");
+            println!("{}", "-".repeat(110));
+            for g in graphs {
+                println!(
+                    "{:<36}  {:<36}  {:<10}  {}",
+                    g.id,
+                    g.project_id,
+                    format!("{:?}", g.state).to_lowercase(),
+                    g.name
+                );
+            }
+        }
+        _ => {
+            if let Err(err) = output(graphs, format) {
+                eprintln!("Failed to render graphs: {err}");
+            }
+        }
+    }
+}
+
+fn print_flows(flows: &[hivemind::core::flow::TaskFlow], format: OutputFormat) {
+    match format {
+        OutputFormat::Table => {
+            if flows.is_empty() {
+                println!("No flows found.");
+                return;
+            }
+            println!("{:<36}  {:<36}  {:<10}  GRAPH", "ID", "PROJECT", "STATE");
+            println!("{}", "-".repeat(110));
+            for f in flows {
+                println!(
+                    "{:<36}  {:<36}  {:<10}  {}",
+                    f.id,
+                    f.project_id,
+                    format!("{:?}", f.state).to_lowercase(),
+                    f.graph_id
+                );
+            }
+        }
+        _ => {
+            if let Err(err) = output(flows, format) {
+                eprintln!("Failed to render flows: {err}");
+            }
+        }
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
@@ -365,6 +419,13 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
             },
             Err(e) => output_error(&e, format),
         },
+        GraphCommands::List(args) => match registry.list_graphs(args.project.as_deref()) {
+            Ok(graphs) => {
+                print_graphs(&graphs, format);
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
     }
 }
 
@@ -383,6 +444,13 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
+        FlowCommands::List(args) => match registry.list_flows(args.project.as_deref()) {
+            Ok(flows) => {
+                print_flows(&flows, format);
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
         FlowCommands::Start(args) => match registry.start_flow(&args.flow_id) {
             Ok(flow) => {
                 print_flow_id(flow.id, format);
@@ -425,15 +493,9 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
         }
         FlowCommands::Status(args) => match registry.get_flow(&args.flow_id) {
             Ok(flow) => match format {
-                OutputFormat::Json => {
-                    if let Ok(json) = serde_json::to_string_pretty(&flow) {
-                        println!("{json}");
-                    }
-                    ExitCode::Success
-                }
-                OutputFormat::Yaml => {
-                    if let Ok(yaml) = serde_yaml::to_string(&flow) {
-                        print!("{yaml}");
+                OutputFormat::Json | OutputFormat::Yaml => {
+                    if let Err(err) = output(&flow, format) {
+                        eprintln!("Failed to render flow status: {err}");
                     }
                     ExitCode::Success
                 }

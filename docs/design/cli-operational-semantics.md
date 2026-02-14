@@ -30,6 +30,34 @@ Each command is specified with:
 |         # alternatives
 ```
 
+### 1.3 Global runtime environment
+
+- `HIVEMIND_DATA_DIR` controls where local orchestration state is stored.
+  - Default: `~/.hivemind`
+  - Contents include `events.jsonl` plus generated artifacts/worktrees.
+- For reproducible tests and isolated runs, set `HIVEMIND_DATA_DIR` explicitly.
+
+### 1.4 version
+
+**Synopsis:**
+```
+hivemind version
+```
+
+**Preconditions:** None
+
+**Effects:** None (read-only)
+
+**Events:** None
+
+**Output:**
+- `table`: `hivemind <version>`
+- `json|yaml`: standard success wrapper containing `{ "name": "hivemind", "version": "..." }`
+
+**Failures:** None
+
+**Idempotence:** Idempotent.
+
 ---
 
 ## 2. Project Commands
@@ -135,6 +163,8 @@ hivemind project runtime-set <project> [--adapter <name>] [--binary-path <path>]
 **Effects:**
 - Project runtime configuration is set (or replaced)
 - Adapter selection becomes explicit for TaskFlow execution
+- Runtime changes during active flows are allowed and apply to future task executions/ticks.
+  Running attempts are not retroactively mutated.
 
 **Events:**
 ```
@@ -204,6 +234,7 @@ ProjectUpdated:
 - `project_name_conflict`: Name already taken
 
 **Idempotence:** Idempotent if no changes. Otherwise emits a new update event.
+No `ProjectUpdated` event is emitted when both name and description are unchanged.
 
 ---
 
@@ -433,10 +464,10 @@ DependencyAdded:
 ```
 
 **Failures:**
-- `GRAPH_NOT_FOUND`
-- `GRAPH_IMMUTABLE`: Graph already used in TaskFlow
-- `TASK_NOT_IN_GRAPH`
-- `CYCLE_DETECTED`: Dependency would create cycle
+- `graph_not_found`
+- `graph_immutable`: Graph already used in a flow; error message may include locking flow ID
+- `task_not_in_graph`
+- `cycle_detected`: Dependency would create cycle
 
 **Idempotence:** Idempotent. Adding existing dependency is no-op.
 
@@ -462,6 +493,27 @@ hivemind graph validate <graph-id>
 
 **Failures:**
 - `GRAPH_NOT_FOUND`
+
+**Idempotence:** Idempotent.
+
+---
+
+### 4.4 graph list
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] graph list [--project <project-id-or-name>]
+```
+
+**Preconditions:**
+- If `--project` is supplied, project exists
+
+**Effects:** None (read-only)
+
+**Events:** None
+
+**Failures:**
+- `project_not_found`: Provided project filter does not resolve
 
 **Idempotence:** Idempotent.
 
@@ -648,6 +700,7 @@ hivemind flow status <flow-id>
 - Task states summary
 - Progress metrics
 - Current activity
+- In `json|yaml`, successful responses follow `{ success: true, data: <flow> }`
 
 **Events:** None
 
@@ -658,7 +711,28 @@ hivemind flow status <flow-id>
 
 ---
 
-### 5.7 flow tick
+### 5.7 flow list
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] flow list [--project <project-id-or-name>]
+```
+
+**Preconditions:**
+- If `--project` is supplied, project exists
+
+**Effects:** None (read-only)
+
+**Events:** None
+
+**Failures:**
+- `project_not_found`: Provided project filter does not resolve
+
+**Idempotence:** Idempotent.
+
+---
+
+### 5.8 flow tick
 
 **Synopsis:**
 ```
@@ -829,6 +903,7 @@ hivemind task complete <task-id>
 - Task exists and is part of a TaskFlow
 - Task execution state is RUNNING
 - The current attempt has an associated baseline
+- All active checkpoints for the attempt are completed
 
 **Effects:**
 - Task execution state transitions to VERIFYING
@@ -865,6 +940,7 @@ CheckpointCommitCreated:
 - `TASK_NOT_FOUND`
 - `TASK_NOT_IN_FLOW`
 - `TASK_NOT_RUNNING`: Task is not in RUNNING state
+- `checkpoints_incomplete`: One or more active checkpoints are not yet completed
 - `BASELINE_NOT_FOUND`: Baseline artifact missing for attempt
 - `DIFF_COMPUTE_FAILED`: Diff computation failed
 
@@ -920,7 +996,7 @@ hivemind task abort <task-id> [--reason <text>]
 
 **Preconditions:**
 - Task exists and is in a TaskFlow
-- Task is not already SUCCESS or FAILED
+- Task is not already SUCCESS
 
 **Effects:**
 - Task state changes to FAILED
@@ -1333,6 +1409,16 @@ All commands support:
 ```
 
 Default: table
+
+For machine-readable success payloads (`json|yaml`), commands emit:
+```json
+{
+  "success": true,
+  "data": { "...": "..." }
+}
+```
+
+Some ID-returning commands may return a minimal object in `data` (for example, a single `flow_id` or `graph_id`).
 
 ### 10.2 Error Output Format
 
