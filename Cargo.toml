@@ -1,6 +1,6 @@
 [package]
-name = "hivemind"
-version = "0.1.14"
+name = "hivemind-core"
+version = "0.1.15"
 edition = "2021"
 authors = ["Antonio"]
 description = "A structured orchestration system for agentic coding workflows"
@@ -9,6 +9,9 @@ repository = "https://github.com/Antonio7098/hivemind"
 readme = "README.md"
 keywords = ["cli", "orchestration", "agents", "workflow"]
 categories = ["command-line-utilities", "development-tools"]
+
+[lib]
+name = "hivemind"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
