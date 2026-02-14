@@ -1,0 +1,61 @@
+name: Sync Docs to Landing Page
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: "Branch to push docs to in hivemind-landing"
+        default: "main"
+        required: true
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout canonical docs repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout landing page repo
+        uses: actions/checkout@v4
+        with:
+          repository: Antonio7098/hivemind-landing
+          ref: ${{ github.event.inputs.target_ref || 'main' }}
+          path: landing-page
+          token: ${{ secrets.LANDING_PAGE_TOKEN }}
+
+      - name: Sync docs folder
+        run: |
+          rsync -av --delete docs/ landing-page/src/docs/content/
+
+      - name: Configure Git
+        working-directory: landing-page
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit changes to landing page
+        id: commit
+        working-directory: landing-page
+        run: |
+          if [[ -n $(git status --porcelain src/docs/content) ]]; then
+            git add src/docs/content
+            git commit -m "chore: sync docs from canonical repo (${GITHUB_SHA::7})"
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No doc changes detected"
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push docs updates
+        if: steps.commit.outputs.committed == 'true'
+        working-directory: landing-page
+        run: git push origin

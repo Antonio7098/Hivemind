@@ -1,9 +1,3 @@
----
-title: Core Principles
-description: Foundational principles and invariants
-order: 2
----
-
 # Hivemind Principles
 
 > These principles are non-negotiable.

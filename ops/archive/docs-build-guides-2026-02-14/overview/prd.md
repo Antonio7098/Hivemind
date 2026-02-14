@@ -1,9 +1,3 @@
----
-title: Product Requirements
-description: Complete PRD for Hivemind v0
-order: 1
----
-
 # Hivemind — Product Requirements Document (PRD)
 
 ## 1. Vision
@@ -394,4 +388,4 @@ Hivemind succeeds if:
 ---
 
 **Hivemind is not an AI that codes.**  
-**It is a system that makes agentic work legible, observable, and governable.**
+**It is a system that makes agentic work legible, governable,

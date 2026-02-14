@@ -1,9 +1,3 @@
----
-title: Verification Authority
-description: Verification and authority model
-order: 8
----
-
 # Hivemind — Verification Authority
 
 > **Principle 9:** Automated checks are mandatory.
@@ -481,3 +475,31 @@ This hierarchy ensures that:
 - Verification is observable and auditable
 
 > Automated checks say "this is wrong." Verifiers suggest "try this instead." Humans decide "ship it or not."
+
+---
+
+## 13. Implementation Notes (Phase 17)
+
+Phase 17 implemented the structured verification check framework described above.
+
+### 13.1 Core Types
+- `CheckConfig`: name, command, required (default true), optional timeout_ms
+- `CheckResult`: name, passed, exit_code, output, duration_ms, required
+
+### 13.2 CLI Commands
+- `hivemind graph add-check <graph-id> <task-id> --name <name> --command <cmd> [--required] [--timeout-ms <ms>]`: Attach checks to graph tasks (only allowed on draft graphs).
+- `hivemind verify run <task-id>`: Manually trigger verification for a task in Verifying state.
+- `hivemind verify results <attempt-id> [--output]`: Show per-attempt check results and optionally full output.
+
+### 13.3 Events
+- `CheckStarted`: Emitted before each check runs.
+- `CheckCompleted`: Emitted after each check, including pass/fail, exit code, combined output, duration, required flag.
+- `GraphTaskCheckAdded`: Emitted when a check is attached to a graph task.
+
+### 13.4 Behavior
+- Checks run in the task worktree with CARGO_TARGET_DIR set appropriately.
+- Required check failures block task success (transition to Retry/Failed based on retry policy).
+- Optional check failures are recorded but do not block success.
+- Per-check timeout is supported; timeouts emit exit code 124 and a "timed out" message.
+
+See the Phase 17 report for detailed validation results and coverage.

@@ -1,9 +1,3 @@
----
-title: Scope Enforcement
-description: Scope enforcement mechanisms
-order: 7
----
-
 # Hivemind — Scope Enforcement
 
 > **Principle 2:** Fail fast, fail loud, fail early.
