@@ -1,9 +1,3 @@
----
-title: Error Model
-description: Error handling and recovery
-order: 2
----
-
 # Hivemind — Error Model
 
 > **Principle 4:** Errors must be classifiable, attributable, and actionable.

@@ -7,6 +7,10 @@ It is designed to make parallel AI agent work on real codebases **safe, legible,
 Hivemind is not an AI that codes.  
 It is a system that makes agentic work **real**.
 
+**Everything observable.**
+**Everything deterministic.**
+**Everything reversible.**
+
 ---
 
 ## Why Hivemind Exists
@@ -74,6 +78,10 @@ Then continue to:
 
 docs/architecture/ # System shape & invariants
 docs/design/ # Concrete mechanics & semantics
+
+Archived internal build-focused docs are preserved under:
+
+ops/archive/docs-build-guides-2026-02-14/
 
 ---
 

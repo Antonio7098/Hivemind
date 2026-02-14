@@ -1,42 +1,34 @@
----
-title: Vision
-description: Long-term vision for Hivemind
-order: 4
----
-
 # Hivemind — Vision
 
 ## Purpose
 
 Hivemind exists to make **agentic software development safe, legible, and trustworthy**.
 
-As AI agents become capable of modifying real codebases, the limiting factor is no longer intelligence — it is **orchestration and control**.
+As AI agents become capable of modifying real codebases, the limiting factor is no longer intelligence — it is **control**. Existing tools optimize for speed and convenience, often at the cost of transparency, safety, and debuggability.
 
 Hivemind is built on the belief that powerful agents require **strong systems around them**, not more autonomy.
-
-**Everything observable.**
-**Everything deterministic.**
-**Everything reversible.**
 
 ---
 
 ## The Problem
 
-Most AI coding tools are designed for **interactive, single-agent use**.
+Modern AI coding tools tend to:
 
-They are useful for local iteration, but they do not provide a system-level execution model for autonomous, parallel agent work.
+- Operate through opaque interactions
+- Hide execution context and intermediate state
+- Make large, hard-to-attribute changes
+- Break down under parallelism
+- Fail silently or unclearly
 
-At scale, teams need to answer questions many tools are not designed to guarantee:
+When something goes wrong, developers are left asking:
 
-- What exactly happened?
-- Why did it happen?
-- Can we replay it?
-- Can we undo it safely?
-- Can we trust the next run?
+- What actually happened?
+- Which agent changed this?
+- Why did it think this was correct?
+- Can I undo this safely?
+- Can I trust the next run?
 
-Without these guarantees, parallel autonomy becomes expensive to operate.
-
-These are not primarily model problems. They are **systems problems**.
+These are not model problems. They are **systems problems**.
 
 ---
 
@@ -52,10 +44,7 @@ They fail because they operate without:
 - Verifiable outcomes
 - Human governance
 
-The future of agentic development is not better prompts. It is **better orchestration**.
-
-Ideas can flow freely.
-Execution cannot.
+The future of agentic development is not better prompts — it is **better orchestration**.
 
 ---
 
@@ -72,8 +61,6 @@ In Hivemind:
 - Verification is authoritative
 - Failure is expected and inspectable
 - Humans retain control at critical boundaries
-
-This is how teams scale agent autonomy without surrendering correctness, safety, or trust.
 
 Agents work *within* the system. The system never disappears.
 
@@ -113,8 +100,6 @@ Hivemind is guided by a small set of beliefs:
 
 - **Observability is truth** — if it cannot be observed, it cannot be trusted
 - **Structure enables scale** — unstructured agents do not scale
-- **Execution must be deterministic** — hidden branching destroys trust
-- **Reversibility is mandatory** — every meaningful action must be inspectable and undoable
 - **Failures must be explicit** — silent failure is worse than loud failure
 - **Humans decide what ships** — agents assist, systems govern
 - **Replaceable intelligence matters** — models change, systems endure
@@ -155,10 +140,9 @@ Hivemind is successful when:
 
 - Developers trust agent output without blind faith
 - Failures are easy to explain
-- Retrying work feels safe and bounded
+- Retrying work feels safe
 - Parallel execution does not increase anxiety
 - The system remains useful even without automation
-- Teams can scale parallel agents without scaling operational chaos
 
 ---
 

@@ -1,9 +1,3 @@
----
-title: Architecture Overview
-description: High-level system architecture
-order: 1
----
-
 # Hivemind Architecture
 
 > **Principle:** Planning is deterministic. Execution is observable. Runtimes are replaceable.
@@ -20,13 +14,13 @@ This file is the **map**, not the terrain.
 
 Detailed specifications live elsewhere:
 
-- `docs/architecture/state-model.md` — persisted state model
-- `docs/architecture/event-model.md` — event taxonomy and replay guarantees
+- `docs/architecture/state.md` — persisted state model
+- `docs/architecture/events.md` — event taxonomy and replay guarantees
 - `docs/architecture/taskflow.md` — execution semantics and FSMs
-- `docs/architecture/scope-model.md` — safety, isolation, and parallelism rules
-- `docs/architecture/commit-branch-model.md` — execution vs integration commit lifecycle
+- `docs/architecture/scope.md` — safety, isolation, and parallelism rules
+- `docs/architecture/commits.md` — execution vs integration commit lifecycle
 - `docs/architecture/runtime-adapters.md` — runtime abstraction strategy
-- `docs/architecture/cli-capabilities.md` — authoritative system interface
+- `docs/interface/cli.md` — authoritative system interface
 
 This document intentionally avoids duplicating those details.
 
@@ -108,7 +102,7 @@ Scope is a **first-class safety mechanism**.
 
 Parallel execution decisions, worktree isolation, and retry safety are all derived from explicit scope compatibility rules. Scope violations are fatal to the current attempt and always observable via events.
 
-Detailed scope semantics are defined in `scope-model.md`.
+Detailed scope semantics are defined in `scope.md`.
 
 ---
 
@@ -222,8 +216,21 @@ Hidden runtime context is never relied upon.
 Task execution produces explicit, inspectable artifacts:
 
 - **Execution branches** (one per task by default)
+- **Flow integration branch** (one per flow, merge boundary)
 - **Checkpoint (execution) commits**
 - **Diffs and filesystem changes**
+
+By default, each TaskFlow records a **base revision** at flow start. That base revision is used to deterministically create:
+
+- per-task execution branches: `exec/<flow-id>/<task-id>`
+- the flow integration branch: `flow/<flow-id>`
+
+On retry, the task execution branch/worktree is reset to the recorded base revision.
+
+Retries have an explicit mode:
+
+- `clean` (default): reset the task execution branch/worktree to the recorded base revision.
+- `continue`: preserve the existing task execution worktree contents.
 
 These artifacts are:
 - Owned by the task
@@ -232,7 +239,7 @@ These artifacts are:
 
 Integration commits are created only via the merge protocol.
 
-The full lifecycle is defined in `commit-branch-model.md`.
+The full lifecycle is defined in `commits.md`.
 
 ---
 
@@ -256,6 +263,11 @@ In the wrapper model, Hivemind:
 - Executes them in scoped worktrees
 - Observes filesystem and process behavior
 - Derives diffs and execution commits mechanically
+
+Wrapper adapters may also project deterministic stdout/stderr markers into
+observational runtime events (command/tool/todo/narrative observations).
+These projected events are telemetry only and never authoritative state
+transitions.
 
 This approach prioritizes leverage, speed, and replaceability.
 
@@ -283,7 +295,7 @@ Hivemind is **event-native**.
 
 The event log is the **single source of truth**.
 
-Detailed models are defined in `state-model.md` and `event-model.md`.
+Detailed models are defined in `state.md` and `events.md`.
 
 ---
 

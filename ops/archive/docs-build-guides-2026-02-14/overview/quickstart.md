@@ -1,9 +1,3 @@
----
-title: Quickstart Guide
-description: Get started with Hivemind
-order: 3
----
-
 # Hivemind Quickstart (Humans + LLM Operators)
 
 This is a copy/paste guide for running Hivemind end-to-end on a real repository using a real agent runtime (example: `opencode`).
@@ -19,6 +13,7 @@ Hivemind is **local-first** and **event-sourced**:
 ## 0) Prerequisites
 
 - Rust toolchain installed (`cargo`, `rustc`).
+- Rustup default toolchain configured (for example: `rustup default stable`).
 - Git installed.
 - A git repository you want to operate on.
 - A runtime adapter binary installed (example: `opencode`).
@@ -228,17 +223,45 @@ $HM -f json worktree inspect <task-id>
 
 ---
 
+## 9) Retrying a task
+
+If a task ends up in `retry` or `failed`, you can request a retry.
+
+`clean` retries (default) reset the task execution worktree back to the flow base revision:
+
+```bash
+$HM task retry <task-id> --mode clean
+```
+
+`continue` retries preserve the task execution worktree so the next attempt can pick up where the previous one left off:
+
+```bash
+$HM task retry <task-id> --mode continue
+```
+
+---
+
 ## 9) Merge workflow (explicit, gated)
 
-When a flow is `completed`, merge is a separate, explicit protocol.
+When a flow is `completed`, merge is a gated protocol with two safety rails:
+
+1. **Flow freeze** – `merge prepare` transitions the flow to `FrozenForMerge` so new executions cannot start.
+2. **Integration token** – each merge step acquires a per-flow lock; the CLI surfaces it via `FlowIntegrationLockAcquired` events.
 
 1) Prepare
 
 ```bash
-# Use --target to explicitly select the integration target branch.
-# This matters if your repo default branch is not "main".
+# Use --target to explicitly select the integration target branch (default auto-detects "main").
 $HM -f json merge prepare "$FLOW_ID" --target master
 ```
+
+This command:
+
+- Freezes the flow (check `flow status` for `State: FrozenForMerge`).
+- Creates the flow sandbox branch/worktree `integration/<flow>/prepare` + `_integration_prepare`.
+- Replays each successful `exec/<flow>/<task>` via per-task branches `integration/<flow>/<task>`.
+- Runs graph-level merge checks and emits `merge_check_*` + `task_integrated_into_flow` events.
+- Updates `flow/<flow>` as the canonical summary branch.
 
 2) Approve
 
@@ -256,6 +279,16 @@ Preconditions for `merge execute`:
 
 - Repo must be clean (Hivemind ignores `.hivemind/` changes).
 - Merge must be prepared and approved.
+- Flow must still be `FrozenForMerge`.
+
+3) Event sanity check (optional but recommended)
+
+```bash
+$HM events list --flow "$FLOW_ID" --limit 200 \
+  | grep -E "task_execution_frozen|flow_frozen_for_merge|flow_integration_lock_acquired|task_integrated_into_flow|merge_completed"
+```
+
+If any of the sentinel events are missing, rerun `merge prepare` to refresh the sandbox before executing.
 
 ---
 
