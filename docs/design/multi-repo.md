@@ -71,6 +71,16 @@ Within a multi-repo task:
 4. Scope verified per repo
 5. Verification considers all repos
 
+### 2.4 Runtime Surface (Phase 27)
+
+For each attempt, Hivemind provides multi-repo paths to the runtime via:
+- Primary working directory: first attached repository task worktree
+- Context block listing all repo worktree paths by repo name
+- Environment variables:
+  - `HIVEMIND_PRIMARY_WORKTREE`
+  - `HIVEMIND_ALL_WORKTREES` (`name=path;name=path`)
+  - `HIVEMIND_REPO_<REPO_NAME>_WORKTREE` (sanitized uppercase key per repo)
+
 ---
 
 ## 3. Atomicity Model

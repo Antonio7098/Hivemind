@@ -872,23 +872,23 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 > **User Story 7:** Multi-repo project execution.
 
 ### 27.1 Multi-Repo Worktrees
-- [ ] Worktree per repo per task
-- [ ] Agent receives all repo paths
+- [x] Worktree per repo per task
+- [x] Agent receives all repo paths
 
 ### 27.2 Multi-Repo Scope
-- [ ] Scope evaluated per repo
-- [ ] Violation in any repo fails task
+- [x] Scope evaluated per repo
+- [x] Violation in any repo fails task
 
 ### 27.3 Multi-Repo Merge
-- [ ] Atomicity at TaskFlow level (default)
-- [ ] All repos merge or none merge
-- [ ] Partial failure handling
+- [x] Atomicity at TaskFlow level (default)
+- [x] All repos merge or none merge
+- [x] Partial failure handling
 
 ### 27.4 Exit Criteria
-- [ ] Tasks can modify multiple repos
-- [ ] Scope enforced per repo
-- [ ] Merge is atomic across repos
-- [ ] User Story 7, 8 achievable
+- [x] Tasks can modify multiple repos
+- [x] Scope enforced per repo
+- [x] Merge is atomic across repos
+- [x] User Story 7, 8 achievable
 
 ---
 

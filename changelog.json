@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.16",
+      "date": "2026-02-14",
+      "phase": 27,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Provision task worktrees across all attached repositories and propagate dependency branch integration in each repo before runtime execution"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Inject multi-repo runtime context/env (`HIVEMIND_PRIMARY_WORKTREE`, `HIVEMIND_ALL_WORKTREES`, per-repo worktree env vars) so agents can operate across repos in a single attempt"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Enforce repository scope per repo during verification; writes in undeclared/read-only repos now fail the attempt"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Extend merge prepare/execute to multi-repo flows with taskflow-level all-or-nothing merge guarantees and best-effort rollback of partially merged repos"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add registry coverage for multi-repo merge preparation and atomic merge failure handling"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Phase 27 complete in roadmap and document Phase 27 runtime/scope mechanics in design docs"
+        }
+      ]
+    },
+    {
       "version": "v0.1.15",
       "date": "2026-02-14",
       "phase": 26,

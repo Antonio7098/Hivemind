@@ -1,6 +1,6 @@
 [package]
 name = "hivemind-core"
-version = "0.1.15"
+version = "0.1.16"
 edition = "2021"
 authors = ["Antonio"]
 description = "A structured orchestration system for agentic coding workflows"

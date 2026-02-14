@@ -263,9 +263,10 @@ Repository scope controls which repos an agent may access.
 
 ### 6.1 Enforcement Mechanism
 
-- Worktree contains only the allowed repository
-- Multiple repos → multiple worktrees or careful path restrictions
-- Read-only mode → mount as read-only or detect writes post-hoc
+- Each attached repo gets a task-scoped worktree (`exec/<flow>/<task>`)
+- Runtime receives all repo worktree paths (context + `HIVEMIND_ALL_WORKTREES` + per-repo env vars)
+- Post-execution verification inspects each repo worktree (`git status --porcelain`) and enforces repository access mode
+- Read-only mode is enforced via post-hoc write detection in that repo worktree
 
 ### 6.2 Multi-Repo Tasks
 
