@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.15",
+      "date": "2026-02-14",
+      "phase": 26,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Introduce concurrency governance in Registry::tick_flow with multi-dispatch scheduling, scope-aware conflict telemetry, and global concurrency cap parsing"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Expose --max-parallel on flow tick and --max-parallel-tasks on project runtime-set, plus surface new scheduling telemetry via server API"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Emit ScopeConflictDetected/TaskSchedulingDeferred events and persist max_parallel_tasks policy in ProjectRuntimeConfigured"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Rewrite Phase 26 roadmap, update architecture/design/quickstart docs to describe concurrency governance and global caps"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Extend unit coverage for scheduling conflicts/global cap parsing and document manual hivemind-test validation scenarios"
+        }
+      ]
+    },
+    {
       "version": "v0.1.14",
       "date": "2026-02-13",
       "phase": 24,

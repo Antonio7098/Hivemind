@@ -134,6 +134,8 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::TaskFlowAborted { .. } => "TaskFlowAborted",
         EventPayload::TaskReady { .. } => "TaskReady",
         EventPayload::TaskBlocked { .. } => "TaskBlocked",
+        EventPayload::ScopeConflictDetected { .. } => "ScopeConflictDetected",
+        EventPayload::TaskSchedulingDeferred { .. } => "TaskSchedulingDeferred",
         EventPayload::TaskExecutionStateChanged { .. } => "TaskExecutionStateChanged",
         EventPayload::TaskExecutionStarted { .. } => "TaskExecutionStarted",
         EventPayload::TaskExecutionSucceeded { .. } => "TaskExecutionSucceeded",
@@ -211,6 +213,8 @@ fn payload_category(payload: &EventPayload) -> &'static str {
 
         EventPayload::TaskReady { .. }
         | EventPayload::TaskBlocked { .. }
+        | EventPayload::ScopeConflictDetected { .. }
+        | EventPayload::TaskSchedulingDeferred { .. }
         | EventPayload::TaskExecutionStateChanged { .. }
         | EventPayload::TaskExecutionStarted { .. }
         | EventPayload::TaskExecutionSucceeded { .. }
@@ -411,6 +415,7 @@ struct ProjectRuntimeRequest {
     args: Option<Vec<String>>,
     env: Option<HashMap<String, String>>,
     timeout_ms: Option<u64>,
+    max_parallel_tasks: Option<u16>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -510,6 +515,7 @@ struct FlowIdRequest {
 struct FlowTickRequest {
     flow_id: String,
     interactive: Option<bool>,
+    max_parallel: Option<u16>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -948,6 +954,7 @@ fn handle_api_request_inner(
                 &req.args.unwrap_or_default(),
                 &env_pairs,
                 req.timeout_ms.unwrap_or(600_000),
+                req.max_parallel_tasks.unwrap_or(1),
             )?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
@@ -1148,9 +1155,11 @@ fn handle_api_request_inner(
         }
         "/api/flows/tick" if method == ApiMethod::Post => {
             let req: FlowTickRequest = parse_json_body(body, "server:flows:tick")?;
-            let wrapped = CliResponse::success(
-                registry.tick_flow(&req.flow_id, req.interactive.unwrap_or(false))?,
-            );
+            let wrapped = CliResponse::success(registry.tick_flow(
+                &req.flow_id,
+                req.interactive.unwrap_or(false),
+                req.max_parallel,
+            )?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)

@@ -458,13 +458,15 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
-        FlowCommands::Tick(args) => match registry.tick_flow(&args.flow_id, args.interactive) {
-            Ok(flow) => {
-                print_flow_id(flow.id, format);
-                ExitCode::Success
+        FlowCommands::Tick(args) => {
+            match registry.tick_flow(&args.flow_id, args.interactive, args.max_parallel) {
+                Ok(flow) => {
+                    print_flow_id(flow.id, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
             }
-            Err(e) => output_error(&e, format),
-        },
+        }
         FlowCommands::Pause(args) => {
             let _ = args.wait;
             match registry.pause_flow(&args.flow_id) {
@@ -677,6 +679,7 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
             &args.args,
             &args.env,
             args.timeout_ms,
+            args.max_parallel_tasks,
         ) {
             Ok(project) => {
                 print_project(&project, format);
@@ -984,6 +987,8 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::TaskFlowAborted { .. } => "flow_aborted",
         EventPayload::TaskReady { .. } => "task_ready",
         EventPayload::TaskBlocked { .. } => "task_blocked",
+        EventPayload::ScopeConflictDetected { .. } => "scope_conflict_detected",
+        EventPayload::TaskSchedulingDeferred { .. } => "task_scheduling_deferred",
         EventPayload::TaskExecutionStateChanged { .. } => "task_execution_state_changed",
         EventPayload::TaskExecutionStarted { .. } => "task_execution_started",
         EventPayload::TaskExecutionSucceeded { .. } => "task_execution_succeeded",

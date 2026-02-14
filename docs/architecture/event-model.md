@@ -199,6 +199,7 @@ These events describe enforcement and violations.
 Examples:
 - `ScopeValidated`
 - `ScopeConflictDetected`
+- `TaskSchedulingDeferred`
 - `ScopeViolationDetected`
 
 Scope events are **safety-critical** and never ignored.

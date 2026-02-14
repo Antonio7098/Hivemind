@@ -16,6 +16,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+const fn default_max_parallel_tasks() -> u16 {
+    1
+}
+
 /// Unique identifier for an event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct EventId(Uuid);
@@ -245,6 +249,8 @@ pub enum EventPayload {
         #[serde(default)]
         env: HashMap<String, String>,
         timeout_ms: u64,
+        #[serde(default = "default_max_parallel_tasks")]
+        max_parallel_tasks: u16,
     },
     /// A new task was created.
     TaskCreated {
@@ -361,6 +367,19 @@ pub enum EventPayload {
         task_id: Uuid,
         #[serde(default)]
         reason: Option<String>,
+    },
+    ScopeConflictDetected {
+        flow_id: Uuid,
+        task_id: Uuid,
+        conflicting_task_id: Uuid,
+        severity: String,
+        action: String,
+        reason: String,
+    },
+    TaskSchedulingDeferred {
+        flow_id: Uuid,
+        task_id: Uuid,
+        reason: String,
     },
     TaskExecutionStateChanged {
         flow_id: Uuid,

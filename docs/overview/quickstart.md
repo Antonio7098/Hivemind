@@ -112,12 +112,14 @@ $HM project runtime-set "expense-tracker" \
   --adapter opencode \
   --binary-path /absolute/path/to/opencode \
   --model opencode/kimi-k2.5-free \
+  --max-parallel-tasks 2 \
   --timeout-ms 600000
 ```
 
 Notes:
 
 - `--model` is optional; if omitted, the adapter may use its own default.
+- `--max-parallel-tasks` controls per-project scheduling concurrency policy.
 - If the runtime requires credentials, set them in your environment (do not hardcode secrets in scripts).
 
 ---
@@ -181,6 +183,11 @@ $HM flow start "$FLOW_ID"
 ### 7.3 Tick it until it completes
 
 Hivemind is deterministic and explicit: you advance execution using `flow tick`.
+For concurrency governance, optionally set a global cap:
+
+```bash
+export HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL=4
+```
 
 ```bash
 while true; do
@@ -191,7 +198,7 @@ while true; do
     break
   fi
 
-  $HM flow tick "$FLOW_ID"
+  $HM flow tick "$FLOW_ID" --max-parallel 2
   sleep 1
 done
 ```

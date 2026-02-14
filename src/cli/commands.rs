@@ -263,6 +263,10 @@ pub struct FlowTickArgs {
     /// Enable interactive mode (prompt between steps)
     #[arg(long)]
     pub interactive: bool,
+
+    /// Override max tasks to schedule this tick (must be >= 1)
+    #[arg(long)]
+    pub max_parallel: Option<u16>,
 }
 
 #[derive(Args)]
@@ -385,6 +389,10 @@ pub struct ProjectRuntimeSetArgs {
     /// Execution timeout in milliseconds
     #[arg(long, default_value = "600000")]
     pub timeout_ms: u64,
+
+    /// Max number of tasks that may execute concurrently per flow tick
+    #[arg(long, default_value_t = 1)]
+    pub max_parallel_tasks: u16,
 }
 
 /// Arguments for project inspect.

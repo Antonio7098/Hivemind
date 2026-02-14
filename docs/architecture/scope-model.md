@@ -223,9 +223,10 @@ On violation:
 Worktrees are derived from scope decisions.
 
 Rules:
-- Compatible scopes → may share worktree
-- Soft conflicts → planner or user decides
-- Hard conflicts → isolated worktrees required
+- Each task attempt executes in its own isolated worktree/branch
+- Compatible scopes → eligible for parallel dispatch
+- Soft conflicts → eligible for parallel dispatch with warning telemetry
+- Hard conflicts → serialized in scheduler dispatch
 
 Worktrees are an enforcement mechanism, not a primary abstraction.
 
@@ -248,6 +249,7 @@ All scope-related decisions emit events:
 - `ScopeAssigned`
 - `ScopeValidated`
 - `ScopeConflictDetected`
+- `TaskSchedulingDeferred`
 - `ScopeViolationDetected`
 
 This ensures scope decisions are inspectable and debuggable.

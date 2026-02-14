@@ -351,11 +351,21 @@ ScopeViolationDetected:
 
 ```
 ScopeConflictDetected:
-  task_a: string
-  task_b: string
-  conflict_type: SOFT | HARD
-  conflicting_paths: [string]
-  resolution: ISOLATED | SERIALIZED | ACKNOWLEDGED
+  flow_id: uuid
+  task_id: uuid
+  conflicting_task_id: uuid
+  severity: soft_conflict | hard_conflict
+  action: warn_parallel | serialized
+  reason: string
+```
+
+### 9.4 Scheduling Deferred Event
+
+```
+TaskSchedulingDeferred:
+  flow_id: uuid
+  task_id: uuid
+  reason: string
 ```
 
 ---
