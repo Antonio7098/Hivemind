@@ -136,6 +136,7 @@ Wrapper adapters invoke existing CLI-based runtimes as subprocesses.
 Examples:
 - Claude Code
 - Codex CLI
+- Kilo
 - Gemini CLI
 - OpenCode
 
@@ -299,4 +300,3 @@ The runtime adapter layer allows Hivemind to:
 - Preserve architectural integrity
 
 Runtimes are tools. Hivemind is the system.
-

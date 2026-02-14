@@ -451,13 +451,13 @@ Output: stdout
 Notes: Requires OPENAI_API_KEY
 ```
 
-### 11.3 Gemini CLI
+### 11.3 Kilo
 
 ```
-Binary: gemini
+Binary: kilo
 Input: stdin
 Output: stdout
-Notes: Requires GOOGLE_API_KEY
+Notes: OpenCode-compatible wrapper; supports OpenCode-style model identifiers (for example `opencode/kimi-k2.5-free`)
 ```
 
 ### 11.4 OpenCode

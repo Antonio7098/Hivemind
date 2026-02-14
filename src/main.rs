@@ -4,9 +4,9 @@ use clap::error::ErrorKind;
 use clap::Parser;
 use hivemind::cli::commands::{
     AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, EventCommands,
-    FlowCommands, GraphCommands, MergeCommands, ProjectCommands, ServeArgs, TaskAbortArgs,
-    TaskCloseArgs, TaskCommands, TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs,
-    TaskRetryArgs, TaskStartArgs, TaskUpdateArgs, VerifyCommands, WorktreeCommands,
+    FlowCommands, GraphCommands, MergeCommands, ProjectCommands, RuntimeCommands, ServeArgs,
+    TaskAbortArgs, TaskCloseArgs, TaskCommands, TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs,
+    TaskListArgs, TaskRetryArgs, TaskStartArgs, TaskUpdateArgs, VerifyCommands, WorktreeCommands,
 };
 use hivemind::cli::output::{output, output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
@@ -538,6 +538,7 @@ fn run(cli: Cli) -> ExitCode {
         Some(Commands::Graph(cmd)) => handle_graph(cmd, format),
         Some(Commands::Flow(cmd)) => handle_flow(cmd, format),
         Some(Commands::Events(cmd)) => handle_events(cmd, format),
+        Some(Commands::Runtime(cmd)) => handle_runtime(cmd, format),
         Some(Commands::Verify(cmd)) => handle_verify(cmd, format),
         Some(Commands::Merge(cmd)) => handle_merge(cmd, format),
         Some(Commands::Attempt(cmd)) => handle_attempt(cmd, format),
@@ -883,6 +884,34 @@ fn handle_task_update(
     }
 }
 
+fn handle_task_runtime_set(
+    registry: &Registry,
+    args: &hivemind::cli::commands::TaskRuntimeSetArgs,
+    format: OutputFormat,
+) -> ExitCode {
+    let result = if args.clear {
+        registry.task_runtime_clear(&args.task_id)
+    } else {
+        registry.task_runtime_set(
+            &args.task_id,
+            &args.adapter,
+            &args.binary_path,
+            args.model.clone(),
+            &args.args,
+            &args.env,
+            args.timeout_ms,
+        )
+    };
+
+    match result {
+        Ok(task) => {
+            print_task(&task, format);
+            ExitCode::Success
+        }
+        Err(e) => output_error(&e, format),
+    }
+}
+
 fn handle_task_close(registry: &Registry, args: &TaskCloseArgs, format: OutputFormat) -> ExitCode {
     match registry.close_task(&args.task_id, args.reason.as_deref()) {
         Ok(task) => {
@@ -952,11 +981,80 @@ fn handle_task(cmd: TaskCommands, format: OutputFormat) -> ExitCode {
         TaskCommands::List(args) => handle_task_list(&registry, &args, format),
         TaskCommands::Inspect(args) => handle_task_inspect(&registry, &args, format),
         TaskCommands::Update(args) => handle_task_update(&registry, &args, format),
+        TaskCommands::RuntimeSet(args) => handle_task_runtime_set(&registry, &args, format),
         TaskCommands::Close(args) => handle_task_close(&registry, &args, format),
         TaskCommands::Start(args) => handle_task_start(&registry, &args, format),
         TaskCommands::Complete(args) => handle_task_complete(&registry, &args, format),
         TaskCommands::Retry(args) => handle_task_retry(&registry, &args, format),
         TaskCommands::Abort(args) => handle_task_abort(&registry, &args, format),
+    }
+}
+
+fn handle_runtime(cmd: RuntimeCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        RuntimeCommands::List => {
+            let rows = registry.runtime_list();
+            match format {
+                OutputFormat::Table => {
+                    if rows.is_empty() {
+                        println!("No runtimes available.");
+                    } else {
+                        println!(
+                            "{:<14}  {:<20}  {:<10}  OCODE_FAMILY",
+                            "ADAPTER", "BINARY", "AVAILABLE"
+                        );
+                        println!("{}", "-".repeat(72));
+                        for row in rows {
+                            println!(
+                                "{:<14}  {:<20}  {:<10}  {}",
+                                row.adapter_name,
+                                row.default_binary,
+                                if row.available { "yes" } else { "no" },
+                                if row.opencode_compatible { "yes" } else { "no" }
+                            );
+                        }
+                    }
+                    ExitCode::Success
+                }
+                _ => output(&rows, format)
+                    .map(|()| ExitCode::Success)
+                    .unwrap_or(ExitCode::Error),
+            }
+        }
+        RuntimeCommands::Health(args) => {
+            match registry.runtime_health(args.project.as_deref(), args.task.as_deref()) {
+                Ok(status) => {
+                    match format {
+                        OutputFormat::Table => {
+                            println!("Adapter: {}", status.adapter_name);
+                            println!("Binary: {}", status.binary_path);
+                            println!("Healthy: {}", if status.healthy { "yes" } else { "no" });
+                            if let Some(ref target) = status.target {
+                                println!("Target: {target}");
+                            }
+                            if let Some(ref details) = status.details {
+                                println!("Details: {details}");
+                            }
+                        }
+                        _ => {
+                            if output(&status, format).is_err() {
+                                return ExitCode::Error;
+                            }
+                        }
+                    }
+                    if status.healthy {
+                        ExitCode::Success
+                    } else {
+                        ExitCode::Error
+                    }
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
     }
 }
 
@@ -969,6 +1067,8 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::ProjectRuntimeConfigured { .. } => "project_runtime_configured",
         EventPayload::TaskCreated { .. } => "task_created",
         EventPayload::TaskUpdated { .. } => "task_updated",
+        EventPayload::TaskRuntimeConfigured { .. } => "task_runtime_configured",
+        EventPayload::TaskRuntimeCleared { .. } => "task_runtime_cleared",
         EventPayload::TaskClosed { .. } => "task_closed",
         EventPayload::RepositoryAttached { .. } => "repo_attached",
         EventPayload::RepositoryDetached { .. } => "repo_detached",

@@ -4,6 +4,48 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.17",
+      "date": "2026-02-14",
+      "phase": 28,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add Codex, Claude Code, and Kilo runtime adapters with shared execution/interactive semantics and health checks"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Introduce `hivemind runtime list` and `hivemind runtime health` for adapter discovery and diagnostics"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Support task-level runtime override via `task runtime-set` with event-sourced TaskRuntimeConfigured/TaskRuntimeCleared state transitions"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Runtime execution now resolves effective runtime per task (override or project default) while preserving existing TaskFlow event semantics and projection behavior"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Harden runtime event projection by normalizing ANSI/control-prefixed output so command/tool markers are observable from real runtime streams"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Extend registry tests for runtime catalog coverage, codex adapter execution, and task runtime override precedence"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Phase 28 complete and update quickstart/runtime/CLI semantics docs for multi-runtime operation"
+        }
+      ]
+    },
+    {
       "version": "v0.1.16",
       "date": "2026-02-14",
       "phase": 27,

@@ -70,6 +70,19 @@ pub struct ProjectRuntimeConfig {
     pub max_parallel_tasks: u16,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskRuntimeConfig {
+    pub adapter_name: String,
+    pub binary_path: String,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+    pub timeout_ms: u64,
+}
+
 /// A project in the system.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Project {
@@ -109,6 +122,8 @@ pub struct Task {
     pub description: Option<String>,
     #[serde(default)]
     pub scope: Option<Scope>,
+    #[serde(default)]
+    pub runtime_override: Option<TaskRuntimeConfig>,
     pub state: TaskState,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -264,6 +279,7 @@ impl AppState {
                         title: title.clone(),
                         description: description.clone(),
                         scope: scope.clone(),
+                        runtime_override: None,
                         state: TaskState::Open,
                         created_at: timestamp,
                         updated_at: timestamp,
@@ -282,6 +298,33 @@ impl AppState {
                     if let Some(d) = description {
                         task.description = Some(d.clone());
                     }
+                    task.updated_at = timestamp;
+                }
+            }
+            EventPayload::TaskRuntimeConfigured {
+                task_id,
+                adapter_name,
+                binary_path,
+                model,
+                args,
+                env,
+                timeout_ms,
+            } => {
+                if let Some(task) = self.tasks.get_mut(task_id) {
+                    task.runtime_override = Some(TaskRuntimeConfig {
+                        adapter_name: adapter_name.clone(),
+                        binary_path: binary_path.clone(),
+                        model: model.clone(),
+                        args: args.clone(),
+                        env: env.clone(),
+                        timeout_ms: *timeout_ms,
+                    });
+                    task.updated_at = timestamp;
+                }
+            }
+            EventPayload::TaskRuntimeCleared { task_id } => {
+                if let Some(task) = self.tasks.get_mut(task_id) {
+                    task.runtime_override = None;
                     task.updated_at = timestamp;
                 }
             }

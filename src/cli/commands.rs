@@ -56,6 +56,10 @@ pub enum Commands {
     #[command(subcommand)]
     Events(EventCommands),
 
+    /// Runtime adapter discovery and health checks
+    #[command(subcommand)]
+    Runtime(RuntimeCommands),
+
     /// Verification commands
     #[command(subcommand)]
     Verify(VerifyCommands),
@@ -460,6 +464,9 @@ pub enum TaskCommands {
     /// Update a task
     Update(TaskUpdateArgs),
 
+    /// Configure or clear a task-level runtime override
+    RuntimeSet(TaskRuntimeSetArgs),
+
     /// Close a task
     Close(TaskCloseArgs),
 
@@ -536,6 +543,62 @@ pub struct TaskUpdateArgs {
     /// New description
     #[arg(long, short = 'd')]
     pub description: Option<String>,
+}
+
+/// Arguments for task runtime override.
+#[derive(Args)]
+pub struct TaskRuntimeSetArgs {
+    /// Task ID
+    pub task_id: String,
+
+    /// Clear any existing task runtime override
+    #[arg(long)]
+    pub clear: bool,
+
+    /// Runtime adapter name
+    #[arg(long, default_value = "opencode")]
+    pub adapter: String,
+
+    /// Path to runtime binary
+    #[arg(long, default_value = "opencode")]
+    pub binary_path: String,
+
+    /// Optional model identifier
+    #[arg(long)]
+    pub model: Option<String>,
+
+    /// Extra args to pass to runtime
+    #[arg(long = "arg", allow_hyphen_values = true)]
+    pub args: Vec<String>,
+
+    /// Extra environment variables in KEY=VALUE form
+    #[arg(long = "env")]
+    pub env: Vec<String>,
+
+    /// Execution timeout in milliseconds
+    #[arg(long, default_value = "600000")]
+    pub timeout_ms: u64,
+}
+
+/// Runtime subcommands.
+#[derive(Subcommand)]
+pub enum RuntimeCommands {
+    /// List built-in runtime adapters and local availability
+    List,
+    /// Run runtime adapter health checks
+    Health(RuntimeHealthArgs),
+}
+
+/// Arguments for runtime health checks.
+#[derive(Args)]
+pub struct RuntimeHealthArgs {
+    /// Optional project ID or name to health-check configured runtime
+    #[arg(long)]
+    pub project: Option<String>,
+
+    /// Optional task ID to health-check effective runtime (task override or project default)
+    #[arg(long)]
+    pub task: Option<String>,
 }
 
 /// Arguments for task close.

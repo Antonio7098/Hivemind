@@ -4,7 +4,8 @@
 //! capabilities within Hivemind's orchestration framework.
 
 use super::runtime::{
-    AdapterConfig, ExecutionInput, ExecutionReport, RuntimeAdapter, RuntimeError,
+    AdapterConfig, ExecutionInput, ExecutionReport, InteractiveAdapterEvent,
+    InteractiveExecutionResult, RuntimeAdapter, RuntimeError,
 };
 use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::terminal;
@@ -118,17 +119,6 @@ pub struct OpenCodeAdapter {
     process: Option<Child>,
 }
 
-pub enum InteractiveAdapterEvent {
-    Output { content: String },
-    Input { content: String },
-    Interrupted,
-}
-
-pub struct InteractiveExecutionResult {
-    pub report: ExecutionReport,
-    pub terminated_reason: Option<String>,
-}
-
 impl OpenCodeAdapter {
     /// Creates a new `OpenCode` adapter.
     pub fn new(config: OpenCodeConfig) -> Self {
@@ -227,7 +217,10 @@ impl OpenCodeAdapter {
             .binary_path
             .file_name()
             .and_then(|s| s.to_str())
-            .is_some_and(|s| s.contains("opencode"));
+            .is_some_and(|s| {
+                let lower = s.to_ascii_lowercase();
+                lower.contains("opencode") || lower.contains("kilo")
+            });
 
         if is_opencode_binary {
             cmd.arg("run");
@@ -607,7 +600,10 @@ impl RuntimeAdapter for OpenCodeAdapter {
             .binary_path
             .file_name()
             .and_then(|s| s.to_str())
-            .is_some_and(|s| s.contains("opencode"));
+            .is_some_and(|s| {
+                let lower = s.to_ascii_lowercase();
+                lower.contains("opencode") || lower.contains("kilo")
+            });
 
         if is_opencode_binary {
             cmd.stdin(Stdio::null());

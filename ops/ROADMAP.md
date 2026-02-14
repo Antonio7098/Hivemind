@@ -897,27 +897,27 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 **Goal:** Support multiple runtimes.
 
 ### 28.1 Codex CLI Adapter
-- [ ] Implement CodexAdapter
-- [ ] Test integration
+- [x] Implement CodexAdapter
+- [x] Test integration
 
 ### 28.2 Claude Code Adapter
-- [ ] Implement ClaudeCodeAdapter
-- [ ] Test integration
+- [x] Implement ClaudeCodeAdapter
+- [x] Test integration
 
 ### 28.3 Kilo Code Adapter
-- [ ] Implement KiloAdapter
-- [ ] Test integration
+- [x] Implement KiloAdapter
+- [x] Test integration
 
 ### 28.4 Runtime Selection
-- [ ] Per-project default runtime
-- [ ] Per-task override
-- [ ] `hivemind runtime list`
-- [ ] `hivemind runtime health`
+- [x] Per-project default runtime
+- [x] Per-task override
+- [x] `hivemind runtime list`
+- [x] `hivemind runtime health`
 
 ### 28.5 Exit Criteria
-- [ ] Multiple runtimes work
-- [ ] Runtime selection works
-- [ ] Same TaskFlow semantics across runtimes
+- [x] Multiple runtimes work
+- [x] Runtime selection works
+- [x] Same TaskFlow semantics across runtimes
 
 ---
 
