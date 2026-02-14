@@ -122,6 +122,22 @@ Notes:
 - `--max-parallel-tasks` controls per-project scheduling concurrency policy.
 - If the runtime requires credentials, set them in your environment (do not hardcode secrets in scripts).
 
+Optional runtime diagnostics:
+
+```bash
+$HM runtime list
+$HM runtime health --project "expense-tracker"
+```
+
+Optional task-level override (uses task runtime instead of project default):
+
+```bash
+$HM task runtime-set "$TASK_A" \
+  --adapter kilo \
+  --binary-path /absolute/path/to/kilo \
+  --model opencode/kimi-k2.5-free
+```
+
 ---
 
 ## 5) Create tasks

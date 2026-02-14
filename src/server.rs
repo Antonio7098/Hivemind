@@ -118,6 +118,8 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::RepositoryDetached { .. } => "RepositoryDetached",
         EventPayload::TaskCreated { .. } => "TaskCreated",
         EventPayload::TaskUpdated { .. } => "TaskUpdated",
+        EventPayload::TaskRuntimeConfigured { .. } => "TaskRuntimeConfigured",
+        EventPayload::TaskRuntimeCleared { .. } => "TaskRuntimeCleared",
         EventPayload::TaskClosed { .. } => "TaskClosed",
         EventPayload::TaskGraphCreated { .. } => "TaskGraphCreated",
         EventPayload::TaskAddedToGraph { .. } => "TaskAddedToGraph",
@@ -194,6 +196,8 @@ fn payload_category(payload: &EventPayload) -> &'static str {
 
         EventPayload::TaskCreated { .. }
         | EventPayload::TaskUpdated { .. }
+        | EventPayload::TaskRuntimeConfigured { .. }
+        | EventPayload::TaskRuntimeCleared { .. }
         | EventPayload::TaskClosed { .. } => "task",
 
         EventPayload::TaskGraphCreated { .. }

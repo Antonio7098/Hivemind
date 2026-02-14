@@ -382,6 +382,44 @@ TaskUpdated:
 
 ---
 
+### 3.6 task runtime-set
+
+**Synopsis:**
+```
+hivemind task runtime-set <task-id> [--clear] [--adapter <name>] [--binary-path <path>] [--model <model>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>]
+```
+
+**Preconditions:**
+- Task `<task-id>` exists
+
+**Effects:**
+- Sets a task-level runtime override used for execution of that task
+- `--clear` removes the task-level override and falls back to project runtime
+
+**Events:**
+```
+TaskRuntimeConfigured:
+  task_id: <task_id>
+  adapter_name: <name>
+  binary_path: <path>
+  model: <model> | null
+  args: [<args...>]
+  env: { <key>: <value>, ... }
+  timeout_ms: <ms>
+
+TaskRuntimeCleared:
+  task_id: <task_id>
+```
+
+**Failures:**
+- `task_not_found`
+- `invalid_runtime_adapter`
+- `invalid_env`
+
+**Idempotence:** `--clear` is idempotent when no override is present.
+
+---
+
 ## 4. TaskGraph Commands
 
 ### 4.1 graph create
@@ -1187,6 +1225,40 @@ MergeCompleted:
 - `PUSH_FAILED`: Could not push to remote
 
 **Idempotence:** Not idempotent. Cannot merge twice.
+
+---
+
+## 8.4 Runtime Commands
+
+### runtime list
+
+**Synopsis:**
+```
+hivemind runtime list
+```
+
+**Effects:**
+- Lists built-in runtime adapters and local binary availability
+
+**Failures:** None (read-only)
+
+### runtime health
+
+**Synopsis:**
+```
+hivemind runtime health [--project <project>] [--task <task-id>]
+```
+
+**Effects:**
+- Runs adapter health check for the selected runtime target
+- If no target is provided, reports aggregate default-binary availability
+
+**Failures:**
+- `runtime_not_configured` (when checking project/task with no configured runtime)
+- `task_not_found`
+- `project_not_found`
+
+**Exit behavior:** Returns non-zero when the target runtime is unhealthy.
 
 ---
 

@@ -267,6 +267,21 @@ pub enum EventPayload {
         title: Option<String>,
         description: Option<String>,
     },
+    TaskRuntimeConfigured {
+        task_id: Uuid,
+        adapter_name: String,
+        binary_path: String,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default)]
+        env: HashMap<String, String>,
+        timeout_ms: u64,
+    },
+    TaskRuntimeCleared {
+        task_id: Uuid,
+    },
     /// A task was closed.
     TaskClosed {
         id: Uuid,

@@ -12,7 +12,7 @@ use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, Ta
 use crate::core::runtime_event_projection::{ProjectedRuntimeObservation, RuntimeEventProjector};
 use crate::core::scope::{check_compatibility, RepoAccessMode, Scope, ScopeCompatibility};
 use crate::core::state::{
-    AppState, AttemptCheckpointState, AttemptState, Project, Task, TaskState,
+    AppState, AttemptCheckpointState, AttemptState, Project, ProjectRuntimeConfig, Task, TaskState,
 };
 use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
 use crate::storage::event_store::{EventFilter, EventStore, IndexedEventStore};
@@ -31,8 +31,15 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
-use crate::adapters::opencode::{OpenCodeAdapter, OpenCodeConfig};
-use crate::adapters::runtime::{AttemptSummary, ExecutionInput, RuntimeAdapter};
+use crate::adapters::claude_code::{ClaudeCodeAdapter, ClaudeCodeConfig};
+use crate::adapters::codex::{CodexAdapter, CodexConfig};
+use crate::adapters::kilo::{KiloAdapter, KiloConfig};
+use crate::adapters::opencode::OpenCodeConfig;
+use crate::adapters::runtime::{
+    AttemptSummary, ExecutionInput, InteractiveAdapterEvent, InteractiveExecutionResult,
+    RuntimeAdapter, RuntimeError,
+};
+use crate::adapters::{runtime_descriptors, SUPPORTED_ADAPTERS};
 
 /// Configuration for the registry.
 #[derive(Debug, Clone)]
@@ -76,6 +83,25 @@ pub struct Registry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeListEntry {
+    pub adapter_name: String,
+    pub default_binary: String,
+    pub available: bool,
+    pub opencode_compatible: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeHealthStatus {
+    pub adapter_name: String,
+    pub binary_path: String,
+    pub healthy: bool,
+    #[serde(default)]
+    pub target: Option<String>,
+    #[serde(default)]
+    pub details: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct DiffArtifact {
     diff: Diff,
     unified: String,
@@ -116,6 +142,65 @@ pub struct CheckpointCompletionResult {
     pub next_checkpoint_id: Option<String>,
     pub all_completed: bool,
     pub commit_hash: String,
+}
+
+enum SelectedRuntimeAdapter {
+    OpenCode(crate::adapters::opencode::OpenCodeAdapter),
+    Codex(CodexAdapter),
+    ClaudeCode(ClaudeCodeAdapter),
+    Kilo(KiloAdapter),
+}
+
+impl SelectedRuntimeAdapter {
+    fn initialize(&mut self) -> std::result::Result<(), RuntimeError> {
+        match self {
+            Self::OpenCode(a) => a.initialize(),
+            Self::Codex(a) => a.initialize(),
+            Self::ClaudeCode(a) => a.initialize(),
+            Self::Kilo(a) => a.initialize(),
+        }
+    }
+
+    fn prepare(
+        &mut self,
+        task_id: Uuid,
+        worktree: &std::path::Path,
+    ) -> std::result::Result<(), RuntimeError> {
+        match self {
+            Self::OpenCode(a) => a.prepare(task_id, worktree),
+            Self::Codex(a) => a.prepare(task_id, worktree),
+            Self::ClaudeCode(a) => a.prepare(task_id, worktree),
+            Self::Kilo(a) => a.prepare(task_id, worktree),
+        }
+    }
+
+    fn execute(
+        &mut self,
+        input: ExecutionInput,
+    ) -> std::result::Result<crate::adapters::runtime::ExecutionReport, RuntimeError> {
+        match self {
+            Self::OpenCode(a) => a.execute(input),
+            Self::Codex(a) => a.execute(input),
+            Self::ClaudeCode(a) => a.execute(input),
+            Self::Kilo(a) => a.execute(input),
+        }
+    }
+
+    fn execute_interactive<F>(
+        &mut self,
+        input: &ExecutionInput,
+        on_event: F,
+    ) -> std::result::Result<InteractiveExecutionResult, RuntimeError>
+    where
+        F: FnMut(InteractiveAdapterEvent) -> std::result::Result<(), String>,
+    {
+        match self {
+            Self::OpenCode(a) => a.execute_interactive(input, on_event),
+            Self::Codex(a) => a.execute_interactive(input, on_event),
+            Self::ClaudeCode(a) => a.execute_interactive(input, on_event),
+            Self::Kilo(a) => a.execute_interactive(input, on_event),
+        }
+    }
 }
 
 impl Registry {
@@ -2249,6 +2334,19 @@ impl Registry {
             return Err(err);
         }
 
+        if !SUPPORTED_ADAPTERS.contains(&adapter) {
+            let err = HivemindError::user(
+                "invalid_runtime_adapter",
+                format!(
+                    "Unsupported runtime adapter '{adapter}'. Supported: {}",
+                    SUPPORTED_ADAPTERS.join(", ")
+                ),
+                "registry:project_runtime_set",
+            );
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
+        }
+
         let mut env_map = HashMap::new();
         for pair in env {
             let Some((k, v)) = pair.split_once('=') else {
@@ -2308,6 +2406,280 @@ impl Registry {
         })?;
 
         self.get_project(&project.id.to_string())
+    }
+
+    #[must_use]
+    pub fn runtime_list(&self) -> Vec<RuntimeListEntry> {
+        runtime_descriptors()
+            .into_iter()
+            .map(|d| RuntimeListEntry {
+                adapter_name: d.adapter_name.to_string(),
+                default_binary: d.default_binary.to_string(),
+                available: Self::binary_available(d.default_binary),
+                opencode_compatible: d.opencode_compatible,
+            })
+            .collect()
+    }
+
+    pub fn runtime_health(
+        &self,
+        project: Option<&str>,
+        task_id: Option<&str>,
+    ) -> Result<RuntimeHealthStatus> {
+        if let Some(task_id) = task_id {
+            let task = self.get_task(task_id)?;
+            let project = self.get_project(&task.project_id.to_string())?;
+            let project_max_parallel = project
+                .runtime
+                .as_ref()
+                .map_or(1, |cfg| cfg.max_parallel_tasks);
+            let project_runtime = project.runtime.ok_or_else(|| {
+                HivemindError::new(
+                    ErrorCategory::Runtime,
+                    "runtime_not_configured",
+                    "Project has no runtime configured",
+                    "registry:runtime_health",
+                )
+            })?;
+            let runtime = task.runtime_override.map_or_else(
+                || project_runtime,
+                |r| ProjectRuntimeConfig {
+                    adapter_name: r.adapter_name,
+                    binary_path: r.binary_path,
+                    model: r.model,
+                    args: r.args,
+                    env: r.env,
+                    timeout_ms: r.timeout_ms,
+                    max_parallel_tasks: project_max_parallel,
+                },
+            );
+
+            return Ok(Self::health_for_runtime(
+                &runtime,
+                Some(format!("task:{task_id}")),
+            ));
+        }
+
+        if let Some(project_id_or_name) = project {
+            let project = self.get_project(project_id_or_name)?;
+            let runtime = project.runtime.ok_or_else(|| {
+                HivemindError::new(
+                    ErrorCategory::Runtime,
+                    "runtime_not_configured",
+                    "Project has no runtime configured",
+                    "registry:runtime_health",
+                )
+            })?;
+            return Ok(Self::health_for_runtime(
+                &runtime,
+                Some(format!("project:{project_id_or_name}")),
+            ));
+        }
+
+        Ok(RuntimeHealthStatus {
+            adapter_name: "all".to_string(),
+            binary_path: "builtin-defaults".to_string(),
+            healthy: self.runtime_list().iter().all(|r| r.available),
+            target: None,
+            details: Some(
+                self.runtime_list()
+                    .into_iter()
+                    .map(|r| {
+                        format!(
+                            "{}={} ({})",
+                            r.adapter_name,
+                            if r.available { "ok" } else { "missing" },
+                            r.default_binary
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn task_runtime_set(
+        &self,
+        task_id: &str,
+        adapter: &str,
+        binary_path: &str,
+        model: Option<String>,
+        args: &[String],
+        env: &[String],
+        timeout_ms: u64,
+    ) -> Result<Task> {
+        let task = self.get_task(task_id)?;
+        if !SUPPORTED_ADAPTERS.contains(&adapter) {
+            return Err(HivemindError::user(
+                "invalid_runtime_adapter",
+                format!(
+                    "Unsupported runtime adapter '{adapter}'. Supported: {}",
+                    SUPPORTED_ADAPTERS.join(", ")
+                ),
+                "registry:task_runtime_set",
+            ));
+        }
+
+        let mut env_map = HashMap::new();
+        for pair in env {
+            let Some((k, v)) = pair.split_once('=') else {
+                return Err(HivemindError::user(
+                    "invalid_env",
+                    format!("Invalid env var '{pair}'. Expected KEY=VALUE"),
+                    "registry:task_runtime_set",
+                ));
+            };
+            if k.trim().is_empty() {
+                return Err(HivemindError::user(
+                    "invalid_env",
+                    format!("Invalid env var '{pair}'. KEY cannot be empty"),
+                    "registry:task_runtime_set",
+                ));
+            }
+            env_map.insert(k.to_string(), v.to_string());
+        }
+
+        let event = Event::new(
+            EventPayload::TaskRuntimeConfigured {
+                task_id: task.id,
+                adapter_name: adapter.to_string(),
+                binary_path: binary_path.to_string(),
+                model,
+                args: args.to_vec(),
+                env: env_map,
+                timeout_ms,
+            },
+            CorrelationIds::for_task(task.project_id, task.id),
+        );
+        self.store.append(event).map_err(|e| {
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:task_runtime_set",
+            )
+        })?;
+        self.get_task(task_id)
+    }
+
+    pub fn task_runtime_clear(&self, task_id: &str) -> Result<Task> {
+        let task = self.get_task(task_id)?;
+        if task.runtime_override.is_none() {
+            return Ok(task);
+        }
+
+        let event = Event::new(
+            EventPayload::TaskRuntimeCleared { task_id: task.id },
+            CorrelationIds::for_task(task.project_id, task.id),
+        );
+        self.store.append(event).map_err(|e| {
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:task_runtime_clear",
+            )
+        })?;
+        self.get_task(task_id)
+    }
+
+    fn binary_available(binary: &str) -> bool {
+        if binary.contains('/') {
+            let path = PathBuf::from(binary);
+            return path.exists();
+        }
+
+        std::env::var_os("PATH").is_some_and(|paths| {
+            std::env::split_paths(&paths).any(|dir| {
+                let candidate = dir.join(binary);
+                candidate.exists() && candidate.is_file()
+            })
+        })
+    }
+
+    fn health_for_runtime(
+        runtime: &ProjectRuntimeConfig,
+        target: Option<String>,
+    ) -> RuntimeHealthStatus {
+        match Self::build_runtime_adapter(runtime.clone()) {
+            Ok(mut adapter) => match adapter.initialize() {
+                Ok(()) => RuntimeHealthStatus {
+                    adapter_name: runtime.adapter_name.clone(),
+                    binary_path: runtime.binary_path.clone(),
+                    healthy: true,
+                    target,
+                    details: None,
+                },
+                Err(e) => RuntimeHealthStatus {
+                    adapter_name: runtime.adapter_name.clone(),
+                    binary_path: runtime.binary_path.clone(),
+                    healthy: false,
+                    target,
+                    details: Some(format!("{}: {}", e.code, e.message)),
+                },
+            },
+            Err(e) => RuntimeHealthStatus {
+                adapter_name: runtime.adapter_name.clone(),
+                binary_path: runtime.binary_path.clone(),
+                healthy: false,
+                target,
+                details: Some(format!("{}: {}", e.code, e.message)),
+            },
+        }
+    }
+
+    fn build_runtime_adapter(runtime: ProjectRuntimeConfig) -> Result<SelectedRuntimeAdapter> {
+        let timeout = Duration::from_millis(runtime.timeout_ms);
+        match runtime.adapter_name.as_str() {
+            "opencode" => {
+                let mut cfg = OpenCodeConfig::new(PathBuf::from(runtime.binary_path));
+                cfg.model = runtime.model.clone().or(cfg.model);
+                cfg.base.args = runtime.args;
+                cfg.base.env = runtime.env;
+                cfg.base.timeout = timeout;
+                Ok(SelectedRuntimeAdapter::OpenCode(
+                    crate::adapters::opencode::OpenCodeAdapter::new(cfg),
+                ))
+            }
+            "codex" => {
+                let mut cfg = CodexConfig::new(PathBuf::from(runtime.binary_path));
+                cfg.model = runtime.model;
+                cfg.base.args = if runtime.args.is_empty() {
+                    CodexConfig::default().base.args
+                } else {
+                    runtime.args
+                };
+                cfg.base.env = runtime.env;
+                cfg.base.timeout = timeout;
+                Ok(SelectedRuntimeAdapter::Codex(CodexAdapter::new(cfg)))
+            }
+            "claude-code" => {
+                let mut cfg = ClaudeCodeConfig::new(PathBuf::from(runtime.binary_path));
+                cfg.model = runtime.model;
+                cfg.base.args = if runtime.args.is_empty() {
+                    ClaudeCodeConfig::default().base.args
+                } else {
+                    runtime.args
+                };
+                cfg.base.env = runtime.env;
+                cfg.base.timeout = timeout;
+                Ok(SelectedRuntimeAdapter::ClaudeCode(ClaudeCodeAdapter::new(
+                    cfg,
+                )))
+            }
+            "kilo" => {
+                let mut cfg = KiloConfig::new(PathBuf::from(runtime.binary_path));
+                cfg.model = runtime.model;
+                cfg.base.args = runtime.args;
+                cfg.base.env = runtime.env;
+                cfg.base.timeout = timeout;
+                Ok(SelectedRuntimeAdapter::Kilo(KiloAdapter::new(cfg)))
+            }
+            _ => Err(HivemindError::user(
+                "unsupported_runtime",
+                format!("Unsupported runtime adapter '{}'", runtime.adapter_name),
+                "registry:build_runtime_adapter",
+            )),
+        }
     }
 
     #[allow(clippy::too_many_lines)]
@@ -2474,7 +2846,7 @@ impl Registry {
             )
         })?;
 
-        let runtime = project.runtime.clone().ok_or_else(|| {
+        let project_runtime = project.runtime.clone().ok_or_else(|| {
             HivemindError::new(
                 ErrorCategory::Runtime,
                 "runtime_not_configured",
@@ -2482,14 +2854,22 @@ impl Registry {
                 "registry:tick_flow",
             )
         })?;
-
-        if runtime.adapter_name != "opencode" {
-            return Err(HivemindError::user(
-                "unsupported_runtime",
-                format!("Unsupported runtime adapter '{}'", runtime.adapter_name),
-                "registry:tick_flow",
-            ));
-        }
+        let task_runtime_override = state
+            .tasks
+            .get(&task_id)
+            .and_then(|task| task.runtime_override.clone());
+        let runtime = task_runtime_override.map_or_else(
+            || project_runtime.clone(),
+            |ovr| ProjectRuntimeConfig {
+                adapter_name: ovr.adapter_name,
+                binary_path: ovr.binary_path,
+                model: ovr.model,
+                args: ovr.args,
+                env: ovr.env,
+                timeout_ms: ovr.timeout_ms,
+                max_parallel_tasks: project_runtime.max_parallel_tasks,
+            },
+        );
 
         let worktree_status =
             Self::ensure_task_worktree(&flow, &state, task_id, "registry:tick_flow")?;
@@ -2687,11 +3067,7 @@ impl Registry {
                 HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
             })?;
 
-        let timeout = Duration::from_millis(runtime.timeout_ms);
-        let mut cfg = OpenCodeConfig::new(PathBuf::from(runtime.binary_path));
-        cfg.model = runtime.model.clone().or(cfg.model);
-        cfg.base.args = runtime.args;
-        cfg.base.env = runtime.env;
+        let mut runtime_for_adapter = runtime;
 
         let target_dir = self
             .config
@@ -2701,24 +3077,24 @@ impl Registry {
             .join(task_id.to_string())
             .join(attempt_id.to_string());
         let _ = fs::create_dir_all(&target_dir);
-        cfg.base
+        runtime_for_adapter
             .env
             .entry("CARGO_TARGET_DIR".to_string())
             .or_insert_with(|| target_dir.to_string_lossy().to_string());
-        cfg.base
+        runtime_for_adapter
             .env
             .insert("HIVEMIND_ATTEMPT_ID".to_string(), attempt_id.to_string());
-        cfg.base
+        runtime_for_adapter
             .env
             .insert("HIVEMIND_TASK_ID".to_string(), task_id.to_string());
-        cfg.base
+        runtime_for_adapter
             .env
             .insert("HIVEMIND_FLOW_ID".to_string(), flow.id.to_string());
-        cfg.base.env.insert(
+        runtime_for_adapter.env.insert(
             "HIVEMIND_PRIMARY_WORKTREE".to_string(),
             worktree_status.path.to_string_lossy().to_string(),
         );
-        cfg.base.env.insert(
+        runtime_for_adapter.env.insert(
             "HIVEMIND_ALL_WORKTREES".to_string(),
             repo_worktrees
                 .iter()
@@ -2738,13 +3114,13 @@ impl Registry {
                     })
                     .collect::<String>()
             );
-            cfg.base
+            runtime_for_adapter
                 .env
                 .insert(env_key, wt.path.to_string_lossy().to_string());
         }
         if let Ok(bin) = std::env::current_exe() {
             let hivemind_bin = bin.to_string_lossy().to_string();
-            cfg.base
+            runtime_for_adapter
                 .env
                 .insert("HIVEMIND_BIN".to_string(), hivemind_bin);
 
@@ -2753,15 +3129,13 @@ impl Registry {
                 .map(|p| p.join("hivemind-agent"))
                 .filter(|p| p.exists())
                 .unwrap_or(bin);
-            cfg.base.env.insert(
+            runtime_for_adapter.env.insert(
                 "HIVEMIND_AGENT_BIN".to_string(),
                 agent_path.to_string_lossy().to_string(),
             );
         }
 
-        cfg.base.timeout = timeout;
-
-        let mut adapter = OpenCodeAdapter::new(cfg);
+        let mut adapter = Self::build_runtime_adapter(runtime_for_adapter.clone())?;
         if let Err(e) = adapter.initialize() {
             let reason = format!("{}: {}", e.code, e.message);
             self.store
@@ -2827,7 +3201,7 @@ impl Registry {
 
             let res = adapter.execute_interactive(&input, |evt| {
                 match evt {
-                    crate::adapters::opencode::InteractiveAdapterEvent::Output { content } => {
+                    InteractiveAdapterEvent::Output { content } => {
                         let chunk = content;
                         let _ = stdout.write_all(chunk.as_bytes());
                         let _ = stdout.flush();
@@ -2847,7 +3221,7 @@ impl Registry {
                             "registry:tick_flow",
                         );
                     }
-                    crate::adapters::opencode::InteractiveAdapterEvent::Input { content } => {
+                    InteractiveAdapterEvent::Input { content } => {
                         let event = Event::new(
                             EventPayload::RuntimeInputProvided {
                                 attempt_id,
@@ -2857,7 +3231,7 @@ impl Registry {
                         );
                         self.store.append(event).map_err(|e| e.to_string())?;
                     }
-                    crate::adapters::opencode::InteractiveAdapterEvent::Interrupted => {
+                    InteractiveAdapterEvent::Interrupted => {
                         let event = Event::new(
                             EventPayload::RuntimeInterrupted { attempt_id },
                             attempt_corr.clone(),
@@ -6744,30 +7118,22 @@ mod tests {
     }
 
     #[test]
-    fn tick_flow_rejects_unsupported_runtime_adapter() {
+    fn project_runtime_set_rejects_unsupported_runtime_adapter() {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
-        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
-        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
-        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
-        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
 
-        registry
-            .project_runtime_set(
-                "proj",
-                "not-a-real-adapter",
-                "opencode",
-                None,
-                &[],
-                &[],
-                1000,
-                1,
-            )
-            .unwrap();
-
-        let res = registry.tick_flow(&flow.id.to_string(), false, None);
+        let res = registry.project_runtime_set(
+            "proj",
+            "not-a-real-adapter",
+            "opencode",
+            None,
+            &[],
+            &[],
+            1000,
+            1,
+        );
         assert!(res.is_err());
-        assert_eq!(res.unwrap_err().code, "unsupported_runtime");
+        assert_eq!(res.unwrap_err().code, "invalid_runtime_adapter");
     }
 
     #[test]
@@ -6856,6 +7222,138 @@ mod tests {
         assert!(events
             .iter()
             .any(|e| matches!(e.payload, EventPayload::RuntimeExited { .. })));
+    }
+
+    #[test]
+    fn runtime_list_includes_phase_28_adapters() {
+        let registry = test_registry();
+        let list = registry.runtime_list();
+        let names = list
+            .iter()
+            .map(|r| r.adapter_name.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        assert!(names.contains("opencode"));
+        assert!(names.contains("codex"));
+        assert!(names.contains("claude-code"));
+        assert!(names.contains("kilo"));
+    }
+
+    #[test]
+    fn tick_flow_executes_with_codex_adapter() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+
+        let repo_path = repo_dir.to_string_lossy().to_string();
+        registry
+            .attach_repo("proj", &repo_path, None, RepoAccessMode::ReadWrite)
+            .unwrap();
+
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "codex",
+                "/usr/bin/env",
+                None,
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo '$ cargo fmt --check'; echo 'Tool: rg'; echo codex_stderr 1>&2; printf codex > codex.txt"
+                        .to_string(),
+                ],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let _ = registry.tick_flow(&flow.id.to_string(), false, None);
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::RuntimeStarted { adapter_name, .. } if adapter_name == "codex"
+            )
+        }));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::RuntimeCommandObserved { .. })));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::RuntimeToolCallObserved { .. })));
+    }
+
+    #[test]
+    fn task_runtime_override_takes_precedence_over_project_runtime() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo project_runtime; exit 1".to_string(),
+                ],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        registry
+            .task_runtime_set(
+                &task.id.to_string(),
+                "kilo",
+                "/usr/bin/env",
+                None,
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo task_override_runtime; printf override > override.txt".to_string(),
+                ],
+                &[],
+                1000,
+            )
+            .unwrap();
+
+        let _ = registry.tick_flow(&flow.id.to_string(), false, None);
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::RuntimeStarted { adapter_name, .. } if adapter_name == "kilo"
+            )
+        }));
     }
 
     #[test]

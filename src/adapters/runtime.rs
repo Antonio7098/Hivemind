@@ -106,6 +106,27 @@ impl ExecutionReport {
     }
 }
 
+/// Interactive runtime transport events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum InteractiveAdapterEvent {
+    /// Runtime emitted output content.
+    Output { content: String },
+    /// User input forwarded to runtime.
+    Input { content: String },
+    /// Runtime interrupted (for example by Ctrl+C).
+    Interrupted,
+}
+
+/// Interactive execution result metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InteractiveExecutionResult {
+    /// Final execution report.
+    pub report: ExecutionReport,
+    /// Optional termination reason.
+    pub terminated_reason: Option<String>,
+}
+
 /// An error from the runtime.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeError {
