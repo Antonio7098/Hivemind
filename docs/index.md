@@ -8,6 +8,9 @@ order: 0
 
 Hivemind is a **local-first orchestration system** for AI agents working on real codebases.
 
+Public site: <https://hivemind-landing.netlify.app/>  
+Canonical quickstart: <https://hivemind-landing.netlify.app/docs/overview/quickstart>
+
 It is built for teams that need to scale agent autonomy without losing control.
 
 **Everything observable.**
