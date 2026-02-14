@@ -951,6 +951,48 @@ fn cli_events_stream_with_filters() {
     assert_eq!(code, 0, "{err}");
     assert!(!out.contains("No events found."));
 
+    // List events with flow + time range filters
+    let (code, out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--flow",
+            &flow_id,
+            "--since",
+            "1970-01-01T00:00:00Z",
+            "--until",
+            "2100-01-01T00:00:00Z",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let json: serde_json::Value = serde_json::from_str(&out).expect("events list json");
+    let events = json
+        .get("data")
+        .and_then(|v| v.as_array())
+        .expect("events data array");
+    assert!(!events.is_empty());
+
+    // List with invalid timestamp should fail
+    let (code, _out, _err) = run_hivemind(tmp.path(), &["events", "list", "--since", "not-a-time"]);
+    assert_ne!(code, 0);
+
+    // List with invalid range should fail
+    let (code, _out, _err) = run_hivemind(
+        tmp.path(),
+        &[
+            "events",
+            "list",
+            "--since",
+            "2100-01-01T00:00:00Z",
+            "--until",
+            "1970-01-01T00:00:00Z",
+        ],
+    );
+    assert_ne!(code, 0);
+
     // Stream with invalid flow ID
     let (code, _, _) = run_hivemind(tmp.path(), &["events", "stream", "--flow", "not-a-uuid"]);
     assert_ne!(code, 0);

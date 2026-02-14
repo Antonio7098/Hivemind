@@ -926,19 +926,19 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 **Goal:** Real-time observability.
 
 ### 29.1 Event Stream Command
-- [ ] `hivemind events stream` (real-time)
-- [ ] Filters: --flow, --task, --since
+- [x] `hivemind events stream` (real-time)
+- [x] Filters: --flow, --task, --since
 
 ### 29.2 Event Query Command
-- [ ] `hivemind events list` (historical)
-- [ ] `hivemind events inspect <event-id>`
-- [ ] Correlation filtering
-- [ ] Time range filtering
+- [x] `hivemind events list` (historical)
+- [x] `hivemind events inspect <event-id>`
+- [x] Correlation filtering
+- [x] Time range filtering
 
 ### 29.3 Exit Criteria
-- [ ] Real-time event stream works
-- [ ] Historical queries work
-- [ ] Events are the complete record
+- [x] Real-time event stream works
+- [x] Historical queries work
+- [x] Events are the complete record
 
 ---
 

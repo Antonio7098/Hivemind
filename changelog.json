@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.18",
+      "date": "2026-02-14",
+      "phase": 29,
+      "changes": [
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Extend `events list` and `events stream` with correlation filters (`--graph`, `--flow`, `--task`, `--attempt`) and RFC3339 time-window filters (`--since`, `--until`)"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Enhance EventFilter matching with timestamp bounds to support deterministic historical queries and streaming windows"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add event store coverage for time-range filtering and CLI integration coverage for new event query/stream filters and invalid time-range handling"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Phase 29 complete in roadmap and update CLI/quickstart/capabilities docs for correlation and time-range observability queries"
+        },
+        {
+          "type": "added",
+          "area": "ops",
+          "description": "Add Phase 29 execution report including manual `hivemind-test` validation with captured start/end timestamps and event query evidence"
+        }
+      ]
+    },
+    {
       "version": "v0.1.17",
       "date": "2026-02-14",
       "phase": 28,

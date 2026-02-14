@@ -50,7 +50,9 @@ Purpose:
 
 Capabilities:
 - Stream events (live)
-- Query events by correlation (project / taskflow / task)
+- Query historical events by correlation (project / graph / flow / task / attempt)
+- Query events by time window (`--since`, `--until`)
+- Inspect full event payload by event ID
 - Replay events into derived state
 
 Purpose:
@@ -381,4 +383,3 @@ By exposing all functionality via the CLI, Hivemind enables:
 - Confident evolution
 
 The UI does not extend Hivemind. It reflects it.
-

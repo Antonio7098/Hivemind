@@ -1264,11 +1264,58 @@ hivemind runtime health [--project <project>] [--task <task-id>]
 
 ## 9. Event Commands
 
-### 9.1 events stream
+### 9.1 events list
 
 **Synopsis:**
 ```
-hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project-id>] [--graph <graph-id>] [--limit <n>]
+hivemind events list [--project <project>] [--graph <graph-id>] [--flow <flow-id>] [--task <task-id>] [--attempt <attempt-id>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
+```
+
+**Preconditions:** None
+
+**Effects:** None (read-only)
+
+**Output:**
+- Historical event records
+- Optional correlation and time-window filtering
+
+**Events:** None (reads events, doesn't create)
+
+**Failures:**
+- `invalid_*_id`: Invalid correlation ID
+- `invalid_timestamp`: Invalid RFC3339 timestamp
+- `invalid_time_range`: `--since` is later than `--until`
+
+**Idempotence:** Idempotent.
+
+---
+
+### 9.2 events inspect
+
+**Synopsis:**
+```
+hivemind events inspect <event-id>
+```
+
+**Preconditions:** Event exists
+
+**Effects:** None (read-only)
+
+**Output:** Full event payload and metadata
+
+**Failures:**
+- `invalid_event_id`
+- `event_not_found`
+
+**Idempotence:** Idempotent.
+
+---
+
+### 9.3 events stream
+
+**Synopsis:**
+```
+hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project>] [--graph <graph-id>] [--attempt <attempt-id>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
 ```
 
 **Preconditions:** None
@@ -1276,19 +1323,21 @@ hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project
 **Effects:** None (read-only, streaming)
 
 **Output:**
-- Real-time event stream
-- Filtered by specified criteria
+- Real-time event stream (historical matching events first, then new matching events)
+- Filtered by correlation IDs and/or time window
 
 **Events:** None (reads events, doesn't create)
 
 **Failures:**
-- `INVALID_FILTER`: Filter criteria invalid
+- `invalid_*_id`: Invalid correlation ID
+- `invalid_timestamp`: Invalid RFC3339 timestamp
+- `invalid_time_range`: `--since` is later than `--until`
 
 **Idempotence:** N/A (streaming command)
 
 ---
 
-### 9.2 events replay
+### 9.4 events replay
 
 **Synopsis:**
 ```
