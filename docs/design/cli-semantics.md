@@ -132,7 +132,7 @@ RepositoryAttachedToProject:
 
 **Synopsis:**
 ```
-hivemind project runtime-set <project> [--adapter <name>] [--binary-path <path>] [--model <model>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>]
+hivemind project runtime-set <project> [--adapter <name>] [--binary-path <path>] [--model <model>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>] [--max-parallel-tasks <n>]
 ```
 
 **Preconditions:**
@@ -152,11 +152,13 @@ ProjectRuntimeConfigured:
   args: [<args...>]
   env: { <key>: <value>, ... }
   timeout_ms: <ms>
+  max_parallel_tasks: <n>
 ```
 
 **Failures:**
 - `project_not_found`
 - `invalid_env`: invalid env formatting
+- `invalid_max_parallel_tasks`: `--max-parallel-tasks` must be >= 1
 
 **Idempotence:** Idempotent if config is unchanged. Otherwise emits a new configuration event.
 
@@ -668,7 +670,7 @@ hivemind flow status <flow-id>
 
 **Synopsis:**
 ```
-hivemind flow tick <flow-id> [--interactive]
+hivemind flow tick <flow-id> [--interactive] [--max-parallel <n>]
 ```
 
 `--interactive` is introduced in **Phase 15: Interactive Runtime Sessions (CLI)**.
@@ -680,7 +682,11 @@ hivemind flow tick <flow-id> [--interactive]
 
 **Effects:**
 - Transitions any dependency-satisfied `PENDING` tasks to `READY`
-- Executes a single `READY` task attempt using the configured runtime adapter
+- Executes up to the effective concurrency limit of task attempts using the configured runtime adapter
+- Effective limit is derived from `--max-parallel`, project runtime `max_parallel_tasks`, and optional global cap `HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL`
+- Evaluates scope compatibility for each dispatch candidate within the tick
+- Hard conflicts are deferred and serialized
+- Soft conflicts are allowed with warning telemetry
 - Emits runtime lifecycle events correlated by attempt ID
 
 If `--interactive` is provided and the selected adapter supports interactive execution:
@@ -695,6 +701,19 @@ If `--interactive` is provided and the selected adapter supports interactive exe
 TaskReady:
   flow_id: <flow-id>
   task_id: <task-id>
+
+ScopeConflictDetected:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  conflicting_task_id: <task-id>
+  severity: soft_conflict | hard_conflict
+  action: warn_parallel | serialized
+  reason: <text>
+
+TaskSchedulingDeferred:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  reason: <text>
 
 TaskExecutionStateChanged:
   task_id: <task-id>
@@ -740,6 +759,8 @@ TaskExecutionStateChanged:
 - `WORKTREE_NOT_FOUND`
 - `UNSUPPORTED_RUNTIME`
 - `INTERACTIVE_MODE_UNSUPPORTED`: `--interactive` was provided but the adapter does not support interactive execution
+- `invalid_max_parallel`: `--max-parallel` must be >= 1
+- `invalid_global_parallel_limit`: `HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL` is invalid
 
 **Idempotence:** Not idempotent. Each tick may schedule and/or execute work.
 

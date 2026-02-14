@@ -12,6 +12,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
+const fn default_max_parallel_tasks() -> u16 {
+    1
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AttemptCheckpointState {
@@ -62,6 +66,8 @@ pub struct ProjectRuntimeConfig {
     #[serde(default)]
     pub env: HashMap<String, String>,
     pub timeout_ms: u64,
+    #[serde(default = "default_max_parallel_tasks")]
+    pub max_parallel_tasks: u16,
 }
 
 /// A project in the system.
@@ -228,6 +234,7 @@ impl AppState {
                 args,
                 env,
                 timeout_ms,
+                max_parallel_tasks,
             } => {
                 if let Some(project) = self.projects.get_mut(project_id) {
                     project.runtime = Some(ProjectRuntimeConfig {
@@ -237,6 +244,7 @@ impl AppState {
                         args: args.clone(),
                         env: env.clone(),
                         timeout_ms: *timeout_ms,
+                        max_parallel_tasks: *max_parallel_tasks,
                     });
                     project.updated_at = timestamp;
                 }
@@ -693,6 +701,8 @@ impl AppState {
             | EventPayload::CheckpointCommitCreated { .. }
             | EventPayload::ScopeValidated { .. }
             | EventPayload::ScopeViolationDetected { .. }
+            | EventPayload::ScopeConflictDetected { .. }
+            | EventPayload::TaskSchedulingDeferred { .. }
             | EventPayload::RetryContextAssembled { .. }
             | EventPayload::FlowIntegrationLockAcquired { .. }
             | EventPayload::Unknown => {}

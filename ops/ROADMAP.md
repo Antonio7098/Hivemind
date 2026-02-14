@@ -832,26 +832,36 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 ---
 
-## Phase 26: Parallel Execution
+## Phase 26: Concurrency Governance
 
-**Goal:** Safe parallel agent execution.
+**Goal:** Controlled, policy-driven parallel task execution.
 
-> **User Story 5:** Parallel scoped agents.
+> **User Stories 5 & 6:** Parallel scoped agents and scope conflict handling.
 
-### 26.1 Scope-Based Parallelism
-- [ ] Scheduler allows parallel tasks if scopes compatible
-- [ ] Hard conflicts → serialize or isolate
-- [ ] Soft conflicts → warn or isolate
+**Execution Note (2026-02-14):** With per-task worktree isolation already in place, Phase 26 focuses on scheduler policy, concurrency limits, and conflict observability (not filesystem safety primitives).
 
-### 26.2 Parallel Worktrees
-- [ ] Multiple worktrees active simultaneously
-- [ ] Each task has isolated worktree
+### 26.1 Execution Concurrency
+- [x] Allow multiple task attempts to be dispatched in one `flow tick`
+- [x] Enforce per-project concurrency policy via runtime config (`max_parallel_tasks`)
+- [x] Enforce optional global cap via `HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL`
+- [x] Preserve runtime/worktree isolation guarantees for concurrently scheduled tasks
 
-### 26.3 Exit Criteria
-- [ ] Compatible tasks run in parallel
-- [ ] Conflicts handled correctly
-- [ ] No corruption from parallel execution
-- [ ] User Story 5, 6 achievable
+### 26.2 Scope-Aware Scheduling
+- [x] Evaluate task scope compatibility before dispatching each candidate
+- [x] Hard conflicts are serialized and emitted as `ScopeConflictDetected` + `TaskSchedulingDeferred`
+- [x] Soft conflicts are permitted in parallel but emitted as `ScopeConflictDetected` warnings
+- [x] Compatible scopes are dispatched in parallel up to the effective concurrency limit
+
+### 26.3 CLI and API Discoverability
+- [x] Add `hivemind flow tick --max-parallel <n>` override
+- [x] Add `hivemind project runtime-set --max-parallel-tasks <n>` policy control
+- [x] Surface new scheduling telemetry through CLI/server event labeling
+
+### 26.4 Validation and Exit Criteria
+- [x] Unit coverage verifies compatible parallel dispatch and hard/soft conflict handling
+- [x] Scheduler behavior is deterministic under concurrency limits and scope policy
+- [x] Manual `hivemind-test` validation of edge cases (parallel dispatch, conflict serialization, global cap)
+- [x] User Stories 5 & 6 are achievable through CLI-first workflow
 
 ---
 
@@ -886,16 +896,16 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 **Goal:** Support multiple runtimes.
 
-### 28.1 Claude Code Adapter
-- [ ] Implement ClaudeCodeAdapter
-- [ ] Test integration
-
-### 28.2 Codex CLI Adapter
+### 28.1 Codex CLI Adapter
 - [ ] Implement CodexAdapter
 - [ ] Test integration
 
-### 28.3 Gemini CLI Adapter
-- [ ] Implement GeminiAdapter
+### 28.2 Claude Code Adapter
+- [ ] Implement ClaudeCodeAdapter
+- [ ] Test integration
+
+### 28.3 Kilo Code Adapter
+- [ ] Implement KiloAdapter
 - [ ] Test integration
 
 ### 28.4 Runtime Selection

@@ -69,8 +69,15 @@ Failure states do **not** unblock downstream tasks.
 - Tasks may execute in parallel if:
   - Dependencies are satisfied
   - Scopes are compatible
+- Parallel dispatch width is policy-driven:
+  - Per-project runtime policy (`max_parallel_tasks`)
+  - Optional per-tick override (`flow tick --max-parallel`)
+  - Optional global cap (`HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL`)
+- Scope conflict handling is deterministic:
+  - Hard conflicts are serialized and deferred in the current tick
+  - Soft conflicts are allowed but explicitly emitted as warning telemetry
 
-Scheduling emits explicit events (`TaskReady`, `TaskBlocked`).
+Scheduling emits explicit events (`TaskReady`, `TaskBlocked`, `ScopeConflictDetected`, `TaskSchedulingDeferred`).
 
 ---
 
@@ -279,6 +286,7 @@ TaskFlow guarantees that:
 - Execution history is inspectable
 - Partial progress is preserved
 - Debugging does not require runtime context
+- Concurrency governance decisions are event-visible (conflict + defer telemetry)
 
 ---
 

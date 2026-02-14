@@ -147,6 +147,8 @@ Planner runs are explicit and non-executing.
 Capabilities:
 - Create TaskFlow from TaskGraph
 - Start TaskFlow
+- Tick TaskFlow deterministically (`flow tick`)
+- Override per-tick scheduling width (`flow tick --max-parallel`)
 - Pause TaskFlow
 - Resume TaskFlow
 - Abort TaskFlow
@@ -179,6 +181,19 @@ Capabilities:
 - List worktrees for a flow
 - Inspect worktree for a task
 - Clean up worktrees for a flow
+
+Isolation guarantee:
+- Each task attempt executes in an isolated worktree/branch owned by the flow engine
+
+---
+
+### 6.5 Concurrency Governance
+
+Capabilities:
+- Configure per-project concurrency policy (`project runtime-set --max-parallel-tasks`)
+- Enforce optional global concurrency cap (`HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL`)
+- Schedule multiple compatible tasks within a single tick
+- Emit conflict/defer telemetry when scope policy limits scheduling
 
 ---
 

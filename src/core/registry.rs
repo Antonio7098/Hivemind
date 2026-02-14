@@ -10,7 +10,7 @@ use crate::core::events::{CorrelationIds, Event, EventPayload, RuntimeOutputStre
 use crate::core::flow::{FlowState, RetryMode, TaskExecState, TaskFlow};
 use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, TaskGraph};
 use crate::core::runtime_event_projection::{ProjectedRuntimeObservation, RuntimeEventProjector};
-use crate::core::scope::{RepoAccessMode, Scope};
+use crate::core::scope::{check_compatibility, RepoAccessMode, Scope, ScopeCompatibility};
 use crate::core::state::{
     AppState, AttemptCheckpointState, AttemptState, Project, Task, TaskState,
 };
@@ -2048,10 +2048,22 @@ impl Registry {
         args: &[String],
         env: &[String],
         timeout_ms: u64,
+        max_parallel_tasks: u16,
     ) -> Result<Project> {
         let project = self
             .get_project(id_or_name)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+
+        if max_parallel_tasks == 0 {
+            let err = HivemindError::user(
+                "invalid_max_parallel_tasks",
+                "max_parallel_tasks must be at least 1",
+                "registry:project_runtime_set",
+            )
+            .with_hint("Use --max-parallel-tasks 1 or higher");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
+        }
 
         let mut env_map = HashMap::new();
         for pair in env {
@@ -2083,6 +2095,7 @@ impl Registry {
             args: args.to_vec(),
             env: env_map.clone(),
             timeout_ms,
+            max_parallel_tasks,
         };
         if project.runtime.as_ref() == Some(&desired) {
             return Ok(project);
@@ -2097,6 +2110,7 @@ impl Registry {
                 args: args.to_vec(),
                 env: env_map,
                 timeout_ms,
+                max_parallel_tasks,
             },
             CorrelationIds::for_project(project.id),
         );
@@ -2113,7 +2127,12 @@ impl Registry {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub fn tick_flow(&self, flow_id: &str, interactive: bool) -> Result<TaskFlow> {
+    fn tick_flow_once(
+        &self,
+        flow_id: &str,
+        interactive: bool,
+        preferred_task: Option<Uuid>,
+    ) -> Result<TaskFlow> {
         let flow = self.get_flow(flow_id)?;
         if flow.state != FlowState::Running {
             return Err(HivemindError::user(
@@ -2235,7 +2254,10 @@ impl Registry {
         let mut ready = flow.tasks_in_state(TaskExecState::Ready);
         ready.sort();
 
-        let task_to_run = retrying.first().copied().or_else(|| ready.first().copied());
+        let preferred =
+            preferred_task.filter(|task_id| retrying.contains(task_id) || ready.contains(task_id));
+        let task_to_run =
+            preferred.or_else(|| retrying.first().copied().or_else(|| ready.first().copied()));
 
         let Some(task_id) = task_to_run else {
             let all_success = flow
@@ -2806,6 +2828,252 @@ impl Registry {
 
         self.complete_task_execution(&task_id.to_string())?;
         self.process_verifying_task(flow_id, task_id)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub fn tick_flow(
+        &self,
+        flow_id: &str,
+        interactive: bool,
+        max_parallel: Option<u16>,
+    ) -> Result<TaskFlow> {
+        let flow = self.get_flow(flow_id)?;
+        if flow.state != FlowState::Running {
+            return Err(HivemindError::user(
+                "flow_not_running",
+                "Flow is not in running state",
+                "registry:tick_flow",
+            ));
+        }
+
+        let state = self.state()?;
+        let project = state.projects.get(&flow.project_id).ok_or_else(|| {
+            HivemindError::system(
+                "project_not_found",
+                format!("Project '{}' not found", flow.project_id),
+                "registry:tick_flow",
+            )
+        })?;
+
+        let configured_limit = project
+            .runtime
+            .as_ref()
+            .map_or(1_u16, |cfg| cfg.max_parallel_tasks.max(1));
+        let requested_limit = max_parallel.unwrap_or(configured_limit);
+        let global_limit = match env::var("HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL") {
+            Ok(raw) => Self::parse_global_parallel_limit(Some(raw))?,
+            Err(env::VarError::NotPresent) => Self::parse_global_parallel_limit(None)?,
+            Err(env::VarError::NotUnicode(_)) => {
+                return Err(HivemindError::user(
+                    "invalid_global_parallel_limit",
+                    "HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL must be valid UTF-8",
+                    "registry:tick_flow",
+                ))
+            }
+        };
+
+        let limit = requested_limit.min(global_limit);
+        if limit == 0 {
+            return Err(HivemindError::user(
+                "invalid_max_parallel",
+                "max_parallel must be at least 1",
+                "registry:tick_flow",
+            )
+            .with_hint("Use --max-parallel 1 or higher"));
+        }
+
+        let mut started_in_tick: Vec<(Uuid, Scope)> = Vec::new();
+        let mut latest_flow = flow;
+
+        for _ in 0..usize::from(limit) {
+            let snapshot = self.get_flow(flow_id)?;
+            latest_flow = snapshot.clone();
+            if snapshot.state != FlowState::Running {
+                break;
+            }
+
+            let mut verifying = snapshot.tasks_in_state(TaskExecState::Verifying);
+            verifying.sort();
+            if let Some(task_id) = verifying.first().copied() {
+                latest_flow = self.process_verifying_task(flow_id, task_id)?;
+                continue;
+            }
+
+            let state = self.state()?;
+            let graph = state.graphs.get(&snapshot.graph_id).ok_or_else(|| {
+                HivemindError::system("graph_not_found", "Graph not found", "registry:tick_flow")
+            })?;
+
+            let mut retrying = snapshot.tasks_in_state(TaskExecState::Retry);
+            retrying.sort();
+            let mut ready = snapshot.tasks_in_state(TaskExecState::Ready);
+            ready.sort();
+
+            let mut candidates = retrying;
+            for task_id in ready {
+                if !candidates.contains(&task_id) {
+                    candidates.push(task_id);
+                }
+            }
+
+            if candidates.is_empty() {
+                latest_flow = self.tick_flow_once(flow_id, interactive, None)?;
+                break;
+            }
+
+            let mut active_scopes = started_in_tick.clone();
+            let mut running = snapshot.tasks_in_state(TaskExecState::Running);
+            running.sort();
+            for running_id in running {
+                if active_scopes.iter().any(|(id, _)| *id == running_id) {
+                    continue;
+                }
+                if let Some(task) = graph.tasks.get(&running_id) {
+                    active_scopes.push((running_id, task.scope.clone().unwrap_or_default()));
+                }
+            }
+
+            let mut chosen: Option<(Uuid, Scope)> = None;
+
+            for candidate_id in candidates {
+                let Some(task) = graph.tasks.get(&candidate_id) else {
+                    continue;
+                };
+
+                let candidate_scope = task.scope.clone().unwrap_or_default();
+                let mut hard_conflict: Option<(Uuid, String)> = None;
+                let mut soft_conflict: Option<(Uuid, String)> = None;
+
+                for (other_id, other_scope) in &active_scopes {
+                    if *other_id == candidate_id {
+                        continue;
+                    }
+
+                    match check_compatibility(&candidate_scope, other_scope) {
+                        ScopeCompatibility::HardConflict => {
+                            hard_conflict = Some((
+                                *other_id,
+                                format!(
+                                    "Hard scope conflict with task {other_id}; serialized in this tick"
+                                ),
+                            ));
+                            break;
+                        }
+                        ScopeCompatibility::SoftConflict => {
+                            if soft_conflict.is_none() {
+                                soft_conflict = Some((
+                                    *other_id,
+                                    format!(
+                                        "Soft scope conflict with task {other_id}; allowing parallel attempt with warning"
+                                    ),
+                                ));
+                            }
+                        }
+                        ScopeCompatibility::Compatible => {}
+                    }
+                }
+
+                if let Some((conflicting_task_id, reason)) = hard_conflict {
+                    self.append_event(
+                        Event::new(
+                            EventPayload::ScopeConflictDetected {
+                                flow_id: snapshot.id,
+                                task_id: candidate_id,
+                                conflicting_task_id,
+                                severity: "hard_conflict".to_string(),
+                                action: "serialized".to_string(),
+                                reason: reason.clone(),
+                            },
+                            CorrelationIds::for_graph_flow_task(
+                                snapshot.project_id,
+                                snapshot.graph_id,
+                                snapshot.id,
+                                candidate_id,
+                            ),
+                        ),
+                        "registry:tick_flow",
+                    )?;
+
+                    self.append_event(
+                        Event::new(
+                            EventPayload::TaskSchedulingDeferred {
+                                flow_id: snapshot.id,
+                                task_id: candidate_id,
+                                reason,
+                            },
+                            CorrelationIds::for_graph_flow_task(
+                                snapshot.project_id,
+                                snapshot.graph_id,
+                                snapshot.id,
+                                candidate_id,
+                            ),
+                        ),
+                        "registry:tick_flow",
+                    )?;
+                    continue;
+                }
+
+                if let Some((conflicting_task_id, reason)) = soft_conflict {
+                    self.append_event(
+                        Event::new(
+                            EventPayload::ScopeConflictDetected {
+                                flow_id: snapshot.id,
+                                task_id: candidate_id,
+                                conflicting_task_id,
+                                severity: "soft_conflict".to_string(),
+                                action: "warn_parallel".to_string(),
+                                reason,
+                            },
+                            CorrelationIds::for_graph_flow_task(
+                                snapshot.project_id,
+                                snapshot.graph_id,
+                                snapshot.id,
+                                candidate_id,
+                            ),
+                        ),
+                        "registry:tick_flow",
+                    )?;
+                }
+
+                chosen = Some((candidate_id, candidate_scope));
+                break;
+            }
+
+            let Some((task_id, scope)) = chosen else {
+                break;
+            };
+
+            started_in_tick.push((task_id, scope));
+            latest_flow = self.tick_flow_once(flow_id, interactive, Some(task_id))?;
+        }
+
+        Ok(latest_flow)
+    }
+
+    fn parse_global_parallel_limit(raw: Option<String>) -> Result<u16> {
+        let Some(raw) = raw else {
+            return Ok(u16::MAX);
+        };
+
+        let parsed = raw.parse::<u16>().map_err(|_| {
+            HivemindError::user(
+                "invalid_global_parallel_limit",
+                format!(
+                    "HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL must be a positive integer, got '{raw}'"
+                ),
+                "registry:tick_flow",
+            )
+        })?;
+
+        if parsed == 0 {
+            return Err(HivemindError::user(
+                "invalid_global_parallel_limit",
+                "HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL must be at least 1",
+                "registry:tick_flow",
+            ));
+        }
+
+        Ok(parsed)
     }
 
     /// Returns the registry configuration.
@@ -5758,6 +6026,7 @@ impl Registry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::scope::{FilePermission, FilesystemScope, PathRule};
     use crate::storage::event_store::InMemoryEventStore;
     use std::process::Command;
 
@@ -5817,6 +6086,25 @@ mod tests {
             .args(["branch", "-M", "main"])
             .current_dir(repo_dir)
             .output();
+    }
+
+    fn configure_failing_runtime(registry: &Registry) {
+        registry
+            .project_runtime_set(
+                "proj",
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo runtime_started; exit 1".to_string(),
+                ],
+                &[],
+                1000,
+                4,
+            )
+            .unwrap();
     }
 
     #[test]
@@ -5939,6 +6227,7 @@ mod tests {
             &[],
             &["NO_EQUALS".to_string()],
             1000,
+            1,
         );
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code, "invalid_env");
@@ -5977,7 +6266,7 @@ mod tests {
         let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
 
-        let res = registry.tick_flow(&flow.id.to_string(), false);
+        let res = registry.tick_flow(&flow.id.to_string(), false, None);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code, "flow_not_running");
     }
@@ -5991,7 +6280,7 @@ mod tests {
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
         let flow = registry.start_flow(&flow.id.to_string()).unwrap();
 
-        let res = registry.tick_flow(&flow.id.to_string(), false);
+        let res = registry.tick_flow(&flow.id.to_string(), false, None);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code, "runtime_not_configured");
     }
@@ -6014,10 +6303,11 @@ mod tests {
                 &[],
                 &[],
                 1000,
+                1,
             )
             .unwrap();
 
-        let res = registry.tick_flow(&flow.id.to_string(), false);
+        let res = registry.tick_flow(&flow.id.to_string(), false, None);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code, "unsupported_runtime");
     }
@@ -6032,10 +6322,10 @@ mod tests {
         let flow = registry.start_flow(&flow.id.to_string()).unwrap();
 
         registry
-            .project_runtime_set("proj", "opencode", "opencode", None, &[], &[], 1000)
+            .project_runtime_set("proj", "opencode", "opencode", None, &[], &[], 1000, 1)
             .unwrap();
 
-        let res = registry.tick_flow(&flow.id.to_string(), false);
+        let res = registry.tick_flow(&flow.id.to_string(), false, None);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code, "project_has_no_repo");
     }
@@ -6073,10 +6363,13 @@ mod tests {
                 ],
                 &[],
                 1000,
+                1,
             )
             .unwrap();
 
-        let err = registry.tick_flow(&flow.id.to_string(), false).unwrap_err();
+        let err = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap_err();
         assert_eq!(err.code, "checkpoints_incomplete");
 
         let events = registry.read_events(&EventFilter::all()).unwrap();
@@ -6105,6 +6398,223 @@ mod tests {
         assert!(events
             .iter()
             .any(|e| matches!(e.payload, EventPayload::RuntimeExited { .. })));
+    }
+
+    #[test]
+    fn tick_flow_runs_multiple_compatible_tasks_when_max_parallel_allows() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+        configure_failing_runtime(&registry);
+
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let t2 = registry.create_task("proj", "Task 2", None, None).unwrap();
+        let graph = registry
+            .create_graph("proj", "g1", &[t1.id, t2.id])
+            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let updated = registry
+            .tick_flow(&flow.id.to_string(), false, Some(2))
+            .unwrap();
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        let runtime_started = events
+            .iter()
+            .filter(|event| {
+                matches!(event.payload, EventPayload::RuntimeStarted { .. })
+                    && event.metadata.correlation.flow_id == Some(flow.id)
+            })
+            .count();
+        assert_eq!(runtime_started, 2);
+
+        let failed = updated
+            .task_executions
+            .values()
+            .filter(|exec| exec.state == TaskExecState::Failed)
+            .count();
+        assert_eq!(failed, 2);
+    }
+
+    #[test]
+    fn tick_flow_serializes_hard_scope_conflicts_with_observability_events() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+        configure_failing_runtime(&registry);
+
+        let hard_scope = Scope::new().with_filesystem(
+            FilesystemScope::new().with_rule(PathRule::new("src", FilePermission::Write)),
+        );
+
+        let t1 = registry
+            .create_task("proj", "Task 1", None, Some(hard_scope.clone()))
+            .unwrap();
+        let t2 = registry
+            .create_task("proj", "Task 2", None, Some(hard_scope))
+            .unwrap();
+        let graph = registry
+            .create_graph("proj", "g-hard", &[t1.id, t2.id])
+            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let updated = registry
+            .tick_flow(&flow.id.to_string(), false, Some(2))
+            .unwrap();
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        let runtime_started = events
+            .iter()
+            .filter(|event| {
+                matches!(event.payload, EventPayload::RuntimeStarted { .. })
+                    && event.metadata.correlation.flow_id == Some(flow.id)
+            })
+            .count();
+        assert_eq!(runtime_started, 1);
+
+        let failed = updated
+            .task_executions
+            .values()
+            .filter(|exec| exec.state == TaskExecState::Failed)
+            .count();
+        assert_eq!(failed, 1);
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::ScopeConflictDetected {
+                    flow_id,
+                    severity,
+                    action,
+                    ..
+                } if *flow_id == flow.id && severity == "hard_conflict" && action == "serialized"
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::TaskSchedulingDeferred { flow_id, .. } if *flow_id == flow.id
+            )
+        }));
+    }
+
+    #[test]
+    fn parse_global_parallel_limit_defaults_to_unbounded_when_missing() {
+        let parsed = Registry::parse_global_parallel_limit(None).unwrap();
+        assert_eq!(parsed, u16::MAX);
+    }
+
+    #[test]
+    fn parse_global_parallel_limit_accepts_positive_value() {
+        let parsed = Registry::parse_global_parallel_limit(Some("3".to_string())).unwrap();
+        assert_eq!(parsed, 3);
+    }
+
+    #[test]
+    fn parse_global_parallel_limit_rejects_zero() {
+        let err = Registry::parse_global_parallel_limit(Some("0".to_string())).unwrap_err();
+        assert_eq!(err.code, "invalid_global_parallel_limit");
+    }
+
+    #[test]
+    fn parse_global_parallel_limit_rejects_non_numeric() {
+        let err = Registry::parse_global_parallel_limit(Some("abc".to_string())).unwrap_err();
+        assert_eq!(err.code, "invalid_global_parallel_limit");
+    }
+
+    #[test]
+    fn tick_flow_warns_on_soft_scope_conflicts_and_allows_parallel_dispatch() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+        configure_failing_runtime(&registry);
+
+        let write_scope = Scope::new().with_filesystem(
+            FilesystemScope::new().with_rule(PathRule::new("src", FilePermission::Write)),
+        );
+        let read_scope = Scope::new().with_filesystem(
+            FilesystemScope::new().with_rule(PathRule::new("src", FilePermission::Read)),
+        );
+
+        let t1 = registry
+            .create_task("proj", "Task 1", None, Some(write_scope))
+            .unwrap();
+        let t2 = registry
+            .create_task("proj", "Task 2", None, Some(read_scope))
+            .unwrap();
+        let graph = registry
+            .create_graph("proj", "g-soft", &[t1.id, t2.id])
+            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let updated = registry
+            .tick_flow(&flow.id.to_string(), false, Some(2))
+            .unwrap();
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        let runtime_started = events
+            .iter()
+            .filter(|event| {
+                matches!(event.payload, EventPayload::RuntimeStarted { .. })
+                    && event.metadata.correlation.flow_id == Some(flow.id)
+            })
+            .count();
+        assert_eq!(runtime_started, 2);
+
+        let failed = updated
+            .task_executions
+            .values()
+            .filter(|exec| exec.state == TaskExecState::Failed)
+            .count();
+        assert_eq!(failed, 2);
+
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::ScopeConflictDetected {
+                    flow_id,
+                    severity,
+                    action,
+                    ..
+                } if *flow_id == flow.id && severity == "soft_conflict" && action == "warn_parallel"
+            )
+        }));
     }
 
     #[test]
@@ -6510,6 +7020,7 @@ mod tests {
             &[],
             &["=VALUE".to_string()],
             1000,
+            1,
         );
         assert!(res.is_err());
 
