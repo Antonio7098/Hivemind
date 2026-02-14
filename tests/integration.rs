@@ -157,13 +157,14 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
 }
 
 fn hivemind_bin() -> PathBuf {
-    if let Some(path) = option_env!("CARGO_BIN_EXE_hivemind") {
-        PathBuf::from(path)
-    } else {
-        std::env::var("CARGO_BIN_EXE_hivemind")
-            .map(PathBuf::from)
-            .expect("CARGO_BIN_EXE_hivemind not set; build the hivemind binary")
-    }
+    option_env!("CARGO_BIN_EXE_hivemind").map_or_else(
+        || {
+            std::env::var("CARGO_BIN_EXE_hivemind")
+                .map(PathBuf::from)
+                .expect("CARGO_BIN_EXE_hivemind not set; build the hivemind binary")
+        },
+        PathBuf::from,
+    )
 }
 
 fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, String, String) {
