@@ -369,6 +369,23 @@ impl Registry {
         })
     }
 
+    pub fn list_graphs(&self, project_id_or_name: Option<&str>) -> Result<Vec<TaskGraph>> {
+        let project_filter = match project_id_or_name {
+            Some(id_or_name) => Some(self.get_project(id_or_name)?.id),
+            None => None,
+        };
+
+        let state = self.state()?;
+        let mut graphs: Vec<_> = state
+            .graphs
+            .into_values()
+            .filter(|g| project_filter.is_none_or(|pid| g.project_id == pid))
+            .collect();
+        graphs.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
+        graphs.reverse();
+        Ok(graphs)
+    }
+
     fn emit_task_execution_frozen(
         &self,
         flow: &TaskFlow,
@@ -2873,6 +2890,9 @@ impl Registry {
                 "repo_already_attached",
                 format!("Repository '{path}' is already attached to this project"),
                 "registry:attach_repo",
+            )
+            .with_hint(
+                "Use 'hivemind project inspect <project>' to view attached repos or detach the existing one with 'hivemind project detach-repo <project> <repo-name>'",
             );
             self.record_error_event(&err, CorrelationIds::for_project(project.id));
             return Err(err);
@@ -3269,6 +3289,7 @@ impl Registry {
         self.get_graph(&graph_id.to_string())
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn add_graph_dependency(
         &self,
         graph_id: &str,
@@ -3315,11 +3336,28 @@ impl Registry {
         })?;
 
         if graph.state != GraphState::Draft {
-            let err = HivemindError::user(
-                "graph_immutable",
-                format!("Graph '{graph_id}' is immutable"),
-                "registry:add_graph_dependency",
+            let locking_flow_id = state
+                .flows
+                .values()
+                .filter(|flow| flow.graph_id == gid)
+                .max_by_key(|flow| flow.updated_at)
+                .map(|flow| flow.id);
+            let message = locking_flow_id.map_or_else(
+                || format!("Graph '{graph_id}' is immutable"),
+                |flow_id| format!("Graph '{graph_id}' is immutable (locked by flow '{flow_id}')"),
             );
+
+            let mut err = HivemindError::user(
+                "graph_immutable",
+                message,
+                "registry:add_graph_dependency",
+            )
+            .with_hint(
+                "Create a new graph if you need additional dependencies, or modify task execution in the existing flow",
+            );
+            if let Some(flow_id) = locking_flow_id {
+                err = err.with_context("locking_flow_id", flow_id.to_string());
+            }
             self.record_error_event(&err, CorrelationIds::for_graph(graph.project_id, gid));
             return Err(err);
         }
@@ -3329,7 +3367,8 @@ impl Registry {
                 "task_not_in_graph",
                 "One or more tasks are not in the graph",
                 "registry:add_graph_dependency",
-            );
+            )
+            .with_hint("Ensure both task IDs were included when the graph was created");
             self.record_error_event(&err, CorrelationIds::for_graph(graph.project_id, gid));
             return Err(err);
         }
@@ -3348,7 +3387,8 @@ impl Registry {
                 "cycle_detected",
                 e.to_string(),
                 "registry:add_graph_dependency",
-            );
+            )
+            .with_hint("Remove one dependency in the cycle and try again");
             self.record_error_event(&err, CorrelationIds::for_graph(graph.project_id, gid));
             err
         })?;
@@ -3516,6 +3556,23 @@ impl Registry {
             valid: issues.is_empty(),
             issues,
         })
+    }
+
+    pub fn list_flows(&self, project_id_or_name: Option<&str>) -> Result<Vec<TaskFlow>> {
+        let project_filter = match project_id_or_name {
+            Some(id_or_name) => Some(self.get_project(id_or_name)?.id),
+            None => None,
+        };
+
+        let state = self.state()?;
+        let mut flows: Vec<_> = state
+            .flows
+            .into_values()
+            .filter(|flow| project_filter.is_none_or(|pid| flow.project_id == pid))
+            .collect();
+        flows.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
+        flows.reverse();
+        Ok(flows)
     }
 
     pub fn get_flow(&self, flow_id: &str) -> Result<TaskFlow> {
@@ -5821,6 +5878,55 @@ mod tests {
     }
 
     #[test]
+    fn list_graphs_and_flows_support_project_filters() {
+        let registry = test_registry();
+        registry.create_project("proj-a", None).unwrap();
+        registry.create_project("proj-b", None).unwrap();
+
+        let a_task = registry
+            .create_task("proj-a", "Task A", None, None)
+            .unwrap();
+        let b_task = registry
+            .create_task("proj-b", "Task B", None, None)
+            .unwrap();
+
+        let a_graph = registry
+            .create_graph("proj-a", "graph-a", &[a_task.id])
+            .unwrap();
+        let b_graph = registry
+            .create_graph("proj-b", "graph-b", &[b_task.id])
+            .unwrap();
+
+        let a_flow = registry
+            .create_flow(&a_graph.id.to_string(), Some("flow-a"))
+            .unwrap();
+        let b_flow = registry
+            .create_flow(&b_graph.id.to_string(), Some("flow-b"))
+            .unwrap();
+
+        let graphs_a = registry.list_graphs(Some("proj-a")).unwrap();
+        assert_eq!(graphs_a.len(), 1);
+        assert_eq!(graphs_a[0].id, a_graph.id);
+
+        let graphs_b = registry.list_graphs(Some("proj-b")).unwrap();
+        assert_eq!(graphs_b.len(), 1);
+        assert_eq!(graphs_b[0].id, b_graph.id);
+
+        let flows_a = registry.list_flows(Some("proj-a")).unwrap();
+        assert_eq!(flows_a.len(), 1);
+        assert_eq!(flows_a[0].id, a_flow.id);
+
+        let flows_b = registry.list_flows(Some("proj-b")).unwrap();
+        assert_eq!(flows_b.len(), 1);
+        assert_eq!(flows_b[0].id, b_flow.id);
+
+        let all_graphs = registry.list_graphs(None).unwrap();
+        assert!(all_graphs.len() >= 2);
+        let all_flows = registry.list_flows(None).unwrap();
+        assert!(all_flows.len() >= 2);
+    }
+
+    #[test]
     fn project_runtime_set_rejects_invalid_env_pairs() {
         let registry = test_registry();
         registry.create_project("proj", None).unwrap();
@@ -5836,6 +5942,31 @@ mod tests {
         );
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code, "invalid_env");
+    }
+
+    #[test]
+    fn attach_repo_duplicate_path_includes_recovery_hint() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+
+        let repo_path = repo_dir.to_string_lossy().to_string();
+        registry
+            .attach_repo("proj", &repo_path, Some("main"), RepoAccessMode::ReadWrite)
+            .unwrap();
+
+        let err = registry
+            .attach_repo("proj", &repo_path, Some("main"), RepoAccessMode::ReadWrite)
+            .unwrap_err();
+
+        assert_eq!(err.code, "repo_already_attached");
+        assert!(err
+            .recovery_hint
+            .as_deref()
+            .is_some_and(|hint| hint.contains("detach-repo")));
     }
 
     #[test]
@@ -6080,6 +6211,58 @@ mod tests {
             again.dependencies.get(&t2.id),
             updated.dependencies.get(&t2.id)
         );
+    }
+
+    #[test]
+    fn add_graph_dependency_missing_task_has_hint() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+
+        let err = registry
+            .add_graph_dependency(
+                &graph.id.to_string(),
+                &t1.id.to_string(),
+                &Uuid::new_v4().to_string(),
+            )
+            .unwrap_err();
+
+        assert_eq!(err.code, "task_not_in_graph");
+        assert!(err
+            .recovery_hint
+            .as_deref()
+            .is_some_and(|hint| hint.contains("included when the graph was created")));
+    }
+
+    #[test]
+    fn add_graph_dependency_locked_graph_includes_locking_flow_context() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+
+        let t1 = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[t1.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+
+        let err = registry
+            .add_graph_dependency(
+                &graph.id.to_string(),
+                &t1.id.to_string(),
+                &t1.id.to_string(),
+            )
+            .unwrap_err();
+
+        assert_eq!(err.code, "graph_immutable");
+        assert!(err.message.contains(&flow.id.to_string()));
+        assert_eq!(
+            err.context.get("locking_flow_id").map(String::as_str),
+            Some(flow.id.to_string().as_str())
+        );
+        assert!(err
+            .recovery_hint
+            .as_deref()
+            .is_some_and(|hint| hint.contains("Create a new graph")));
     }
 
     #[test]

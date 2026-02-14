@@ -179,7 +179,7 @@ Hivemind is deterministic and explicit: you advance execution using `flow tick`.
 
 ```bash
 while true; do
-  STATE=$($HM -f json flow status "$FLOW_ID" | python3 -c 'import json,sys; print(json.load(sys.stdin)["state"])')
+  STATE=$($HM -f json flow status "$FLOW_ID" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["state"])')
   echo "flow state: $STATE"
 
   if [ "$STATE" = "completed" ] || [ "$STATE" = "aborted" ]; then

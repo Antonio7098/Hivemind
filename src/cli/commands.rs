@@ -142,10 +142,16 @@ pub struct WorktreeCleanupArgs {
 
 #[derive(Subcommand)]
 pub enum GraphCommands {
+    /// Create a new task graph from project tasks
     Create(GraphCreateArgs),
+    /// Add a dependency edge to a draft graph (fails once graph is locked by a flow)
     AddDependency(GraphAddDependencyArgs),
+    /// Add a verification check to a task in a draft graph
     AddCheck(GraphAddCheckArgs),
+    /// Validate a graph for cycles and structural issues
     Validate(GraphValidateArgs),
+    /// List graphs (optionally filtered by project)
+    List(GraphListArgs),
 }
 
 #[derive(Args)]
@@ -172,18 +178,24 @@ pub struct GraphAddDependencyArgs {
 
 #[derive(Args)]
 pub struct GraphAddCheckArgs {
+    /// Graph ID
     pub graph_id: String,
+    /// Task ID within the graph
     pub task_id: String,
 
+    /// Check name
     #[arg(long)]
     pub name: String,
 
+    /// Shell command to execute for the check
     #[arg(long)]
     pub command: String,
 
+    /// Whether this check is required for verification success
     #[arg(long, default_value_t = true)]
     pub required: bool,
 
+    /// Optional timeout in milliseconds for this check
     #[arg(long)]
     pub timeout_ms: Option<u64>,
 }
@@ -194,10 +206,19 @@ pub struct GraphValidateArgs {
     pub graph_id: String,
 }
 
+#[derive(Args)]
+pub struct GraphListArgs {
+    /// Optional project ID or name to filter graphs
+    #[arg(long)]
+    pub project: Option<String>,
+}
+
 #[derive(Subcommand)]
 pub enum FlowCommands {
     /// Create a new flow from a graph (locks the graph)
     Create(FlowCreateArgs),
+    /// List flows (optionally filtered by project)
+    List(FlowListArgs),
     /// Start a flow (transitions it into running state)
     Start(FlowStartArgs),
     /// Advance execution by one scheduling/execution step
@@ -219,6 +240,13 @@ pub struct FlowCreateArgs {
     /// Optional flow name
     #[arg(long)]
     pub name: Option<String>,
+}
+
+#[derive(Args)]
+pub struct FlowListArgs {
+    /// Optional project ID or name to filter flows
+    #[arg(long)]
+    pub project: Option<String>,
 }
 
 #[derive(Args)]
@@ -279,7 +307,9 @@ pub struct TaskRetryArgs {
 
 #[derive(Args)]
 pub struct TaskAbortArgs {
+    /// Task ID
     pub task_id: String,
+    /// Optional abort reason
     #[arg(long)]
     pub reason: Option<String>,
 }
@@ -347,7 +377,8 @@ pub struct ProjectRuntimeSetArgs {
     #[arg(long = "arg", allow_hyphen_values = true)]
     pub args: Vec<String>,
 
-    /// Extra environment variables for the runtime in KEY=VALUE form (repeatable)
+    /// Extra environment variables for the runtime in KEY=VALUE form (repeatable).
+    /// Empty keys are rejected, empty values are allowed (KEY=), and duplicate keys use the last value.
     #[arg(long = "env")]
     pub env: Vec<String>,
 
@@ -437,11 +468,13 @@ pub enum TaskCommands {
 
 #[derive(Args)]
 pub struct TaskStartArgs {
+    /// Task ID
     pub task_id: String,
 }
 
 #[derive(Args)]
 pub struct TaskCompleteArgs {
+    /// Task ID
     pub task_id: String,
 }
 
@@ -458,7 +491,8 @@ pub struct TaskCreateArgs {
     #[arg(long, short = 'd')]
     pub description: Option<String>,
 
-    /// Scope contract as a JSON string
+    /// Scope contract as a JSON string.
+    /// Required shape: {"filesystem":{"rules":[...]},"repositories":[],"git":{"permissions":[]},"execution":{"allowed":[],"denied":[]}}
     #[arg(long)]
     pub scope: Option<String>,
 }
@@ -580,10 +614,13 @@ pub struct EventReplayArgs {
 /// Verify subcommands.
 #[derive(Subcommand)]
 pub enum VerifyCommands {
+    /// Apply a human override to verification outcome for a task
     Override(VerifyOverrideArgs),
 
+    /// Manually trigger verification for a task in an active flow
     Run(VerifyRunArgs),
 
+    /// Show verification results for an attempt
     Results(VerifyResultsArgs),
 }
 
@@ -603,13 +640,16 @@ pub struct VerifyOverrideArgs {
 
 #[derive(Args)]
 pub struct VerifyRunArgs {
+    /// Task ID
     pub task_id: String,
 }
 
 #[derive(Args)]
 pub struct VerifyResultsArgs {
+    /// Attempt ID
     pub attempt_id: String,
 
+    /// Include full check output payloads
     #[arg(long)]
     pub output: bool,
 }
@@ -619,7 +659,7 @@ pub struct VerifyResultsArgs {
 pub enum MergeCommands {
     #[command(
         about = "Prepare a completed flow for integration (sandbox merge)",
-        long_about = "Freeze the flow for merge, acquire the per-flow integration lock, materialize integration/<flow>/prepare + _integration_prepare worktree, integrate each successful exec/<flow>/<task> through integration/<flow>/<task> sandboxes with --no-commit --no-ff, run required integration checks, and emit MergePrepared/MergeCheck/TaskIntegratedIntoFlow events."
+        long_about = "Prepare a completed flow for merge by building an integration sandbox, applying successful task branches, and running required integration checks before approval."
     )]
     Prepare(MergePrepareArgs),
 
