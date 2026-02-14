@@ -1,5 +1,6 @@
 //! Integration tests for Hivemind.
 
+use std::path::PathBuf;
 use std::process::Command;
 
 fn init_git_repo(repo_dir: &std::path::Path) {
@@ -155,8 +156,19 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
     assert!(wt_out.contains(".hivemind/worktrees"), "{wt_out}");
 }
 
+fn hivemind_bin() -> PathBuf {
+    option_env!("CARGO_BIN_EXE_hivemind").map_or_else(
+        || {
+            std::env::var("CARGO_BIN_EXE_hivemind")
+                .map(PathBuf::from)
+                .expect("CARGO_BIN_EXE_hivemind not set; build the hivemind binary")
+        },
+        PathBuf::from,
+    )
+}
+
 fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, String, String) {
-    let output = Command::new(env!("CARGO_BIN_EXE_hivemind"))
+    let output = Command::new(hivemind_bin())
         .env("HOME", home)
         .args(args)
         .output()
@@ -174,7 +186,7 @@ fn run_hivemind_with_env(
     args: &[&str],
     extra_env: &[(&str, &str)],
 ) -> (i32, String, String) {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_hivemind"));
+    let mut cmd = Command::new(hivemind_bin());
     cmd.env("HOME", home).args(args);
     for (k, v) in extra_env {
         cmd.env(k, v);
