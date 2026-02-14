@@ -62,6 +62,15 @@ These principles are enforced through architecture, not convention.
 
 Everything runs **locally**.
 
+### Install via crates.io
+
+```bash
+cargo install hivemind-core
+hivemind --version
+```
+
+Add `~/.cargo/bin` to `PATH` if needed. Public docs live at <https://hivemind-landing.netlify.app/> with the canonical quickstart at <https://hivemind-landing.netlify.app/docs/overview/quickstart>.
+
 ---
 
 ## Documentation Map

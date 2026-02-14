@@ -6,7 +6,7 @@ authors = ["Antonio"]
 description = "A structured orchestration system for agentic coding workflows"
 license = "MIT"
 repository = "https://github.com/Antonio7098/hivemind"
-readme = "README.md"
+readme = "CRATES.md"
 keywords = ["cli", "orchestration", "agents", "workflow"]
 categories = ["command-line-utilities", "development-tools"]
 
