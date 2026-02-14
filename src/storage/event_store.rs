@@ -5,6 +5,7 @@
 
 use crate::core::events::{Event, EventId};
 use chrono::Duration as ChronoDuration;
+use chrono::{DateTime, Utc};
 use fs2::FileExt;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -70,6 +71,10 @@ pub struct EventFilter {
     pub flow_id: Option<Uuid>,
     /// Filter by attempt ID.
     pub attempt_id: Option<Uuid>,
+    /// Include events at or after this timestamp.
+    pub since: Option<DateTime<Utc>>,
+    /// Include events at or before this timestamp.
+    pub until: Option<DateTime<Utc>>,
     /// Maximum number of events to return.
     pub limit: Option<usize>,
 }
@@ -123,6 +128,16 @@ impl EventFilter {
         }
         if let Some(aid) = self.attempt_id {
             if event.metadata.correlation.attempt_id != Some(aid) {
+                return false;
+            }
+        }
+        if let Some(since) = self.since {
+            if event.metadata.timestamp < since {
+                return false;
+            }
+        }
+        if let Some(until) = self.until {
+            if event.metadata.timestamp > until {
                 return false;
             }
         }
@@ -732,6 +747,50 @@ mod tests {
         let events = store.read(&filter).unwrap();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].metadata.correlation.graph_id, Some(graph1));
+    }
+
+    #[test]
+    fn in_memory_store_filter_by_time_range() {
+        let store = InMemoryEventStore::new();
+        let project = Uuid::new_v4();
+
+        store
+            .append(Event::new(
+                EventPayload::ProjectCreated {
+                    id: project,
+                    name: "p1".to_string(),
+                    description: None,
+                },
+                CorrelationIds::for_project(project),
+            ))
+            .unwrap();
+        store
+            .append(Event::new(
+                EventPayload::ProjectUpdated {
+                    id: project,
+                    name: Some("p2".to_string()),
+                    description: None,
+                },
+                CorrelationIds::for_project(project),
+            ))
+            .unwrap();
+
+        let all = store.read_all().unwrap();
+        assert_eq!(all.len(), 2);
+        let first_ts = all[0].metadata.timestamp;
+        let second_ts = all[1].metadata.timestamp;
+
+        let mut filter = EventFilter::all();
+        filter.since = Some(second_ts);
+        let since_events = store.read(&filter).unwrap();
+        assert_eq!(since_events.len(), 1);
+        assert_eq!(since_events[0].metadata.timestamp, second_ts);
+
+        let mut filter = EventFilter::all();
+        filter.until = Some(first_ts);
+        let until_events = store.read(&filter).unwrap();
+        assert_eq!(until_events.len(), 1);
+        assert_eq!(until_events[0].metadata.timestamp, first_ts);
     }
 
     #[test]

@@ -227,6 +227,8 @@ done
 
 ```bash
 $HM -f json events stream --flow "$FLOW_ID" --limit 200
+$HM -f json events stream --flow "$FLOW_ID" --since "2026-01-01T00:00:00Z" --limit 200
+$HM -f json events list --flow "$FLOW_ID" --since "2026-01-01T00:00:00Z" --until "2026-12-31T23:59:59Z" --limit 500
 ```
 
 You should see runtime lifecycle events like:

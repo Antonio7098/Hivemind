@@ -1,5 +1,6 @@
 //! Hivemind CLI entrypoint.
 
+use chrono::{DateTime, Utc};
 use clap::error::ErrorKind;
 use clap::Parser;
 use hivemind::cli::commands::{
@@ -1155,6 +1156,102 @@ fn print_events_table(events: Vec<hivemind::core::events::Event>) {
     }
 }
 
+fn parse_event_uuid(
+    raw: &str,
+    code: &str,
+    noun: &str,
+    origin: &str,
+) -> Result<Uuid, hivemind::core::error::HivemindError> {
+    Uuid::parse_str(raw).map_err(|_| {
+        hivemind::core::error::HivemindError::user(
+            code,
+            format!("'{raw}' is not a valid {noun} ID"),
+            origin,
+        )
+    })
+}
+
+fn parse_event_time(
+    raw: &str,
+    flag: &str,
+    origin: &str,
+) -> Result<DateTime<Utc>, hivemind::core::error::HivemindError> {
+    DateTime::parse_from_rfc3339(raw)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|_| {
+            hivemind::core::error::HivemindError::user(
+                "invalid_timestamp",
+                format!("Invalid {flag} timestamp '{raw}'. Expected RFC3339 format."),
+                origin,
+            )
+        })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_event_filter(
+    registry: &Registry,
+    origin: &str,
+    project: Option<&str>,
+    graph: Option<&str>,
+    flow: Option<&str>,
+    task: Option<&str>,
+    attempt: Option<&str>,
+    since: Option<&str>,
+    until: Option<&str>,
+    limit: usize,
+) -> Result<hivemind::storage::event_store::EventFilter, hivemind::core::error::HivemindError> {
+    use hivemind::storage::event_store::EventFilter;
+
+    let mut filter = EventFilter::all();
+    filter.limit = Some(limit);
+
+    if let Some(project) = project {
+        filter.project_id = Some(registry.get_project(project)?.id);
+    }
+    if let Some(graph) = graph {
+        filter.graph_id = Some(parse_event_uuid(
+            graph,
+            "invalid_graph_id",
+            "graph",
+            origin,
+        )?);
+    }
+    if let Some(flow) = flow {
+        filter.flow_id = Some(parse_event_uuid(flow, "invalid_flow_id", "flow", origin)?);
+    }
+    if let Some(task) = task {
+        filter.task_id = Some(parse_event_uuid(task, "invalid_task_id", "task", origin)?);
+    }
+    if let Some(attempt) = attempt {
+        filter.attempt_id = Some(parse_event_uuid(
+            attempt,
+            "invalid_attempt_id",
+            "attempt",
+            origin,
+        )?);
+    }
+    if let Some(since) = since {
+        filter.since = Some(parse_event_time(since, "--since", origin)?);
+    }
+    if let Some(until) = until {
+        filter.until = Some(parse_event_time(until, "--until", origin)?);
+    }
+
+    if filter
+        .since
+        .zip(filter.until)
+        .is_some_and(|(since, until)| since > until)
+    {
+        return Err(hivemind::core::error::HivemindError::user(
+            "invalid_time_range",
+            "`--since` must be earlier than or equal to `--until`",
+            origin,
+        ));
+    }
+
+    Ok(filter)
+}
+
 #[allow(clippy::too_many_lines)]
 fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
@@ -1163,16 +1260,23 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
 
     match cmd {
         EventCommands::List(args) => {
-            let filter_project_id = if let Some(project) = args.project.as_deref() {
-                match registry.get_project(project) {
-                    Ok(p) => Some(p.id),
-                    Err(e) => return output_error(&e, format),
-                }
-            } else {
-                None
+            let filter = match build_event_filter(
+                &registry,
+                "cli:events:list",
+                args.project.as_deref(),
+                args.graph.as_deref(),
+                args.flow.as_deref(),
+                args.task.as_deref(),
+                args.attempt.as_deref(),
+                args.since.as_deref(),
+                args.until.as_deref(),
+                args.limit,
+            ) {
+                Ok(f) => f,
+                Err(e) => return output_error(&e, format),
             };
 
-            let events = match registry.list_events(filter_project_id, args.limit) {
+            let events = match registry.read_events(&filter) {
                 Ok(evs) => evs,
                 Err(e) => return output_error(&e, format),
             };
@@ -1223,62 +1327,21 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
             ExitCode::Success
         }
         EventCommands::Stream(args) => {
-            use hivemind::storage::event_store::EventFilter;
-
-            let mut filter = EventFilter::all();
-            filter.limit = Some(args.limit);
-
-            if let Some(ref project) = args.project {
-                match registry.get_project(project) {
-                    Ok(p) => filter.project_id = Some(p.id),
-                    Err(e) => return output_error(&e, format),
-                }
-            }
-            if let Some(ref flow) = args.flow {
-                match Uuid::parse_str(flow) {
-                    Ok(id) => filter.flow_id = Some(id),
-                    Err(_) => {
-                        return output_error(
-                            &hivemind::core::error::HivemindError::user(
-                                "invalid_flow_id",
-                                format!("'{flow}' is not a valid flow ID"),
-                                "cli:events:stream",
-                            ),
-                            format,
-                        );
-                    }
-                }
-            }
-            if let Some(ref task) = args.task {
-                match Uuid::parse_str(task) {
-                    Ok(id) => filter.task_id = Some(id),
-                    Err(_) => {
-                        return output_error(
-                            &hivemind::core::error::HivemindError::user(
-                                "invalid_task_id",
-                                format!("'{task}' is not a valid task ID"),
-                                "cli:events:stream",
-                            ),
-                            format,
-                        );
-                    }
-                }
-            }
-            if let Some(ref graph) = args.graph {
-                match Uuid::parse_str(graph) {
-                    Ok(id) => filter.graph_id = Some(id),
-                    Err(_) => {
-                        return output_error(
-                            &hivemind::core::error::HivemindError::user(
-                                "invalid_graph_id",
-                                format!("'{graph}' is not a valid graph ID"),
-                                "cli:events:stream",
-                            ),
-                            format,
-                        );
-                    }
-                }
-            }
+            let filter = match build_event_filter(
+                &registry,
+                "cli:events:stream",
+                args.project.as_deref(),
+                args.graph.as_deref(),
+                args.flow.as_deref(),
+                args.task.as_deref(),
+                args.attempt.as_deref(),
+                args.since.as_deref(),
+                args.until.as_deref(),
+                args.limit,
+            ) {
+                Ok(f) => f,
+                Err(e) => return output_error(&e, format),
+            };
 
             let rx = match registry.stream_events(&filter) {
                 Ok(r) => r,

@@ -635,6 +635,30 @@ pub struct EventListArgs {
     #[arg(long)]
     pub project: Option<String>,
 
+    /// Filter by graph ID
+    #[arg(long)]
+    pub graph: Option<String>,
+
+    /// Filter by flow ID
+    #[arg(long)]
+    pub flow: Option<String>,
+
+    /// Filter by task ID
+    #[arg(long)]
+    pub task: Option<String>,
+
+    /// Filter by attempt ID
+    #[arg(long)]
+    pub attempt: Option<String>,
+
+    /// Lower bound timestamp (RFC3339), inclusive
+    #[arg(long)]
+    pub since: Option<String>,
+
+    /// Upper bound timestamp (RFC3339), inclusive
+    #[arg(long)]
+    pub until: Option<String>,
+
     /// Maximum number of events
     #[arg(long, default_value = "50")]
     pub limit: usize,
@@ -665,6 +689,18 @@ pub struct EventStreamArgs {
     /// Filter by graph ID
     #[arg(long)]
     pub graph: Option<String>,
+
+    /// Filter by attempt ID
+    #[arg(long)]
+    pub attempt: Option<String>,
+
+    /// Lower bound timestamp (RFC3339), inclusive
+    #[arg(long)]
+    pub since: Option<String>,
+
+    /// Upper bound timestamp (RFC3339), inclusive
+    #[arg(long)]
+    pub until: Option<String>,
 
     /// Maximum number of events
     #[arg(long, default_value = "100")]
