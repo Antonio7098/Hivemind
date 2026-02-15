@@ -544,8 +544,10 @@ fn cli_graph_flow_and_task_control_smoke() {
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("\"is_worktree\": true"), "{out}");
 
-    let (code, out, err) =
-        run_hivemind(tmp.path(), &["-f", "json", "worktree", "cleanup", &flow_id]);
+    let (code, out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "worktree", "cleanup", &flow_id, "--force"],
+    );
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("\"success\":true"), "{out}");
 
@@ -1358,6 +1360,37 @@ fn cli_runtime_config_and_flow_tick() {
     assert!(out.contains("runtime_tool_call_observed"), "{out}");
     assert!(out.contains("runtime_todo_snapshot_updated"), "{out}");
     assert!(out.contains("runtime_narrative_output_observed"), "{out}");
+
+    let events_json: serde_json::Value = serde_json::from_str(&out).expect("events json");
+    let data = events_json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .expect("events data");
+    let runtime_started = data
+        .iter()
+        .find_map(|ev| {
+            let payload = ev.get("payload")?;
+            let typ = payload.get("type")?.as_str()?;
+            if typ != "runtime_started" {
+                return None;
+            }
+            Some(payload)
+        })
+        .expect("runtime_started payload");
+
+    let prompt = runtime_started
+        .get("prompt")
+        .and_then(|v| v.as_str())
+        .expect("runtime prompt");
+    assert!(prompt.contains("Task:"));
+    assert!(prompt.contains("Success Criteria:"));
+
+    let flags = runtime_started
+        .get("flags")
+        .and_then(|v| v.as_array())
+        .expect("runtime flags");
+    assert_eq!(flags.first().and_then(|v| v.as_str()), Some("sh"));
+    assert_eq!(flags.get(1).and_then(|v| v.as_str()), Some("-c"));
 }
 
 #[test]
@@ -1491,4 +1524,515 @@ fn cli_checkpoint_complete_unblocks_attempt_and_emits_lifecycle_events() {
         events_out.contains("checkpoint_commit_created"),
         "{events_out}"
     );
+}
+
+#[test]
+fn cli_scope_violation_detects_tmp_write_outside_worktree() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--binary-path",
+            "/usr/bin/env",
+            "--arg",
+            "sh",
+            "--arg",
+            "-c",
+            "--arg",
+            "tmp=\"/tmp/hm_scope_${HIVEMIND_ATTEMPT_ID}.txt\"; printf data > \"$tmp\"; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+            "--timeout-ms",
+            "2000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let scope = r#"{"filesystem":{"rules":[{"pattern":"allowed/**","permission":"write"}]},"repositories":[],"git":{"permissions":[]},"execution":{"allowed":[],"denied":[]}}"#;
+    let (code, out, err) = run_hivemind(
+        tmp.path(),
+        &["task", "create", "proj", "t1", "--scope", scope],
+    );
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_ne!(code, 0, "expected scope violation");
+    assert!(err.contains("scope"), "{err}");
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "200",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        events_out.contains("scope_violation_detected"),
+        "{events_out}"
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_attempt_inspect_context_returns_retry_context() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--binary-path",
+            "/usr/bin/env",
+            "--arg",
+            "sh",
+            "--arg",
+            "-c",
+            "--arg",
+            "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+            "--timeout-ms",
+            "2000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "graph",
+            "add-check",
+            &graph_id,
+            &t1_id,
+            "--name",
+            "fail_check",
+            "--command",
+            "exit 1",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, _err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 1);
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["task", "retry", &t1_id, "--mode", "continue"]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, _err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 1);
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "300",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let events_json: serde_json::Value = serde_json::from_str(&events_out).expect("events json");
+    let attempt_id = events_json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .filter_map(|ev| {
+                    let payload = ev.get("payload")?;
+                    let typ = payload.get("type")?.as_str()?;
+                    if typ != "attempt_started" {
+                        return None;
+                    }
+                    payload
+                        .get("attempt_id")
+                        .and_then(serde_json::Value::as_str)
+                        .map(std::string::ToString::to_string)
+                })
+                .next_back()
+        })
+        .expect("attempt id");
+
+    let (code, inspect_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "attempt", "inspect", &attempt_id, "--context"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let inspect_json: serde_json::Value =
+        serde_json::from_str(&inspect_out).expect("attempt inspect json");
+    let context = inspect_json
+        .get("context")
+        .and_then(serde_json::Value::as_str)
+        .expect("context in attempt inspect");
+    assert!(context.contains("Retry attempt 2/"), "{context}");
+}
+
+#[test]
+fn cli_worktree_cleanup_requires_force_on_running_flow() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, _err) = run_hivemind(tmp.path(), &["worktree", "cleanup", &flow_id]);
+    assert_eq!(code, 3);
+    let (code, _out, err) = run_hivemind(tmp.path(), &["worktree", "cleanup", &flow_id, "--force"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "100",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        events_out.contains("worktree_cleanup_performed"),
+        "{events_out}"
+    );
+}
+
+#[test]
+fn cli_abort_flow_transitions_running_tasks_to_failed() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["task", "start", &t1_id]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "abort", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, status_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "flow", "status", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+    let status_json: serde_json::Value = serde_json::from_str(&status_out).expect("flow status");
+    let task_state = status_json
+        .get("data")
+        .and_then(|d| d.get("task_executions"))
+        .and_then(|d| d.get(&t1_id))
+        .and_then(|d| d.get("state"))
+        .and_then(serde_json::Value::as_str);
+    assert_eq!(task_state, Some("failed"));
+}
+
+#[test]
+fn cli_merge_prepare_blocked_emits_error_event() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, _err) = run_hivemind(tmp.path(), &["merge", "prepare", &flow_id]);
+    assert_ne!(code, 0);
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "list", "--flow", &flow_id, "--limit", "100",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let events_json: serde_json::Value = serde_json::from_str(&events_out).expect("events json");
+    let has_blocked_error = events_json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .is_some_and(|arr| {
+            arr.iter().any(|ev| {
+                ev.get("payload")
+                    .and_then(|p| p.get("type"))
+                    .and_then(serde_json::Value::as_str)
+                    == Some("error_occurred")
+                    && ev
+                        .get("payload")
+                        .and_then(|p| p.get("error"))
+                        .and_then(|e| e.get("code"))
+                        .and_then(serde_json::Value::as_str)
+                        == Some("flow_not_completed")
+            })
+        });
+    assert!(
+        has_blocked_error,
+        "expected error_occurred(flow_not_completed) in events: {events_out}"
+    );
+}
+
+#[test]
+fn cli_dependency_chain_only_root_task_starts_ready() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out1, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out1
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, out2, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t2"]);
+    assert_eq!(code, 0, "{err}");
+    let t2_id = out2
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, out3, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t3"]);
+    assert_eq!(code, 0, "{err}");
+    let t3_id = out3
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "graph",
+            "create",
+            "proj",
+            "g1",
+            "--from-tasks",
+            &t1_id,
+            &t2_id,
+            &t3_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "add-dependency", &graph_id, &t1_id, &t2_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "add-dependency", &graph_id, &t2_id, &t3_id],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["graph", "validate", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, status_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "flow", "status", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+    let status_json: serde_json::Value = serde_json::from_str(&status_out).expect("flow status");
+
+    let task_executions = status_json
+        .get("data")
+        .and_then(|d| d.get("task_executions"))
+        .and_then(serde_json::Value::as_object)
+        .expect("task executions object");
+
+    let t1_state = task_executions
+        .get(&t1_id)
+        .and_then(|v| v.get("state"))
+        .and_then(serde_json::Value::as_str);
+    let t2_state = task_executions
+        .get(&t2_id)
+        .and_then(|v| v.get("state"))
+        .and_then(serde_json::Value::as_str);
+    let t3_state = task_executions
+        .get(&t3_id)
+        .and_then(|v| v.get("state"))
+        .and_then(serde_json::Value::as_str);
+
+    assert_eq!(t1_state, Some("ready"));
+    assert_eq!(t2_state, Some("pending"));
+    assert_eq!(t3_state, Some("pending"));
 }

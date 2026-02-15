@@ -178,6 +178,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::FlowIntegrationLockAcquired { .. } => "FlowIntegrationLockAcquired",
         EventPayload::MergeApproved { .. } => "MergeApproved",
         EventPayload::MergeCompleted { .. } => "MergeCompleted",
+        EventPayload::WorktreeCleanupPerformed { .. } => "WorktreeCleanupPerformed",
         EventPayload::RuntimeStarted { .. } => "RuntimeStarted",
         EventPayload::RuntimeOutputChunk { .. } => "RuntimeOutputChunk",
         EventPayload::RuntimeInputProvided { .. } => "RuntimeInputProvided",
@@ -231,7 +232,8 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskFlowPaused { .. }
         | EventPayload::TaskFlowResumed { .. }
         | EventPayload::TaskFlowCompleted { .. }
-        | EventPayload::TaskFlowAborted { .. } => "flow",
+        | EventPayload::TaskFlowAborted { .. }
+        | EventPayload::WorktreeCleanupPerformed { .. } => "flow",
 
         EventPayload::TaskReady { .. }
         | EventPayload::TaskBlocked { .. }
@@ -684,6 +686,10 @@ struct CheckpointCompleteRequest {
 #[derive(Debug, Deserialize)]
 struct WorktreeCleanupRequest {
     flow_id: String,
+    #[serde(default)]
+    force: bool,
+    #[serde(default)]
+    dry_run: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1506,7 +1512,7 @@ fn handle_api_request_inner(
         }
         "/api/worktrees/cleanup" if method == ApiMethod::Post => {
             let req: WorktreeCleanupRequest = parse_json_body(body, "server:worktrees:cleanup")?;
-            registry.worktree_cleanup(&req.flow_id)?;
+            registry.worktree_cleanup(&req.flow_id, req.force, req.dry_run)?;
             let wrapped = CliResponse::success(serde_json::json!({ "ok": true }));
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());

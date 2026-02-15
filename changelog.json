@@ -4,6 +4,70 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.22",
+      "date": "2026-02-15",
+      "phase": 32,
+      "changes": [
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "Extend `runtime_started` events to include the effective runtime prompt payload and command flags used to launch the runtime"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add integration coverage asserting `runtime_started` carries prompt and flags for flow tick runtime execution"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Document `runtime_started` prompt/flags payload fields in CLI semantics and event replay design docs"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.21",
+      "date": "2026-02-15",
+      "phase": 32,
+      "changes": [
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "Harden scope enforcement for wrapper runtimes by capturing per-attempt repository and ambient baselines, validating post-run drift, and emitting scope violations for unauthorized out-of-worktree writes"
+        },
+        {
+          "type": "fixed",
+          "area": "cli",
+          "description": "Complete `attempt inspect --context` output to return assembled retry context when available in event history"
+        },
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "Require `worktree cleanup --force` for running flows, add `--dry-run` support, and emit `worktree_cleanup_performed` audit events"
+        },
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "On flow abort, transition active task executions to failed with explicit `flow_aborted` failure events and attempt correlation"
+        },
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "Record flow-correlated `error_occurred` events when `merge prepare` is blocked by `flow_not_completed` preconditions"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add regression coverage for scope violations outside worktrees, attempt context inspection, running-flow cleanup force requirements, abort-state consistency, merge precondition observability, and dependency-chain readiness ordering"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update scope enforcement, CLI semantics, and quickstart docs to reflect current scope-detection mechanics, cleanup safety flags/events, abort transitions, and retry-context inspection"
+        }
+      ]
+    },
+    {
       "version": "v0.1.20",
       "date": "2026-02-15",
       "phase": 31,

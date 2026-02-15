@@ -220,31 +220,44 @@ fn handle_worktree(cmd: WorktreeCommands, format: OutputFormat) -> ExitCode {
             },
             Err(e) => output_error(&e, format),
         },
-        WorktreeCommands::Cleanup(args) => match registry.worktree_cleanup(&args.flow_id) {
-            Ok(()) => {
-                match format {
-                    OutputFormat::Json => {
-                        println!(
-                            "{}",
-                            serde_json::json!({"success": true, "flow_id": args.flow_id})
-                        );
-                    }
-                    OutputFormat::Yaml => {
-                        if let Ok(yaml) = serde_yaml::to_string(&serde_json::json!({
-                            "success": true,
-                            "flow_id": args.flow_id
-                        })) {
-                            print!("{yaml}");
+        WorktreeCommands::Cleanup(args) => {
+            match registry.worktree_cleanup(&args.flow_id, args.force, args.dry_run) {
+                Ok(()) => {
+                    match format {
+                        OutputFormat::Json => {
+                            println!(
+                                "{}",
+                                serde_json::json!({
+                                    "success": true,
+                                    "flow_id": args.flow_id,
+                                    "force": args.force,
+                                    "dry_run": args.dry_run
+                                })
+                            );
+                        }
+                        OutputFormat::Yaml => {
+                            if let Ok(yaml) = serde_yaml::to_string(&serde_json::json!({
+                                "success": true,
+                                "flow_id": args.flow_id,
+                                "force": args.force,
+                                "dry_run": args.dry_run
+                            })) {
+                                print!("{yaml}");
+                            }
+                        }
+                        OutputFormat::Table => {
+                            if args.dry_run {
+                                println!("dry-run ok");
+                            } else {
+                                println!("ok");
+                            }
                         }
                     }
-                    OutputFormat::Table => {
-                        println!("ok");
-                    }
+                    ExitCode::Success
                 }
-                ExitCode::Success
+                Err(e) => output_error(&e, format),
             }
-            Err(e) => output_error(&e, format),
-        },
+        }
     }
 }
 
@@ -1256,6 +1269,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::FlowIntegrationLockAcquired { .. } => "flow_integration_lock_acquired",
         EventPayload::MergeApproved { .. } => "merge_approved",
         EventPayload::MergeCompleted { .. } => "merge_completed",
+        EventPayload::WorktreeCleanupPerformed { .. } => "worktree_cleanup_performed",
         EventPayload::RuntimeStarted { .. } => "runtime_started",
         EventPayload::RuntimeOutputChunk { .. } => "runtime_output_chunk",
         EventPayload::RuntimeInputProvided { .. } => "runtime_input_provided",
@@ -1857,7 +1871,9 @@ fn handle_attempt_inspect(
     }
 
     match registry.get_attempt(attempt_id) {
-        Ok(attempt) => print_attempt_inspect_attempt(registry, &attempt, args.diff, format),
+        Ok(attempt) => {
+            print_attempt_inspect_attempt(registry, &attempt, args.diff, args.context, format)
+        }
         Err(e) if e.code == "attempt_not_found" => {
             print_attempt_inspect_task_fallback(registry, parsed, args.diff, format, &e)
         }
@@ -1869,6 +1885,7 @@ fn print_attempt_inspect_attempt(
     registry: &Registry,
     attempt: &AttemptState,
     show_diff: bool,
+    show_context: bool,
     format: OutputFormat,
 ) -> ExitCode {
     let diff = if show_diff {
@@ -1876,6 +1893,11 @@ fn print_attempt_inspect_attempt(
             Ok(d) => d,
             Err(e) => return output_error(&e, format),
         }
+    } else {
+        None
+    };
+    let retry_context = if show_context {
+        attempt_retry_context_from_events(registry, attempt.id)
     } else {
         None
     };
@@ -1889,6 +1911,7 @@ fn print_attempt_inspect_attempt(
         "baseline_id": attempt.baseline_id,
         "diff_id": attempt.diff_id,
         "diff": diff,
+        "context": retry_context,
     });
 
     match format {
@@ -1914,6 +1937,9 @@ fn print_attempt_inspect_attempt(
             if let Some(did) = attempt.diff_id {
                 println!("Diff:     {did}");
             }
+            if let Some(ctx) = retry_context {
+                println!("Context:\n{ctx}");
+            }
             if let Some(d) = diff {
                 println!("{d}");
             }
@@ -1934,6 +1960,7 @@ struct AttemptInspectCollected {
     files_created: Vec<std::path::PathBuf>,
     files_modified: Vec<std::path::PathBuf>,
     files_deleted: Vec<std::path::PathBuf>,
+    retry_context: Option<String>,
 }
 
 fn collect_attempt_runtime_data(
@@ -1952,6 +1979,7 @@ fn collect_attempt_runtime_data(
         files_created: Vec::new(),
         files_modified: Vec::new(),
         files_deleted: Vec::new(),
+        retry_context: None,
     };
 
     for ev in events {
@@ -1959,7 +1987,7 @@ fn collect_attempt_runtime_data(
             EventPayload::RuntimeStarted {
                 adapter_name,
                 task_id,
-                attempt_id: _,
+                ..
             } => {
                 collected.adapter_name = Some(adapter_name.clone());
                 collected.task_id = Some(*task_id);
@@ -2001,6 +2029,9 @@ fn collect_attempt_runtime_data(
                 collected.files_created.clone_from(files_created);
                 collected.files_modified.clone_from(files_modified);
                 collected.files_deleted.clone_from(files_deleted);
+            }
+            EventPayload::RetryContextAssembled { context, .. } => {
+                collected.retry_context = Some(context.clone());
             }
             _ => {}
         }
@@ -2091,6 +2122,15 @@ fn build_attempt_inspect_json(
             serde_json::to_value(&collected.files_deleted).unwrap_or(serde_json::Value::Null),
         );
     }
+    if args.context {
+        info.insert(
+            "context".to_string(),
+            collected.retry_context.as_ref().map_or_else(
+                || serde_json::Value::Null,
+                |value| serde_json::Value::String(value.clone()),
+            ),
+        );
+    }
 
     serde_json::Value::Object(info)
 }
@@ -2145,6 +2185,26 @@ fn print_attempt_inspect_table(
         println!("Stdout:\n{}", collected.stdout);
         println!("Stderr:\n{}", collected.stderr);
     }
+    if args.context {
+        if let Some(ctx) = collected.retry_context.as_ref() {
+            println!("Context:\n{ctx}");
+        } else {
+            println!("Context:  (none)");
+        }
+    }
+}
+
+fn attempt_retry_context_from_events(registry: &Registry, attempt_id: Uuid) -> Option<String> {
+    use hivemind::core::events::EventPayload;
+    use hivemind::storage::event_store::EventFilter;
+
+    let mut filter = EventFilter::all();
+    filter.attempt_id = Some(attempt_id);
+    let events = registry.read_events(&filter).ok()?;
+    events.into_iter().find_map(|event| match event.payload {
+        EventPayload::RetryContextAssembled { context, .. } => Some(context),
+        _ => None,
+    })
 }
 
 fn try_print_attempt_from_events(

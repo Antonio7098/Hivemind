@@ -766,6 +766,7 @@ impl AppState {
             EventPayload::TaskExecutionStateChanged {
                 flow_id,
                 task_id,
+                attempt_id: _,
                 from: _,
                 to,
             } => {
@@ -945,6 +946,7 @@ impl AppState {
             | EventPayload::TaskSchedulingDeferred { .. }
             | EventPayload::RetryContextAssembled { .. }
             | EventPayload::FlowIntegrationLockAcquired { .. }
+            | EventPayload::WorktreeCleanupPerformed { .. }
             | EventPayload::Unknown => {}
 
             EventPayload::TaskRetryRequested {

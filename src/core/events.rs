@@ -494,6 +494,8 @@ pub enum EventPayload {
     TaskExecutionStateChanged {
         flow_id: Uuid,
         task_id: Uuid,
+        #[serde(default)]
+        attempt_id: Option<Uuid>,
         from: TaskExecState,
         to: TaskExecState,
     },
@@ -746,10 +748,20 @@ pub enum EventPayload {
         #[serde(default)]
         commits: Vec<String>,
     },
+    WorktreeCleanupPerformed {
+        flow_id: Uuid,
+        cleaned_worktrees: usize,
+        forced: bool,
+        dry_run: bool,
+    },
     RuntimeStarted {
         adapter_name: String,
         task_id: Uuid,
         attempt_id: Uuid,
+        #[serde(default)]
+        prompt: String,
+        #[serde(default)]
+        flags: Vec<String>,
     },
     RuntimeOutputChunk {
         attempt_id: Uuid,
