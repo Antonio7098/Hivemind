@@ -41,6 +41,7 @@ impl Default for CodexConfig {
         cfg.base.args = vec![
             "exec".to_string(),
             "--skip-git-repo-check".to_string(),
+            "--dangerously-bypass-approvals-and-sandbox".to_string(),
             "-c".to_string(),
             "reasoning_effort=high".to_string(),
             "-".to_string(),
