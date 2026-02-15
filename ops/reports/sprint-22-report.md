@@ -1,17 +1,17 @@
-# Phase Report Template
+# Sprint Report Template
 
-> Copy this template to `ops/reports/phase-<N>-report.md` and fill in all sections.
+> Copy this template to `ops/reports/sprint-<N>-report.md` and fill in all sections.
 
 ---
 
-# Phase 22 Report: CLI Discoverability + E2E Quickstart + Merge Robustness
+# Sprint 22 Report: CLI Discoverability + E2E Quickstart + Merge Robustness
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 22 |
-| Phase Title | CLI Discoverability + E2E Quickstart + Merge Robustness |
+| Sprint Number | 22 |
+| Sprint Title | CLI Discoverability + E2E Quickstart + Merge Robustness |
 | Branch | `cascade/hivemind-beta-fixes-e3b4b7` |
 | PR | (pending) |
 | Start Date | 2026-02-09 |
@@ -159,15 +159,15 @@
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 14 | Complete |
+| Sprint 14 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
 | N/A | N/A |
 
@@ -193,9 +193,9 @@
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [x] Ready for next phase
+- [x] Ready for next sprint
 
-**Phase 22 is COMPLETE.**
+**Sprint 22 is COMPLETE.**
 
 ---
 

@@ -5,7 +5,7 @@
 
 This document specifies the **concrete mechanics** of wrapper-based runtime adapters. It defines exactly how Hivemind launches, monitors, and observes external CLI runtimes like Claude Code, Codex CLI, and others.
 
-This is an implementation guide for Phase 1 runtime integration.
+This is an implementation guide for Sprint 1 runtime integration.
 
 ---
 
@@ -46,17 +46,17 @@ The adapter is **not** responsible for:
 
 ## 2. Adapter Lifecycle
 
-### 2.1 Lifecycle Phases
+### 2.1 Lifecycle Sprints
 
 ```
 Initialize → Prepare → Execute → Observe → Terminate → Report
 ```
 
-Each phase has defined inputs, outputs, and failure modes.
+Each sprint has defined inputs, outputs, and failure modes.
 
 ---
 
-## 3. Phase: Initialize
+## 3. Sprint: Initialize
 
 ### 3.1 Purpose
 
@@ -88,7 +88,7 @@ Initialization failure is **non-recoverable**. TaskFlow cannot proceed with a br
 
 ---
 
-## 4. Phase: Prepare
+## 4. Sprint: Prepare
 
 ### 4.1 Purpose
 
@@ -132,7 +132,7 @@ Preparation failure → attempt fails before execution.
 
 ---
 
-## 5. Phase: Execute
+## 5. Sprint: Execute
 
 ### 5.1 Purpose
 
@@ -243,7 +243,7 @@ In interactive mode, Ctrl+C results in:
 
 ---
 
-## 6. Phase: Observe
+## 6. Sprint: Observe
 
 ### 6.1 Purpose
 
@@ -304,7 +304,7 @@ Output parsing is **best-effort**. Hivemind never depends on parsing success.
 
 ---
 
-## 7. Phase: Terminate
+## 7. Sprint: Terminate
 
 ### 7.1 Purpose
 
@@ -330,7 +330,7 @@ Clean up subprocess resources.
 
 ---
 
-## 8. Phase: Report
+## 8. Sprint: Report
 
 ### 8.1 Purpose
 
@@ -439,7 +439,7 @@ On adapter initialization:
 
 ---
 
-## 11. Supported Runtimes (Phase 1)
+## 11. Supported Runtimes (Sprint 1)
 
 ### 11.1 Claude Code
 
@@ -547,8 +547,8 @@ Where possible, enforce:
 
 ### 13.3 Network Isolation
 
-Phase 1: No network isolation (limitation accepted)
-Phase 2+: Consider network namespace isolation
+Sprint 1: No network isolation (limitation accepted)
+Sprint 2+: Consider network namespace isolation
 
 ### 13.4 Trust Model
 
@@ -569,7 +569,7 @@ The wrapper adapter guarantees:
 - Output is captured
 - Side effects are observed
 - Errors are translated to Hivemind errors
-- Events are emitted for all phases
+- Events are emitted for all sprints
 
 Violating these invariants is a SystemError.
 
@@ -590,4 +590,4 @@ Limitations accepted:
 - **Limited interception:** Cannot prevent violations, only detect
 - **Opaque reasoning:** Cannot see chain-of-thought
 
-These limitations are acceptable for Phase 1. The architecture supports evolution to deeper integration without breaking TaskFlow semantics.
+These limitations are acceptable for Sprint 1. The architecture supports evolution to deeper integration without breaking TaskFlow semantics.

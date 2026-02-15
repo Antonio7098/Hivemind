@@ -24,7 +24,7 @@ Design documents cover:
 - Multi-repo integration behavior
 
 These documents are allowed to:
-- Be phase-aware (Phase 1 vs Phase 2)
+- Be sprint-aware (Sprint 1 vs Sprint 2)
 - Discuss limitations honestly
 - Reference OS or runtime constraints
 - Evolve as implementation progresses

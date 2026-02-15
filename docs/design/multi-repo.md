@@ -71,7 +71,7 @@ Within a multi-repo task:
 4. Scope verified per repo
 5. Verification considers all repos
 
-### 2.4 Runtime Surface (Phase 27)
+### 2.4 Runtime Surface (Sprint 27)
 
 For each attempt, Hivemind provides multi-repo paths to the runtime via:
 - Primary working directory: first attached repository task worktree

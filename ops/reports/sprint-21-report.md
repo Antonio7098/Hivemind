@@ -1,12 +1,12 @@
-# Phase 21 Report: Execution Commits & Branches
+# Sprint 21 Report: Execution Commits & Branches
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 21 |
-| Phase Title | Execution Commits & Branches |
-| Branch | `phase/21-execution-commits-branches` |
+| Sprint Number | 21 |
+| Sprint Title | Execution Commits & Branches |
+| Branch | `sprint/21-execution-commits-branches` |
 | PR | (pending) |
 | Start Date | 2026-02-12 |
 | Completion Date | 2026-02-12 |
@@ -34,7 +34,7 @@
 | events/ | `src/core/events.rs` | (see git diff) | (see git diff) |
 | tests/ | `tests/integration.rs`, `hivemind-test/test_worktree.sh` | (see git diff) | (see git diff) |
 | docs/ | `docs/architecture/*.md`, `docs/design/*.md`, `docs/overview/quickstart.md` | (see git diff) | (see git diff) |
-| ops/ | `ops/ROADMAP.md`, `ops/reports/phase-21-report.md`, `changelog.json` (pending) | (see git diff) | (see git diff) |
+| ops/ | `ops/ROADMAP.md`, `ops/reports/sprint-21-report.md`, `changelog.json` (pending) | (see git diff) | (see git diff) |
 | **Total** |  |  |  |
 
 ### New Components
@@ -82,7 +82,7 @@
 
 ### Coverage
 
-- Coverage instrumentation not re-run yet for this phase; prior baseline remains <80%. No new uncovered files introduced.
+- Coverage instrumentation not re-run yet for this sprint; prior baseline remains <80%. No new uncovered files introduced.
 
 ---
 
@@ -94,7 +94,7 @@
 | `cargo clippy -D warnings` | Pending | Will run immediately after fmt |
 | `cargo test --all-features` | Pending | Same as above |
 | `cargo doc` | Pending | Same as above |
-| Coverage threshold (80%) | N/A | Coverage not enforced for this phase |
+| Coverage threshold (80%) | N/A | Coverage not enforced for this sprint |
 
 ---
 
@@ -131,7 +131,7 @@
 | `docs/design/retry-context.md` | Clarified relationship between retry context and retry mode |
 | `docs/design/runtime-wrapper-mechanics.md` | Noted runtime expectations for retries |
 | `docs/overview/quickstart.md` | Added example showing both retry modes |
-| `ops/ROADMAP.md` | Marked Phase 21 deliverables in progress (completion pending) |
+| `ops/ROADMAP.md` | Marked Sprint 21 deliverables in progress (completion pending) |
 
 ---
 
@@ -161,17 +161,17 @@
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 20 | Complete |
+| Sprint 20 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 22 | Ready |
+| Sprint 22 | Ready |
 
 ---
 
@@ -195,9 +195,9 @@
 - [ ] Full validation suite passes (rerun pending after rustup install)
 - [x] Documentation updated
 - [ ] Changelog updated
-- [ ] Ready for next phase (after validation + release bump)
+- [ ] Ready for next sprint (after validation + release bump)
 
-**Phase 21 is nearing completion (awaiting validation + versioning).**
+**Sprint 21 is nearing completion (awaiting validation + versioning).**
 
 ---
 

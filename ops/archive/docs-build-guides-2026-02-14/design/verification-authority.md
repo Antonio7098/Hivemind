@@ -478,9 +478,9 @@ This hierarchy ensures that:
 
 ---
 
-## 13. Implementation Notes (Phase 17)
+## 13. Implementation Notes (Sprint 17)
 
-Phase 17 implemented the structured verification check framework described above.
+Sprint 17 implemented the structured verification check framework described above.
 
 ### 13.1 Core Types
 - `CheckConfig`: name, command, required (default true), optional timeout_ms
@@ -502,4 +502,4 @@ Phase 17 implemented the structured verification check framework described above
 - Optional check failures are recorded but do not block success.
 - Per-check timeout is supported; timeouts emit exit code 124 and a "timed out" message.
 
-See the Phase 17 report for detailed validation results and coverage.
+See the Sprint 17 report for detailed validation results and coverage.

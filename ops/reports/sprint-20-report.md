@@ -1,12 +1,12 @@
-# Phase 20 Report: Human Override
+# Sprint 20 Report: Human Override
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 20 |
-| Phase Title | Human Override |
-| Branch | `phase/20-human-override` |
+| Sprint Number | 20 |
+| Sprint Title | Human Override |
+| Branch | `sprint/20-human-override` |
 | PR | N/A |
 | Start Date | 2026-02-12 |
 | Completion Date | 2026-02-12 |
@@ -32,7 +32,7 @@
 | core/ | `src/core/registry.rs` | 72 | 35 |
 | tests/ | `tests/integration.rs` | 156 | 0 |
 | docs/ | `docs/design/cli-operational-semantics.md` | (see git diff) | (see git diff) |
-| ops/ | `ops/ROADMAP.md`, `ops/reports/phase-20-report.md`, `changelog.json` | (see git diff) | (see git diff) |
+| ops/ | `ops/ROADMAP.md`, `ops/reports/sprint-20-report.md`, `changelog.json` | (see git diff) | (see git diff) |
 | **Total** | | | |
 
 ### New Components
@@ -87,7 +87,7 @@
 | `cargo clippy -D warnings` | PASS | `make validate` |
 | `cargo test` | PASS | `make validate` |
 | `cargo doc` | PASS | `make validate` |
-| Coverage threshold (80%) | FAIL | Not enforced in this phase; existing project coverage remains below 80% |
+| Coverage threshold (80%) | FAIL | Not enforced in this sprint; existing project coverage remains below 80% |
 
 ---
 
@@ -105,9 +105,9 @@
 | Document | Change |
 |----------|--------|
 | `docs/design/cli-operational-semantics.md` | Updated `verify override` semantics to match implementation (allowed states, reason requirement, attribution) |
-| `ops/ROADMAP.md` | Mark Phase 20 complete with completion date |
-| `ops/reports/phase-20-report.md` | Added |
-| `changelog.json` | Added Phase 20 entry |
+| `ops/ROADMAP.md` | Mark Sprint 20 complete with completion date |
+| `ops/reports/sprint-20-report.md` | Added |
+| `changelog.json` | Added Sprint 20 entry |
 
 ---
 
@@ -128,18 +128,18 @@
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 17 | Complete |
-| Phase 19 | Complete |
+| Sprint 17 | Complete |
+| Sprint 19 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 21 | Ready |
+| Sprint 21 | Ready |
 
 ---
 
@@ -149,9 +149,9 @@
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [x] Ready for next phase
+- [x] Ready for next sprint
 
-**Phase 20 is COMPLETE.**
+**Sprint 20 is COMPLETE.**
 
 ---
 

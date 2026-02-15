@@ -1,12 +1,12 @@
-# Phase 26 Report: Concurrency Governance
+# Sprint 26 Report: Concurrency Governance
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 26 |
-| Phase Title | Concurrency Governance |
-| Branch | `phase/26-concurrency-governance` |
+| Sprint Number | 26 |
+| Sprint Title | Concurrency Governance |
+| Branch | `sprint/26-concurrency-governance` |
 | PR | _TBD_ |
 | Start Date | 2026-02-14 |
 | Completion Date | 2026-02-14 |
@@ -17,7 +17,7 @@
 
 ## Objectives
 
-1. Re-scope Phase 26 around scheduler policy: allow multiple attempts per tick with deterministic concurrency governance.
+1. Re-scope Sprint 26 around scheduler policy: allow multiple attempts per tick with deterministic concurrency governance.
 2. Enforce per-project and global concurrency limits without regressing scope isolation.
 3. Emit explicit telemetry (`ScopeConflictDetected`, `TaskSchedulingDeferred`) for scheduling/conflict decisions.
 4. Ensure CLI/API discoverability (`flow tick --max-parallel`, `project runtime-set --max-parallel-tasks`) and documentation coverage across architecture/design/quickstart artifacts.
@@ -33,7 +33,7 @@
 |------|---------------|-------------|---------------|
 | core/ | `src/core/events.rs`, `src/core/registry.rs`, `src/core/state.rs` | 549 | 9 |
 | cli/ | `src/cli/commands.rs`, `src/main.rs`, `src/server.rs` | 31 | 9 |
-| docs/ops | `ops/ROADMAP.md`, `ops/reports/phase-26-report.md` | 31 | 21 |
+| docs/ops | `ops/ROADMAP.md`, `ops/reports/sprint-26-report.md` | 31 | 21 |
 | docs/architecture | `docs/architecture/cli-capabilities.md`, `docs/architecture/event-model.md`, `docs/architecture/scope-model.md`, `docs/architecture/taskflow.md` | 30 | 4 |
 | docs/design | `docs/design/cli-semantics.md`, `docs/design/scope-enforcement.md` | 39 | 8 |
 | docs/overview | `docs/overview/quickstart.md` | 8 | 1 |
@@ -68,7 +68,7 @@
 | 3 | Soft conflicts allowed with warnings | PASS | `tick_flow_warns_on_soft_scope_conflicts_and_allows_parallel_dispatch`
 | 4 | Concurrency limits enforced (runtime config + global cap) | PASS | `parse_global_parallel_limit_*` tests + manual `HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL` scenario
 | 5 | CLI/API discoverability & docs updated | PASS | CLI help, server handler, docs (architecture/design/quickstart) updated
-| 6 | Manual `hivemind-test` validation (parallel, conflict, global cap) | PASS | `manual_phase26::*` script in `/home/antonio/programming/Hivemind/hivemind-test` (Python harness)
+| 6 | Manual `hivemind-test` validation (parallel, conflict, global cap) | PASS | `manual_sprint26::*` script in `/home/antonio/programming/Hivemind/hivemind-test` (Python harness)
 
 **Overall: 6/6 criteria passed**
 
@@ -94,7 +94,7 @@ cargo test
 ### Manual `hivemind-test` Runs
 
 ```
-python3 manual_phase26.py  # ad-hoc script recorded in shell history (see ops report)
+python3 manual_sprint26.py  # ad-hoc script recorded in shell history (see ops report)
 manually exercised three cases:
   - compatible_parallel_dispatch (2 runtime_started)
   - hard_conflict_serialized (scope_conflict + scheduling_deferred events)
@@ -104,7 +104,7 @@ manually exercised three cases:
 ### Coverage
 
 ```
-Not collected this phase (unchanged from Phase 24 target)
+Not collected this sprint (unchanged from Sprint 24 target)
 ```
 
 - Line coverage: N/A
@@ -121,7 +121,7 @@ Not collected this phase (unchanged from Phase 24 target)
 | `cargo clippy -D warnings` | PASS | Includes allowance for `tick_flow` length |
 | `cargo test` | PASS | Full lib + integration |
 | `cargo doc --no-deps` | PASS | Ensures doc comments compile |
-| Coverage threshold (80%) | N/A | Not collected this phase |
+| Coverage threshold (80%) | N/A | Not collected this sprint |
 
 ---
 
@@ -151,7 +151,7 @@ Not collected this phase (unchanged from Phase 24 target)
 
 | Document | Change |
 |----------|--------|
-| `ops/ROADMAP.md` | Phase 26 rewritten to "Concurrency Governance" with completed checklist |
+| `ops/ROADMAP.md` | Sprint 26 rewritten to "Concurrency Governance" with completed checklist |
 | `docs/architecture/cli-capabilities.md` | Added concurrency governance capabilities section |
 | `docs/architecture/taskflow.md` | Documented policy-driven parallel dispatch + telemetry |
 | `docs/architecture/scope-model.md` | Clarified scope/worktree guidance + observability events |
@@ -183,26 +183,26 @@ Not collected this phase (unchanged from Phase 24 target)
 
 | Item | Severity | Tracking |
 |------|----------|----------|
-| Addition of more granular scheduler metrics (per-task reason codes) | Medium | Future observability phase |
-| No automated coverage run this phase | Medium | Carry-over from Phase 24, needs infra follow-up |
+| Addition of more granular scheduler metrics (per-task reason codes) | Medium | Future observability sprint |
+| No automated coverage run this sprint | Medium | Carry-over from Sprint 24, needs infra follow-up |
 
 ---
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 25: Single-Repo End-to-End | Complete |
-| Phase 24: Execution Checkpoints | Complete |
+| Sprint 25: Single-Repo End-to-End | Complete |
+| Sprint 24: Execution Checkpoints | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 27: Multi-Repo Support | Ready |
-| Phase 28: Additional Runtime Adapters | Ready |
+| Sprint 27: Multi-Repo Support | Ready |
+| Sprint 28: Additional Runtime Adapters | Ready |
 
 ---
 
@@ -215,7 +215,7 @@ Not collected this phase (unchanged from Phase 24 target)
 | Lines added | 688 |
 | Lines removed | 52 |
 | Tests added | 0 new files (expanded existing suites) |
-| Manual scripts | 1 ad-hoc Python harness (`manual_phase26`) |
+| Manual scripts | 1 ad-hoc Python harness (`manual_sprint26`) |
 | Duration (days) | < 1 |
 
 ---
@@ -225,10 +225,10 @@ Not collected this phase (unchanged from Phase 24 target)
 - [x] All exit criteria pass
 - [x] All validation checks pass
 - [x] Documentation updated
-- [x] Changelog entry pending (Phase 26 release cut)
-- [x] Ready for next phase
+- [x] Changelog entry pending (Sprint 26 release cut)
+- [x] Ready for next sprint
 
-**Phase 26 is COMPLETE.**
+**Sprint 26 is COMPLETE.**
 
 ---
 

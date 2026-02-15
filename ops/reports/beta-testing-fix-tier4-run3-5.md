@@ -17,9 +17,9 @@
 
 ---
 
-## 2. Source Reports & Phases
+## 2. Source Reports & Sprints
 
-| Artifact / Information | Origin Phase or Report | Reference / Link |
+| Artifact / Information | Origin Sprint or Report | Reference / Link |
 |------------------------|------------------------|------------------|
 | Tier 4 aggregate status and open findings | Tier 4 | `24-hour-hivemind/runs/tier_4_runtime_adapter_behavior_and_projection_signals/tier_4_runtime_adapter_behavior_and_projection_signals-FINAL-REPORT.md` |
 | Runtime output attribution failure | RUN-003 | `24-hour-hivemind/runs/tier_4_runtime_adapter_behavior_and_projection_signals/RUN-003/RUN-003-FINAL-REPORT.md` |
@@ -97,7 +97,7 @@
 ## 9. Outstanding Actions
 
 - [x] Changelog updated
-- [ ] PR prepared per `ops/process/phase-execution.md`
+- [ ] PR prepared per `ops/process/sprint-execution.md`
 - [ ] CI green on PR branch
 - [ ] Squash merge and tag release
 

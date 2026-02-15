@@ -1,12 +1,12 @@
-# Phase 14 Report: OpenCode Adapter (First Runtime)
+# Sprint 14 Report: OpenCode Adapter (First Runtime)
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 14 |
-| Phase Title | OpenCode Adapter (First Runtime) |
-| Branch | `phase/14-opencode-adapter` |
+| Sprint Number | 14 |
+| Sprint Title | OpenCode Adapter (First Runtime) |
+| Branch | `sprint/14-opencode-adapter` |
 | PR | _TBD_ |
 | Start Date | 2026-02-08 |
 | Completion Date | 2026-02-08 |
@@ -112,7 +112,7 @@ Lines found: 6113
 | `cargo fmt --check` | PASS | `make validate` |
 | `cargo clippy -D warnings` | PASS | `make validate` |
 | `cargo test --all-features` | PASS | unit + integration tests |
-| `cargo doc` | N/A | not part of `make validate` for this phase |
+| `cargo doc` | N/A | not part of `make validate` for this sprint |
 | Coverage threshold (80%) | PASS | Actual: 80.03% excluding `src/main.rs` |
 
 ---
@@ -154,15 +154,15 @@ Artifacts captured in: `/tmp/tmp.NDwACF2PLR/events_stream.json`
 | Document | Change |
 |----------|--------|
 | `docs/design/cli-operational-semantics.md` | Documented new runtime commands and semantics |
-| `ops/ROADMAP.md` | Marked Phase 14 checklist complete |
-| `changelog.json` | Added Phase 14 entry (`v0.1.5`) |
+| `ops/ROADMAP.md` | Marked Sprint 14 checklist complete |
+| `changelog.json` | Added Sprint 14 entry (`v0.1.5`) |
 
 ---
 
 ## Challenges
 
 1. **Rebase conflicts across core state/registry and CLI attempt inspection**
-   - **Resolution**: merged event-based runtime inspection with Phase 12 diff artifact inspection; added targeted lint fixes.
+   - **Resolution**: merged event-based runtime inspection with Sprint 12 diff artifact inspection; added targeted lint fixes.
 
 2. **Clippy hard gates (`too_many_lines`, `unreachable-patterns`, dead-code)**
    - **Resolution**: minimal suppression where justified (`OpenCodeAdapter::execute`), and structural fixes for match arms/unused helpers.
@@ -186,18 +186,18 @@ Artifacts captured in: `/tmp/tmp.NDwACF2PLR/events_stream.json`
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 13 | Complete |
-| Phase 12 | Complete |
+| Sprint 13 | Complete |
+| Sprint 12 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|----------|
-| Phase 15 | Ready |
+| Sprint 15 | Ready |
 
 ---
 
@@ -221,9 +221,9 @@ Artifacts captured in: `/tmp/tmp.NDwACF2PLR/events_stream.json`
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [x] Ready for next phase
+- [x] Ready for next sprint
 
-**Phase 14 is COMPLETE.**
+**Sprint 14 is COMPLETE.**
 
 ---
 

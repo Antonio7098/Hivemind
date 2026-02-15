@@ -6,7 +6,7 @@
     {
       "version": "v0.1.19",
       "date": "2026-02-15",
-      "phase": 30,
+      "sprint": 30,
       "changes": [
         {
           "type": "fixed",
@@ -43,7 +43,7 @@
     {
       "version": "v0.1.18",
       "date": "2026-02-14",
-      "phase": 29,
+      "sprint": 29,
       "changes": [
         {
           "type": "added",
@@ -63,19 +63,19 @@
         {
           "type": "changed",
           "area": "docs",
-          "description": "Mark Phase 29 complete in roadmap and update CLI/quickstart/capabilities docs for correlation and time-range observability queries"
+          "description": "Mark Sprint 29 complete in roadmap and update CLI/quickstart/capabilities docs for correlation and time-range observability queries"
         },
         {
           "type": "added",
           "area": "ops",
-          "description": "Add Phase 29 execution report including manual `hivemind-test` validation with captured start/end timestamps and event query evidence"
+          "description": "Add Sprint 29 execution report including manual `hivemind-test` validation with captured start/end timestamps and event query evidence"
         }
       ]
     },
     {
       "version": "v0.1.17",
       "date": "2026-02-14",
-      "phase": 28,
+      "sprint": 28,
       "changes": [
         {
           "type": "added",
@@ -110,14 +110,14 @@
         {
           "type": "changed",
           "area": "docs",
-          "description": "Mark Phase 28 complete and update quickstart/runtime/CLI semantics docs for multi-runtime operation"
+          "description": "Mark Sprint 28 complete and update quickstart/runtime/CLI semantics docs for multi-runtime operation"
         }
       ]
     },
     {
       "version": "v0.1.16",
       "date": "2026-02-14",
-      "phase": 27,
+      "sprint": 27,
       "changes": [
         {
           "type": "added",
@@ -147,14 +147,14 @@
         {
           "type": "changed",
           "area": "docs",
-          "description": "Mark Phase 27 complete in roadmap and document Phase 27 runtime/scope mechanics in design docs"
+          "description": "Mark Sprint 27 complete in roadmap and document Sprint 27 runtime/scope mechanics in design docs"
         }
       ]
     },
     {
       "version": "v0.1.15",
       "date": "2026-02-14",
-      "phase": 26,
+      "sprint": 26,
       "changes": [
         {
           "type": "added",
@@ -174,7 +174,7 @@
         {
           "type": "changed",
           "area": "docs",
-          "description": "Rewrite Phase 26 roadmap, update architecture/design/quickstart docs to describe concurrency governance and global caps"
+          "description": "Rewrite Sprint 26 roadmap, update architecture/design/quickstart docs to describe concurrency governance and global caps"
         },
         {
           "type": "added",
@@ -186,7 +186,7 @@
     {
       "version": "v0.1.14",
       "date": "2026-02-13",
-      "phase": 24,
+      "sprint": 24,
       "changes": [
         {
           "type": "added",
@@ -206,7 +206,7 @@
         {
           "type": "changed",
           "area": "docs",
-          "description": "Update ops/ROADMAP.md for Phase 24 Execution Checkpoints and renumber subsequent phases; add detailed exit criteria"
+          "description": "Update ops/ROADMAP.md for Sprint 24 Execution Checkpoints and renumber subsequent sprints; add detailed exit criteria"
         },
         {
           "type": "added",
@@ -218,7 +218,7 @@
     {
       "version": "v0.1.13",
       "date": "2026-02-13",
-      "phase": 23,
+      "sprint": 23,
       "changes": [
         {
           "type": "added",
@@ -250,7 +250,7 @@
     {
       "version": "v0.1.12",
       "date": "2026-02-13",
-      "phase": 22,
+      "sprint": 22,
       "changes": [
         {
           "type": "added",
@@ -282,7 +282,7 @@
     {
       "version": "v0.1.11",
       "date": "2026-02-12",
-      "phase": 21,
+      "sprint": 21,
       "changes": [
         {
           "type": "added",
@@ -314,7 +314,7 @@
     {
       "version": "v0.1.10",
       "date": "2026-02-12",
-      "phase": 20,
+      "sprint": 20,
       "changes": [
         {
           "type": "added",
@@ -336,7 +336,7 @@
     {
       "version": "v0.1.9",
       "date": "2026-02-10",
-      "phase": 17,
+      "sprint": 17,
       "changes": [
         {
           "type": "added",
@@ -378,7 +378,7 @@
     {
       "version": "v0.1.8",
       "date": "2026-02-09",
-      "phase": 16,
+      "sprint": 16,
       "changes": [
         {
           "type": "added",
@@ -415,7 +415,7 @@
     {
       "version": "v0.1.7",
       "date": "2026-02-09",
-      "phase": 15,
+      "sprint": 15,
       "changes": [
         {
           "type": "added",
@@ -447,7 +447,7 @@
     {
       "version": "v0.1.6",
       "date": "2026-02-09",
-      "phase": 22,
+      "sprint": 22,
       "changes": [
         {
           "type": "added",
@@ -474,7 +474,7 @@
     {
       "version": "v0.1.5",
       "date": "2026-02-08",
-      "phase": 14,
+      "sprint": 14,
       "changes": [
         {
           "type": "added",
@@ -516,7 +516,7 @@
     {
       "version": "v0.1.4",
       "date": "2026-02-08",
-      "phase": 12,
+      "sprint": 12,
       "changes": [
         {
           "type": "added",
@@ -548,7 +548,7 @@
     {
       "version": "v0.1.3",
       "date": "2026-02-07",
-      "phase": 13,
+      "sprint": 13,
       "changes": [
         {
           "type": "added",
@@ -570,7 +570,7 @@
     {
       "version": "v0.1.2",
       "date": "2026-02-07",
-      "phase": 11,
+      "sprint": 11,
       "changes": [
         {
           "type": "added",
@@ -592,7 +592,7 @@
     {
       "version": "v0.1.1",
       "date": "2026-02-06",
-      "phase": 0,
+      "sprint": 0,
       "changes": [
         {
           "type": "changed",

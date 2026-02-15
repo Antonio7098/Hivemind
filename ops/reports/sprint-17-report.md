@@ -1,11 +1,11 @@
-# Phase 17 Report: Verification Framework
+# Sprint 17 Report: Verification Framework
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 17 |
-| Phase Title | Verification Framework |
+| Sprint Number | 17 |
+| Sprint Title | Verification Framework |
 | Branch | `main` |
 | PR | N/A |
 | Start Date | 2026-02-10 |
@@ -108,9 +108,9 @@
 
 | Document | Change |
 |----------|--------|
-| `ops/ROADMAP.md` | Mark Phase 17 checklist complete |
-| `changelog.json` | Add Phase 17 entry (v0.1.9) |
-| `ops/reports/phase-17-report.md` | Added |
+| `ops/ROADMAP.md` | Mark Sprint 17 checklist complete |
+| `changelog.json` | Add Sprint 17 entry (v0.1.9) |
+| `ops/reports/sprint-17-report.md` | Added |
 
 ---
 
@@ -131,17 +131,17 @@
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 16 | Complete |
+| Sprint 16 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 18 | Ready |
+| Sprint 18 | Ready |
 
 ---
 
@@ -152,7 +152,7 @@
 - [x] Documentation updated
 - [x] Changelog updated
 - [x] End-to-end hivemind-test scripts executed and evidence captured
-- [ ] Ready for next phase (coverage target below 80%)
+- [ ] Ready for next sprint (coverage target below 80%)
 
 ---
 

@@ -5,11 +5,11 @@ Changelog helper for Hivemind.
 Usage:
     python scripts/changelog_add.py --interactive
     python scripts/changelog_add.py \
-        --version "phase-1" \
+        --version "sprint-1" \
         --type added \
         --area core \
         --description "Event foundation with append-only event store" \
-        --phase 1
+        --sprint 1
 """
 
 import json
@@ -43,7 +43,7 @@ def save_changelog(data):
     print(f"Changelog saved to {CHANGELOG_PATH}")
 
 
-def add_entry(version, date, changes, phase=None):
+def add_entry(version, date, changes, sprint=None):
     """Add a new entry to the changelog."""
     changelog = load_changelog()
 
@@ -53,8 +53,8 @@ def add_entry(version, date, changes, phase=None):
         "changes": changes
     }
 
-    if phase is not None:
-        entry["phase"] = phase
+    if sprint is not None:
+        entry["sprint"] = sprint
 
     # Insert at the beginning
     changelog["entries"].insert(0, entry)
@@ -67,13 +67,13 @@ def interactive_mode():
     """Interactive mode for adding changelog entries."""
     print("=== Hivemind Changelog Entry ===\n")
 
-    version = input("Version (e.g., 'phase-1' or 'v0.1.0'): ").strip()
+    version = input("Version (e.g., 'sprint-1' or 'v0.1.0'): ").strip()
     date = input(f"Date [{datetime.now().strftime('%Y-%m-%d')}]: ").strip()
     if not date:
         date = datetime.now().strftime("%Y-%m-%d")
 
-    phase_input = input("Phase number (or press Enter to skip): ").strip()
-    phase = int(phase_input) if phase_input else None
+    sprint_input = input("Sprint number (or press Enter to skip): ").strip()
+    sprint = int(sprint_input) if sprint_input else None
 
     changes = []
     print("\nAdd changes (empty description to finish):\n")
@@ -119,7 +119,7 @@ def interactive_mode():
         print("  Change added.\n")
 
     if changes:
-        entry = add_entry(version, date, changes, phase)
+        entry = add_entry(version, date, changes, sprint)
         print(f"\nEntry added: {json.dumps(entry, indent=2)}")
     else:
         print("\nNo changes added. Exiting.")
@@ -142,7 +142,7 @@ def cli_mode(args):
 
     date = args.date or datetime.now().strftime("%Y-%m-%d")
 
-    entry = add_entry(args.version, date, [change], args.phase)
+    entry = add_entry(args.version, date, [change], args.sprint)
     print(f"Entry added: {json.dumps(entry, indent=2)}")
 
 
@@ -150,14 +150,14 @@ def main():
     parser = argparse.ArgumentParser(description="Add entries to Hivemind changelog")
     parser.add_argument("--interactive", "-i", action="store_true",
                         help="Interactive mode")
-    parser.add_argument("--version", "-v", help="Version string (e.g., 'phase-1')")
+    parser.add_argument("--version", "-v", help="Version string (e.g., 'sprint-1')")
     parser.add_argument("--date", "-d", help="Date (YYYY-MM-DD), defaults to today")
     parser.add_argument("--type", "-t", choices=VALID_TYPES,
                         help="Change type")
     parser.add_argument("--area", "-a", choices=VALID_AREAS,
                         help="Affected area")
     parser.add_argument("--description", help="Change description")
-    parser.add_argument("--phase", "-p", type=int, help="Phase number")
+    parser.add_argument("--sprint", "-p", type=int, help="Sprint number")
     parser.add_argument("--commit", "-c", help="Commit hash")
     parser.add_argument("--files", "-f", nargs="+", help="Affected files")
     parser.add_argument("--issues", nargs="+", help="Related issues")

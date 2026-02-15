@@ -1,11 +1,11 @@
-# Phase 15 Report: Interactive Runtime Sessions (CLI)
+# Sprint 15 Report: Interactive Runtime Sessions (CLI)
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 15 |
-| Phase Title | Interactive Runtime Sessions (CLI) |
+| Sprint Number | 15 |
+| Sprint Title | Interactive Runtime Sessions (CLI) |
 | Branch | `main` |
 | PR | _TBD_ |
 | Start Date | 2026-02-09 |
@@ -111,13 +111,13 @@ TOTAL lines: 74.47% (excluding src/main.rs and src/server.rs)
 | `cargo clippy -D warnings` | PASS | `make validate` |
 | `cargo test` | PASS | `make validate` |
 | `cargo doc` | PASS | `make validate` |
-| Coverage threshold (80%) | N/A | Not enforced by `make validate` for this phase |
+| Coverage threshold (80%) | N/A | Not enforced by `make validate` for this sprint |
 
 ---
 
 ## Manual Testing (Interactive Runtime Session)
 
-This manual verification is required to complete Phase 15 exit criteria.
+This manual verification is required to complete Sprint 15 exit criteria.
 
 ### Setup (isolated HOME)
 
@@ -274,9 +274,9 @@ HOME="$TMP" $HM flow tick "$FLOW_ID" --interactive
 
 | Document | Change |
 |----------|--------|
-| `ops/ROADMAP.md` | Phase 15 checklist updated |
-| `changelog.json` | Added Phase 15 entry (`v0.1.7`) |
-| `ops/reports/phase-15-report.md` | Added Phase 15 report |
+| `ops/ROADMAP.md` | Sprint 15 checklist updated |
+| `changelog.json` | Added Sprint 15 entry (`v0.1.7`) |
+| `ops/reports/sprint-15-report.md` | Added Sprint 15 report |
 
 ---
 
@@ -307,17 +307,17 @@ HOME="$TMP" $HM flow tick "$FLOW_ID" --interactive
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 14 | Complete |
+| Sprint 14 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 16 | Ready |
+| Sprint 16 | Ready |
 
 ---
 
@@ -339,9 +339,9 @@ HOME="$TMP" $HM flow tick "$FLOW_ID" --interactive
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [ ] Ready for next phase
+- [ ] Ready for next sprint
 
-**Phase 15 is PENDING (manual verification required).**
+**Sprint 15 is PENDING (manual verification required).**
 
 ---
 

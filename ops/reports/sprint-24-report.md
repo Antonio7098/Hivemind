@@ -1,12 +1,12 @@
-# Phase 24 Report: Execution Checkpoints
+# Sprint 24 Report: Execution Checkpoints
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 24 |
-| Phase Title | Execution Checkpoints |
-| Branch | `phase/24-execution-checkpoints` |
+| Sprint Number | 24 |
+| Sprint Title | Execution Checkpoints |
+| Branch | `sprint/24-execution-checkpoints` |
 | PR | _TBD_ |
 | Start Date | 2026-02-13 |
 | Completion Date | 2026-02-13 |
@@ -34,7 +34,7 @@
 | adapters/ | — | 0 | 0 |
 | storage/ | — | 0 | 0 |
 | tests/scripts | `tests/integration.rs`, `hivemind-test/test_runtime_projection_real_opencode.sh` | ~170 | ~20 |
-| docs/ops | `ops/ROADMAP.md`, `changelog.json`, `ops/reports/phase-24-report.md` | ~190 | ~30 |
+| docs/ops | `ops/ROADMAP.md`, `changelog.json`, `ops/reports/sprint-24-report.md` | ~190 | ~30 |
 | **Total** | 13 files | ~1,100 | ~145 |
 
 ### New Components
@@ -97,7 +97,7 @@ cargo test --tests
 ### Coverage
 
 ```
-Coverage tooling not run this phase (tracked for future work)
+Coverage tooling not run this sprint (tracked for future work)
 ```
 
 - Line coverage: N/A
@@ -144,7 +144,7 @@ Coverage tooling not run this phase (tracked for future work)
 
 | Document | Change |
 |----------|--------|
-| `ops/ROADMAP.md` | Added Phase 24 Execution Checkpoints detail and renumbered later phases |
+| `ops/ROADMAP.md` | Added Sprint 24 Execution Checkpoints detail and renumbered later sprints |
 | `changelog.json` | Added v0.1.14 entry |
 | `hivemind-test/test_runtime_projection_real_opencode.sh` | Documented manual validation flow |
 
@@ -179,17 +179,17 @@ Coverage tooling not run this phase (tracked for future work)
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 23: Runtime Event Projection | Complete |
+| Sprint 23: Runtime Event Projection | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 25: Single-Repo End-to-End | Ready |
+| Sprint 25: Single-Repo End-to-End | Ready |
 
 ---
 
@@ -213,9 +213,9 @@ Coverage tooling not run this phase (tracked for future work)
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [x] Ready for next phase
+- [x] Ready for next sprint
 
-**Phase 24 is COMPLETE.**
+**Sprint 24 is COMPLETE.**
 
 ---
 

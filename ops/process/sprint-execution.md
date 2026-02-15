@@ -1,19 +1,19 @@
-did # Phase Execution Protocol
+did # Sprint Execution Protocol
 
 > **Principle 11:** Build incrementally, prove foundations first.
 > **Principle 15:** No magic. Everything has a reason. Everything has a trail.
 
-This document defines the **mandatory workflow** for executing each phase of Hivemind development. Every phase follows this protocol. No exceptions.
+This document defines the **mandatory workflow** for executing each sprint of Hivemind development. Every sprint follows this protocol. No exceptions.
 
 The protocol ensures that:
-- Each phase is isolated and traceable (one branch per phase)
+- Each sprint is isolated and traceable (one branch per sprint)
 - Quality gates are enforced before progression
 - Documentation stays synchronized with code
 - History is auditable and reproducible
 
 ---
 
-## Phase Lifecycle
+## Sprint Lifecycle
 
 ```
 PLANNING → DEVELOPMENT → VALIDATION → DOCUMENTATION → REPORT → REVIEW → MERGE → CI MONITORING
@@ -21,7 +21,7 @@ PLANNING → DEVELOPMENT → VALIDATION → DOCUMENTATION → REPORT → REVIEW 
 
 Each stage has defined inputs, outputs, and exit criteria.
 
-> **CRITICAL:** Phase report is generated **BEFORE merge**, not after. Merge happens only when report is complete.
+> **CRITICAL:** Sprint report is generated **BEFORE merge**, not after. Merge happens only when report is complete.
 
 ---
 
@@ -29,18 +29,18 @@ Each stage has defined inputs, outputs, and exit criteria.
 
 ### 1.1 Branch Creation
 
-Create a dedicated branch for the phase:
+Create a dedicated branch for the sprint:
 
 ```bash
 git checkout main
 git pull origin main
-git checkout -b phase/<phase-number>-<short-name>
+git checkout -b sprint/<sprint-number>-<short-name>
 ```
 
 Examples:
-- `phase/01-event-foundation`
-- `phase/14-opencode-adapter`
-- `phase/23-single-repo-e2e`
+- `sprint/01-event-foundation`
+- `sprint/14-opencode-adapter`
+- `sprint/23-single-repo-e2e`
 
 ### 1.2 Scope Review
 
@@ -48,18 +48,18 @@ Before writing code:
 
 > **CRITICAL:** Thoroughly review **all** relevant documentation in `docs/architecture/` and `docs/design/`. Do not miss anything — missing docs lead to incomplete implementations.
 
-1. Read the phase definition in `ops/ROADMAP.md`
-2. Identify all checklist items for the phase
+1. Read the sprint definition in `ops/ROADMAP.md`
+2. Identify all checklist items for the sprint
 3. **Review related architecture docs** in `docs/architecture/` — check for patterns, interfaces, and constraints
 4. **Review related design docs** in `docs/design/` — understand operational semantics, error models, and decisions
 5. **Cross-reference docs** — ensure architecture and design docs are consistent
-6. Identify dependencies on prior phases
-7. Verify prior phase exit criteria are met
+6. Identify dependencies on prior sprints
+7. Verify prior sprint exit criteria are met
 
 ### 1.3 Planning Outputs
 
 - [Branch created and pushed  
-- [Phase scope understood  
+- [Sprint scope understood  
 - [Dependencies verified  
 
 ---
@@ -68,7 +68,7 @@ Before writing code:
 
 ### 2.1 Development Rules
 
-1. **One phase per branch** — no mixing phase work
+1. **One sprint per branch** — no mixing sprint work
 2. **Commit frequently** — atomic, meaningful commits
 3. **Commit message format:**
    ```
@@ -76,7 +76,7 @@ Before writing code:
 
    [optional body]
 
-   Phase: <phase-number>
+   Sprint: <sprint-number>
    ```
    Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
@@ -91,7 +91,7 @@ As you complete items, update `ops/ROADMAP.md`:
 
 ### 2.3 Development Outputs
 
-- [All phase checklist items implemented  
+- [All sprint checklist items implemented  
 - [All new code has tests  
 - [Commits are atomic and well-messaged  
 
@@ -134,14 +134,14 @@ make validate
 For each exit criterion in `ops/ROADMAP.md`:
 
 1. Write a verification test or manual verification script
-2. Document how to verify in the phase report
+2. Document how to verify in the sprint report
 3. All exit criteria must pass
 
 ### 3.3 Principle Checkpoint
 
 Verify against all 15 principles:
 
-Review each principle and document compliance in phase report:
+Review each principle and document compliance in sprint report:
 1. Observability is truth
 2. Fail fast, fail loud
 3. Reliability over cleverness
@@ -185,7 +185,7 @@ cargo doc --no-deps --document-private-items
 
 ### 4.2 Architecture/Design Docs
 
-If the phase changes behavior documented in `docs/`:
+If the sprint changes behavior documented in `docs/`:
 
 1. Update affected architecture docs
 2. Update affected design docs
@@ -204,7 +204,7 @@ make changelog-add
 
 ### 4.4 README Updates
 
-If the phase adds user-facing features:
+If the sprint adds user-facing features:
 - Update relevant sections in README.md
 - Add/update usage examples
 
@@ -284,33 +284,33 @@ Minimum debugging artifacts to include in the PR discussion:
 
 ## 5. Report Stage (BEFORE Merge)
 
-### 5.1 Generate Phase Report
+### 5.1 Generate Sprint Report
 
-Create report at `ops/reports/phase-<N>-report.md` using the template in `ops/process/phase-report-template.md`.
+Create report at `ops/reports/sprint-<N>-report.md` using the template in `ops/process/sprint-report-template.md`.
 
 The report must document:
 
-1. **Phase Metadata** — Number, title, dates, duration
-2. **Objectives** — What the phase aimed to achieve
+1. **Sprint Metadata** — Number, title, dates, duration
+2. **Objectives** — What the sprint aimed to achieve
 3. **Deliverables** — What was delivered
 4. **Exit Criteria Results** — Pass/fail for each criterion
 5. **Metrics** — Lines of code, test count, coverage
 6. **Principle Compliance** — How each principle was upheld
 7. **Challenges** — What was difficult
 8. **Learnings** — What was learned
-9. **Next Phase Readiness** — Dependencies satisfied for next phase
+9. **Next Sprint Readiness** — Dependencies satisfied for next sprint
 
 ### 5.2 Commit Report
 
 ```bash
-git add ops/reports/phase-<N>-report.md
-git commit -m "docs: Phase <N> completion report"
-git push origin phase/<N>-<name>
+git add ops/reports/sprint-<N>-report.md
+git commit -m "docs: Sprint <N> completion report"
+git push origin sprint/<N>-<name>
 ```
 
 ### 5.3 Report Outputs
 
-- Phase report generated from template
+- Sprint report generated from template
 - All exit criteria documented with results
 - Metrics captured (coverage, lines changed, etc.)
 - Principle compliance documented
@@ -357,14 +357,14 @@ Before creating a PR:
 
 The PR description must include:
 
-1. **Phase Summary** — What this phase accomplishes
+1. **Sprint Summary** — What this sprint accomplishes
 2. **Changes Made** — Bullet list of major changes
 3. **Exit Criteria Status** — All criteria with pass/fail
 4. **Test Results** — Summary of test output
 5. **Coverage Report** — Coverage percentage
 6. **Principle Compliance** — Any notable decisions
 7. **Breaking Changes** — If any
-8. **Phase Report** — Link to `ops/reports/phase-<N>-report.md`
+8. **Sprint Report** — Link to `ops/reports/sprint-<N>-report.md`
 
 ### 6.4 Create Pull Request
 
@@ -373,16 +373,16 @@ The PR description must include:
 git status -sb
 
 # Push branch
-git push -u origin phase/<N>-<name>
+git push -u origin sprint/<N>-<name>
 
 # Create PR
-make phase-pr
+make sprint-pr
 
 # Or manually:
 gh pr create \
-  --title "Phase <N>: <Title>" \
+  --title "Sprint <N>: <Title>" \
   --base main \
-  --head phase/<N>-<name>
+  --head sprint/<N>-<name>
 ```
 
 ### 6.5 Review Outputs
@@ -403,7 +403,7 @@ Before merging:
 
 1. All CI checks pass ✅
 2. Review comments addressed
-3. **Phase report is complete and committed**
+3. **Sprint report is complete and committed**
 4. Final validation run passes
 
 ### 7.2 Merge Protocol
@@ -416,8 +416,8 @@ gh pr merge <PR-number> --squash --delete-branch
 ### 7.3 Merge Outputs
 
 - PR merged to main
-- Phase branch deleted
-- Phase report present in main
+- Sprint branch deleted
+- Sprint report present in main
 
 ---
 
@@ -448,7 +448,7 @@ cargo build --release
 cargo test --all-features
 ```
 
-All green? Phase is **complete and ready for next phase**.
+All green? Sprint is **complete and ready for next sprint**.
 
 ### 8.3 CI Failure Path
 
@@ -457,28 +457,28 @@ If CI fails after merge:
 1. **Diagnose the failure** — Check CI logs
 2. **Fix immediately** — Create fix commit on main
 3. **Re-run CI** — Wait for pass
-4. **Update phase report** — Document the issue and fix
-5. **Commit report update** — `git add ops/reports/phase-<N>-report.md && git commit -m "docs: Phase <N> report update (post-merge fix)"`
+4. **Update sprint report** — Document the issue and fix
+5. **Commit report update** — `git add ops/reports/sprint-<N>-report.md && git commit -m "docs: Sprint <N> report update (post-merge fix)"`
 
 ### 8.4 Tagging (Optional)
 
-For milestone phases, create a tag (after CI passes):
+For milestone sprints, create a tag (after CI passes):
 
 ```bash
-git tag -a phase-<N>-complete -m "Phase <N>: <Title> complete"
-git push origin phase-<N>-complete
+git tag -a sprint-<N>-complete -m "Sprint <N>: <Title> complete"
+git push origin sprint-<N>-complete
 ```
 
 ### 8.5 Update Master Tracking
 
 Update `ops/ROADMAP.md` on main:
-- All checklist items for phase marked `[x]`
+- All checklist items for sprint marked `[x]`
 - Add completion date as comment
 
 Commit:
 ```bash
 git add ops/ROADMAP.md
-git commit -m "docs: Phase <N> marked complete"
+git commit -m "docs: Sprint <N> marked complete"
 ```
 
 ### 8.6 CI Monitoring Outputs
@@ -487,7 +487,7 @@ git commit -m "docs: Phase <N> marked complete"
 - Local build/test verification complete
 - Tag created (if milestone)
 - ops/ROADMAP.md updated on main
-- Next phase is ready to begin
+- Next sprint is ready to begin
 
 ---
 
@@ -511,27 +511,27 @@ cargo llvm-cov --all-features
 ## Quick Reference: Git Workflow
 
 ```bash
-# Start phase
+# Start sprint
 git checkout main && git pull
-git checkout -b phase/<N>-<name>
+git checkout -b sprint/<N>-<name>
 
 # During development
 git add <files>
-git commit -m "<type>(<scope>): <desc>\n\nPhase: <N>"
+git commit -m "<type>(<scope>): <desc>\n\nSprint: <N>"
 
 # Prepare for PR
 make validate
-git push -u origin phase/<N>-<name>
+git push -u origin sprint/<N>-<name>
 
 # Create PR
-make phase-pr
+make sprint-pr
 
 # After review (on your branch)
 # Address comments, push fixes
 
 # After merge
 git checkout main && git pull
-git tag -a phase-<N>-complete -m "Phase <N> complete"  # optional
+git tag -a sprint-<N>-complete -m "Sprint <N> complete"  # optional
 ```
 
 ---
@@ -549,9 +549,9 @@ If validation fails before PR:
 ### Exit Criteria Failure
 
 If an exit criterion cannot be met:
-1. Document why in the phase report
+1. Document why in the sprint report
 2. Create issue for follow-up
-3. Decide: block phase or defer criterion
+3. Decide: block sprint or defer criterion
 4. If blocking, fix before merge
 5. If deferring, document explicitly in report
 
@@ -571,7 +571,7 @@ git push --force-with-lease
 If CI fails after merge:
 1. **Act immediately**
 2. Fix on main or in new PR
-3. Document in phase report
+3. Document in sprint report
 4. Re-run CI until passing
 
 ---
@@ -580,27 +580,27 @@ If CI fails after merge:
 
 This protocol enforces:
 
-- **One branch per phase** — isolation and traceability
+- **One branch per sprint** — isolation and traceability
 - **All checks must pass** — no exceptions
 - **Documentation is mandatory** — not optional
-- **Phase report before merge** — non-negotiable
+- **Sprint report before merge** — non-negotiable
 - **CI monitoring after merge** — required
 - **Reports are generated** — history is preserved
 - **Changelog is updated** — changes are tracked
 
-Violating these invariants requires explicit justification documented in the phase report.
+Violating these invariants requires explicit justification documented in the sprint report.
 
 ---
 
 ## Final Pre-Merge Checklist
 
-Before considering this phase complete, verify **nothing has been missed**:
+Before considering this sprint complete, verify **nothing has been missed**:
 
 ### Documentation Review
 - **Re-read** `docs/architecture/` — any patterns/interfaces you missed?
 - **Re-read** `docs/design/` — any operational semantics you overlooked?
 - **Cross-check** architecture against design docs — are they consistent?
-- **Review** phase-specific docs in architecture — are all relevant specs covered?
+- **Review** sprint-specific docs in architecture — are all relevant specs covered?
 
 ### Code Completeness
 - All checklist items from `ops/ROADMAP.md` implemented
@@ -615,7 +615,7 @@ Before considering this phase complete, verify **nothing has been missed**:
 - Doc tests pass (`cargo test --doc`)
 
 ### Documentation
-- Phase report generated and committed
+- Sprint report generated and committed
 - `changelog.json` updated
 - Public API items have doc comments
 - README updated (if user-facing changes)
@@ -633,7 +633,7 @@ Before considering this phase complete, verify **nothing has been missed**:
 ### Final Verification
 - **One final read-through** of all changed files
 - **One final run** of full validation suite
-- Phase report accurately reflects what was done
+- Sprint report accurately reflects what was done
 
 > **WARNING:** If you think "I probably don't need to check this" — **check it anyway**. Undocumented assumptions cause failures.
 

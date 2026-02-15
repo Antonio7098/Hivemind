@@ -1,12 +1,12 @@
-# Phase 11 Report: Worktree Management
+# Sprint 11 Report: Worktree Management
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 11 |
-| Phase Title | Worktree Management |
-| Branch | `phase/11-worktree-management` |
+| Sprint Number | 11 |
+| Sprint Title | Worktree Management |
+| Branch | `sprint/11-worktree-management` |
 | PR | #3 |
 | Start Date | 2026-02-07 |
 | Completion Date | 2026-02-07 |
@@ -32,7 +32,7 @@
 | core/ | `src/core/registry.rs`, `src/core/worktree.rs` | 270 | 6 |
 | cli/ | `src/cli/commands.rs`, `src/main.rs` | 111 | 1 |
 | tests/ | `tests/integration.rs` | 68 | 0 |
-| docs/ | `ops/ROADMAP.md`, `changelog.json`, `docs/design/cli-operational-semantics.md`, `docs/architecture/hivemind_cli_capability_specification.md`, `ops/reports/phase-11-report.md` | 341 | 15 |
+| docs/ | `ops/ROADMAP.md`, `changelog.json`, `docs/design/cli-operational-semantics.md`, `docs/architecture/hivemind_cli_capability_specification.md`, `ops/reports/sprint-11-report.md` | 341 | 15 |
 | other | `.gitignore`, `Cargo.toml`, `Cargo.lock`, `Makefile` | 6 | 5 |
 | **Total** | 14 | 796 | 27 |
 
@@ -136,11 +136,11 @@ cargo llvm-cov (all features):
 
 | Document | Change |
 |----------|--------|
-| `ops/ROADMAP.md` | Mark Phase 11 items complete |
+| `ops/ROADMAP.md` | Mark Sprint 11 items complete |
 | `docs/design/cli-operational-semantics.md` | Added semantics for `worktree` commands |
 | `docs/architecture/hivemind_cli_capability_specification.md` | Added worktree management capability section |
-| `changelog.json` | Added v0.1.2 entry for Phase 11 |
-| `Makefile` | Made `make phase-pr` non-interactive and POSIX-sh compatible |
+| `changelog.json` | Added v0.1.2 entry for Sprint 11 |
+| `Makefile` | Made `make sprint-pr` non-interactive and POSIX-sh compatible |
 
 ---
 
@@ -169,17 +169,17 @@ cargo llvm-cov (all features):
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 0 | Complete |
+| Sprint 0 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 12 | Ready |
+| Sprint 12 | Ready |
 
 ---
 
@@ -203,9 +203,9 @@ cargo llvm-cov (all features):
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [x] Ready for next phase
+- [x] Ready for next sprint
 
-**Phase 11 is COMPLETE.**
+**Sprint 11 is COMPLETE.**
 
 ---
 

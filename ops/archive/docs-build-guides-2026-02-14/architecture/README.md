@@ -24,7 +24,7 @@ Architecture documents define:
 They intentionally avoid:
 - OS-specific details
 - Runtime implementation tricks
-- Phase-specific limitations
+- Sprint-specific limitations
 - Command-level behavior
 
 ---

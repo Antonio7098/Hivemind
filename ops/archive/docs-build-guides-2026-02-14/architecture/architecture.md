@@ -255,7 +255,7 @@ Runtimes are treated as:
 
 ---
 
-### 8.2 Wrapper-Based Runtimes (Initial Phase)
+### 8.2 Wrapper-Based Runtimes (Initial Sprint)
 
 In the wrapper model, Hivemind:
 

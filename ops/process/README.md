@@ -9,25 +9,25 @@ This directory contains the mandatory processes for Hivemind development.
 
 | Document | Purpose |
 |----------|---------|
-| [phase-execution.md](phase-execution.md) | **Mandatory workflow** for executing each phase |
-| [phase-report-template.md](phase-report-template.md) | Template for phase completion reports |
+| [sprint-execution.md](sprint-execution.md) | **Mandatory workflow** for executing each sprint |
+| [sprint-report-template.md](sprint-report-template.md) | Template for sprint completion reports |
 
 ## Quick Start
 
-### Starting a New Phase
+### Starting a New Sprint
 
 ```bash
-# Create phase branch
-make phase-start N=1 NAME=event-foundation
+# Create sprint branch
+make sprint-start N=1 NAME=event-foundation
 
 # Or manually:
 git checkout main && git pull
-git checkout -b phase/01-event-foundation
+git checkout -b sprint/01-event-foundation
 ```
 
 ### During Development
 
-1. Implement phase checklist items from `ops/ROADMAP.md`
+1. Implement sprint checklist items from `ops/ROADMAP.md`
 2. Write tests alongside code
 3. Commit frequently with meaningful messages
 4. Update `ops/ROADMAP.md` as items complete
@@ -48,16 +48,16 @@ cargo doc --no-deps
 ### Creating PR
 
 ```bash
-make phase-pr
+make sprint-pr
 
 # Or manually:
-gh pr create --title "Phase N: Title" --base main
+gh pr create --title "Sprint N: Title" --base main
 ```
 
 ### After Merge
 
-1. Generate phase report from template
-2. Save to `ops/reports/phase-N-report.md`
+1. Generate sprint report from template
+2. Save to `ops/reports/sprint-N-report.md`
 3. Update changelog: `make changelog-add`
 
 ## Validation Commands
@@ -73,10 +73,10 @@ gh pr create --title "Phase N: Title" --base main
 | `make doc` | Generate documentation |
 | `make validate` | Full validation suite |
 
-## Phase Lifecycle
+## Sprint Lifecycle
 
 ```
 PLANNING → DEVELOPMENT → VALIDATION → DOCUMENTATION → REVIEW → MERGE → REPORT
 ```
 
-See [phase-execution.md](phase-execution.md) for complete details.
+See [sprint-execution.md](sprint-execution.md) for complete details.

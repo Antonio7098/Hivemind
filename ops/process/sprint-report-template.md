@@ -1,18 +1,18 @@
-# Phase Report Template
+# Sprint Report Template
 
-> Copy this template to `ops/reports/phase-<N>-report.md` and fill in all sections.
+> Copy this template to `ops/reports/sprint-<N>-report.md` and fill in all sections.
 
 ---
 
-# Phase [N] Report: [Title]
+# Sprint [N] Report: [Title]
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | |
-| Phase Title | |
-| Branch | `phase/<N>-<name>` |
+| Sprint Number | |
+| Sprint Title | |
+| Branch | `sprint/<N>-<name>` |
 | PR | #[number] |
 | Start Date | YYYY-MM-DD |
 | Completion Date | YYYY-MM-DD |
@@ -23,7 +23,7 @@
 
 ## Objectives
 
-_What this phase aimed to achieve, from ops/ROADMAP.md._
+_What this sprint aimed to achieve, from ops/ROADMAP.md._
 
 1.
 2.
@@ -171,7 +171,7 @@ _What was difficult or unexpected._
 
 ## Learnings
 
-_What was learned that might inform future phases._
+_What was learned that might inform future sprints._
 
 1.
 2.
@@ -191,17 +191,17 @@ _Any shortcuts taken or debt incurred._
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase [X] | Complete |
+| Sprint [X] | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase [Y] | Ready/Blocked |
+| Sprint [Y] | Ready/Blocked |
 
 ---
 
@@ -225,9 +225,9 @@ _Any shortcuts taken or debt incurred._
 - [ ] All validation checks pass
 - [ ] Documentation updated
 - [ ] Changelog updated
-- [ ] Ready for next phase
+- [ ] Ready for next sprint
 
-**Phase [N] is COMPLETE.**
+**Sprint [N] is COMPLETE.**
 
 ---
 

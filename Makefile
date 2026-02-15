@@ -82,37 +82,37 @@ install:
 changelog-add:
 	python scripts/changelog_add.py --interactive
 
-# === Phase workflow helpers ===
+# === Sprint workflow helpers ===
 
-# Start a new phase (usage: make phase-start N=1 NAME=event-foundation)
-phase-start:
+# Start a new sprint (usage: make sprint-start N=1 NAME=event-foundation)
+sprint-start:
 	@if [ -z "$(N)" ] || [ -z "$(NAME)" ]; then \
-		echo "Usage: make phase-start N=<number> NAME=<short-name>"; \
+		echo "Usage: make sprint-start N=<number> NAME=<short-name>"; \
 		exit 1; \
 	fi
 	git checkout main
 	git pull origin main
-	git checkout -b phase/$(N)-$(NAME)
-	@echo "Branch phase/$(N)-$(NAME) created. Ready to begin Phase $(N)."
+	git checkout -b sprint/$(N)-$(NAME)
+	@echo "Branch sprint/$(N)-$(NAME) created. Ready to begin Sprint $(N)."
 
 # Pre-PR validation (run before creating PR)
-phase-validate: validate
+sprint-validate: validate
 	@echo ""
-	@echo "=== Phase Validation Complete ==="
-	@echo "Run 'make phase-pr' to create the pull request."
+	@echo "=== Sprint Validation Complete ==="
+	@echo "Run 'make sprint-pr' to create the pull request."
 
-# Create PR for current phase branch
-phase-pr:
+# Create PR for current sprint branch
+sprint-pr:
 	@BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
-	case "$$BRANCH" in phase/*) ;; *) \
-		echo "Error: Not on a phase branch (current: $$BRANCH)"; \
+	case "$$BRANCH" in sprint/*) ;; *) \
+		echo "Error: Not on a sprint branch (current: $$BRANCH)"; \
 		exit 1; \
 	esac; \
-	PHASE_NUM=$$(echo $$BRANCH | sed 's/phase\/\([0-9]*\)-.*/\1/'); \
-	PHASE_NAME=$$(echo $$BRANCH | sed 's/phase\/[0-9]*-//'); \
-	echo "Creating PR for Phase $$PHASE_NUM: $$PHASE_NAME"; \
-	echo "Remember: Phase report (ops/reports/phase-$$PHASE_NUM-report.md) must be committed before merge!"; \
-	gh pr create --title "Phase $$PHASE_NUM: $$PHASE_NAME" --base main --body "Phase report: ops/reports/phase-$$PHASE_NUM-report.md"
+	SPRINT_NUM=$$(echo $$BRANCH | sed 's/sprint\/\([0-9]*\)-.*/\1/'); \
+	SPRINT_NAME=$$(echo $$BRANCH | sed 's/sprint\/[0-9]*-//'); \
+	echo "Creating PR for Sprint $$SPRINT_NUM: $$SPRINT_NAME"; \
+	echo "Remember: Sprint report (ops/reports/sprint-$$SPRINT_NUM-report.md) must be committed before merge!"; \
+	gh pr create --title "Sprint $$SPRINT_NUM: $$SPRINT_NAME" --base main --body "Sprint report: ops/reports/sprint-$$SPRINT_NUM-report.md"
 
 # === Help ===
 
@@ -138,10 +138,10 @@ help:
 	@echo "Documentation:"
 	@echo "  doc             Generate documentation"
 	@echo ""
-	@echo "Phase workflow:"
-	@echo "  phase-start     Start new phase (N=1 NAME=event-foundation)"
-	@echo "  phase-validate  Run pre-PR validation"
-	@echo "  phase-pr        Create PR for current phase"
+	@echo "Sprint workflow:"
+	@echo "  sprint-start     Start new sprint (N=1 NAME=event-foundation)"
+	@echo "  sprint-validate  Run pre-PR validation"
+	@echo "  sprint-pr        Create PR for current sprint"
 	@echo ""
 	@echo "Changelog:"
 	@echo "  changelog-add   Add entry interactively"

@@ -1,7 +1,7 @@
-# Phase 29 Report - Event Streaming and Observability
+# Sprint 29 Report - Event Streaming and Observability
 
 ## Scope
-Phase 29 goals from `ops/ROADMAP.md`:
+Sprint 29 goals from `ops/ROADMAP.md`:
 - Real-time event streaming command with practical filtering
 - Historical event query command with inspect support
 - Correlation and time-range filtering for observability
@@ -42,7 +42,7 @@ Manual run used a fresh clone workspace and `hivemind-test` style sandbox repo u
 
 Artifacts:
 - root: `/tmp/tmp.pqAF9LVsk8`
-- logs: `/tmp/tmp.pqAF9LVsk8/phase29-manual`
+- logs: `/tmp/tmp.pqAF9LVsk8/sprint29-manual`
 
 Captured start/end:
 - start: `2026-02-14T21:31:38+00:00`

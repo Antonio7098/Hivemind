@@ -1,12 +1,12 @@
-# Phase 12 Report: Baseline & Diff Computation
+# Sprint 12 Report: Baseline & Diff Computation
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 12 |
-| Phase Title | Baseline & Diff Computation |
-| Branch | `phase/12-baseline-diff-computation` |
+| Sprint Number | 12 |
+| Sprint Title | Baseline & Diff Computation |
+| Branch | `sprint/12-baseline-diff-computation` |
 | PR | #5 |
 | Start Date | 2026-02-08 |
 | Completion Date | 2026-02-08 |
@@ -32,7 +32,7 @@
 | core/ | `src/core/events.rs`, `src/core/state.rs`, `src/core/registry.rs` | 692 | 3 |
 | cli/ | `src/cli/commands.rs`, `src/main.rs` | 340 | 142 |
 | tests/ | `tests/integration.rs` | 66 | 0 |
-| docs/ | `docs/design/cli-operational-semantics.md`, `ops/ROADMAP.md`, `changelog.json`, `ops/reports/phase-12-report.md` | 360 | 18 |
+| docs/ | `docs/design/cli-operational-semantics.md`, `ops/ROADMAP.md`, `changelog.json`, `ops/reports/sprint-12-report.md` | 360 | 18 |
 | other | `Cargo.toml`, `Cargo.lock` | 2 | 2 |
 | **Total** | 12 files | 1460 | 165 |
 
@@ -124,7 +124,7 @@ Not measured as part of `make validate`.
 | 8 | Absolute observability | PASS | Event stream captures what happened; artifacts preserve the actual diff content |
 | 9 | Automated checks mandatory | PASS | `make validate` is green |
 | 10 | Failures are first-class | PASS | Attempt/diff artifacts are preserved regardless of later verification outcome |
-| 11 | Build incrementally | PASS | Manual boundaries introduced ahead of runtime adapters, matching phase sequencing |
+| 11 | Build incrementally | PASS | Manual boundaries introduced ahead of runtime adapters, matching sprint sequencing |
 | 12 | Maximum modularity | PASS | Artifacts are external; events remain minimal references |
 | 13 | Abstraction without loss | PASS | Unified diff preserved verbatim for human inspection |
 | 14 | Human authority | PASS | Diff inspection is read-only; verification overrides remain explicit |
@@ -136,10 +136,10 @@ Not measured as part of `make validate`.
 
 | Document | Change |
 |----------|--------|
-| `ops/ROADMAP.md` | Mark Phase 12 items complete |
+| `ops/ROADMAP.md` | Mark Sprint 12 items complete |
 | `docs/design/cli-operational-semantics.md` | Add semantics for `task start`/`task complete` and `attempt inspect --diff` |
-| `changelog.json` | Add v0.1.4 entry for Phase 12 |
-| `ops/reports/phase-12-report.md` | Added this report |
+| `changelog.json` | Add v0.1.4 entry for Sprint 12 |
+| `ops/reports/sprint-12-report.md` | Added this report |
 
 ---
 
@@ -171,17 +171,17 @@ Not measured as part of `make validate`.
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 11 | Complete |
+| Sprint 11 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 13 | Ready |
+| Sprint 13 | Ready |
 
 ---
 
@@ -204,9 +204,9 @@ Not measured as part of `make validate`.
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [x] Ready for next phase
+- [x] Ready for next sprint
 
-**Phase 12 is COMPLETE.**
+**Sprint 12 is COMPLETE.**
 
 ---
 

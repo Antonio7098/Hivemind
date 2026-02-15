@@ -189,18 +189,18 @@ The engine never assumes agent goodwill.
 
 Scope enforcement occurs at multiple layers.
 
-**Phase 1 (Wrapper Runtimes):**
+**Sprint 1 (Wrapper Runtimes):**
 - **Post-hoc detection** via filesystem observation and git diff inspection
 - Violations are **detected after execution**, not prevented
 - Detected violations emit **ScopeViolationDetected** event and halt execution
 
-**Phase 2+ (Interception / Native Runtime):**
+**Sprint 2+ (Interception / Native Runtime):**
 - **Runtime interception** — restrict commands before execution
 - True **prevention** becomes possible with deeper integration
 
 *See `docs/design/scope-enforcement.md` for detailed enforcement mechanics.*
 
-This distinction is important: Phase 1 scope enforcement is reliable **detection**, not prevention. Violations are caught and made fatal (Principle 2: fail fast via post-hoc check), but we do not claim to prevent execution before it occurs.
+This distinction is important: Sprint 1 scope enforcement is reliable **detection**, not prevention. Violations are caught and made fatal (Principle 2: fail fast via post-hoc check), but we do not claim to prevent execution before it occurs.
 
 ---
 
@@ -277,7 +277,7 @@ By making capabilities explicit, comparable, and enforceable, Hivemind enables:
 - Clear accountability
 - Predictable execution
 
-**Important:** Enforcement mechanisms vary by phase. Phase 1 is detection-based; Phase 2+ adds prevention. See `docs/design/scope-enforcement.md` for operational details.
+**Important:** Enforcement mechanisms vary by sprint. Sprint 1 is detection-based; Sprint 2+ adds prevention. See `docs/design/scope-enforcement.md` for operational details.
 
 Without scope, agent orchestration is guesswork. With scope, it is engineering.
 

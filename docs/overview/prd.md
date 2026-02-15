@@ -150,7 +150,7 @@ Worktrees are a consequence of scopes, not a primary abstraction.
 
 ## 4. Execution Model
 
-### 4.1 Planning Phase (Outside Execution)
+### 4.1 Planning Sprint (Outside Execution)
 
 - Planner agent converts intent into:
   - Tasks

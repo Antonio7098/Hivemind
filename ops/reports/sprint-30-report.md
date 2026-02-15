@@ -1,10 +1,10 @@
-# Phase 30: UI Foundation (Optional)
+# Sprint 30: UI Foundation (Optional)
 
-## 1. Phase Metadata
+## 1. Sprint Metadata
 
-- **Phase**: 30
+- **Sprint**: 30
 - **Title**: UI Foundation (Optional)
-- **Branch**: `phase/30-ui-foundation`
+- **Branch**: `sprint/30-ui-foundation`
 - **Dates**: 2026-02-09 – 2026-02-09
 - **Owner**: Antonio
 
@@ -32,7 +32,7 @@
 
 ## 4. Exit Criteria Results
 
-From `ops/ROADMAP.md` Phase 30:
+From `ops/ROADMAP.md` Sprint 30:
 
 - [x] UI reads via CLI/events only (projection over `Registry` + events.jsonl).
 - [x] UI does not modify state directly (HTTP API is read-only; no mutation endpoints).
@@ -80,7 +80,7 @@ From `ops/ROADMAP.md` Phase 30:
 - A registry-centric “projection server” is a good fit for UI needs without introducing a parallel API.
 - Small helper tests around HTTP handlers help keep behavior stable as the registry evolves.
 
-## 9. Next Phase Readiness
+## 9. Next Sprint Readiness
 
 - UI can now present graphs/flows/events derived from real event-sourced state.
 - Sets the foundation for future UI improvements (e.g. live event streaming, richer dashboards) while staying read-only.
