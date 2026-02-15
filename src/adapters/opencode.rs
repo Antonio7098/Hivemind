@@ -4,8 +4,8 @@
 //! capabilities within Hivemind's orchestration framework.
 
 use super::runtime::{
-    AdapterConfig, ExecutionInput, ExecutionReport, InteractiveAdapterEvent,
-    InteractiveExecutionResult, RuntimeAdapter, RuntimeError,
+    format_execution_prompt, AdapterConfig, ExecutionInput, ExecutionReport,
+    InteractiveAdapterEvent, InteractiveExecutionResult, RuntimeAdapter, RuntimeError,
 };
 use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::terminal;
@@ -13,7 +13,6 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use signal_hook::consts::SIGINT;
 use signal_hook::iterator::Signals;
 use std::env;
-use std::fmt::Write as FmtWrite;
 use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -138,33 +137,7 @@ impl OpenCodeAdapter {
     /// Formats the input for the runtime.
     #[allow(clippy::unused_self)]
     fn format_input(&self, input: &ExecutionInput) -> String {
-        let task_description = &input.task_description;
-        let success_criteria = &input.success_criteria;
-        let mut prompt = format!("Task: {task_description}\n\n");
-        let _ = write!(prompt, "Success Criteria: {success_criteria}\n\n");
-
-        if let Some(ref context) = input.context {
-            let _ = write!(prompt, "Context:\n{context}\n\n");
-        }
-
-        if !input.prior_attempts.is_empty() {
-            prompt.push_str("Prior Attempts:\n");
-            for attempt in &input.prior_attempts {
-                let attempt_number = attempt.attempt_number;
-                let summary = &attempt.summary;
-                let _ = writeln!(prompt, "- Attempt {attempt_number}: {summary}",);
-                if let Some(ref reason) = attempt.failure_reason {
-                    let _ = writeln!(prompt, "  Failure: {reason}");
-                }
-            }
-            prompt.push('\n');
-        }
-
-        if let Some(ref feedback) = input.verifier_feedback {
-            let _ = write!(prompt, "Verifier Feedback:\n{feedback}\n\n");
-        }
-
-        prompt
+        format_execution_prompt(input)
     }
 
     #[allow(clippy::too_many_lines)]

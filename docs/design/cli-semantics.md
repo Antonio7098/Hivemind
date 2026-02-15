@@ -833,6 +833,9 @@ TaskExecutionStateChanged:
 RuntimeStarted:
   attempt_id: <attempt-id>
   task_id: <task-id>
+  adapter_name: <adapter-name>
+  prompt: <runtime-prompt>
+  flags: [<runtime-args-and-flags...>]
 
 RuntimeOutputChunk:
   attempt_id: <attempt-id>

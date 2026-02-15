@@ -37,8 +37,8 @@ use crate::adapters::codex::{CodexAdapter, CodexConfig};
 use crate::adapters::kilo::{KiloAdapter, KiloConfig};
 use crate::adapters::opencode::OpenCodeConfig;
 use crate::adapters::runtime::{
-    AttemptSummary, ExecutionInput, InteractiveAdapterEvent, InteractiveExecutionResult,
-    RuntimeAdapter, RuntimeError,
+    format_execution_prompt, AttemptSummary, ExecutionInput, InteractiveAdapterEvent,
+    InteractiveExecutionResult, RuntimeAdapter, RuntimeError,
 };
 use crate::adapters::{runtime_descriptors, SUPPORTED_ADAPTERS};
 
@@ -243,6 +243,71 @@ impl SelectedRuntimeAdapter {
 }
 
 impl Registry {
+    fn has_model_flag(args: &[String], short_alias: bool) -> bool {
+        args.iter().any(|arg| {
+            arg == "--model" || arg.starts_with("--model=") || (short_alias && arg == "-m")
+        })
+    }
+
+    fn runtime_start_flags(runtime: &ProjectRuntimeConfig) -> Vec<String> {
+        match runtime.adapter_name.as_str() {
+            "codex" => {
+                let mut flags = if runtime.args.is_empty() {
+                    CodexConfig::default().base.args
+                } else {
+                    runtime.args.clone()
+                };
+
+                if let Some(model) = runtime.model.as_ref() {
+                    if !Self::has_model_flag(&flags, false) {
+                        flags.extend(["--model".to_string(), model.clone()]);
+                    }
+                }
+
+                flags
+            }
+            "claude-code" => {
+                let mut flags = if runtime.args.is_empty() {
+                    ClaudeCodeConfig::default().base.args
+                } else {
+                    runtime.args.clone()
+                };
+
+                if let Some(model) = runtime.model.as_ref() {
+                    if !Self::has_model_flag(&flags, false) {
+                        flags.extend(["--model".to_string(), model.clone()]);
+                    }
+                }
+
+                flags
+            }
+            "opencode" | "kilo" => {
+                let mut flags = runtime.args.clone();
+                let is_opencode_binary = PathBuf::from(&runtime.binary_path)
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|s| {
+                        let lower = s.to_ascii_lowercase();
+                        lower.contains("opencode") || lower.contains("kilo")
+                    });
+
+                if is_opencode_binary {
+                    let mut with_start = vec!["run".to_string()];
+                    if let Some(model) = runtime.model.as_ref() {
+                        if !Self::has_model_flag(&flags, true) {
+                            with_start.extend(["--model".to_string(), model.clone()]);
+                        }
+                    }
+                    with_start.append(&mut flags);
+                    with_start
+                } else {
+                    flags
+                }
+            }
+            _ => runtime.args.clone(),
+        }
+    }
+
     fn format_checkpoint_commit_message(spec: &CheckpointCommitSpec<'_>) -> String {
         let mut message = String::new();
         let _ = writeln!(message, "hivemind(checkpoint): {}", spec.checkpoint_id);
@@ -1679,7 +1744,7 @@ impl Registry {
             return Vec::new();
         };
         let mut names: Vec<String> = entries
-            .filter_map(|entry| entry.ok())
+            .filter_map(std::result::Result::ok)
             .filter_map(|entry| entry.file_name().into_string().ok())
             .collect();
         names.sort();
@@ -1794,8 +1859,7 @@ impl Registry {
                 let path_preview = current_status
                     .first()
                     .and_then(|line| line.strip_prefix("?? ").or_else(|| line.get(3..)))
-                    .map(str::trim)
-                    .unwrap_or("<unknown>");
+                    .map_or("<unknown>", str::trim);
                 violations.push(crate::core::enforcement::ScopeViolation::filesystem(
                     format!("{}:{path_preview}", snapshot.repo_path),
                     "Repository workspace changed outside task worktree",
@@ -3919,12 +3983,27 @@ impl Registry {
             (Some(context), Vec::new())
         };
 
+        let input = ExecutionInput {
+            task_description: task
+                .description
+                .clone()
+                .unwrap_or_else(|| task.title.clone()),
+            success_criteria: task.criteria.description.clone(),
+            context: retry_context,
+            prior_attempts,
+            verifier_feedback: None,
+        };
+        let runtime_prompt = format_execution_prompt(&input);
+        let runtime_flags = Self::runtime_start_flags(&runtime);
+
         self.store
             .append(Event::new(
                 EventPayload::RuntimeStarted {
                     adapter_name: runtime.adapter_name.clone(),
                     task_id,
                     attempt_id,
+                    prompt: runtime_prompt,
+                    flags: runtime_flags,
                 },
                 attempt_corr.clone(),
             ))
@@ -4055,17 +4134,6 @@ impl Registry {
             );
             return self.get_flow(flow_id);
         }
-
-        let input = ExecutionInput {
-            task_description: task
-                .description
-                .clone()
-                .unwrap_or_else(|| task.title.clone()),
-            success_criteria: task.criteria.description.clone(),
-            context: retry_context,
-            prior_attempts,
-            verifier_feedback: None,
-        };
 
         let mut runtime_projector = RuntimeEventProjector::new();
 

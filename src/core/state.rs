@@ -946,6 +946,7 @@ impl AppState {
             | EventPayload::TaskSchedulingDeferred { .. }
             | EventPayload::RetryContextAssembled { .. }
             | EventPayload::FlowIntegrationLockAcquired { .. }
+            | EventPayload::WorktreeCleanupPerformed { .. }
             | EventPayload::Unknown => {}
 
             EventPayload::TaskRetryRequested {
@@ -1085,7 +1086,6 @@ impl AppState {
                     flow.updated_at = timestamp;
                 }
             }
-            EventPayload::WorktreeCleanupPerformed { .. } => {}
         }
     }
 

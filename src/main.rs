@@ -1987,7 +1987,7 @@ fn collect_attempt_runtime_data(
             EventPayload::RuntimeStarted {
                 adapter_name,
                 task_id,
-                attempt_id: _,
+                ..
             } => {
                 collected.adapter_name = Some(adapter_name.clone());
                 collected.task_id = Some(*task_id);

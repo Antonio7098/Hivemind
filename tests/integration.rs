@@ -1360,6 +1360,37 @@ fn cli_runtime_config_and_flow_tick() {
     assert!(out.contains("runtime_tool_call_observed"), "{out}");
     assert!(out.contains("runtime_todo_snapshot_updated"), "{out}");
     assert!(out.contains("runtime_narrative_output_observed"), "{out}");
+
+    let events_json: serde_json::Value = serde_json::from_str(&out).expect("events json");
+    let data = events_json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .expect("events data");
+    let runtime_started = data
+        .iter()
+        .find_map(|ev| {
+            let payload = ev.get("payload")?;
+            let typ = payload.get("type")?.as_str()?;
+            if typ != "runtime_started" {
+                return None;
+            }
+            Some(payload)
+        })
+        .expect("runtime_started payload");
+
+    let prompt = runtime_started
+        .get("prompt")
+        .and_then(|v| v.as_str())
+        .expect("runtime prompt");
+    assert!(prompt.contains("Task:"));
+    assert!(prompt.contains("Success Criteria:"));
+
+    let flags = runtime_started
+        .get("flags")
+        .and_then(|v| v.as_array())
+        .expect("runtime flags");
+    assert_eq!(flags.first().and_then(|v| v.as_str()), Some("sh"));
+    assert_eq!(flags.get(1).and_then(|v| v.as_str()), Some("-c"));
 }
 
 #[test]
@@ -1579,6 +1610,7 @@ fn cli_scope_violation_detects_tmp_write_outside_worktree() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn cli_attempt_inspect_context_returns_retry_context() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
@@ -1877,7 +1909,7 @@ fn cli_merge_prepare_blocked_emits_error_event() {
     let has_blocked_error = events_json
         .get("data")
         .and_then(|d| d.as_array())
-        .map(|arr| {
+        .is_some_and(|arr| {
             arr.iter().any(|ev| {
                 ev.get("payload")
                     .and_then(|p| p.get("type"))
@@ -1890,8 +1922,7 @@ fn cli_merge_prepare_blocked_emits_error_event() {
                         .and_then(serde_json::Value::as_str)
                         == Some("flow_not_completed")
             })
-        })
-        .unwrap_or(false);
+        });
     assert!(
         has_blocked_error,
         "expected error_occurred(flow_not_completed) in events: {events_out}"

@@ -4,6 +4,28 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.22",
+      "date": "2026-02-15",
+      "phase": 32,
+      "changes": [
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "Extend `runtime_started` events to include the effective runtime prompt payload and command flags used to launch the runtime"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add integration coverage asserting `runtime_started` carries prompt and flags for flow tick runtime execution"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Document `runtime_started` prompt/flags payload fields in CLI semantics and event replay design docs"
+        }
+      ]
+    },
+    {
       "version": "v0.1.21",
       "date": "2026-02-15",
       "phase": 32,

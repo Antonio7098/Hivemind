@@ -758,6 +758,10 @@ pub enum EventPayload {
         adapter_name: String,
         task_id: Uuid,
         attempt_id: Uuid,
+        #[serde(default)]
+        prompt: String,
+        #[serde(default)]
+        flags: Vec<String>,
     },
     RuntimeOutputChunk {
         attempt_id: Uuid,
