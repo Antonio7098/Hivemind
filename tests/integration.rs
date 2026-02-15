@@ -1780,8 +1780,9 @@ fn cli_worktree_cleanup_requires_force_on_running_flow() {
 
     let (code, _out, _err) = run_hivemind(tmp.path(), &["worktree", "cleanup", &flow_id]);
     assert_eq!(code, 3);
-    let (code, _out, err) = run_hivemind(tmp.path(), &["worktree", "cleanup", &flow_id, "--force"]);
+    let (code, out, err) = run_hivemind(tmp.path(), &["worktree", "cleanup", &flow_id, "--force"]);
     assert_eq!(code, 0, "{err}");
+    assert!(out.contains("Cleanup complete."), "{out}");
 
     let (code, events_out, err) = run_hivemind(
         tmp.path(),
@@ -1794,6 +1795,151 @@ fn cli_worktree_cleanup_requires_force_on_running_flow() {
         events_out.contains("worktree_cleanup_performed"),
         "{events_out}"
     );
+}
+
+#[test]
+fn cli_flow_restart_creates_replacement_for_aborted_flow() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "abort", &flow_id, "--force"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, restart_out, err) = run_hivemind(tmp.path(), &["flow", "restart", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+    let restarted_flow_id = restart_out
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("restarted flow id");
+    assert_ne!(restarted_flow_id, flow_id);
+
+    let (code, status_out, err) = run_hivemind(tmp.path(), &["flow", "status", &restarted_flow_id]);
+    assert_eq!(code, 0, "{err}");
+    assert!(status_out.contains("State:   Created"), "{status_out}");
+}
+
+#[test]
+fn cli_attempt_list_and_checkpoint_list_show_attempt_progress() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let task_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &task_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, start_out, err) = run_hivemind(tmp.path(), &["task", "start", &task_id]);
+    assert_eq!(code, 0, "{err}");
+    let attempt_id = start_out
+        .lines()
+        .find_map(|l| l.strip_prefix("Attempt ID:").map(|s| s.trim().to_string()))
+        .expect("attempt id");
+
+    let (code, attempts_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "attempt", "list", "--flow", &flow_id, "--limit", "20",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let attempts_json: serde_json::Value =
+        serde_json::from_str(&attempts_out).expect("attempt list json");
+    let attempts = attempts_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .expect("attempt list array");
+    assert!(attempts.iter().any(|attempt| {
+        attempt
+            .get("attempt_id")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|id| id == attempt_id)
+    }));
+
+    let (code, checkpoints_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "checkpoint", "list", &attempt_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let checkpoints_json: serde_json::Value =
+        serde_json::from_str(&checkpoints_out).expect("checkpoint list json");
+    let checkpoints = checkpoints_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .expect("checkpoint list array");
+    assert!(checkpoints.iter().any(|checkpoint| {
+        checkpoint
+            .get("checkpoint_id")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|id| id == "checkpoint-1")
+    }));
 }
 
 #[test]

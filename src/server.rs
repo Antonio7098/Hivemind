@@ -1512,8 +1512,8 @@ fn handle_api_request_inner(
         }
         "/api/worktrees/cleanup" if method == ApiMethod::Post => {
             let req: WorktreeCleanupRequest = parse_json_body(body, "server:worktrees:cleanup")?;
-            registry.worktree_cleanup(&req.flow_id, req.force, req.dry_run)?;
-            let wrapped = CliResponse::success(serde_json::json!({ "ok": true }));
+            let result = registry.worktree_cleanup(&req.flow_id, req.force, req.dry_run)?;
+            let wrapped = CliResponse::success(result);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)

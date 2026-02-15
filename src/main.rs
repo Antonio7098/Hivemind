@@ -164,6 +164,7 @@ fn main() {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn handle_worktree(cmd: WorktreeCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
         return ExitCode::Error;
@@ -222,34 +223,42 @@ fn handle_worktree(cmd: WorktreeCommands, format: OutputFormat) -> ExitCode {
         },
         WorktreeCommands::Cleanup(args) => {
             match registry.worktree_cleanup(&args.flow_id, args.force, args.dry_run) {
-                Ok(()) => {
+                Ok(result) => {
                     match format {
                         OutputFormat::Json => {
                             println!(
                                 "{}",
                                 serde_json::json!({
                                     "success": true,
-                                    "flow_id": args.flow_id,
-                                    "force": args.force,
-                                    "dry_run": args.dry_run
+                                    "flow_id": result.flow_id,
+                                    "force": result.forced,
+                                    "dry_run": result.dry_run,
+                                    "cleaned_worktrees": result.cleaned_worktrees
                                 })
                             );
                         }
                         OutputFormat::Yaml => {
                             if let Ok(yaml) = serde_yaml::to_string(&serde_json::json!({
                                 "success": true,
-                                "flow_id": args.flow_id,
-                                "force": args.force,
-                                "dry_run": args.dry_run
+                                "flow_id": result.flow_id,
+                                "force": result.forced,
+                                "dry_run": result.dry_run,
+                                "cleaned_worktrees": result.cleaned_worktrees
                             })) {
                                 print!("{yaml}");
                             }
                         }
                         OutputFormat::Table => {
-                            if args.dry_run {
-                                println!("dry-run ok");
+                            if result.dry_run {
+                                println!(
+                                    "Dry run complete. {} worktree(s) would be cleaned.",
+                                    result.cleaned_worktrees
+                                );
                             } else {
-                                println!("ok");
+                                println!(
+                                    "Cleanup complete. {} worktree(s) cleaned.",
+                                    result.cleaned_worktrees
+                                );
                             }
                         }
                     }
@@ -507,6 +516,15 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
         },
         FlowCommands::Abort(args) => {
             match registry.abort_flow(&args.flow_id, args.reason.as_deref(), args.force) {
+                Ok(flow) => {
+                    print_flow_id(flow.id, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+        FlowCommands::Restart(args) => {
+            match registry.restart_flow(&args.flow_id, args.name.as_deref(), args.start) {
                 Ok(flow) => {
                     print_flow_id(flow.id, format);
                     ExitCode::Success
@@ -1784,6 +1802,42 @@ fn handle_attempt(cmd: AttemptCommands, format: OutputFormat) -> ExitCode {
     };
 
     match cmd {
+        AttemptCommands::List(args) => {
+            match registry.list_attempts(args.flow.as_deref(), args.task.as_deref(), args.limit) {
+                Ok(attempts) => match format {
+                    OutputFormat::Table => {
+                        if attempts.is_empty() {
+                            println!("No attempts found.");
+                        } else {
+                            println!(
+                                "{:<36}  {:<36}  {:<36}  {:<8}  CHECKPOINTS",
+                                "ATTEMPT", "FLOW", "TASK", "NUMBER"
+                            );
+                            println!("{}", "-".repeat(170));
+                            for attempt in attempts {
+                                println!(
+                                    "{:<36}  {:<36}  {:<36}  {:<8}  {}",
+                                    attempt.attempt_id,
+                                    attempt.flow_id,
+                                    attempt.task_id,
+                                    attempt.attempt_number,
+                                    if attempt.all_checkpoints_completed {
+                                        "all_completed"
+                                    } else {
+                                        "incomplete"
+                                    }
+                                );
+                            }
+                        }
+                        ExitCode::Success
+                    }
+                    _ => output(&attempts, format)
+                        .map(|()| ExitCode::Success)
+                        .unwrap_or(ExitCode::Error),
+                },
+                Err(e) => output_error(&e, format),
+            }
+        }
         AttemptCommands::Inspect(args) => handle_attempt_inspect(&registry, &args, format),
     }
 }
@@ -1794,6 +1848,38 @@ fn handle_checkpoint(cmd: CheckpointCommands, format: OutputFormat) -> ExitCode 
     };
 
     match cmd {
+        CheckpointCommands::List(args) => match registry.list_checkpoints(&args.attempt_id) {
+            Ok(checkpoints) => match format {
+                OutputFormat::Table => {
+                    if checkpoints.is_empty() {
+                        println!("No checkpoints declared for this attempt.");
+                    } else {
+                        println!(
+                            "{:<32}  {:<9}  {:<11}  {:<12}  SUMMARY",
+                            "CHECKPOINT", "ORDER", "STATE", "COMMIT"
+                        );
+                        println!("{}", "-".repeat(120));
+                        for checkpoint in checkpoints {
+                            let commit = checkpoint.commit_hash.unwrap_or_else(|| "-".to_string());
+                            let summary = checkpoint.summary.unwrap_or_default();
+                            println!(
+                                "{:<32}  {:<9}  {:<11}  {:<12}  {}",
+                                checkpoint.checkpoint_id,
+                                format!("{}/{}", checkpoint.order, checkpoint.total),
+                                format!("{:?}", checkpoint.state).to_lowercase(),
+                                commit,
+                                summary
+                            );
+                        }
+                    }
+                    ExitCode::Success
+                }
+                _ => output(&checkpoints, format)
+                    .map(|()| ExitCode::Success)
+                    .unwrap_or(ExitCode::Error),
+            },
+            Err(e) => output_error(&e, format),
+        },
         CheckpointCommands::Complete(args) => {
             let attempt_id = args
                 .attempt_id

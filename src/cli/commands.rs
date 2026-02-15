@@ -102,8 +102,17 @@ pub enum Commands {
 /// Checkpoint subcommands.
 #[derive(Subcommand)]
 pub enum CheckpointCommands {
+    /// List checkpoints for an attempt
+    List(CheckpointListArgs),
     /// Complete the currently active checkpoint for an attempt
     Complete(CheckpointCompleteArgs),
+}
+
+/// Arguments for checkpoint listing.
+#[derive(Args)]
+pub struct CheckpointListArgs {
+    /// Attempt ID
+    pub attempt_id: String,
 }
 
 /// Arguments for checkpoint completion.
@@ -257,6 +266,8 @@ pub enum FlowCommands {
     Resume(FlowResumeArgs),
     /// Abort a flow
     Abort(FlowAbortArgs),
+    /// Restart an aborted flow by creating a new flow from the same graph
+    Restart(FlowRestartArgs),
     /// Show flow state and per-task execution state
     Status(FlowStatusArgs),
     /// Set flow run mode (`manual` or `auto`)
@@ -326,6 +337,18 @@ pub struct FlowAbortArgs {
     pub force: bool,
     #[arg(long)]
     pub reason: Option<String>,
+}
+
+#[derive(Args)]
+pub struct FlowRestartArgs {
+    /// Aborted flow ID
+    pub flow_id: String,
+    /// Optional name for the restarted flow
+    #[arg(long)]
+    pub name: Option<String>,
+    /// Start the restarted flow immediately
+    #[arg(long, default_value_t = false)]
+    pub start: bool,
 }
 
 #[derive(Args)]
@@ -980,8 +1003,24 @@ pub struct MergeExecuteArgs {
 /// Attempt subcommands.
 #[derive(Subcommand)]
 pub enum AttemptCommands {
+    /// List attempts (optionally filtered)
+    List(AttemptListArgs),
     /// Inspect an attempt
     Inspect(AttemptInspectArgs),
+}
+
+/// Arguments for attempt list.
+#[derive(Args)]
+pub struct AttemptListArgs {
+    /// Optional flow ID filter
+    #[arg(long)]
+    pub flow: Option<String>,
+    /// Optional task ID filter
+    #[arg(long)]
+    pub task: Option<String>,
+    /// Maximum number of attempts
+    #[arg(long, default_value = "50")]
+    pub limit: usize,
 }
 
 /// Arguments for attempt inspect.

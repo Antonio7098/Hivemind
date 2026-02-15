@@ -12,8 +12,8 @@ use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, Ta
 use crate::core::runtime_event_projection::{ProjectedRuntimeObservation, RuntimeEventProjector};
 use crate::core::scope::{check_compatibility, RepoAccessMode, Scope, ScopeCompatibility};
 use crate::core::state::{
-    AppState, AttemptCheckpointState, AttemptState, Project, ProjectRuntimeConfig,
-    RuntimeRoleDefaults, Task, TaskRuntimeConfig, TaskState,
+    AppState, AttemptCheckpoint, AttemptCheckpointState, AttemptState, Project,
+    ProjectRuntimeConfig, RuntimeRoleDefaults, Task, TaskRuntimeConfig, TaskState,
 };
 use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
 use crate::storage::event_store::{EventFilter, EventStore, IndexedEventStore};
@@ -181,6 +181,24 @@ pub struct CheckpointCompletionResult {
     pub next_checkpoint_id: Option<String>,
     pub all_completed: bool,
     pub commit_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AttemptListItem {
+    pub attempt_id: Uuid,
+    pub flow_id: Uuid,
+    pub task_id: Uuid,
+    pub attempt_number: u32,
+    pub started_at: chrono::DateTime<Utc>,
+    pub all_checkpoints_completed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorktreeCleanupResult {
+    pub flow_id: Uuid,
+    pub cleaned_worktrees: usize,
+    pub forced: bool,
+    pub dry_run: bool,
 }
 
 enum SelectedRuntimeAdapter {
@@ -5486,6 +5504,83 @@ impl Registry {
         })
     }
 
+    pub fn list_attempts(
+        &self,
+        flow_id: Option<&str>,
+        task_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<AttemptListItem>> {
+        let origin = "registry:list_attempts";
+        let flow_filter = match flow_id {
+            Some(raw) => Some(Uuid::parse_str(raw).map_err(|_| {
+                HivemindError::user(
+                    "invalid_flow_id",
+                    format!("'{raw}' is not a valid flow ID"),
+                    origin,
+                )
+            })?),
+            None => None,
+        };
+        let task_filter = match task_id {
+            Some(raw) => Some(Uuid::parse_str(raw).map_err(|_| {
+                HivemindError::user(
+                    "invalid_task_id",
+                    format!("'{raw}' is not a valid task ID"),
+                    origin,
+                )
+            })?),
+            None => None,
+        };
+
+        let state = self.state()?;
+        let mut attempts: Vec<_> = state
+            .attempts
+            .values()
+            .filter(|attempt| flow_filter.is_none_or(|id| attempt.flow_id == id))
+            .filter(|attempt| task_filter.is_none_or(|id| attempt.task_id == id))
+            .cloned()
+            .collect();
+        attempts.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+
+        Ok(attempts
+            .into_iter()
+            .take(limit)
+            .map(|attempt| AttemptListItem {
+                attempt_id: attempt.id,
+                flow_id: attempt.flow_id,
+                task_id: attempt.task_id,
+                attempt_number: attempt.attempt_number,
+                started_at: attempt.started_at,
+                all_checkpoints_completed: attempt.all_checkpoints_completed,
+            })
+            .collect())
+    }
+
+    pub fn list_checkpoints(&self, attempt_id: &str) -> Result<Vec<AttemptCheckpoint>> {
+        let attempt_uuid = Uuid::parse_str(attempt_id).map_err(|_| {
+            HivemindError::user(
+                "invalid_attempt_id",
+                format!("'{attempt_id}' is not a valid attempt ID"),
+                "registry:list_checkpoints",
+            )
+        })?;
+
+        let state = self.state()?;
+        let attempt = state
+            .attempts
+            .get(&attempt_uuid)
+            .ok_or_else(|| {
+                HivemindError::user(
+                    "attempt_not_found",
+                    "Attempt not found",
+                    "registry:list_checkpoints",
+                )
+            })?
+            .clone();
+
+        Ok(attempt.checkpoints)
+    }
+
     fn unmet_flow_dependencies(state: &AppState, flow: &TaskFlow) -> Vec<Uuid> {
         let mut unmet: Vec<Uuid> = flow
             .depends_on_flows
@@ -5806,6 +5901,85 @@ impl Registry {
         Ok(started)
     }
 
+    pub fn restart_flow(&self, flow_id: &str, name: Option<&str>, start: bool) -> Result<TaskFlow> {
+        let source = self.get_flow(flow_id)?;
+        if source.state != FlowState::Aborted {
+            return Err(HivemindError::user(
+                "flow_not_aborted",
+                "Only aborted flows can be restarted",
+                "registry:restart_flow",
+            )
+            .with_hint("Abort the flow first, or create a new flow from the graph"));
+        }
+
+        let state = self.state()?;
+        let runtime_defaults = state
+            .flow_runtime_defaults
+            .get(&source.id)
+            .cloned()
+            .unwrap_or_default();
+        let mut dependencies: Vec<_> = source.depends_on_flows.iter().copied().collect();
+        dependencies.sort();
+
+        let source_graph_id = source.graph_id;
+        let source_run_mode = source.run_mode;
+        drop(state);
+
+        let mut restarted = self.create_flow(&source_graph_id.to_string(), name)?;
+        let restarted_id = restarted.id.to_string();
+
+        for dep in dependencies {
+            restarted = self.flow_add_dependency(&restarted_id, &dep.to_string())?;
+        }
+
+        if let Some(config) = runtime_defaults.worker {
+            let env_pairs: Vec<String> = config
+                .env
+                .iter()
+                .map(|(key, value)| format!("{key}={value}"))
+                .collect();
+            restarted = self.flow_runtime_set(
+                &restarted_id,
+                RuntimeRole::Worker,
+                &config.adapter_name,
+                &config.binary_path,
+                config.model,
+                &config.args,
+                &env_pairs,
+                config.timeout_ms,
+                config.max_parallel_tasks,
+            )?;
+        }
+        if let Some(config) = runtime_defaults.validator {
+            let env_pairs: Vec<String> = config
+                .env
+                .iter()
+                .map(|(key, value)| format!("{key}={value}"))
+                .collect();
+            restarted = self.flow_runtime_set(
+                &restarted_id,
+                RuntimeRole::Validator,
+                &config.adapter_name,
+                &config.binary_path,
+                config.model,
+                &config.args,
+                &env_pairs,
+                config.timeout_ms,
+                config.max_parallel_tasks,
+            )?;
+        }
+
+        if source_run_mode != RunMode::Manual {
+            restarted = self.flow_set_run_mode(&restarted_id, source_run_mode)?;
+        }
+
+        if start && restarted.state == FlowState::Created {
+            restarted = self.start_flow(&restarted_id)?;
+        }
+
+        Ok(restarted)
+    }
+
     pub fn worktree_list(&self, flow_id: &str) -> Result<Vec<WorktreeStatus>> {
         let flow = self.get_flow(flow_id)?;
         let state = self.state()?;
@@ -5856,7 +6030,12 @@ impl Registry {
             .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_inspect"))
     }
 
-    pub fn worktree_cleanup(&self, flow_id: &str, force: bool, dry_run: bool) -> Result<()> {
+    pub fn worktree_cleanup(
+        &self,
+        flow_id: &str,
+        force: bool,
+        dry_run: bool,
+    ) -> Result<WorktreeCleanupResult> {
         let flow = self.get_flow(flow_id)?;
         if flow.state == FlowState::Running && !force {
             return Err(HivemindError::user(
@@ -5896,7 +6075,12 @@ impl Registry {
             "registry:worktree_cleanup",
         )?;
 
-        Ok(())
+        Ok(WorktreeCleanupResult {
+            flow_id: flow.id,
+            cleaned_worktrees: existing_worktrees,
+            forced: force,
+            dry_run,
+        })
     }
 
     pub fn pause_flow(&self, flow_id: &str) -> Result<TaskFlow> {
@@ -9588,6 +9772,115 @@ mod tests {
             .abort_flow(&flow.id.to_string(), None, false)
             .unwrap();
         assert_eq!(flow2.state, FlowState::Aborted);
+    }
+
+    #[test]
+    fn flow_restart_requires_aborted_source_flow() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+
+        let err = registry
+            .restart_flow(&flow.id.to_string(), None, false)
+            .unwrap_err();
+        assert_eq!(err.code, "flow_not_aborted");
+    }
+
+    #[test]
+    fn flow_restart_creates_new_flow_and_copies_settings() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        registry
+            .flow_runtime_set(
+                &flow.id.to_string(),
+                RuntimeRole::Worker,
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &["sh".to_string(), "-c".to_string(), "echo hi".to_string()],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+        let flow = registry
+            .abort_flow(&flow.id.to_string(), Some("restart-test"), true)
+            .unwrap();
+        assert_eq!(flow.state, FlowState::Aborted);
+
+        let restarted = registry
+            .restart_flow(&flow.id.to_string(), Some("restart"), false)
+            .unwrap();
+        assert_ne!(restarted.id, flow.id);
+        assert_eq!(restarted.graph_id, flow.graph_id);
+        assert_eq!(restarted.state, FlowState::Created);
+        assert_eq!(restarted.run_mode, flow.run_mode);
+
+        let state = registry.state().unwrap();
+        let copied_worker = state
+            .flow_runtime_defaults
+            .get(&restarted.id)
+            .and_then(|defaults| defaults.worker.as_ref())
+            .expect("copied worker runtime");
+        assert_eq!(copied_worker.adapter_name, "opencode");
+        assert_eq!(copied_worker.binary_path, "/usr/bin/env");
+    }
+
+    #[test]
+    fn list_attempts_and_checkpoints_returns_attempt_progress() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let attempt_id = registry.start_task_execution(&task.id.to_string()).unwrap();
+
+        let attempts = registry
+            .list_attempts(Some(&flow.id.to_string()), Some(&task.id.to_string()), 10)
+            .unwrap();
+        assert_eq!(attempts.len(), 1);
+        assert_eq!(attempts[0].attempt_id, attempt_id);
+        assert!(!attempts[0].all_checkpoints_completed);
+
+        let checkpoints = registry.list_checkpoints(&attempt_id.to_string()).unwrap();
+        assert!(!checkpoints.is_empty());
+        assert_eq!(checkpoints[0].checkpoint_id, "checkpoint-1");
     }
 
     #[test]

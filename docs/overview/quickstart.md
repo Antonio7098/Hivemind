@@ -310,7 +310,14 @@ You should see runtime lifecycle events like:
 ### 8.2 Attempts
 
 ```bash
+$HM -f json attempt list --flow "$FLOW_ID" --limit 100
 $HM -f json attempt inspect <attempt-id> --context --diff --output
+```
+
+Checkpoint visibility for a specific attempt:
+
+```bash
+$HM -f json checkpoint list <attempt-id>
 ```
 
 ### 8.3 Worktrees
@@ -395,6 +402,16 @@ If you are mixing logs with JSON, write logs to stderr and parse stdout only.
 
 This typically means the worktree directory does not exist (it may have been cleaned up) or the repo is not in the expected state.
 Use `worktree list` to find expected paths.
+
+### 10.6 Restarting an aborted flow
+
+If a flow is aborted and you want to re-run it with the same graph:
+
+```bash
+$HM flow restart "$FLOW_ID" --start
+```
+
+Without `--start`, Hivemind creates the replacement flow in `created` state.
 
 ---
 
