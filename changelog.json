@@ -4,6 +4,48 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.20",
+      "date": "2026-02-15",
+      "phase": 31,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add flow and task run modes (`manual`/`auto`) with scheduler enforcement so manual tasks are not automatically dispatched"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add inter-flow dependency edges and auto-start dependent auto-mode flows when upstream flows complete"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add runtime defaults and overrides at global/project/flow/task scope with explicit worker/validator role selection and deterministic precedence"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add `task set-run-mode`, `flow set-run-mode`, `flow add-dependency`, `flow runtime-set`, and `runtime defaults-set` commands plus role-aware `runtime health` arguments"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add merge execution mode selection (`local` or `pr`) with optional CI monitoring, auto-merge request, and pull-after behavior for PR mode"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Extend registry coverage for task manual mode, runtime precedence, and dependent-flow auto-start behavior"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update quickstart, CLI semantics, and architecture docs for run modes, inter-flow dependencies, runtime precedence, and PR merge execution options"
+        }
+      ]
+    },
+    {
       "version": "v0.1.19",
       "date": "2026-02-15",
       "phase": 30,

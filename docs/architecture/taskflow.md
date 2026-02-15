@@ -61,9 +61,19 @@ A task becomes *eligible* for execution when:
 
 Failure states do **not** unblock downstream tasks.
 
+### 4.2 Inter-Flow Dependencies
+
+TaskFlows may depend on other TaskFlows in the same project.
+
+- A dependent flow may not start until all declared upstream flows are `COMPLETED`
+- Dependency edges are only mutable while the dependent flow is in `CREATED`
+- Dependency cycles are rejected
+
+When a completed flow unblocks dependent flows that are in `auto` run mode, those flows are started automatically.
+
 ---
 
-### 4.2 Scheduling Guarantees
+### 4.3 Scheduling Guarantees
 
 - A task is scheduled at most once at a time
 - Tasks may execute in parallel if:
@@ -78,6 +88,20 @@ Failure states do **not** unblock downstream tasks.
   - Soft conflicts are allowed but explicitly emitted as warning telemetry
 
 Scheduling emits explicit events (`TaskReady`, `TaskBlocked`, `ScopeConflictDetected`, `TaskSchedulingDeferred`).
+
+---
+
+### 4.4 Run Modes
+
+TaskFlow run mode:
+
+- `manual` (default): flow requires explicit `start/resume/tick` control
+- `auto`: flow progresses automatically when runnable
+
+Task run mode:
+
+- `auto` (default): task can be dispatched when ready
+- `manual`: task remains ready but is skipped by automatic scheduling until mode is changed
 
 ---
 
@@ -312,4 +336,3 @@ TaskFlow is:
 - A safety layer over agentic execution
 
 By separating *what should happen* from *how execution unfolds*, TaskFlow enables powerful automation without sacrificing control or trust.
-

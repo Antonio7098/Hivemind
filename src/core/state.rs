@@ -2,8 +2,8 @@
 //!
 //! All state in Hivemind is derived by replaying events. This ensures
 //! determinism, idempotency, and complete observability.
-use super::events::{Event, EventPayload};
-use super::flow::{FlowState, RetryMode, TaskExecState, TaskExecution, TaskFlow};
+use super::events::{Event, EventPayload, RuntimeRole};
+use super::flow::{FlowState, RetryMode, RunMode, TaskExecState, TaskExecution, TaskFlow};
 use super::graph::{GraphState, TaskGraph};
 use super::scope::{RepoAccessMode, Scope};
 use super::verification::CheckResult;
@@ -83,6 +83,40 @@ pub struct TaskRuntimeConfig {
     pub timeout_ms: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct RuntimeRoleDefaults {
+    #[serde(default)]
+    pub worker: Option<ProjectRuntimeConfig>,
+    #[serde(default)]
+    pub validator: Option<ProjectRuntimeConfig>,
+}
+
+impl RuntimeRoleDefaults {
+    pub fn set(&mut self, role: RuntimeRole, config: Option<ProjectRuntimeConfig>) {
+        match role {
+            RuntimeRole::Worker => self.worker = config,
+            RuntimeRole::Validator => self.validator = config,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct TaskRuntimeRoleOverrides {
+    #[serde(default)]
+    pub worker: Option<TaskRuntimeConfig>,
+    #[serde(default)]
+    pub validator: Option<TaskRuntimeConfig>,
+}
+
+impl TaskRuntimeRoleOverrides {
+    pub fn set(&mut self, role: RuntimeRole, config: Option<TaskRuntimeConfig>) {
+        match role {
+            RuntimeRole::Worker => self.worker = config,
+            RuntimeRole::Validator => self.validator = config,
+        }
+    }
+}
+
 /// A project in the system.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Project {
@@ -94,6 +128,8 @@ pub struct Project {
     pub repositories: Vec<Repository>,
     #[serde(default)]
     pub runtime: Option<ProjectRuntimeConfig>,
+    #[serde(default)]
+    pub runtime_defaults: RuntimeRoleDefaults,
 }
 
 /// A repository attached to a project.
@@ -124,6 +160,10 @@ pub struct Task {
     pub scope: Option<Scope>,
     #[serde(default)]
     pub runtime_override: Option<TaskRuntimeConfig>,
+    #[serde(default)]
+    pub runtime_overrides: TaskRuntimeRoleOverrides,
+    #[serde(default)]
+    pub run_mode: RunMode,
     pub state: TaskState,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -156,6 +196,8 @@ pub struct AppState {
     pub tasks: HashMap<Uuid, Task>,
     pub graphs: HashMap<Uuid, TaskGraph>,
     pub flows: HashMap<Uuid, TaskFlow>,
+    pub global_runtime_defaults: RuntimeRoleDefaults,
+    pub flow_runtime_defaults: HashMap<Uuid, RuntimeRoleDefaults>,
     pub merge_states: HashMap<Uuid, MergeState>,
     pub attempts: HashMap<Uuid, AttemptState>,
 }
@@ -195,6 +237,7 @@ impl AppState {
                         updated_at: timestamp,
                         repositories: Vec::new(),
                         runtime: None,
+                        runtime_defaults: RuntimeRoleDefaults::default(),
                     },
                 );
             }
@@ -252,7 +295,7 @@ impl AppState {
                 max_parallel_tasks,
             } => {
                 if let Some(project) = self.projects.get_mut(project_id) {
-                    project.runtime = Some(ProjectRuntimeConfig {
+                    let configured = ProjectRuntimeConfig {
                         adapter_name: adapter_name.clone(),
                         binary_path: binary_path.clone(),
                         model: model.clone(),
@@ -260,9 +303,62 @@ impl AppState {
                         env: env.clone(),
                         timeout_ms: *timeout_ms,
                         max_parallel_tasks: *max_parallel_tasks,
-                    });
+                    };
+                    project.runtime = Some(configured.clone());
+                    project.runtime_defaults.worker = Some(configured);
                     project.updated_at = timestamp;
                 }
+            }
+            EventPayload::ProjectRuntimeRoleConfigured {
+                project_id,
+                role,
+                adapter_name,
+                binary_path,
+                model,
+                args,
+                env,
+                timeout_ms,
+                max_parallel_tasks,
+            } => {
+                if let Some(project) = self.projects.get_mut(project_id) {
+                    let configured = ProjectRuntimeConfig {
+                        adapter_name: adapter_name.clone(),
+                        binary_path: binary_path.clone(),
+                        model: model.clone(),
+                        args: args.clone(),
+                        env: env.clone(),
+                        timeout_ms: *timeout_ms,
+                        max_parallel_tasks: *max_parallel_tasks,
+                    };
+                    project
+                        .runtime_defaults
+                        .set(*role, Some(configured.clone()));
+                    if *role == RuntimeRole::Worker {
+                        project.runtime = Some(configured);
+                    }
+                    project.updated_at = timestamp;
+                }
+            }
+            EventPayload::GlobalRuntimeConfigured {
+                role,
+                adapter_name,
+                binary_path,
+                model,
+                args,
+                env,
+                timeout_ms,
+                max_parallel_tasks,
+            } => {
+                let configured = ProjectRuntimeConfig {
+                    adapter_name: adapter_name.clone(),
+                    binary_path: binary_path.clone(),
+                    model: model.clone(),
+                    args: args.clone(),
+                    env: env.clone(),
+                    timeout_ms: *timeout_ms,
+                    max_parallel_tasks: *max_parallel_tasks,
+                };
+                self.global_runtime_defaults.set(*role, Some(configured));
             }
             EventPayload::TaskCreated {
                 id,
@@ -280,6 +376,8 @@ impl AppState {
                         description: description.clone(),
                         scope: scope.clone(),
                         runtime_override: None,
+                        runtime_overrides: TaskRuntimeRoleOverrides::default(),
+                        run_mode: RunMode::Auto,
                         state: TaskState::Open,
                         created_at: timestamp,
                         updated_at: timestamp,
@@ -311,20 +409,64 @@ impl AppState {
                 timeout_ms,
             } => {
                 if let Some(task) = self.tasks.get_mut(task_id) {
-                    task.runtime_override = Some(TaskRuntimeConfig {
+                    let configured = TaskRuntimeConfig {
                         adapter_name: adapter_name.clone(),
                         binary_path: binary_path.clone(),
                         model: model.clone(),
                         args: args.clone(),
                         env: env.clone(),
                         timeout_ms: *timeout_ms,
-                    });
+                    };
+                    task.runtime_override = Some(configured.clone());
+                    task.runtime_overrides.worker = Some(configured);
+                    task.updated_at = timestamp;
+                }
+            }
+            EventPayload::TaskRuntimeRoleConfigured {
+                task_id,
+                role,
+                adapter_name,
+                binary_path,
+                model,
+                args,
+                env,
+                timeout_ms,
+            } => {
+                if let Some(task) = self.tasks.get_mut(task_id) {
+                    let configured = TaskRuntimeConfig {
+                        adapter_name: adapter_name.clone(),
+                        binary_path: binary_path.clone(),
+                        model: model.clone(),
+                        args: args.clone(),
+                        env: env.clone(),
+                        timeout_ms: *timeout_ms,
+                    };
+                    task.runtime_overrides.set(*role, Some(configured.clone()));
+                    if *role == RuntimeRole::Worker {
+                        task.runtime_override = Some(configured);
+                    }
                     task.updated_at = timestamp;
                 }
             }
             EventPayload::TaskRuntimeCleared { task_id } => {
                 if let Some(task) = self.tasks.get_mut(task_id) {
                     task.runtime_override = None;
+                    task.runtime_overrides.worker = None;
+                    task.updated_at = timestamp;
+                }
+            }
+            EventPayload::TaskRuntimeRoleCleared { task_id, role } => {
+                if let Some(task) = self.tasks.get_mut(task_id) {
+                    task.runtime_overrides.set(*role, None);
+                    if *role == RuntimeRole::Worker {
+                        task.runtime_override = None;
+                    }
+                    task.updated_at = timestamp;
+                }
+            }
+            EventPayload::TaskRunModeSet { task_id, mode } => {
+                if let Some(task) = self.tasks.get_mut(task_id) {
+                    task.run_mode = *mode;
                     task.updated_at = timestamp;
                 }
             }
@@ -482,6 +624,8 @@ impl AppState {
                         graph_id: *graph_id,
                         project_id: *project_id,
                         base_revision: None,
+                        run_mode: RunMode::Manual,
+                        depends_on_flows: HashSet::new(),
                         state: FlowState::Created,
                         task_executions,
                         created_at: timestamp,
@@ -490,6 +634,59 @@ impl AppState {
                         updated_at: timestamp,
                     },
                 );
+                self.flow_runtime_defaults.entry(*flow_id).or_default();
+            }
+            EventPayload::TaskFlowDependencyAdded {
+                flow_id,
+                depends_on_flow_id,
+            } => {
+                if let Some(flow) = self.flows.get_mut(flow_id) {
+                    flow.depends_on_flows.insert(*depends_on_flow_id);
+                    flow.updated_at = timestamp;
+                }
+            }
+            EventPayload::TaskFlowRunModeSet { flow_id, mode } => {
+                if let Some(flow) = self.flows.get_mut(flow_id) {
+                    flow.run_mode = *mode;
+                    flow.updated_at = timestamp;
+                }
+            }
+            EventPayload::TaskFlowRuntimeConfigured {
+                flow_id,
+                role,
+                adapter_name,
+                binary_path,
+                model,
+                args,
+                env,
+                timeout_ms,
+                max_parallel_tasks,
+            } => {
+                let configured = ProjectRuntimeConfig {
+                    adapter_name: adapter_name.clone(),
+                    binary_path: binary_path.clone(),
+                    model: model.clone(),
+                    args: args.clone(),
+                    env: env.clone(),
+                    timeout_ms: *timeout_ms,
+                    max_parallel_tasks: *max_parallel_tasks,
+                };
+                self.flow_runtime_defaults
+                    .entry(*flow_id)
+                    .or_default()
+                    .set(*role, Some(configured));
+                if let Some(flow) = self.flows.get_mut(flow_id) {
+                    flow.updated_at = timestamp;
+                }
+            }
+            EventPayload::TaskFlowRuntimeCleared { flow_id, role } => {
+                self.flow_runtime_defaults
+                    .entry(*flow_id)
+                    .or_default()
+                    .set(*role, None);
+                if let Some(flow) = self.flows.get_mut(flow_id) {
+                    flow.updated_at = timestamp;
+                }
             }
             EventPayload::TaskFlowStarted {
                 flow_id,

@@ -5,14 +5,16 @@ use clap::error::ErrorKind;
 use clap::Parser;
 use hivemind::cli::commands::{
     AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, EventCommands,
-    FlowCommands, GraphCommands, MergeCommands, ProjectCommands, RuntimeCommands, ServeArgs,
-    TaskAbortArgs, TaskCloseArgs, TaskCommands, TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs,
-    TaskListArgs, TaskRetryArgs, TaskStartArgs, TaskUpdateArgs, VerifyCommands, WorktreeCommands,
+    FlowCommands, GraphCommands, MergeCommands, MergeExecuteModeArg, ProjectCommands, RunModeArg,
+    RuntimeCommands, RuntimeRoleArg, ServeArgs, TaskAbortArgs, TaskCloseArgs, TaskCommands,
+    TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs, TaskStartArgs,
+    TaskUpdateArgs, VerifyCommands, WorktreeCommands,
 };
 use hivemind::cli::output::{output, output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
-use hivemind::core::flow::RetryMode;
-use hivemind::core::registry::Registry;
+use hivemind::core::events::RuntimeRole;
+use hivemind::core::flow::{RetryMode, RunMode};
+use hivemind::core::registry::{MergeExecuteMode, MergeExecuteOptions, Registry};
 use hivemind::core::scope::RepoAccessMode;
 use hivemind::core::scope::Scope;
 use hivemind::core::state::{AttemptState, Project, Task, TaskState};
@@ -316,14 +318,18 @@ fn print_flows(flows: &[hivemind::core::flow::TaskFlow], format: OutputFormat) {
                 println!("No flows found.");
                 return;
             }
-            println!("{:<36}  {:<36}  {:<10}  GRAPH", "ID", "PROJECT", "STATE");
+            println!(
+                "{:<36}  {:<36}  {:<10}  {:<6}  GRAPH",
+                "ID", "PROJECT", "STATE", "MODE"
+            );
             println!("{}", "-".repeat(110));
             for f in flows {
                 println!(
-                    "{:<36}  {:<36}  {:<10}  {}",
+                    "{:<36}  {:<36}  {:<10}  {:<6}  {}",
                     f.id,
                     f.project_id,
                     format!("{:?}", f.state).to_lowercase(),
+                    format!("{:?}", f.run_mode).to_lowercase(),
                     f.graph_id
                 );
             }
@@ -430,6 +436,7 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
         return ExitCode::Error;
@@ -507,6 +514,18 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
                     println!("Graph:   {}", flow.graph_id);
                     println!("Project: {}", flow.project_id);
                     println!("State:   {:?}", flow.state);
+                    println!("RunMode: {:?}", flow.run_mode);
+                    if !flow.depends_on_flows.is_empty() {
+                        let mut deps: Vec<_> = flow.depends_on_flows.iter().copied().collect();
+                        deps.sort();
+                        println!(
+                            "FlowDeps: {}",
+                            deps.iter()
+                                .map(ToString::to_string)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                    }
                     let mut counts = std::collections::HashMap::new();
                     for exec in flow.task_executions.values() {
                         *counts.entry(exec.state).or_insert(0usize) += 1;
@@ -522,6 +541,50 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
             },
             Err(e) => output_error(&e, format),
         },
+        FlowCommands::SetRunMode(args) => {
+            let mode = parse_run_mode(args.mode);
+            match registry.flow_set_run_mode(&args.flow_id, mode) {
+                Ok(flow) => {
+                    print_flow_id(flow.id, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+        FlowCommands::AddDependency(args) => {
+            match registry.flow_add_dependency(&args.flow_id, &args.depends_on_flow_id) {
+                Ok(flow) => {
+                    print_flow_id(flow.id, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+        FlowCommands::RuntimeSet(args) => {
+            let role = parse_runtime_role(args.role);
+            let result = if args.clear {
+                registry.flow_runtime_clear(&args.flow_id, role)
+            } else {
+                registry.flow_runtime_set(
+                    &args.flow_id,
+                    role,
+                    &args.adapter,
+                    &args.binary_path,
+                    args.model,
+                    &args.args,
+                    &args.env,
+                    args.timeout_ms,
+                    args.max_parallel_tasks,
+                )
+            };
+            match result {
+                Ok(flow) => {
+                    print_flow_id(flow.id, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
     }
 }
 
@@ -673,8 +736,9 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        ProjectCommands::RuntimeSet(args) => match registry.project_runtime_set(
+        ProjectCommands::RuntimeSet(args) => match registry.project_runtime_set_role(
             &args.project,
+            parse_runtime_role(args.role),
             &args.adapter,
             &args.binary_path,
             args.model,
@@ -737,6 +801,7 @@ fn print_task(task: &Task, format: OutputFormat) {
                 println!("Description: {desc}");
             }
             println!("State:       {:?}", task.state);
+            println!("RunMode:     {:?}", task.run_mode);
             println!("Created:     {}", task.created_at);
         }
         _ => {
@@ -754,14 +819,20 @@ fn print_tasks(tasks: &[Task], format: OutputFormat) {
                 println!("No tasks found.");
                 return;
             }
-            println!("{:<36}  {:<8}  TITLE", "ID", "STATE");
+            println!("{:<36}  {:<8}  {:<6}  TITLE", "ID", "STATE", "MODE");
             println!("{}", "-".repeat(80));
             for t in tasks {
                 let state = match t.state {
                     TaskState::Open => "open",
                     TaskState::Closed => "closed",
                 };
-                println!("{:<36}  {:<8}  {}", t.id, state, t.title);
+                println!(
+                    "{:<36}  {:<8}  {:<6}  {}",
+                    t.id,
+                    state,
+                    format!("{:?}", t.run_mode).to_lowercase(),
+                    t.title
+                );
             }
         }
         _ => {
@@ -777,6 +848,27 @@ fn parse_task_state(s: &str) -> Option<TaskState> {
         "open" => Some(TaskState::Open),
         "closed" => Some(TaskState::Closed),
         _ => None,
+    }
+}
+
+fn parse_runtime_role(role: RuntimeRoleArg) -> RuntimeRole {
+    match role {
+        RuntimeRoleArg::Worker => RuntimeRole::Worker,
+        RuntimeRoleArg::Validator => RuntimeRole::Validator,
+    }
+}
+
+fn parse_run_mode(mode: RunModeArg) -> RunMode {
+    match mode {
+        RunModeArg::Manual => RunMode::Manual,
+        RunModeArg::Auto => RunMode::Auto,
+    }
+}
+
+fn parse_merge_execute_mode(mode: MergeExecuteModeArg) -> MergeExecuteMode {
+    match mode {
+        MergeExecuteModeArg::Local => MergeExecuteMode::Local,
+        MergeExecuteModeArg::Pr => MergeExecuteMode::Pr,
     }
 }
 
@@ -890,11 +982,13 @@ fn handle_task_runtime_set(
     args: &hivemind::cli::commands::TaskRuntimeSetArgs,
     format: OutputFormat,
 ) -> ExitCode {
+    let role = parse_runtime_role(args.role);
     let result = if args.clear {
-        registry.task_runtime_clear(&args.task_id)
+        registry.task_runtime_clear_role(&args.task_id, role)
     } else {
-        registry.task_runtime_set(
+        registry.task_runtime_set_role(
             &args.task_id,
+            role,
             &args.adapter,
             &args.binary_path,
             args.model.clone(),
@@ -988,6 +1082,15 @@ fn handle_task(cmd: TaskCommands, format: OutputFormat) -> ExitCode {
         TaskCommands::Complete(args) => handle_task_complete(&registry, &args, format),
         TaskCommands::Retry(args) => handle_task_retry(&registry, &args, format),
         TaskCommands::Abort(args) => handle_task_abort(&registry, &args, format),
+        TaskCommands::SetRunMode(args) => {
+            match registry.task_set_run_mode(&args.task_id, parse_run_mode(args.mode)) {
+                Ok(task) => {
+                    print_task(&task, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
     }
 }
 
@@ -1027,7 +1130,12 @@ fn handle_runtime(cmd: RuntimeCommands, format: OutputFormat) -> ExitCode {
             }
         }
         RuntimeCommands::Health(args) => {
-            match registry.runtime_health(args.project.as_deref(), args.task.as_deref()) {
+            match registry.runtime_health_with_role(
+                args.project.as_deref(),
+                args.task.as_deref(),
+                args.flow.as_deref(),
+                parse_runtime_role(args.role),
+            ) {
                 Ok(status) => {
                     match format {
                         OutputFormat::Table => {
@@ -1056,6 +1164,24 @@ fn handle_runtime(cmd: RuntimeCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
+        RuntimeCommands::DefaultsSet(args) => match registry.runtime_defaults_set(
+            parse_runtime_role(args.role),
+            &args.adapter,
+            &args.binary_path,
+            args.model,
+            &args.args,
+            &args.env,
+            args.timeout_ms,
+            args.max_parallel_tasks,
+        ) {
+            Ok(()) => {
+                if matches!(format, OutputFormat::Table) {
+                    println!("ok");
+                }
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
     }
 }
 
@@ -1066,10 +1192,15 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::ProjectCreated { .. } => "project_created",
         EventPayload::ProjectUpdated { .. } => "project_updated",
         EventPayload::ProjectRuntimeConfigured { .. } => "project_runtime_configured",
+        EventPayload::ProjectRuntimeRoleConfigured { .. } => "project_runtime_role_configured",
+        EventPayload::GlobalRuntimeConfigured { .. } => "global_runtime_configured",
         EventPayload::TaskCreated { .. } => "task_created",
         EventPayload::TaskUpdated { .. } => "task_updated",
         EventPayload::TaskRuntimeConfigured { .. } => "task_runtime_configured",
+        EventPayload::TaskRuntimeRoleConfigured { .. } => "task_runtime_role_configured",
         EventPayload::TaskRuntimeCleared { .. } => "task_runtime_cleared",
+        EventPayload::TaskRuntimeRoleCleared { .. } => "task_runtime_role_cleared",
+        EventPayload::TaskRunModeSet { .. } => "task_run_mode_set",
         EventPayload::TaskClosed { .. } => "task_closed",
         EventPayload::RepositoryAttached { .. } => "repo_attached",
         EventPayload::RepositoryDetached { .. } => "repo_detached",
@@ -1081,6 +1212,10 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::TaskGraphValidated { .. } => "graph_validated",
         EventPayload::TaskGraphLocked { .. } => "graph_locked",
         EventPayload::TaskFlowCreated { .. } => "flow_created",
+        EventPayload::TaskFlowDependencyAdded { .. } => "flow_dependency_added",
+        EventPayload::TaskFlowRunModeSet { .. } => "flow_run_mode_set",
+        EventPayload::TaskFlowRuntimeConfigured { .. } => "flow_runtime_configured",
+        EventPayload::TaskFlowRuntimeCleared { .. } => "flow_runtime_cleared",
         EventPayload::TaskFlowStarted { .. } => "flow_started",
         EventPayload::TaskFlowPaused { .. } => "flow_paused",
         EventPayload::TaskFlowResumed { .. } => "flow_resumed",
@@ -1590,7 +1725,15 @@ fn handle_merge(cmd: MergeCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
-        MergeCommands::Execute(args) => match registry.merge_execute(&args.flow_id) {
+        MergeCommands::Execute(args) => match registry.merge_execute_with_options(
+            &args.flow_id,
+            MergeExecuteOptions {
+                mode: parse_merge_execute_mode(args.mode),
+                monitor_ci: args.monitor_ci,
+                auto_merge: args.auto_merge,
+                pull_after: args.pull_after,
+            },
+        ) {
             Ok(ms) => {
                 match format {
                     OutputFormat::Json => {
