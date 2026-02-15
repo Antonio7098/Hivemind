@@ -297,16 +297,14 @@ Capabilities:
 
 ### 11.3 Interactive Runtime Sessions
 
-Some runtimes require follow-up input while they run.
+Interactive runtime sessions are deprecated.
 
 Capabilities:
-- Run a task attempt in an interactive session where user input is forwarded to the runtime
-- Stream runtime output continuously while emitting structured runtime events
-- Interrupt an interactive session deterministically
+- `flow tick --interactive` is retained only for compatibility and returns `interactive_mode_deprecated`
+- Runtime input/interrupt event types remain in the event model for historical replay compatibility
 
 Constraints:
-- Interactive mode must be optional (non-interactive remains the default)
-- Interactive mode must not introduce UI-only behavior; it is exposed via CLI
+- Non-interactive `flow tick` is the only supported execution mode
 - The system of record remains events and derived state, not chat transcripts
 
 ---

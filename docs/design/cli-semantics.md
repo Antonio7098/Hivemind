@@ -711,7 +711,7 @@ hivemind flow status <flow-id>
 hivemind flow tick <flow-id> [--interactive] [--max-parallel <n>]
 ```
 
-`--interactive` is introduced in **Phase 15: Interactive Runtime Sessions (CLI)**.
+`--interactive` is deprecated. The flag now returns `interactive_mode_deprecated`.
 
 **Preconditions:**
 - Flow exists
@@ -727,12 +727,10 @@ hivemind flow tick <flow-id> [--interactive] [--max-parallel <n>]
 - Soft conflicts are allowed with warning telemetry
 - Emits runtime lifecycle events correlated by attempt ID
 
-If `--interactive` is provided and the selected adapter supports interactive execution:
+If `--interactive` is provided:
 
-- The CLI runs the attempt in an interactive session
-- Runtime output is streamed continuously
-- User input is forwarded to the runtime
-- Ctrl+C interrupts the runtime deterministically and records the interruption
+- The command fails with `interactive_mode_deprecated`
+- No attempt is started
 
 **Events:**
 ```
@@ -796,7 +794,7 @@ TaskExecutionStateChanged:
 - `RUNTIME_NOT_CONFIGURED`
 - `WORKTREE_NOT_FOUND`
 - `UNSUPPORTED_RUNTIME`
-- `INTERACTIVE_MODE_UNSUPPORTED`: `--interactive` was provided but the adapter does not support interactive execution
+- `interactive_mode_deprecated`: `--interactive` is no longer supported
 - `invalid_max_parallel`: `--max-parallel` must be >= 1
 - `invalid_global_parallel_limit`: `HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL` is invalid
 

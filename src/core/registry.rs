@@ -3444,6 +3444,15 @@ impl Registry {
         interactive: bool,
         max_parallel: Option<u16>,
     ) -> Result<TaskFlow> {
+        if interactive {
+            return Err(HivemindError::user(
+                "interactive_mode_deprecated",
+                "Interactive mode is deprecated and no longer supported",
+                "registry:tick_flow",
+            )
+            .with_hint("Re-run without --interactive"));
+        }
+
         let flow = self.get_flow(flow_id)?;
         if flow.state != FlowState::Running {
             return Err(HivemindError::user(
@@ -7289,6 +7298,91 @@ mod tests {
         assert!(events
             .iter()
             .any(|e| matches!(e.payload, EventPayload::RuntimeToolCallObserved { .. })));
+    }
+
+    #[test]
+    fn tick_flow_rejects_interactive_mode() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let err = registry
+            .tick_flow(&flow.id.to_string(), true, None)
+            .unwrap_err();
+        assert_eq!(err.code, "interactive_mode_deprecated");
+    }
+
+    #[test]
+    fn tick_flow_captures_runtime_output_with_quoted_args() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo \"Runtime output test successful\"".to_string(),
+                ],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let err = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap_err();
+        assert_eq!(err.code, "checkpoints_incomplete");
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::RuntimeOutputChunk { content, .. }
+                    if content.contains("Runtime output test successful")
+            )
+        }));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e.payload, EventPayload::RuntimeExited { .. })));
     }
 
     #[test]

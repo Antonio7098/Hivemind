@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.19",
+      "date": "2026-02-15",
+      "phase": 30,
+      "changes": [
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "Deprecate interactive flow ticks with explicit `interactive_mode_deprecated` errors and guidance to run non-interactive `flow tick`"
+        },
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "Add regression coverage for runtime output capture when runtime command arguments include nested quoting"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Expand runtime projection heuristics to recognize TODO/DONE prefixes and common runtime narrative status lines"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add projection tests for TODO prefix snapshots and runtime narrative status lines plus registry coverage for interactive deprecation"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update CLI semantics and architecture docs to document interactive deprecation and current flow tick behavior"
+        },
+        {
+          "type": "added",
+          "area": "ops",
+          "description": "Add beta testing fix report for tier-4 RUN-003/RUN-004/RUN-005 stabilization outcomes"
+        }
+      ]
+    },
+    {
       "version": "v0.1.18",
       "date": "2026-02-14",
       "phase": 29,

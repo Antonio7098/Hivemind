@@ -267,6 +267,19 @@ fn parse_todo_item(line: &str) -> Option<(String, bool)> {
             }
         }
     }
+    for (prefix, completed) in [
+        ("TODO: ", false),
+        ("TODO ", false),
+        ("DONE: ", true),
+        ("DONE ", true),
+    ] {
+        if let Some(rest) = line.strip_prefix(prefix) {
+            let item = rest.trim();
+            if !item.is_empty() {
+                return Some((item.to_string(), completed));
+            }
+        }
+    }
     None
 }
 
@@ -279,6 +292,13 @@ fn is_narrative_line(line: &str) -> bool {
         || lower.starts_with("plan:")
         || lower.starts_with("because")
         || lower.starts_with("thinking:")
+        || lower.starts_with("hello")
+        || lower.starts_with("starting")
+        || lower.starts_with("working")
+        || lower.starts_with("updating")
+        || lower.starts_with("checking")
+        || lower.starts_with("analyzing")
+        || lower.starts_with("investigating")
 }
 
 fn normalize_projection_line(raw: &str) -> String {
@@ -424,6 +444,37 @@ mod tests {
         );
 
         assert!(observed.is_empty());
+    }
+
+    #[test]
+    fn projects_todo_from_todo_prefixes() {
+        let mut projector = RuntimeEventProjector::new();
+        let observed = projector.observe_chunk(
+            RuntimeOutputStream::Stdout,
+            "TODO: collect logs\nDONE: collect logs\n",
+        );
+
+        assert!(observed.iter().any(|obs| {
+            matches!(
+                obs,
+                ProjectedRuntimeObservation::TodoSnapshotUpdated { items, .. }
+                    if items == &vec!["[x] collect logs".to_string()]
+            )
+        }));
+    }
+
+    #[test]
+    fn projects_narrative_from_runtime_status_lines() {
+        let mut projector = RuntimeEventProjector::new();
+        let observed = projector.observe_chunk(RuntimeOutputStream::Stdout, "Hello from runtime\n");
+
+        assert!(observed.iter().any(|obs| {
+            matches!(
+                obs,
+                ProjectedRuntimeObservation::NarrativeOutputObserved { content, .. }
+                    if content == "Hello from runtime"
+            )
+        }));
     }
 
     #[test]
