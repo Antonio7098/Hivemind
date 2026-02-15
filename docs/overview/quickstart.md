@@ -102,11 +102,12 @@ $HM -f json project inspect "expense-tracker"
 ### 4.1 Verify the runtime binary is runnable
 
 ```bash
-/absolute/path/to/opencode --version
+/opencode --version
 ```
 
 ### 4.2 Configure runtime in Hivemind
 
+**Using OpenCode:**
 ```bash
 $HM project runtime-set "expense-tracker" \
   --role worker \
@@ -117,12 +118,34 @@ $HM project runtime-set "expense-tracker" \
   --timeout-ms 600000
 ```
 
+**Using Codex CLI (OpenAI):**
+```bash
+$HM project runtime-set "expense-tracker" \
+  --role worker \
+  --adapter codex \
+  --binary-path /absolute/path/to/codex \
+  --model gpt-5.3-codex \
+  --max-parallel-tasks 2 \
+  --timeout-ms 600000
+```
+
+**Using MiniMax M2.5 for validation:**
+```bash
+$HM project runtime-set "expense-tracker" \
+  --role validator \
+  --adapter opencode \
+  --binary-path /absolute/path/to/opencode \
+  --model minimax-coding-plan/MiniMax-M2.5
+```
+
 Notes:
 
 - `--model` is optional; if omitted, the adapter may use its own default.
 - `--max-parallel-tasks` controls per-project scheduling concurrency policy.
 - If the runtime requires credentials, set them in your environment (do not hardcode secrets in scripts).
 - Runtime resolution precedence is: `task override -> flow default -> project default -> global default`.
+- For Codex: `gpt-5.3-codex` works with ChatGPT accounts; `gpt-5.3-codex-high` requires an API account.
+- For OpenCode: Use `opencode models` to list available models.
 
 Optional global fallback defaults:
 
