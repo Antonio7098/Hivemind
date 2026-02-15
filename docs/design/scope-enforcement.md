@@ -54,8 +54,10 @@ What is **not** acceptable:
 Scope violations are detected after execution completes.
 
 **Mechanisms:**
-- Git diff inspection
-- Filesystem snapshot comparison
+- Worktree diff inspection
+- Repository state baseline comparison (`HEAD` + `git status --porcelain`)
+- Ambient baseline comparison for `/tmp` top-level entries
+- Optional syscall tracing (`strace`) when available
 - Worktree isolation
 
 **Timing:**
@@ -111,8 +113,11 @@ Before launching a worker agent:
    - Worktree is the execution sandbox
 
 2. **Baseline Snapshot**
-   - Record filesystem state (file list + hashes) within worktree
-   - Record HEAD commit
+   - Record worktree baseline for diff generation
+   - Record per-repository baseline (`HEAD` + `git status --porcelain`)
+   - Record `/tmp` top-level entry baseline
+   - Persist scope baseline artifact to:
+     - `.hivemind-data/artifacts/scope-baselines/<attempt-id>.json`
 
 3. **Environment Restriction**
    - Set working directory to worktree
@@ -128,33 +133,39 @@ During execution:
    - Enforce timeout limits
    - Capture stdout/stderr
 
-2. **Optional: Filesystem Watching**
-   - inotify/fswatch on worktree directory
-   - Log file access patterns (advisory, not blocking)
-   - Detect writes outside worktree (if possible)
+2. **Optional: Syscall Trace Capture**
+   - If `strace` is available, capture file syscalls for the attempt
+   - Persist trace artifact to:
+     - `.hivemind-data/artifacts/scope-traces/<attempt-id>.log`
+   - Parse write-intent opens (`O_WRONLY|O_RDWR|O_CREAT|O_TRUNC|O_APPEND`) to detect out-of-worktree writes
 
-Filesystem watching in Sprint 1 is **best-effort observability**, not enforcement.
+Syscall tracing in Sprint 1 is **best-effort observability**, not hard prevention.
 
 ### 3.3 Post-Execution Verification
 
 After worker agent exits:
 
-1. **Compute Changes**
-   - Compare filesystem state to baseline
+1. **Compute Worktree Changes**
+   - Compare worktree state to baseline
    - Generate list of modified/created/deleted files
 
-2. **Scope Check**
+2. **Scope Check (Worktree Paths)**
    - For each changed file:
      - Is path within allowed write scope? → OK
      - Is path within denied scope? → VIOLATION
      - Is path outside all declared scopes? → VIOLATION
 
-3. **Git Verification**
-   - Inspect uncommitted changes
-   - Inspect any commits created
-   - Verify all changes fall within scope
+3. **Scope Check (Repository Drift)**
+   - Compare each attached repository against scope baseline:
+     - `HEAD` changed unexpectedly → VIOLATION
+     - `git status --porcelain` drift outside allowed paths → VIOLATION
 
-4. **Emit Result**
+4. **Scope Check (Ambient Writes)**
+   - Compare `/tmp` top-level entries against baseline
+   - New unexpected entries indicate out-of-worktree write activity
+   - If syscall trace exists, traced write paths are enforced directly
+
+5. **Emit Result**
    - All changes within scope → ScopeValidated event
    - Any violation → ScopeViolationDetected event
 
@@ -284,17 +295,17 @@ Git scope controls git operations.
 ### 7.1 Sprint 1 Enforcement
 
 Post-hoc verification:
-- Inspect `git log` for unexpected commits
-- Inspect `git branch` for unexpected branches
-- Inspect `git remote` for push attempts
+- Compare repository `HEAD` before/after attempt
+- Compare repository `git status --porcelain` before/after attempt
+- Treat unexpected repository drift as scope violation
 
 ### 7.2 Violation Detection
 
 | Permission | Violation Indicator |
 |------------|---------------------|
-| May commit | Commits exist when forbidden |
-| May branch | New branches exist when forbidden |
-| Read-only | Any modification to git state |
+| May commit (restricted) | Unexpected `HEAD` change outside allowed scope |
+| Read-only | Any repository status drift in that repo |
+| No repo access | Any repository state change tied to the attempt |
 
 ---
 
@@ -376,6 +387,7 @@ TaskSchedulingDeferred:
 ### 10.1 What Sprint 1 Cannot Do
 
 - Prevent filesystem access outside worktree (can only detect)
+- Guarantee complete absolute-path detection on hosts where syscall tracing is unavailable
 - Prevent arbitrary command execution (can only advise)
 - Enforce network restrictions
 - Prevent memory-based side effects

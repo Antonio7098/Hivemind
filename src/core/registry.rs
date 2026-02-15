@@ -128,6 +128,24 @@ struct DiffArtifact {
     unified: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ScopeRepoSnapshot {
+    repo_path: String,
+    #[serde(default)]
+    git_head: Option<String>,
+    #[serde(default)]
+    status_lines: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ScopeBaselineArtifact {
+    attempt_id: Uuid,
+    #[serde(default)]
+    repo_snapshots: Vec<ScopeRepoSnapshot>,
+    #[serde(default)]
+    tmp_entries: Vec<String>,
+}
+
 struct CompletionArtifacts<'a> {
     baseline_id: Uuid,
     artifact: &'a DiffArtifact,
@@ -942,6 +960,7 @@ impl Registry {
                 EventPayload::TaskExecutionStateChanged {
                     flow_id: flow.id,
                     task_id,
+                    attempt_id: Some(attempt_id),
                     from: TaskExecState::Running,
                     to: TaskExecState::Failed,
                 },
@@ -1049,6 +1068,20 @@ impl Registry {
                 verification.passed = false;
                 verification.violations.extend(repo_violations);
             }
+
+            let ambient_violations =
+                self.verify_scope_environment_baseline(&flow, &state, task_id, attempt.id, origin);
+            if !ambient_violations.is_empty() {
+                verification.passed = false;
+                verification.violations.extend(ambient_violations);
+            }
+
+            let traced_violations =
+                self.verify_scope_trace_writes(&flow, &state, task_id, attempt.id, origin);
+            if !traced_violations.is_empty() {
+                verification.passed = false;
+                verification.violations.extend(traced_violations);
+            }
         }
 
         let corr_task =
@@ -1084,6 +1117,7 @@ impl Registry {
                     EventPayload::TaskExecutionStateChanged {
                         flow_id: flow.id,
                         task_id,
+                        attempt_id: Some(attempt.id),
                         from: TaskExecState::Verifying,
                         to: TaskExecState::Failed,
                     },
@@ -1229,6 +1263,7 @@ impl Registry {
                     EventPayload::TaskExecutionStateChanged {
                         flow_id: flow.id,
                         task_id,
+                        attempt_id: Some(attempt.id),
                         from: TaskExecState::Verifying,
                         to: TaskExecState::Success,
                     },
@@ -1303,6 +1338,7 @@ impl Registry {
                 EventPayload::TaskExecutionStateChanged {
                     flow_id: flow.id,
                     task_id,
+                    attempt_id: Some(attempt.id),
                     from: TaskExecState::Verifying,
                     to,
                 },
@@ -1596,6 +1632,326 @@ impl Registry {
         violations
     }
 
+    fn repo_git_head(path: &Path) -> Option<String> {
+        std::process::Command::new("git")
+            .current_dir(path)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .ok()
+            .filter(|out| out.status.success())
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+            .filter(|head| !head.is_empty())
+    }
+
+    fn repo_status_lines(path: &Path) -> Vec<String> {
+        let output = std::process::Command::new("git")
+            .current_dir(path)
+            .args(["status", "--porcelain"])
+            .output();
+        let Ok(output) = output else {
+            return Vec::new();
+        };
+        if !output.status.success() {
+            return Vec::new();
+        }
+
+        let mut lines: Vec<String> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_string)
+            .collect();
+        lines.retain(|line| {
+            let path = line
+                .strip_prefix("?? ")
+                .or_else(|| line.get(3..))
+                .unwrap_or("")
+                .trim();
+            !path.starts_with(".hivemind/")
+        });
+        lines.sort();
+        lines.dedup();
+        lines
+    }
+
+    fn list_tmp_entries() -> Vec<String> {
+        let Ok(entries) = fs::read_dir("/tmp") else {
+            return Vec::new();
+        };
+        let mut names: Vec<String> = entries
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+    }
+
+    fn write_scope_baseline_artifact(&self, artifact: &ScopeBaselineArtifact) -> Result<()> {
+        fs::create_dir_all(self.scope_baselines_dir()).map_err(|e| {
+            HivemindError::system(
+                "artifact_write_failed",
+                e.to_string(),
+                "registry:write_scope_baseline_artifact",
+            )
+        })?;
+        let bytes = serde_json::to_vec_pretty(artifact).map_err(|e| {
+            HivemindError::system(
+                "artifact_serialize_failed",
+                e.to_string(),
+                "registry:write_scope_baseline_artifact",
+            )
+        })?;
+        fs::write(self.scope_baseline_path(artifact.attempt_id), bytes).map_err(|e| {
+            HivemindError::system(
+                "artifact_write_failed",
+                e.to_string(),
+                "registry:write_scope_baseline_artifact",
+            )
+        })?;
+        Ok(())
+    }
+
+    fn read_scope_baseline_artifact(&self, attempt_id: Uuid) -> Result<ScopeBaselineArtifact> {
+        let bytes = fs::read(self.scope_baseline_path(attempt_id)).map_err(|e| {
+            HivemindError::system(
+                "artifact_read_failed",
+                e.to_string(),
+                "registry:read_scope_baseline_artifact",
+            )
+        })?;
+        serde_json::from_slice(&bytes).map_err(|e| {
+            HivemindError::system(
+                "artifact_deserialize_failed",
+                e.to_string(),
+                "registry:read_scope_baseline_artifact",
+            )
+        })
+    }
+
+    fn capture_scope_baseline_for_attempt(
+        &self,
+        flow: &TaskFlow,
+        state: &AppState,
+        attempt_id: Uuid,
+    ) -> Result<()> {
+        let repo_snapshots = state
+            .projects
+            .get(&flow.project_id)
+            .map(|project| {
+                project
+                    .repositories
+                    .iter()
+                    .map(|repo| ScopeRepoSnapshot {
+                        repo_path: repo.path.clone(),
+                        git_head: Self::repo_git_head(Path::new(&repo.path)),
+                        status_lines: Self::repo_status_lines(Path::new(&repo.path)),
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let artifact = ScopeBaselineArtifact {
+            attempt_id,
+            repo_snapshots,
+            tmp_entries: Self::list_tmp_entries(),
+        };
+        self.write_scope_baseline_artifact(&artifact)
+    }
+
+    fn verify_scope_environment_baseline(
+        &self,
+        flow: &TaskFlow,
+        state: &AppState,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        origin: &'static str,
+    ) -> Vec<crate::core::enforcement::ScopeViolation> {
+        let Ok(baseline) = self.read_scope_baseline_artifact(attempt_id) else {
+            return Vec::new();
+        };
+        let Ok(worktrees) = Self::inspect_task_worktrees(flow, state, task_id, origin) else {
+            return Vec::new();
+        };
+        let allowed_roots: Vec<PathBuf> = worktrees
+            .iter()
+            .filter_map(|(_, status)| status.path.canonicalize().ok())
+            .collect();
+
+        let mut violations = Vec::new();
+        for snapshot in &baseline.repo_snapshots {
+            let repo_path = Path::new(&snapshot.repo_path);
+            let current_head = Self::repo_git_head(repo_path);
+            if current_head != snapshot.git_head {
+                violations.push(crate::core::enforcement::ScopeViolation::git(format!(
+                    "Repository HEAD changed outside task worktree (before: {:?}, after: {:?})",
+                    snapshot.git_head, current_head
+                )));
+            }
+
+            let current_status = Self::repo_status_lines(repo_path);
+            if current_status != snapshot.status_lines {
+                let path_preview = current_status
+                    .first()
+                    .and_then(|line| line.strip_prefix("?? ").or_else(|| line.get(3..)))
+                    .map(str::trim)
+                    .unwrap_or("<unknown>");
+                violations.push(crate::core::enforcement::ScopeViolation::filesystem(
+                    format!("{}:{path_preview}", snapshot.repo_path),
+                    "Repository workspace changed outside task worktree",
+                ));
+            }
+        }
+
+        let current_tmp = Self::list_tmp_entries();
+        let baseline_tmp: HashSet<String> = baseline.tmp_entries.into_iter().collect();
+        for created in current_tmp
+            .into_iter()
+            .filter(|name| !baseline_tmp.contains(name))
+            .take(32)
+        {
+            let path = PathBuf::from("/tmp").join(&created);
+            let canonical = path.canonicalize().unwrap_or(path);
+            if allowed_roots.iter().any(|root| canonical.starts_with(root)) {
+                continue;
+            }
+            if Self::scope_trace_is_ignored(&canonical, None, &self.config.data_dir) {
+                continue;
+            }
+            violations.push(crate::core::enforcement::ScopeViolation::filesystem(
+                canonical.to_string_lossy().to_string(),
+                "Filesystem write outside task worktree detected in /tmp",
+            ));
+        }
+
+        violations
+    }
+
+    fn parse_scope_trace_written_paths(trace_contents: &str) -> Vec<PathBuf> {
+        fn first_quoted_segment(line: &str) -> Option<String> {
+            let start = line.find('"')?;
+            let mut escaped = false;
+            let mut out = String::new();
+            for ch in line[start + 1..].chars() {
+                if escaped {
+                    out.push(ch);
+                    escaped = false;
+                    continue;
+                }
+                match ch {
+                    '\\' => escaped = true,
+                    '"' => return Some(out),
+                    _ => out.push(ch),
+                }
+            }
+            None
+        }
+
+        let mut paths = Vec::new();
+        for line in trace_contents.lines() {
+            let is_open = line.contains("open(") || line.contains("openat(");
+            if !is_open {
+                continue;
+            }
+            let has_write_intent = line.contains("O_WRONLY")
+                || line.contains("O_RDWR")
+                || line.contains("O_CREAT")
+                || line.contains("O_TRUNC")
+                || line.contains("O_APPEND");
+            if !has_write_intent {
+                continue;
+            }
+            let Some(path) = first_quoted_segment(line).filter(|p| !p.is_empty()) else {
+                continue;
+            };
+            paths.push(PathBuf::from(path));
+        }
+
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
+    fn scope_trace_is_ignored(path: &Path, home: Option<&Path>, data_dir: &Path) -> bool {
+        let ignored_roots = [
+            Path::new("/dev"),
+            Path::new("/proc"),
+            Path::new("/sys"),
+            Path::new("/run"),
+        ];
+        if ignored_roots.iter().any(|root| path.starts_with(root)) {
+            return true;
+        }
+        if path.starts_with(data_dir) {
+            return true;
+        }
+        if let Some(home_dir) = home {
+            if path.starts_with(home_dir.join(".config"))
+                || path.starts_with(home_dir.join(".cache"))
+                || path.starts_with(home_dir.join(".local/share"))
+                || path.starts_with(home_dir.join(".npm"))
+                || path.starts_with(home_dir.join(".bun"))
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn verify_scope_trace_writes(
+        &self,
+        flow: &TaskFlow,
+        state: &AppState,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        origin: &'static str,
+    ) -> Vec<crate::core::enforcement::ScopeViolation> {
+        let trace_path = self.scope_trace_path(attempt_id);
+        let Ok(contents) = fs::read_to_string(&trace_path) else {
+            return Vec::new();
+        };
+
+        let Ok(worktrees) = Self::inspect_task_worktrees(flow, state, task_id, origin) else {
+            return Vec::new();
+        };
+        let allowed_roots: Vec<PathBuf> = worktrees
+            .iter()
+            .filter_map(|(_, status)| status.path.canonicalize().ok())
+            .collect();
+        let home_dir = env::var("HOME").ok().map(PathBuf::from);
+
+        let mut violations = Vec::new();
+        for observed in Self::parse_scope_trace_written_paths(&contents) {
+            let observed_abs = if observed.is_absolute() {
+                observed
+            } else if let Some((_, first)) = worktrees.first() {
+                first.path.join(observed)
+            } else {
+                continue;
+            };
+
+            let canonical = observed_abs
+                .canonicalize()
+                .unwrap_or_else(|_| observed_abs.clone());
+            if Self::scope_trace_is_ignored(&canonical, home_dir.as_deref(), &self.config.data_dir)
+            {
+                continue;
+            }
+            if allowed_roots.iter().any(|root| canonical.starts_with(root)) {
+                continue;
+            }
+
+            violations.push(crate::core::enforcement::ScopeViolation::filesystem(
+                canonical.to_string_lossy().to_string(),
+                "Write outside task worktree detected via runtime syscall trace",
+            ));
+        }
+
+        violations.sort_by(|a, b| a.path.cmp(&b.path));
+        violations.dedup_by(|a, b| a.path == b.path);
+        violations
+    }
+
     fn emit_task_execution_completion_events(
         &self,
         flow: &TaskFlow,
@@ -1619,6 +1975,7 @@ impl Registry {
                 EventPayload::TaskExecutionStateChanged {
                     flow_id: flow.id,
                     task_id,
+                    attempt_id: Some(attempt.id),
                     from: TaskExecState::Running,
                     to: TaskExecState::Verifying,
                 },
@@ -1744,6 +2101,23 @@ impl Registry {
 
     fn diff_json_path(&self, diff_id: Uuid) -> PathBuf {
         self.diffs_dir().join(format!("{diff_id}.json"))
+    }
+
+    fn scope_traces_dir(&self) -> PathBuf {
+        self.artifacts_dir().join("scope-traces")
+    }
+
+    fn scope_trace_path(&self, attempt_id: Uuid) -> PathBuf {
+        self.scope_traces_dir().join(format!("{attempt_id}.log"))
+    }
+
+    fn scope_baselines_dir(&self) -> PathBuf {
+        self.artifacts_dir().join("scope-baselines")
+    }
+
+    fn scope_baseline_path(&self, attempt_id: Uuid) -> PathBuf {
+        self.scope_baselines_dir()
+            .join(format!("{attempt_id}.json"))
     }
 
     fn write_baseline_artifact(&self, baseline: &Baseline) -> Result<()> {
@@ -3575,6 +3949,14 @@ impl Registry {
         runtime_for_adapter
             .env
             .insert("HIVEMIND_ATTEMPT_ID".to_string(), attempt_id.to_string());
+        if task.scope.is_some() {
+            let trace_path = self.scope_trace_path(attempt_id);
+            let _ = fs::create_dir_all(self.scope_traces_dir());
+            runtime_for_adapter.env.insert(
+                "HIVEMIND_SCOPE_TRACE_LOG".to_string(),
+                trace_path.to_string_lossy().to_string(),
+            );
+        }
         runtime_for_adapter
             .env
             .insert("HIVEMIND_TASK_ID".to_string(), task_id.to_string());
@@ -5406,16 +5788,46 @@ impl Registry {
             .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_inspect"))
     }
 
-    pub fn worktree_cleanup(&self, flow_id: &str) -> Result<()> {
+    pub fn worktree_cleanup(&self, flow_id: &str, force: bool, dry_run: bool) -> Result<()> {
         let flow = self.get_flow(flow_id)?;
+        if flow.state == FlowState::Running && !force {
+            return Err(HivemindError::user(
+                "flow_running_cleanup_requires_force",
+                "Flow is running; pass --force to clean up active worktrees",
+                "registry:worktree_cleanup",
+            ));
+        }
+
+        let existing_worktrees = self
+            .worktree_list(flow_id)?
+            .iter()
+            .filter(|status| status.is_worktree)
+            .count();
+
         let state = self.state()?;
         let managers =
             Self::worktree_managers_for_flow(&flow, &state, "registry:worktree_cleanup")?;
-        for (_repo_name, manager) in managers {
-            manager
-                .cleanup_flow(flow.id)
-                .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_cleanup"))?;
+        if !dry_run {
+            for (_repo_name, manager) in managers {
+                manager.cleanup_flow(flow.id).map_err(|e| {
+                    Self::worktree_error_to_hivemind(e, "registry:worktree_cleanup")
+                })?;
+            }
         }
+
+        self.append_event(
+            Event::new(
+                EventPayload::WorktreeCleanupPerformed {
+                    flow_id: flow.id,
+                    cleaned_worktrees: existing_worktrees,
+                    forced: force,
+                    dry_run,
+                },
+                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            ),
+            "registry:worktree_cleanup",
+        )?;
+
         Ok(())
     }
 
@@ -5491,6 +5903,78 @@ impl Registry {
                 "Flow is completed",
                 "registry:abort_flow",
             ));
+        }
+
+        let state = self.state()?;
+        let mut latest_attempt_ids: HashMap<Uuid, (chrono::DateTime<Utc>, Uuid)> = HashMap::new();
+        for attempt in state.attempts.values().filter(|a| a.flow_id == flow.id) {
+            latest_attempt_ids
+                .entry(attempt.task_id)
+                .and_modify(|slot| {
+                    if attempt.started_at > slot.0 {
+                        *slot = (attempt.started_at, attempt.id);
+                    }
+                })
+                .or_insert((attempt.started_at, attempt.id));
+        }
+
+        for (task_id, exec) in &flow.task_executions {
+            if !matches!(
+                exec.state,
+                TaskExecState::Running | TaskExecState::Verifying
+            ) {
+                continue;
+            }
+
+            let attempt_id = latest_attempt_ids.get(task_id).map(|(_, id)| *id);
+            self.append_event(
+                Event::new(
+                    EventPayload::TaskExecutionStateChanged {
+                        flow_id: flow.id,
+                        task_id: *task_id,
+                        attempt_id,
+                        from: exec.state,
+                        to: TaskExecState::Failed,
+                    },
+                    CorrelationIds::for_graph_flow_task(
+                        flow.project_id,
+                        flow.graph_id,
+                        flow.id,
+                        *task_id,
+                    ),
+                ),
+                "registry:abort_flow",
+            )?;
+            self.append_event(
+                Event::new(
+                    EventPayload::TaskExecutionFailed {
+                        flow_id: flow.id,
+                        task_id: *task_id,
+                        attempt_id,
+                        reason: Some("flow_aborted".to_string()),
+                    },
+                    attempt_id.map_or_else(
+                        || {
+                            CorrelationIds::for_graph_flow_task(
+                                flow.project_id,
+                                flow.graph_id,
+                                flow.id,
+                                *task_id,
+                            )
+                        },
+                        |aid| {
+                            CorrelationIds::for_graph_flow_task_attempt(
+                                flow.project_id,
+                                flow.graph_id,
+                                flow.id,
+                                *task_id,
+                                aid,
+                            )
+                        },
+                    ),
+                ),
+                "registry:abort_flow",
+            )?;
         }
 
         let event = Event::new(
@@ -5658,6 +6142,9 @@ impl Registry {
             HivemindError::system("task_not_found", "Task not found in graph", origin)
         })?;
         let checkpoint_ids = Self::normalized_checkpoint_ids(&graph_task.checkpoints);
+        if graph_task.scope.is_some() {
+            self.capture_scope_baseline_for_attempt(&flow, &state, attempt_id)?;
+        }
 
         let corr_task =
             CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id);
@@ -5674,6 +6161,7 @@ impl Registry {
                 EventPayload::TaskExecutionStateChanged {
                     flow_id: flow.id,
                     task_id: id,
+                    attempt_id: Some(attempt_id),
                     from: exec.state,
                     to: TaskExecState::Running,
                 },
@@ -6336,11 +6824,16 @@ impl Registry {
         let mut flow = self.get_flow(flow_id)?;
 
         if !matches!(flow.state, FlowState::Completed | FlowState::FrozenForMerge) {
-            return Err(HivemindError::user(
+            let err = HivemindError::user(
                 "flow_not_completed",
                 "Flow has not completed successfully",
                 origin,
-            ));
+            );
+            self.record_error_event(
+                &err,
+                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            );
+            return Err(err);
         }
 
         let mut state = self.state()?;
@@ -9117,6 +9610,7 @@ mod tests {
                 EventPayload::TaskExecutionStateChanged {
                     flow_id: flow.id,
                     task_id: t1.id,
+                    attempt_id: None,
                     from: TaskExecState::Ready,
                     to: TaskExecState::Running,
                 },
@@ -9129,6 +9623,7 @@ mod tests {
             EventPayload::TaskExecutionStateChanged {
                 flow_id: flow.id,
                 task_id: t1.id,
+                attempt_id: None,
                 from: TaskExecState::Running,
                 to: TaskExecState::Failed,
             },
@@ -9262,6 +9757,7 @@ mod tests {
             EventPayload::TaskExecutionStateChanged {
                 flow_id: flow.id,
                 task_id: t1.id,
+                attempt_id: None,
                 from: TaskExecState::Ready,
                 to: TaskExecState::Running,
             },
@@ -9273,6 +9769,7 @@ mod tests {
             EventPayload::TaskExecutionStateChanged {
                 flow_id: flow.id,
                 task_id: t1.id,
+                attempt_id: None,
                 from: TaskExecState::Running,
                 to: TaskExecState::Verifying,
             },
@@ -9394,6 +9891,7 @@ mod tests {
                 EventPayload::TaskExecutionStateChanged {
                     flow_id: flow.id,
                     task_id: t1.id,
+                    attempt_id: None,
                     from,
                     to,
                 },
@@ -9466,6 +9964,7 @@ mod tests {
                 EventPayload::TaskExecutionStateChanged {
                     flow_id: flow.id,
                     task_id: t1.id,
+                    attempt_id: None,
                     from,
                     to,
                 },
@@ -9790,6 +10289,7 @@ mod tests {
                 EventPayload::TaskExecutionStateChanged {
                     flow_id: flow.id,
                     task_id,
+                    attempt_id: None,
                     from: TaskExecState::Verifying,
                     to: TaskExecState::Success,
                 },

@@ -588,8 +588,47 @@ impl RuntimeAdapter for OpenCodeAdapter {
 
         let formatted_input = self.format_input(&input);
 
+        let scope_trace_log = self
+            .config
+            .base
+            .env
+            .get("HIVEMIND_SCOPE_TRACE_LOG")
+            .filter(|v| !v.trim().is_empty())
+            .cloned();
+        let trace_enabled = scope_trace_log.as_ref().is_some_and(|_| {
+            Command::new("strace")
+                .args([
+                    "-o",
+                    "/dev/null",
+                    "-e",
+                    "trace=file",
+                    "--",
+                    "/usr/bin/env",
+                    "true",
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map(|status| status.success())
+                .unwrap_or(false)
+        });
+
         // Build and spawn the command
-        let mut cmd = Command::new(&self.config.base.binary_path);
+        let mut cmd = if trace_enabled {
+            let mut wrapped = Command::new("strace");
+            wrapped
+                .arg("-f")
+                .arg("-qq")
+                .arg("-e")
+                .arg("trace=file")
+                .arg("-o")
+                .arg(scope_trace_log.expect("trace path"))
+                .arg("--")
+                .arg(&self.config.base.binary_path);
+            wrapped
+        } else {
+            Command::new(&self.config.base.binary_path)
+        };
         cmd.current_dir(worktree)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

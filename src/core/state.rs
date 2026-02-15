@@ -766,6 +766,7 @@ impl AppState {
             EventPayload::TaskExecutionStateChanged {
                 flow_id,
                 task_id,
+                attempt_id: _,
                 from: _,
                 to,
             } => {
@@ -1084,6 +1085,7 @@ impl AppState {
                     flow.updated_at = timestamp;
                 }
             }
+            EventPayload::WorktreeCleanupPerformed { .. } => {}
         }
     }
 

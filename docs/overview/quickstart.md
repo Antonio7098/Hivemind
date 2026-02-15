@@ -287,7 +287,7 @@ You should see runtime lifecycle events like:
 ### 8.2 Attempts
 
 ```bash
-$HM -f json attempt inspect <attempt-id> --diff --output
+$HM -f json attempt inspect <attempt-id> --context --diff --output
 ```
 
 ### 8.3 Worktrees
@@ -295,6 +295,8 @@ $HM -f json attempt inspect <attempt-id> --diff --output
 ```bash
 $HM -f json worktree list "$FLOW_ID"
 $HM -f json worktree inspect <task-id>
+$HM -f json worktree cleanup "$FLOW_ID" --dry-run
+$HM -f json worktree cleanup "$FLOW_ID" --force
 ```
 
 ---

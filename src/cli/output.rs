@@ -137,6 +137,7 @@ fn error_to_exit_code(err: &HivemindError) -> ExitCode {
             || c.contains("already_terminal")
             || c.contains("already_running")
             || c.contains("not_running")
+            || c.contains("requires_force")
             || c.contains("not_paused") =>
         {
             ExitCode::Conflict
