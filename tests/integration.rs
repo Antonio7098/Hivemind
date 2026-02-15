@@ -1305,7 +1305,7 @@ fn cli_runtime_config_and_flow_tick() {
             "--arg",
             "-c",
             "--arg",
-            "echo '$ cargo test'; echo 'Tool: grep'; echo '- [ ] collect logs'; echo '- [x] collect logs'; echo 'I will verify outputs'; echo stderr_line 1>&2; printf data > hm_phase14.txt; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+            "echo '$ cargo test'; echo 'Tool: grep'; echo '- [ ] collect logs'; echo '- [x] collect logs'; echo 'I will verify outputs'; echo stderr_line 1>&2; printf data > hm_sprint14.txt; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
             "--timeout-ms",
             "1000",
         ],

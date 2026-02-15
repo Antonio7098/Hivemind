@@ -1,12 +1,12 @@
-# Phase 0 Report: cargo-nextest
+# Sprint 0 Report: cargo-nextest
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 0 |
-| Phase Title | Project Bootstrap — cargo-nextest |
-| Branch | `phase/0-cargo-nextest` |
+| Sprint Number | 0 |
+| Sprint Title | Project Bootstrap — cargo-nextest |
+| Branch | `sprint/0-cargo-nextest` |
 | PR | #2 |
 | Start Date | 2026-02-06 |
 | Completion Date | 2026-02-06 |
@@ -32,7 +32,7 @@
 | other | `Cargo.toml`, `Cargo.lock` | 2 | 2 |
 | docs | `ops/ROADMAP.md` | 1 | 1 |
 | docs | `changelog.json` | 19 | 1 |
-| docs | `ops/reports/phase-0-report.md` | 199 | 0 |
+| docs | `ops/reports/sprint-0-report.md` | 199 | 0 |
 | **Total** | 6 | 237 | 7 |
 
 ### New Components
@@ -103,7 +103,7 @@ cargo llvm-cov (all features):
 | `cargo clippy -D warnings` | PASS | via `make validate` |
 | `cargo test` / `cargo nextest` | PASS | `make validate` runs nextest when installed; manual `cargo nextest run --all-features` executed |
 | `cargo doc` | PASS | via `make validate` |
-| Coverage threshold (80%) | PASS | Coverage measured; overall is 76.66% but Phase 0.1 changed CI/Makefile only; excluding `src/main.rs` is 81.23% |
+| Coverage threshold (80%) | PASS | Coverage measured; overall is 76.66% but Sprint 0.1 changed CI/Makefile only; excluding `src/main.rs` is 81.23% |
 
 ---
 
@@ -133,7 +133,7 @@ cargo llvm-cov (all features):
 
 | Document | Change |
 |----------|--------|
-| `ops/ROADMAP.md` | Marked Phase 0.1 complete |
+| `ops/ROADMAP.md` | Marked Sprint 0.1 complete |
 | `changelog.json` | Added entry for nextest integration |
 
 ---
@@ -155,23 +155,23 @@ cargo llvm-cov (all features):
 
 | Item | Severity | Tracking |
 |------|----------|----------|
-| Add coverage tooling to local dev/CI if required by future phases | Medium | N/A |
+| Add coverage tooling to local dev/CI if required by future sprints | Medium | N/A |
 
 ---
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 0 | Complete |
+| Sprint 0 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 11 | Ready |
+| Sprint 11 | Ready |
 
 ---
 
@@ -195,9 +195,9 @@ cargo llvm-cov (all features):
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [x] Ready for next phase
+- [x] Ready for next sprint
 
-**Phase 0 is COMPLETE.**
+**Sprint 0 is COMPLETE.**
 
 ---
 

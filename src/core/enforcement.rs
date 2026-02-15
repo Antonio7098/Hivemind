@@ -1,6 +1,6 @@
 //! Scope enforcement - post-execution violation detection.
 //!
-//! Phase 1 enforcement is detection-based, not prevention-based.
+//! Sprint 1 enforcement is detection-based, not prevention-based.
 //! Violations are detected after execution and made fatal.
 
 use super::diff::{ChangeType, Diff, FileChange};

@@ -3,7 +3,7 @@
 > **Principle 11:** Build incrementally, prove foundations first.
 > Complexity is earned. Start minimal. Prove invariants. Expand deliberately.
 
-This roadmap builds Hivemind from absolute fundamentals. Each phase must be complete and proven before moving to the next. No shortcuts.
+This roadmap builds Hivemind from absolute fundamentals. Each sprint must be complete and proven before moving to the next. No shortcuts.
 
 ---
 
@@ -11,12 +11,12 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 - [ ] marks incomplete items
 - [x] marks complete items
-- Each phase has **exit criteria** that must pass before proceeding
-- If something breaks in a later phase, fix it in the earliest affected phase
+- Each sprint has **exit criteria** that must pass before proceeding
+- If something breaks in a later sprint, fix it in the earliest affected sprint
 
 ---
 
-## Phase 0: Project Bootstrap
+## Sprint 0: Project Bootstrap
 
 **Goal:** Establish the development foundation.
 
@@ -52,7 +52,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 1: Event Foundation
+## Sprint 1: Event Foundation
 
 **Goal:** Establish the single source of truth. All state will derive from events.
 
@@ -94,7 +94,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 2: Error Model
+## Sprint 2: Error Model
 
 **Goal:** Establish structured error handling before any complex logic.
 
@@ -123,7 +123,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 3: CLI Skeleton
+## Sprint 3: CLI Skeleton
 
 **Goal:** CLI-first is non-negotiable. Build the CLI shell before features.
 
@@ -155,7 +155,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 4: Project Registry
+## Sprint 4: Project Registry
 
 **Goal:** Projects are the top-level organizational unit.
 
@@ -182,7 +182,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 5: Repository Attachment
+## Sprint 5: Repository Attachment
 
 **Goal:** Projects reference repositories (git).
 
@@ -208,7 +208,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 6: Task Management (Lightweight)
+## Sprint 6: Task Management (Lightweight)
 
 **Goal:** Tasks exist as units of intent, independent of execution.
 
@@ -239,7 +239,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 7: Scope Model (Definitions Only)
+## Sprint 7: Scope Model (Definitions Only)
 
 **Goal:** Define scope contracts before enforcement.
 
@@ -250,7 +250,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 - [x] Define GitScope (may commit, may branch)
 
 ### 7.2 Scope Declaration
-- [x] Scope attached to tasks (optional at this phase)
+- [x] Scope attached to tasks (optional at this sprint)
 - [x] Scope serialization (YAML/JSON)
 - [x] Scope validation (well-formed)
 
@@ -266,7 +266,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 8: TaskGraph (Static Planning)
+## Sprint 8: TaskGraph (Static Planning)
 
 **Goal:** TaskGraphs represent immutable intent (DAG of tasks).
 
@@ -300,7 +300,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 9: TaskFlow Foundation (No Execution)
+## Sprint 9: TaskFlow Foundation (No Execution)
 
 **Goal:** TaskFlow is the runtime instance of a TaskGraph.
 
@@ -333,7 +333,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 10: Task Execution State Machine (No Runtime)
+## Sprint 10: Task Execution State Machine (No Runtime)
 
 **Goal:** Task execution FSM without actual agent execution.
 
@@ -349,8 +349,6 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 - [x] PENDING → RUNNING → VERIFYING → SUCCESS
 - [x] PENDING → RUNNING → VERIFYING → RETRY
 - [x] PENDING → RUNNING → VERIFYING → FAILED
-- [x] RETRY → RUNNING (bounded)
-- [x] FAILED → ESCALATED (optional)
 
 ### 10.3 Scheduler (Dependency Resolution)
 - [x] Task becomes READY when all upstream tasks are SUCCESS
@@ -370,7 +368,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 11: Worktree Management
+## Sprint 11: Worktree Management
 
 **Goal:** Isolated git worktrees for task execution.
 
@@ -396,7 +394,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 12: Baseline & Diff Computation
+## Sprint 12: Baseline & Diff Computation
 
 **Goal:** Observe what changed during execution.
 
@@ -421,7 +419,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 13: Runtime Adapter Interface
+## Sprint 13: Runtime Adapter Interface
 
 **Goal:** Define the contract for runtime adapters.
 
@@ -447,11 +445,11 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 ### 13.4 Exit Criteria
 - [x] Interface defined and documented
 - [x] ExecutionReport captures all needed data
-- [x] Events defined for all lifecycle phases
+- [x] Events defined for all lifecycle sprints
 
 ---
 
-## Phase 14: OpenCode Adapter (First Runtime)
+## Sprint 14: OpenCode Adapter (First Runtime)
 
 **Goal:** Wrap OpenCode CLI as first runtime.
 
@@ -467,7 +465,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 - [x] Adapter config in project/global settings
 - [x] Binary path, args, timeout, env passthrough
 
-### 14.3 Integration
+### 13.3 Integration
 - [x] Adapter selected per project
 - [x] Adapter invoked by TaskFlow engine
 
@@ -479,7 +477,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 15: Interactive Runtime Sessions (CLI)
+## Sprint 15: Interactive Runtime Sessions (CLI)
 
 **Goal:** Support interactive execution of external runtimes in the CLI without changing TaskFlow semantics.
 
@@ -507,11 +505,11 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 16: Scope Enforcement (Phase 1: Detection)
+## Sprint 16: Scope Enforcement (Sprint 1: Detection)
 
 **Goal:** Detect scope violations post-execution.
 
-> **Honest:** Phase 1 is detection, not prevention.
+> **Honest:** Sprint 1 is detection, not prevention.
 
 ### 16.1 Scope Verification
 - [x] After execution, check all changes against scope
@@ -528,11 +526,11 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 - [x] Violations detected reliably
 - [x] Violations are fatal to attempt
 - [x] Violations emit observable events
-- [x] Honest: prevention is Phase 2+
+- [x] Honest: prevention is Sprint 2+
 
 ---
 
-## Phase 17: Verification Framework
+## Sprint 17: Verification Framework
 
 **Goal:** Automated checks are the primary gate.
 
@@ -557,7 +555,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 18: Verifier Agent (Advisory)
+## Sprint 18: Verifier Agent (Advisory)
 
 **Goal:** LLM-based verification as advisory layer.
 
@@ -586,7 +584,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 19: Retry Mechanics
+## Sprint 19: Retry Mechanics
 
 **Goal:** Enable intelligent retries with explicit context.
 
@@ -615,7 +613,7 @@ This roadmap builds Hivemind from absolute fundamentals. Each phase must be comp
 
 ---
 
-## Phase 20: Human Override
+## Sprint 20: Human Override
 
 **Goal:** Humans are ultimate authority.
 
@@ -643,7 +641,7 @@ Note: admin token/login?
 
 ---
 
-## Phase 21: Execution Commits & Branches
+## Sprint 21: Execution Commits & Branches
 
 **Goal:** Git artifacts support observability and rollback.
 
@@ -673,7 +671,7 @@ Note: admin token/login?
 
 ---
 
-## Phase 22: Merge Protocol
+## Sprint 22: Merge Protocol
 
 **Goal:** Explicit, human-approved integration.
 
@@ -711,7 +709,7 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 ---
 
-## Phase 23: Runtime Event Projection (OpenCode)
+## Sprint 23: Runtime Event Projection (OpenCode)
 
 **Goal:** Project runtime stdout/stderr into observational Hivemind events without changing execution correctness semantics.
 
@@ -725,7 +723,7 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
   - `RuntimeToolCallObserved`
   - `RuntimeTodoSnapshotUpdated`
   - `RuntimeNarrativeOutputObserved`
-- [x] Ensure names and docs communicate “observed,” never authoritative action
+- [x] Ensure names and docs communicate "observed," never authoritative action
 
 ### 23.2 OpenCode Runtime Projection
 - [x] Start OpenCode runtime tasks that produce diverse stdout/stderr patterns
@@ -752,7 +750,7 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 ---
 
-## Phase 24: Execution Checkpoints
+## Sprint 24: Execution Checkpoints
 
 **Goal:** Introduce first-class, replay-safe execution checkpoints within task attempts.
 
@@ -794,13 +792,13 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 
 ---
 
-## Phase 25: Single-Repo End-to-End
+## Sprint 25: Single-Repo End-to-End
 
 **Goal:** Complete workflow for single-repo projects.
 
 > **User Story 3:** Structured TaskFlow end-to-end.
 
-**Execution Note (2026-02-13):** Original checklist was too narrow and did not reflect Phase 24 checkpoint semantics or full US2/US3/US4 beta validation scope.
+**Execution Note (2026-02-13):** Original checklist was too narrow and did not reflect Sprint 24 checkpoint semantics or full US2/US3/US4 beta validation scope.
 
 ### 25.1 Comprehensive End-to-End Beta Checklist
 - [x] Build and validate CLI binary (`make validate`, `hivemind --help`, subcommand help surfaces)
@@ -829,248 +827,3 @@ Note: Merge preparation is expected to consume `exec/<flow-id>/<task-id>` branch
 - [x] User Stories 2, 3, and 4 are demonstrably achievable
 - [ ] Legacy `hivemind-test` scripts are updated for checkpoint-aware execution (currently stale)
 - [ ] Interactive runtime input/interrupt event path is fully covered by automated beta harness
-
----
-
-## Phase 26: Concurrency Governance
-
-**Goal:** Controlled, policy-driven parallel task execution.
-
-> **User Stories 5 & 6:** Parallel scoped agents and scope conflict handling.
-
-**Execution Note (2026-02-14):** With per-task worktree isolation already in place, Phase 26 focuses on scheduler policy, concurrency limits, and conflict observability (not filesystem safety primitives).
-
-### 26.1 Execution Concurrency
-- [x] Allow multiple task attempts to be dispatched in one `flow tick`
-- [x] Enforce per-project concurrency policy via runtime config (`max_parallel_tasks`)
-- [x] Enforce optional global cap via `HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL`
-- [x] Preserve runtime/worktree isolation guarantees for concurrently scheduled tasks
-
-### 26.2 Scope-Aware Scheduling
-- [x] Evaluate task scope compatibility before dispatching each candidate
-- [x] Hard conflicts are serialized and emitted as `ScopeConflictDetected` + `TaskSchedulingDeferred`
-- [x] Soft conflicts are permitted in parallel but emitted as `ScopeConflictDetected` warnings
-- [x] Compatible scopes are dispatched in parallel up to the effective concurrency limit
-
-### 26.3 CLI and API Discoverability
-- [x] Add `hivemind flow tick --max-parallel <n>` override
-- [x] Add `hivemind project runtime-set --max-parallel-tasks <n>` policy control
-- [x] Surface new scheduling telemetry through CLI/server event labeling
-
-### 26.4 Validation and Exit Criteria
-- [x] Unit coverage verifies compatible parallel dispatch and hard/soft conflict handling
-- [x] Scheduler behavior is deterministic under concurrency limits and scope policy
-- [x] Manual `hivemind-test` validation of edge cases (parallel dispatch, conflict serialization, global cap)
-- [x] User Stories 5 & 6 are achievable through CLI-first workflow
-
----
-
-## Phase 27: Multi-Repo Support
-
-**Goal:** TaskFlows spanning multiple repositories.
-
-> **User Story 7:** Multi-repo project execution.
-
-### 27.1 Multi-Repo Worktrees
-- [x] Worktree per repo per task
-- [x] Agent receives all repo paths
-
-### 27.2 Multi-Repo Scope
-- [x] Scope evaluated per repo
-- [x] Violation in any repo fails task
-
-### 27.3 Multi-Repo Merge
-- [x] Atomicity at TaskFlow level (default)
-- [x] All repos merge or none merge
-- [x] Partial failure handling
-
-### 27.4 Exit Criteria
-- [x] Tasks can modify multiple repos
-- [x] Scope enforced per repo
-- [x] Merge is atomic across repos
-- [x] User Story 7, 8 achievable
-
----
-
-## Phase 28: Additional Runtime Adapters
-
-**Goal:** Support multiple runtimes.
-
-### 28.1 Codex CLI Adapter
-- [x] Implement CodexAdapter
-- [x] Test integration
-
-### 28.2 Claude Code Adapter
-- [x] Implement ClaudeCodeAdapter
-- [x] Test integration
-
-### 28.3 Kilo Code Adapter
-- [x] Implement KiloAdapter
-- [x] Test integration
-
-### 28.4 Runtime Selection
-- [x] Per-project default runtime
-- [x] Per-task override
-- [x] `hivemind runtime list`
-- [x] `hivemind runtime health`
-
-### 28.5 Exit Criteria
-- [x] Multiple runtimes work
-- [x] Runtime selection works
-- [x] Same TaskFlow semantics across runtimes
-
----
-
-## Phase 29: Event Streaming & Observability
-
-**Goal:** Real-time observability.
-
-### 29.1 Event Stream Command
-- [x] `hivemind events stream` (real-time)
-- [x] Filters: --flow, --task, --since
-
-### 29.2 Event Query Command
-- [x] `hivemind events list` (historical)
-- [x] `hivemind events inspect <event-id>`
-- [x] Correlation filtering
-- [x] Time range filtering
-
-### 29.3 Exit Criteria
-- [x] Real-time event stream works
-- [x] Historical queries work
-- [x] Events are the complete record
-
----
-
-## Phase 30: Automation & Scheduling
-
-**Goal:** Triggered TaskFlows.
-
-> **User Story 9:** Scheduled TaskFlows.
-
-### 30.1 Automation Events
-- [ ] `AutomationCreated`
-- [ ] `AutomationTriggered`
-
-### 30.2 Automation Commands
-- [ ] `hivemind automation create <flow> --schedule <cron>`
-- [ ] `hivemind automation list`
-- [ ] `hivemind automation disable`
-- [ ] `hivemind automation trigger` (manual)
-
-### 30.3 Exit Criteria
-- [ ] Scheduled triggers work
-- [ ] Manual triggers work
-- [ ] Automations are observable
-- [ ] User Story 9 achievable
-
----
-
-## Phase 31: Agent Meta-Operation
-
-**Goal:** Agents can operate Hivemind itself.
-
-### 31.1 CLI as API
-- [ ] All commands scriptable
-- [ ] JSON output reliable
-- [ ] Exit codes semantic
-
-### 31.2 Attribution
-- [ ] Agent actions attributed in events
-- [ ] Scope applies to meta-operations
-
-### 31.3 Exit Criteria
-- [ ] Agents can invoke CLI commands
-- [ ] Actions are audited
-- [ ] Meta-orchestration possible
-
----
-
-## Phase 32: UI Foundation (Optional)
-
-**Goal:** UI is a projection over CLI-accessible state.
-
-### 32.1 Views
-- [ ] Project overview
-- [ ] Task list / Kanban
-- [ ] TaskFlow document view
-- [ ] Dependency graph
-- [ ] Diff and verification views
-
-### 32.2 Principles
-- [ ] UI reads via CLI/events only
-- [ ] UI does not modify state directly
-- [ ] UI is secondary to CLI
-
-### 32.3 Exit Criteria
-- [ ] UI reflects CLI state accurately
-- [ ] No UI-only features
-
----
-
-## Phase 33: Production Hardening
-
-**Goal:** Production-ready quality.
-
-### 33.1 Error Handling
-- [ ] All error paths tested
-- [ ] Recovery hints useful
-- [ ] No silent failures
-
-### 33.2 Performance
-- [ ] Event replay scales to 10k+ events
-- [ ] CLI response time < 100ms for reads
-- [ ] Parallel execution efficient
-
-### 33.3 Documentation
-- [ ] CLI help complete
-- [ ] Architecture docs match implementation
-- [ ] User guide written
-
-### 33.4 Exit Criteria
-- [ ] All user stories achievable
-- [ ] All principles upheld
-- [ ] Ready for real use
-
----
-
-## Summary: User Story Coverage
-
-| User Story | Phase |
-|------------|-------|
-| US1: Simple Todo Tracking | Phase 6 |
-| US2: Manual Agent Assistance | Phase 25 |
-| US3: Structured TaskFlow | Phase 25 |
-| US4: Verification Failure & Retry | Phase 19 |
-| US5: Parallel Scoped Agents | Phase 26 |
-| US6: Scope Conflict Handling | Phase 26 |
-| US7: Multi-Repo Project Execution | Phase 27 |
-| US8: Shared Repo Across Projects | Phase 27 |
-| US9: Automation | Phase 30 |
-| US10: Pause & Resume | Phase 9 |
-
----
-
-## Principle Checkpoints
-
-After each phase, verify:
-
-1. **Observability:** All state derived from events?
-2. **Fail Fast:** Errors surface immediately?
-3. **Reliability:** Deterministic, no cleverness?
-4. **Errors:** Structured, attributable, actionable?
-5. **Structure:** Explicit boundaries and FSMs?
-6. **SOLID:** Single responsibility, clear interfaces?
-7. **CLI-First:** Feature works via CLI?
-8. **Absolute Observability:** No silent side effects?
-9. **Automated Checks:** Verification gates progress?
-10. **Failures First-Class:** Failures preserved and inspectable?
-11. **Incremental:** Foundations proven before expansion?
-12. **Modularity:** Replaceable components?
-13. **Control:** Power users can drop down a level?
-14. **Human Authority:** Humans decide at boundaries?
-15. **No Magic:** Everything has a reason and trail?
-
----
-
-**This roadmap is the contract. Follow it.**

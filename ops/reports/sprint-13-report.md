@@ -1,12 +1,12 @@
-# Phase 13 Report: Runtime Adapter Interface
+# Sprint 13 Report: Runtime Adapter Interface
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 13 |
-| Phase Title | Runtime Adapter Interface |
-| Branch | `phase/13-runtime-adapter-interface` |
+| Sprint Number | 13 |
+| Sprint Title | Runtime Adapter Interface |
+| Branch | `sprint/13-runtime-adapter-interface` |
 | PR | #4 |
 | Start Date | 2026-02-07 |
 | Completion Date | 2026-02-07 |
@@ -32,7 +32,7 @@
 | core/ | `src/core/events.rs`, `src/core/state.rs` | 47 | 0 |
 | cli/ | `src/main.rs` | 4 | 0 |
 | adapters/ | `src/adapters/runtime.rs`, `src/adapters/opencode.rs` | 13 | 12 |
-| docs/ | `ops/ROADMAP.md`, `changelog.json`, `ops/reports/phase-13-report.md` | 245 | 9 |
+| docs/ | `ops/ROADMAP.md`, `changelog.json`, `ops/reports/sprint-13-report.md` | 245 | 9 |
 | other | `Cargo.toml`, `Cargo.lock` | 2 | 2 |
 | **Total** | 10 | 311 | 23 |
 
@@ -59,7 +59,7 @@
 |---|-----------|--------|--------------|
 | 1 | Interface defined and documented | PASS | `RuntimeAdapter` trait aligned and validated by `make validate` |
 | 2 | ExecutionReport captures all needed data | PASS | `ExecutionReport` already includes exit code, duration, stdout/stderr, file changes, errors; compilation/tests via `make validate` |
-| 3 | Events defined for all lifecycle phases | PASS | Added runtime lifecycle variants to `EventPayload` (`RuntimeStarted`, `RuntimeOutputChunk`, `RuntimeExited`, `RuntimeTerminated`) |
+| 3 | Events defined for all lifecycle sprints | PASS | Added runtime lifecycle variants to `EventPayload` (`RuntimeStarted`, `RuntimeOutputChunk`, `RuntimeExited`, `RuntimeTerminated`) |
 
 **Overall: 3/3 criteria passed**
 
@@ -125,7 +125,7 @@ cargo llvm-cov (all features):
 | 8 | Absolute observability | PASS | Core event store can persist runtime lifecycle data without relying on runtime output claims |
 | 9 | Automated checks mandatory | PASS | `make validate` green |
 | 10 | Failures are first-class | PASS | Lifecycle events include termination and output streaming primitives |
-| 11 | Build incrementally | PASS | Phase 13 defines contract + events without forcing runtime integration yet |
+| 11 | Build incrementally | PASS | Sprint 13 defines contract + events without forcing runtime integration yet |
 | 12 | Maximum modularity | PASS | Adapter contract supports additional runtimes without core rewrites |
 | 13 | Abstraction without loss | PASS | Core events expose concrete lifecycle/stream semantics |
 | 14 | Human authority | PASS | No automatic execution/merge behavior introduced |
@@ -137,9 +137,9 @@ cargo llvm-cov (all features):
 
 | Document | Change |
 |----------|--------|
-| `ops/ROADMAP.md` | Mark Phase 13 items complete |
-| `changelog.json` | Added v0.1.3 entry for Phase 13 |
-| `ops/reports/phase-13-report.md` | Added this report |
+| `ops/ROADMAP.md` | Mark Sprint 13 items complete |
+| `changelog.json` | Added v0.1.3 entry for Sprint 13 |
+| `ops/reports/sprint-13-report.md` | Added this report |
 
 ---
 
@@ -156,7 +156,7 @@ cargo llvm-cov (all features):
 ## Learnings
 
 1. Adding new event variants requires coordinated updates in every exhaustive `match` over `EventPayload` (projections + CLI).
-2. Introducing a runtime contract early enables Phase 14 to focus on wrapper mechanics rather than interface churn.
+2. Introducing a runtime contract early enables Sprint 14 to focus on wrapper mechanics rather than interface churn.
 
 ---
 
@@ -171,17 +171,17 @@ cargo llvm-cov (all features):
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 0 | Complete |
+| Sprint 0 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 14 | Ready |
+| Sprint 14 | Ready |
 
 ---
 
@@ -205,9 +205,9 @@ cargo llvm-cov (all features):
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [x] Ready for next phase
+- [x] Ready for next sprint
 
-**Phase 13 is COMPLETE.**
+**Sprint 13 is COMPLETE.**
 
 ---
 

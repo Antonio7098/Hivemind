@@ -17,9 +17,9 @@
 
 ---
 
-## 2. Source Reports & Phases
+## 2. Source Reports & Sprints
 
-| Artifact / Information | Origin Phase or Report | Reference / Link |
+| Artifact / Information | Origin Sprint or Report | Reference / Link |
 |------------------------|------------------------|------------------|
 | Overall beta tier status | TIER-0 FINAL REPORT | `24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/TIER-0-FINAL-REPORT.md` |
 | CLI smoke: SMK-006 | SMK-006 FINAL REPORT | `24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/SMK-006/SMK-006-FINAL-REPORT.md` |
@@ -96,7 +96,7 @@
 ## 9. Outstanding Actions
 
 - [x] Changelog updated
-- [ ] PR prepared per `ops/process/phase-execution.md` (including description referencing this report)
+- [ ] PR prepared per `ops/process/sprint-execution.md` (including description referencing this report)
 - [ ] Additional TODOs (e.g. expand regression coverage to new commands)
 
 ---

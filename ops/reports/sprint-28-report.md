@@ -1,7 +1,7 @@
-# Phase 28 Report - Additional Runtime Adapters
+# Sprint 28 Report - Additional Runtime Adapters
 
 ## Scope
-Implemented Phase 28 in `ops/ROADMAP.md`:
+Implemented Sprint 28 in `ops/ROADMAP.md`:
 - Codex adapter
 - Claude Code adapter
 - Kilo adapter

@@ -468,7 +468,7 @@ fn check_git_compatibility(a: &GitScope, b: &GitScope) -> ScopeCompatibility {
 }
 
 fn check_execution_compatibility(a: &ExecutionScope, b: &ExecutionScope) -> ScopeCompatibility {
-    // Phase 1: conservative heuristics.
+    // Sprint 1: conservative heuristics.
     // If either side allows everything, treat as soft conflict.
     // If both allow everything, treat as hard conflict.
     let a_allows_all = a.allowed.iter().any(|p| p == "*") && a.denied.is_empty();

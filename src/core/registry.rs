@@ -7234,7 +7234,7 @@ mod tests {
     }
 
     #[test]
-    fn runtime_list_includes_phase_28_adapters() {
+    fn runtime_list_includes_sprint_28_adapters() {
         let registry = test_registry();
         let list = registry.runtime_list();
         let names = list

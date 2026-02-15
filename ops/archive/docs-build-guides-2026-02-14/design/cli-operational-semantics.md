@@ -739,7 +739,7 @@ hivemind [-f json|table|yaml] flow list [--project <project-id-or-name>]
 hivemind flow tick <flow-id> [--interactive]
 ```
 
-`--interactive` is introduced in **Phase 15: Interactive Runtime Sessions (CLI)**.
+`--interactive` is introduced in **Sprint 15: Interactive Runtime Sessions (CLI)**.
 
 **Preconditions:**
 - Flow exists

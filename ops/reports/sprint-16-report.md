@@ -1,12 +1,12 @@
-# Phase 16 Report: Scope Enforcement (Phase 1: Detection)
+# Sprint 16 Report: Scope Enforcement (Sprint 1: Detection)
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 16 |
-| Phase Title | Scope Enforcement (Phase 1: Detection) |
-| Branch | `phase/16-scope-enforcement` |
+| Sprint Number | 16 |
+| Sprint Title | Scope Enforcement (Sprint 1: Detection) |
+| Branch | `sprint/16-scope-enforcement` |
 | PR | N/A |
 | Start Date | 2026-02-09 |
 | Completion Date | 2026-02-09 |
@@ -57,7 +57,7 @@
 | 1 | Violations detected reliably | PASS | Added integration test exercising forbidden filesystem write and asserting `ScopeViolationDetected` appears in event stream |
 | 2 | Violations are fatal to attempt | PASS | `process_verifying_task` returns a non-recoverable `HivemindError::scope("scope_violation", ...)` and transitions attempt to `Failed` with no retry |
 | 3 | Violations emit observable events | PASS | `ScopeViolationDetected` / `ScopeValidated` added to event model and emitted in registry verification |
-| 4 | Honest: prevention is Phase 2+ | PASS | Enforcement remains post-hoc verification; no runtime interception added |
+| 4 | Honest: prevention is Sprint 2+ | PASS | Enforcement remains post-hoc verification; no runtime interception added |
 
 ---
 

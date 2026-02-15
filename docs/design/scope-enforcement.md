@@ -9,7 +9,7 @@ order: 7
 > **Principle 2:** Fail fast, fail loud, fail early.
 > **Principle 3:** Reliability over cleverness.
 
-This document specifies **how scope is enforced** at each phase of Hivemind's evolution. It is honest about what enforcement means in Phase 1 (wrapper runtimes) versus later phases.
+This document specifies **how scope is enforced** at each sprint of Hivemind's evolution. It is honest about what enforcement means in Sprint 1 (wrapper runtimes) versus later sprints.
 
 Scope is law. But law requires enforcement mechanisms. This document defines those mechanisms.
 
@@ -28,12 +28,12 @@ These are not equivalent. Prevention is stronger but requires deeper system inte
 
 ### 1.2 Honest Assessment
 
-In Phase 1 (wrapper runtimes), Hivemind **cannot prevent** all scope violations because:
+In Sprint 1 (wrapper runtimes), Hivemind **cannot prevent** all scope violations because:
 - Wrapper runtimes execute as subprocesses
 - Subprocess filesystem access cannot be intercepted without OS-level sandboxing
 - OS-level sandboxing (seccomp, landlock) is platform-specific and complex
 
-Therefore, Phase 1 scope enforcement is primarily **detection-based**.
+Therefore, Sprint 1 scope enforcement is primarily **detection-based**.
 
 This is acceptable because:
 - Detection still satisfies Principle 2 (fail fast via post-hoc check)
@@ -47,9 +47,9 @@ What is **not** acceptable:
 
 ---
 
-## 2. Enforcement Phases
+## 2. Enforcement Sprints
 
-### Phase 1: Detection-Based (Wrapper Runtimes)
+### Sprint 1: Detection-Based (Wrapper Runtimes)
 
 Scope violations are detected after execution completes.
 
@@ -69,7 +69,7 @@ Scope violations are detected after execution completes.
 
 ---
 
-### Phase 2: Hybrid (Interception + Detection)
+### Sprint 2: Hybrid (Interception + Detection)
 
 Scope violations are partially intercepted during execution.
 
@@ -84,7 +84,7 @@ Scope violations are partially intercepted during execution.
 
 ---
 
-### Phase 3: Prevention-Based (Native Runtime)
+### Sprint 3: Prevention-Based (Native Runtime)
 
 Scope violations are prevented before they occur.
 
@@ -98,7 +98,7 @@ Scope violations are prevented before they occur.
 
 ---
 
-## 3. Phase 1 Enforcement Mechanics
+## 3. Sprint 1 Enforcement Mechanics
 
 This section details exactly how enforcement works with wrapper runtimes.
 
@@ -133,7 +133,7 @@ During execution:
    - Log file access patterns (advisory, not blocking)
    - Detect writes outside worktree (if possible)
 
-Filesystem watching in Phase 1 is **best-effort observability**, not enforcement.
+Filesystem watching in Sprint 1 is **best-effort observability**, not enforcement.
 
 ### 3.3 Post-Execution Verification
 
@@ -163,7 +163,7 @@ After worker agent exits:
 On ScopeViolationDetected:
 
 1. **Attempt Fails Immediately**
-   - No verification phase
+   - No verification sprint
    - No retry without policy check
 
 2. **Event Emitted**
@@ -190,7 +190,7 @@ On ScopeViolationDetected:
 
 ## 4. Worktree Isolation
 
-Worktrees are the primary isolation mechanism in Phase 1.
+Worktrees are the primary isolation mechanism in Sprint 1.
 
 ### 4.1 Isolation Rules
 
@@ -230,7 +230,7 @@ These require additional enforcement mechanisms (execution scope).
 
 Execution scope restricts what commands agents may run.
 
-### 5.1 Phase 1: Advisory Only
+### 5.1 Sprint 1: Advisory Only
 
 In wrapper mode, Hivemind cannot intercept arbitrary subprocess execution.
 
@@ -246,9 +246,9 @@ In wrapper mode, Hivemind cannot intercept arbitrary subprocess execution.
 **Mitigation:**
 - Run wrapper processes with restricted permissions
 - Use containerization where available
-- Accept that Phase 1 execution scope is advisory
+- Accept that Sprint 1 execution scope is advisory
 
-### 5.2 Phase 2+: Enforcement
+### 5.2 Sprint 2+: Enforcement
 
 With tool interception:
 - Route all tool calls through Hivemind
@@ -281,7 +281,7 @@ For tasks spanning multiple repositories:
 
 Git scope controls git operations.
 
-### 7.1 Phase 1 Enforcement
+### 7.1 Sprint 1 Enforcement
 
 Post-hoc verification:
 - Inspect `git log` for unexpected commits
@@ -373,7 +373,7 @@ TaskSchedulingDeferred:
 
 ## 10. Limitations and Honesty
 
-### 10.1 What Phase 1 Cannot Do
+### 10.1 What Sprint 1 Cannot Do
 
 - Prevent filesystem access outside worktree (can only detect)
 - Prevent arbitrary command execution (can only advise)
@@ -406,7 +406,7 @@ Detection is **reliable**:
 
 ## 11. Future Enforcement
 
-### 11.1 OS-Level Sandboxing (Phase 2)
+### 11.1 OS-Level Sandboxing (Sprint 2)
 
 Potential mechanisms:
 - Linux: seccomp-bpf, landlock
@@ -415,7 +415,7 @@ Potential mechanisms:
 
 These provide true prevention but require platform-specific implementation.
 
-### 11.2 Native Runtime (Phase 3)
+### 11.2 Native Runtime (Sprint 3)
 
 With a native runtime:
 - All file operations mediated by Hivemind
@@ -442,10 +442,10 @@ Violating these invariants is a SystemError.
 
 Scope enforcement in Hivemind is:
 
-- **Phase 1:** Detection-based, post-execution, reliable
-- **Phase 2:** Hybrid interception + detection
-- **Phase 3:** Prevention-based, mediated execution
+- **Sprint 1:** Detection-based, post-execution, reliable
+- **Sprint 2:** Hybrid interception + detection
+- **Sprint 3:** Prevention-based, mediated execution
 
-The architecture is honest about Phase 1 limitations while ensuring that detected violations are always fatal and observable.
+The architecture is honest about Sprint 1 limitations while ensuring that detected violations are always fatal and observable.
 
 > Scope is law. Detection is enforcement. Silence is forbidden.

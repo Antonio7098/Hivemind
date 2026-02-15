@@ -1,12 +1,12 @@
-# Phase 23 Report: Runtime Event Projection (OpenCode)
+# Sprint 23 Report: Runtime Event Projection (OpenCode)
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 23 |
-| Phase Title | Runtime Event Projection (OpenCode) |
-| Branch | `phase/23-runtime-event-projector` |
+| Sprint Number | 23 |
+| Sprint Title | Runtime Event Projection (OpenCode) |
+| Branch | `sprint/23-runtime-event-projector` |
 | PR | (pending) |
 | Start Date | 2026-02-13 |
 | Completion Date | 2026-02-13 |
@@ -32,7 +32,7 @@
 | core/ | `src/core/runtime_event_projection.rs`, `src/core/events.rs`, `src/core/registry.rs`, `src/core/state.rs`, `src/core/mod.rs` | (see `git diff --numstat`) | (see `git diff --numstat`) |
 | cli/ | `src/main.rs`, `src/server.rs` | (see `git diff --numstat`) | (see `git diff --numstat`) |
 | tests/ | `tests/integration.rs`, `hivemind-test/test_runtime_projection.sh`, `hivemind-test/test_runtime_projection_real_opencode.sh` | (see `git diff --numstat`) | (see `git diff --numstat`) |
-| docs/ | `ops/ROADMAP.md`, `ops/reports/phase-23-report.md`, `docs/architecture/*.md`, `docs/design/*.md`, `changelog.json` | (see `git diff --numstat`) | (see `git diff --numstat`) |
+| docs/ | `ops/ROADMAP.md`, `ops/reports/sprint-23-report.md`, `docs/architecture/*.md`, `docs/design/*.md`, `changelog.json` | (see `git diff --numstat`) | (see `git diff --numstat`) |
 | release/ | `Cargo.toml`, `Cargo.lock` | (see `git diff --numstat`) | (see `git diff --numstat`) |
 | **Total** | 22 files | 1094 | 57 |
 
@@ -133,8 +133,8 @@
 | `docs/design/runtime-wrapper-mechanics.md` | Added output projection mechanics and observability notes |
 | `docs/design/cli-operational-semantics.md` | Added projected runtime event semantics for `flow tick` |
 | `docs/design/event-replay-semantics.md` | Added replay behavior for non-state-mutating projection events |
-| `ops/ROADMAP.md` | Added/completed Phase 23 and renumbered subsequent phases |
-| `changelog.json` | Added `v0.1.13` entry for Phase 23 |
+| `ops/ROADMAP.md` | Added/completed Sprint 23 and renumbered subsequent sprints |
+| `changelog.json` | Added `v0.1.13` entry for Sprint 23 |
 
 ---
 
@@ -169,20 +169,20 @@
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 14 (Runtime configuration + execution) | Complete |
-| Phase 15 (Interactive runtime execution path) | Complete |
-| Phase 22 (Flow integration hardening) | Complete |
+| Sprint 14 (Runtime configuration + execution) | Complete |
+| Sprint 15 (Interactive runtime execution path) | Complete |
+| Sprint 22 (Flow integration hardening) | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 24 (Single-repo end-to-end) | Ready |
-| Phase 28 (Event streaming & observability) | Ready |
+| Sprint 24 (Single-repo end-to-end) | Ready |
+| Sprint 28 (Event streaming & observability) | Ready |
 
 ---
 
@@ -206,9 +206,9 @@
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [x] Ready for next phase
+- [x] Ready for next sprint
 
-**Phase 23 is COMPLETE.**
+**Sprint 23 is COMPLETE.**
 
 ---
 

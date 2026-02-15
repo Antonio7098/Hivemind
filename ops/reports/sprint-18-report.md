@@ -1,11 +1,11 @@
-# Phase 18 Report: Verifier Agent (Advisory)
+# Sprint 18 Report: Verifier Agent (Advisory)
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 18 |
-| Phase Title | Verifier Agent (Advisory) |
+| Sprint Number | 18 |
+| Sprint Title | Verifier Agent (Advisory) |
 | Branch | `main` |
 | PR | N/A |
 | Start Date | 2026-02-11 |
@@ -106,9 +106,9 @@
 
 | Document | Change |
 |----------|--------|
-| `ops/ROADMAP.md` | Mark Phase 18 checklist complete |
-| `changelog.json` | Add Phase 18 entry (v0.1.10) |
-| `ops/reports/phase-18-report.md` | Added |
+| `ops/ROADMAP.md` | Mark Sprint 18 checklist complete |
+| `changelog.json` | Add Sprint 18 entry (v0.1.10) |
+| `ops/reports/sprint-18-report.md` | Added |
 
 ---
 
@@ -129,17 +129,17 @@
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 17 | Complete |
+| Sprint 17 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 19 | Ready (retry context fields now plumbed) |
+| Sprint 19 | Ready (retry context fields now plumbed) |
 
 ---
 
@@ -149,7 +149,7 @@
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [ ] Ready for next phase (coverage target below 80%)
+- [ ] Ready for next sprint (coverage target below 80%)
 
 ---
 

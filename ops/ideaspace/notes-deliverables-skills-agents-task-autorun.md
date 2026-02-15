@@ -24,7 +24,7 @@ This is **about intent**, not automation for its own sake.
 
 ### Where this fits
 
-* **Phase 27: Automation & Scheduling**
+* **Sprint 27: Automation & Scheduling**
 * But the *declaration* belongs earlier
 
 Example (conceptual):
@@ -258,10 +258,10 @@ Answer:
 
 | Note                | Fits where                       |
 | ------------------- | -------------------------------- |
-| Task/flow auto-run  | Phase 27 (declared earlier)      |
-| Deliverables        | Phase 16–18 (verification)       |
-| Skills              | Phase 7–8 (planning metadata)    |
-| Agent definition    | Core / Phase 13                  |
+| Task/flow auto-run  | Sprint 27 (declared earlier)      |
+| Deliverables        | Sprint 16–18 (verification)       |
+| Skills              | Sprint 7–8 (planning metadata)    |
+| Agent definition    | Core / Sprint 13                  |
 | Documents ownership | Project registry + TaskFlow docs |
 
 Nothing here breaks the roadmap.

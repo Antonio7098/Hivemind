@@ -1,12 +1,12 @@
-# Phase 27 Report: Multi-Repo Support
+# Sprint 27 Report: Multi-Repo Support
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 27 |
-| Phase Title | Multi-Repo Support |
-| Branch | `phase/27-multi-repo-support` |
+| Sprint Number | 27 |
+| Sprint Title | Multi-Repo Support |
+| Branch | `sprint/27-multi-repo-support` |
 | PR | _TBD_ |
 | Start Date | 2026-02-14 |
 | Completion Date | 2026-02-14 |
@@ -33,7 +33,7 @@
 |------|---------------|-------------|---------------|
 | core/ | `src/core/registry.rs` | 814 | 190 |
 | docs/design | `docs/design/multi-repo.md`, `docs/design/scope-enforcement.md` | 14 | 3 |
-| docs/ops | `ops/ROADMAP.md`, `ops/reports/phase-27-report.md` | 189 | 11 |
+| docs/ops | `ops/ROADMAP.md`, `ops/reports/sprint-27-report.md` | 189 | 11 |
 | release | `Cargo.toml`, `changelog.json` | 38 | 1 |
 | **Total** | 7 files | 1055 | 205 |
 
@@ -113,7 +113,7 @@ Spot checks confirmed presence of `runtime_*`, `task_execution_state_changed`, `
 | `cargo clippy -D warnings` | PASS | Full targets/features |
 | `cargo test --all-features` | PASS | Includes new multi-repo tests |
 | Manual `hivemind-test` suite | PASS | worktree + execution + merge scripts |
-| `cargo doc --no-deps` | Not run | No public API shape changes requiring doc build gate in this phase |
+| `cargo doc --no-deps` | Not run | No public API shape changes requiring doc build gate in this sprint |
 
 ---
 
@@ -143,10 +143,10 @@ Spot checks confirmed presence of `runtime_*`, `task_execution_state_changed`, `
 
 | Document | Change |
 |----------|--------|
-| `ops/ROADMAP.md` | Marked all Phase 27 checklist and exit criteria complete |
-| `docs/design/multi-repo.md` | Added concrete Phase 27 runtime context/env mechanics |
+| `ops/ROADMAP.md` | Marked all Sprint 27 checklist and exit criteria complete |
+| `docs/design/multi-repo.md` | Added concrete Sprint 27 runtime context/env mechanics |
 | `docs/design/scope-enforcement.md` | Updated repository-scope enforcement mechanics to reflect implementation |
-| `changelog.json` | Added `v0.1.16` / Phase 27 entry |
+| `changelog.json` | Added `v0.1.16` / Sprint 27 entry |
 
 ---
 
@@ -173,27 +173,27 @@ Spot checks confirmed presence of `runtime_*`, `task_execution_state_changed`, `
 | Item | Severity | Tracking |
 |------|----------|----------|
 | Merge events do not yet include repo-specific commit grouping in payload schema | Medium | Future event-model enhancement |
-| Diff/scope detail remains primary-repo-centric for file-level artifacting | Medium | Follow-up phase for richer multi-repo diff artifacts |
+| Diff/scope detail remains primary-repo-centric for file-level artifacting | Medium | Follow-up sprint for richer multi-repo diff artifacts |
 
 ---
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 11 (worktree management) | Complete |
-| Phase 16 (scope enforcement) | Complete |
-| Phase 22 (merge governance hardening) | Complete |
-| Phase 26 (concurrency governance) | Complete |
+| Sprint 11 (worktree management) | Complete |
+| Sprint 16 (scope enforcement) | Complete |
+| Sprint 22 (merge governance hardening) | Complete |
+| Sprint 26 (concurrency governance) | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|-----------|
-| Phase 28: Additional Runtime Adapters | Ready |
-| Phase 29: Event Streaming & Observability | Ready |
+| Sprint 28: Additional Runtime Adapters | Ready |
+| Sprint 29: Event Streaming & Observability | Ready |
 
 ---
 
@@ -216,9 +216,9 @@ Spot checks confirmed presence of `runtime_*`, `task_execution_state_changed`, `
 - [x] All validation checks pass
 - [x] Documentation updated
 - [x] Changelog updated
-- [x] Ready for next phase
+- [x] Ready for next sprint
 
-**Phase 27 is COMPLETE.**
+**Sprint 27 is COMPLETE.**
 
 ---
 

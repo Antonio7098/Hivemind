@@ -9,30 +9,30 @@ A simple command-line application to track personal expenses with the following 
 - Export to CSV
 - Data persistence (JSON file)
 
-## Test Phases
+## Test Sprints
 
-### Phase 1: Project Setup
+### Sprint 1: Project Setup
 - Create hivemind project
 - Configure repository
 - Verify project structure
 
-### Phase 2: Task Creation
+### Sprint 2: Task Creation
 - Create tasks for each feature
 - Set up task dependencies
 - Validate task graph
 
-### Phase 3: Task Execution
+### Sprint 3: Task Execution
 - Execute tasks using opencode agent
 - Monitor execution in real-time
 - Record stdout/stderr
 - Track events
 
-### Phase 4: Verification & Merge
+### Sprint 4: Verification & Merge
 - Verify task completion
 - Test merge workflow
 - Review diff outputs
 
-### Phase 5: Analysis
+### Sprint 5: Analysis
 - Compile bugs found
 - Document DX issues
 - Suggest improvements

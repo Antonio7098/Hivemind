@@ -127,7 +127,7 @@ If a runtime cannot provide these, Hivemind still functions correctly.
 
 ---
 
-## 6. Wrapper-Based Adapters (Phase 1)
+## 6. Wrapper-Based Adapters (Sprint 1)
 
 ### 6.1 Description
 
@@ -177,11 +177,11 @@ Undo, retry, and rollback are handled mechanically via git and worktrees.
 - Limited live editor UX
 - Runtime owns context
 
-These are acceptable tradeoffs in Phase 1.
+These are acceptable tradeoffs in Sprint 1.
 
 ---
 
-## 7. Hybrid Interception (Phase 2)
+## 7. Hybrid Interception (Sprint 2)
 
 As Hivemind matures, adapters may incrementally add interception:
 
@@ -196,11 +196,11 @@ Crucially:
 
 It only improves observability and enforcement.
 
-In Phase 1, scope violations are detected post-hoc via diffs. In Phase 2+, violations are prevented via runtime interception. See `docs/design/scope-enforcement.md` for detailed enforcement mechanics across phases.
+In Sprint 1, scope violations are detected post-hoc via diffs. In Sprint 2+, violations are prevented via runtime interception. See `docs/design/scope-enforcement.md` for detailed enforcement mechanics across sprints.
 
 ---
 
-## 8. Native Runtime (Phase 3 — Optional)
+## 8. Native Runtime (Sprint 3 — Optional)
 
 ### 8.1 What “Native” Means
 

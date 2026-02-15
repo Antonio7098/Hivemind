@@ -15,9 +15,9 @@
 
 ---
 
-## 2. Source Reports & Phases
+## 2. Source Reports & Sprints
 
-| Artifact / Information | Origin Phase or Report | Reference / Link |
+| Artifact / Information | Origin Sprint or Report | Reference / Link |
 |------------------------|------------------------|------------------|
 | Tier 0 final status | Tier 0 FINAL REPORT | `24-hour-hivemind/runs/tier_0_baseline_setup_and_trust_in_tooling_simple/tier_0_baseline_setup_and_trust_in_tooling_simple-FINAL-REPORT.md` |
 | Output contract failure (`flow status`) | SMK-003 FINAL REPORT | `24-hour-hivemind/runs/tier_0_baseline_setup_and_trust_in_tooling_simple/SMK-003/SMK-003-FINAL-REPORT.md` |
@@ -104,7 +104,7 @@
 ## 9. Outstanding Actions
 
 - [ ] Changelog updated
-- [ ] PR prepared per `ops/process/phase-execution.md`
+- [ ] PR prepared per `ops/process/sprint-execution.md`
 - [ ] CI green on PR branch
 - [ ] Merge completed
 

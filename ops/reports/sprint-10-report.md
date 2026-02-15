@@ -1,11 +1,11 @@
-# Phase 10 Report: Task Execution State Machine (No Runtime)
+# Sprint 10 Report: Task Execution State Machine (No Runtime)
 
 ## Metadata
 
 | Field | Value |
 |-------|-------|
-| Phase Number | 10 |
-| Phase Title | Task Execution State Machine (No Runtime) |
+| Sprint Number | 10 |
+| Sprint Title | Task Execution State Machine (No Runtime) |
 | Branch | `main` |
 | PR | N/A |
 | Start Date | 2026-02-11 |
@@ -96,7 +96,7 @@
 | `cargo clippy -D warnings` | PASS | |
 | `cargo test` | PASS | |
 | `cargo doc --no-deps` | PASS | |
-| Coverage threshold (80%) | N/A | No coverage gate executed in this phase. |
+| Coverage threshold (80%) | N/A | No coverage gate executed in this sprint. |
 
 ---
 
@@ -114,7 +114,7 @@
 | 8 | Absolute observability | PASS | Server and CLI event labeling updated to include new events. |
 | 9 | Automated checks mandatory | PASS | Added integration test to cover dependency blocking/order. |
 | 10 | Failures are first-class | PASS | `TaskExecutionFailed` emitted for verification failures (including retryable) and aborts. |
-| 11 | Build incrementally | PASS | Minimal, phase-scoped changes; verified by tests and manual runs. |
+| 11 | Build incrementally | PASS | Minimal, sprint-scoped changes; verified by tests and manual runs. |
 | 12 | Maximum modularity | PASS | No runtime vendor lock-in added; events are adapter-agnostic. |
 | 13 | Abstraction without loss | PASS | Added explicit events while keeping `TaskExecutionStateChanged` as the canonical state transition signal. |
 | 14 | Human authority | PASS | Abort path remains explicit and emits failure signal (`reason=aborted`). |
@@ -126,13 +126,13 @@
 
 | Document | Change |
 |----------|--------|
-| `ops/reports/phase-10-report.md` | Added |
+| `ops/reports/sprint-10-report.md` | Added |
 
 ---
 
 ## Challenges
 
-1. **Challenge**: Phase 10 roadmap listed explicit lifecycle events, but implementation previously only had `TaskExecutionStateChanged`.
+1. **Challenge**: Sprint 10 roadmap listed explicit lifecycle events, but implementation previously only had `TaskExecutionStateChanged`.
    - **Resolution**: Added explicit event variants and emitted them at the lifecycle points without changing existing state transition events.
 
 2. **Challenge**: Dependency direction semantics can be counterintuitive (which side “depends on” which).
@@ -157,17 +157,17 @@
 
 ## Dependencies
 
-### This Phase Depended On
+### This Sprint Depended On
 
-| Phase | Status |
+| Sprint | Status |
 |-------|--------|
-| Phase 9 | Complete |
+| Sprint 9 | Complete |
 
-### Next Phases Depend On This
+### Next Sprints Depend On This
 
-| Phase | Readiness |
+| Sprint | Readiness |
 |-------|----------|
-| Phase 11 | Ready |
+| Sprint 11 | Ready |
 
 ---
 
