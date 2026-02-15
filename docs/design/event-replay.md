@@ -166,7 +166,8 @@ RuntimeOutputChunk:
   content: "Running tests..."  ← Captured output
 
 RuntimeStarted:
-  pid: 12345
+  prompt: "Task: ..."
+  flags: ["--model", "..."]
 ```
 
 These are useful for debugging but not for state reconstruction.

@@ -524,7 +524,7 @@ hivemind graph add-dependency <graph-id> <from-task> <to-task>
 
 **Effects:**
 - Dependency edge added to graph
-- `<to-task>` must complete before `<from-task>` can start
+- `<to-task>` depends on `<from-task>` (`<from-task>` must complete before `<to-task>` can start)
 
 **Events:**
 ```
@@ -714,13 +714,25 @@ hivemind flow abort <flow-id> [--force] [--reason <text>]
 
 **Effects:**
 - Flow state changes to ABORTED
-- Running tasks are terminated (with --force)
-- Or running tasks complete, then abort (without --force)
+- Any RUNNING/VERIFYING task attempts are marked FAILED with reason `flow_aborted`
 - No further tasks scheduled
 - Artifacts preserved
 
 **Events:**
 ```
+TaskExecutionStateChanged:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  attempt_id: <attempt-id|null>
+  from: RUNNING|VERIFYING
+  to: FAILED
+
+TaskExecutionFailed:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  attempt_id: <attempt-id|null>
+  reason: flow_aborted
+
 TaskFlowAborted:
   flow_id: <flow-id>
   reason: <text>
@@ -821,6 +833,9 @@ TaskExecutionStateChanged:
 RuntimeStarted:
   attempt_id: <attempt-id>
   task_id: <task-id>
+  adapter_name: <adapter-name>
+  prompt: <runtime-prompt>
+  flags: [<runtime-args-and-flags...>]
 
 RuntimeOutputChunk:
   attempt_id: <attempt-id>
@@ -1156,7 +1171,7 @@ hivemind attempt inspect <attempt-id> [--context] [--diff] [--output]
 
 **Output:**
 - Attempt metadata
-- With --context: retry context that was provided
+- With --context: retry context that was provided (if available)
 - With --diff: changes made
 - With --output: runtime output
 
@@ -1235,22 +1250,32 @@ hivemind worktree inspect <task-id>
 
 **Synopsis:**
 ```
-hivemind worktree cleanup <flow-id>
+hivemind worktree cleanup <flow-id> [--force] [--dry-run]
 ```
 
 **Preconditions:**
 - Flow exists
 - Flow belongs to a project with exactly one attached repository
+- If flow state is RUNNING, `--force` is required
 
 **Effects:**
 - Removes all task worktrees for the flow under `.hivemind/worktrees/<flow-id>/...`
+- With `--dry-run`, returns success without removing worktrees
 
-**Events:** None
+**Events:**
+```
+WorktreeCleanupPerformed:
+  flow_id: <flow-id>
+  cleaned_worktrees: <count>
+  forced: <boolean>
+  dry_run: <boolean>
+```
 
 **Failures:**
 - `FLOW_NOT_FOUND`
 - `PROJECT_HAS_NO_REPO`: No repository attached
 - `MULTIPLE_REPOS_UNSUPPORTED`: More than one repository attached
+- `flow_running_cleanup_requires_force`: running flow cleanup requires `--force`
 - `GIT_WORKTREE_FAILED`: Worktree remove fails
 
 **Idempotence:** Idempotent (no-op if worktrees are absent).
@@ -1319,6 +1344,10 @@ MergePrepared:
   flow_id: <flow-id>
   repos: [<repo-statuses>]
   conflicts: [<conflicts>]
+
+ErrorOccurred:
+  error.code: flow_not_completed
+  correlation.flow_id: <flow-id>
 ```
 
 **Failures:**

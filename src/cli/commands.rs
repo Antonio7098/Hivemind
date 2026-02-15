@@ -160,6 +160,12 @@ pub struct WorktreeInspectArgs {
 pub struct WorktreeCleanupArgs {
     /// Flow ID
     pub flow_id: String,
+    /// Force cleanup when flow is still running
+    #[arg(long, default_value_t = false)]
+    pub force: bool,
+    /// Show what would be cleaned without removing worktrees
+    #[arg(long, default_value_t = false)]
+    pub dry_run: bool,
 }
 
 #[derive(Subcommand)]
@@ -192,9 +198,9 @@ pub struct GraphCreateArgs {
 pub struct GraphAddDependencyArgs {
     /// Graph ID
     pub graph_id: String,
-    /// Dependent task. Semantics: `from_task` depends on `to_task`.
+    /// Upstream task. Semantics: `to_task` depends on `from_task`.
     pub from_task: String,
-    /// Dependency task. Semantics: `from_task` depends on `to_task`.
+    /// Downstream task that depends on `from_task`.
     pub to_task: String,
 }
 
