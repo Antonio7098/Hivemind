@@ -12,8 +12,8 @@ use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, Ta
 use crate::core::runtime_event_projection::{ProjectedRuntimeObservation, RuntimeEventProjector};
 use crate::core::scope::{check_compatibility, RepoAccessMode, Scope, ScopeCompatibility};
 use crate::core::state::{
-    AppState, AttemptCheckpointState, AttemptState, Project, ProjectRuntimeConfig, RuntimeRoleDefaults,
-    Task, TaskRuntimeConfig, TaskState,
+    AppState, AttemptCheckpointState, AttemptState, Project, ProjectRuntimeConfig,
+    RuntimeRoleDefaults, Task, TaskRuntimeConfig, TaskState,
 };
 use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
 use crate::storage::event_store::{EventFilter, EventStore, IndexedEventStore};
@@ -2398,7 +2398,10 @@ impl Registry {
         Ok(env_map)
     }
 
-    fn project_runtime_for_role(project: &Project, role: RuntimeRole) -> Option<ProjectRuntimeConfig> {
+    fn project_runtime_for_role(
+        project: &Project,
+        role: RuntimeRole,
+    ) -> Option<ProjectRuntimeConfig> {
         match role {
             RuntimeRole::Worker => project
                 .runtime_defaults
@@ -2540,7 +2543,8 @@ impl Registry {
             return Err(err);
         }
 
-        if let Err(err) = Self::ensure_supported_runtime_adapter(adapter, "registry:project_runtime_set")
+        if let Err(err) =
+            Self::ensure_supported_runtime_adapter(adapter, "registry:project_runtime_set")
         {
             self.record_error_event(&err, CorrelationIds::for_project(project.id));
             return Err(err);
@@ -2736,8 +2740,13 @@ impl Registry {
                         "registry:runtime_health",
                     )
                 })?;
-            let runtime =
-                self.effective_runtime_for_task(&state, &flow, task_uuid, role, "registry:runtime_health")?;
+            let runtime = self.effective_runtime_for_task(
+                &state,
+                &flow,
+                task_uuid,
+                role,
+                "registry:runtime_health",
+            )?;
 
             return Ok(Self::health_for_runtime(
                 &runtime,
@@ -2866,7 +2875,9 @@ impl Registry {
     pub fn task_runtime_clear_role(&self, task_id: &str, role: RuntimeRole) -> Result<Task> {
         let task = self.get_task(task_id)?;
         let already_cleared = match role {
-            RuntimeRole::Worker => task.runtime_override.is_none() && task.runtime_overrides.worker.is_none(),
+            RuntimeRole::Worker => {
+                task.runtime_override.is_none() && task.runtime_overrides.worker.is_none()
+            }
             RuntimeRole::Validator => task.runtime_overrides.validator.is_none(),
         };
         if already_cleared {
@@ -3016,11 +3027,7 @@ impl Registry {
         Ok(updated)
     }
 
-    pub fn flow_add_dependency(
-        &self,
-        flow_id: &str,
-        depends_on_flow_id: &str,
-    ) -> Result<TaskFlow> {
+    pub fn flow_add_dependency(&self, flow_id: &str, depends_on_flow_id: &str) -> Result<TaskFlow> {
         let flow = self.get_flow(flow_id)?;
         let dependency = self.get_flow(depends_on_flow_id)?;
         if flow.id == dependency.id {
@@ -3352,8 +3359,13 @@ impl Registry {
             return Ok(flow);
         };
 
-        let runtime =
-            self.effective_runtime_for_task(&state, &flow, task_id, RuntimeRole::Worker, "registry:tick_flow")?;
+        let runtime = self.effective_runtime_for_task(
+            &state,
+            &flow,
+            task_id,
+            RuntimeRole::Worker,
+            "registry:tick_flow",
+        )?;
 
         let worktree_status =
             Self::ensure_task_worktree(&flow, &state, task_id, "registry:tick_flow")?;
@@ -7520,17 +7532,18 @@ impl Registry {
         let merge_branch = format!("integration/{}/prepare", flow.id);
         let merge_ref = format!("refs/heads/{merge_branch}");
         if !Self::git_ref_exists(&repo_path, &merge_ref) {
-            return Err(
-                HivemindError::user(
-                    "merge_branch_not_found",
-                    "Prepared integration branch not found",
-                    origin,
-                )
-                .with_hint("Run 'hivemind merge prepare' again"),
-            );
+            return Err(HivemindError::user(
+                "merge_branch_not_found",
+                "Prepared integration branch not found",
+                origin,
+            )
+            .with_hint("Run 'hivemind merge prepare' again"));
         }
 
-        let target_branch = ms.target_branch.clone().unwrap_or_else(|| "main".to_string());
+        let target_branch = ms
+            .target_branch
+            .clone()
+            .unwrap_or_else(|| "main".to_string());
         let old_target_head = std::process::Command::new("git")
             .current_dir(&repo_path)
             .args(["rev-parse", &target_branch])
@@ -7619,7 +7632,9 @@ impl Registry {
                 origin,
             ));
         }
-        let pr_number = String::from_utf8_lossy(&pr_number_out.stdout).trim().to_string();
+        let pr_number = String::from_utf8_lossy(&pr_number_out.stdout)
+            .trim()
+            .to_string();
         if pr_number.is_empty() {
             return Err(HivemindError::system(
                 "gh_pr_view_failed",
@@ -7706,7 +7721,11 @@ impl Registry {
             if let Some(old_head) = old_target_head {
                 let rev_list = std::process::Command::new("git")
                     .current_dir(&repo_path)
-                    .args(["rev-list", "--reverse", &format!("{old_head}..{new_target_head}")])
+                    .args([
+                        "rev-list",
+                        "--reverse",
+                        &format!("{old_head}..{new_target_head}"),
+                    ])
                     .output()
                     .ok()
                     .filter(|o| o.status.success())
@@ -8412,19 +8431,22 @@ mod tests {
                 "opencode",
                 "/usr/bin/env",
                 None,
-                &["sh".to_string(), "-c".to_string(), "echo should_not_run".to_string()],
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo should_not_run".to_string(),
+                ],
                 &[],
                 1000,
                 1,
             )
             .unwrap();
 
-        let updated = registry.tick_flow(&flow.id.to_string(), false, None).unwrap();
+        let updated = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap();
         assert_eq!(
-            updated
-                .task_executions
-                .get(&task.id)
-                .map(|e| e.state),
+            updated.task_executions.get(&task.id).map(|e| e.state),
             Some(TaskExecState::Ready)
         );
 
@@ -8547,15 +8569,23 @@ mod tests {
             .unwrap();
 
         let flow_a = registry.start_flow(&flow_a.id.to_string()).unwrap();
-        let attempt_id = registry.start_task_execution(&task_a.id.to_string()).unwrap();
+        let attempt_id = registry
+            .start_task_execution(&task_a.id.to_string())
+            .unwrap();
         registry
             .checkpoint_complete(&attempt_id.to_string(), "checkpoint-1", None)
             .unwrap();
-        registry.complete_task_execution(&task_a.id.to_string()).unwrap();
-        let _ = registry.tick_flow(&flow_a.id.to_string(), false, None).unwrap();
+        registry
+            .complete_task_execution(&task_a.id.to_string())
+            .unwrap();
+        let _ = registry
+            .tick_flow(&flow_a.id.to_string(), false, None)
+            .unwrap();
         let maybe_running = registry.get_flow(&flow_a.id.to_string()).unwrap();
         if maybe_running.state == FlowState::Running {
-            let _ = registry.tick_flow(&flow_a.id.to_string(), false, None).unwrap();
+            let _ = registry
+                .tick_flow(&flow_a.id.to_string(), false, None)
+                .unwrap();
         }
         let completed_a = registry.get_flow(&flow_a.id.to_string()).unwrap();
         assert_eq!(completed_a.state, FlowState::Completed);

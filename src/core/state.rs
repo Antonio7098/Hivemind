@@ -330,7 +330,9 @@ impl AppState {
                         timeout_ms: *timeout_ms,
                         max_parallel_tasks: *max_parallel_tasks,
                     };
-                    project.runtime_defaults.set(*role, Some(configured.clone()));
+                    project
+                        .runtime_defaults
+                        .set(*role, Some(configured.clone()));
                     if *role == RuntimeRole::Worker {
                         project.runtime = Some(configured);
                     }

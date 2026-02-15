@@ -5,10 +5,10 @@ use clap::error::ErrorKind;
 use clap::Parser;
 use hivemind::cli::commands::{
     AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, EventCommands,
-    FlowCommands, GraphCommands, MergeCommands, MergeExecuteModeArg, ProjectCommands,
-    RunModeArg, RuntimeCommands, RuntimeRoleArg, ServeArgs, TaskAbortArgs, TaskCloseArgs,
-    TaskCommands, TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs,
-    TaskStartArgs, TaskUpdateArgs, VerifyCommands, WorktreeCommands,
+    FlowCommands, GraphCommands, MergeCommands, MergeExecuteModeArg, ProjectCommands, RunModeArg,
+    RuntimeCommands, RuntimeRoleArg, ServeArgs, TaskAbortArgs, TaskCloseArgs, TaskCommands,
+    TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs, TaskStartArgs,
+    TaskUpdateArgs, VerifyCommands, WorktreeCommands,
 };
 use hivemind::cli::output::{output, output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
