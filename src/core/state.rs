@@ -634,9 +634,7 @@ impl AppState {
                         updated_at: timestamp,
                     },
                 );
-                self.flow_runtime_defaults
-                    .entry(*flow_id)
-                    .or_insert_with(RuntimeRoleDefaults::default);
+                self.flow_runtime_defaults.entry(*flow_id).or_default();
             }
             EventPayload::TaskFlowDependencyAdded {
                 flow_id,
@@ -675,7 +673,7 @@ impl AppState {
                 };
                 self.flow_runtime_defaults
                     .entry(*flow_id)
-                    .or_insert_with(RuntimeRoleDefaults::default)
+                    .or_default()
                     .set(*role, Some(configured));
                 if let Some(flow) = self.flows.get_mut(flow_id) {
                     flow.updated_at = timestamp;
@@ -684,7 +682,7 @@ impl AppState {
             EventPayload::TaskFlowRuntimeCleared { flow_id, role } => {
                 self.flow_runtime_defaults
                     .entry(*flow_id)
-                    .or_insert_with(RuntimeRoleDefaults::default)
+                    .or_default()
                     .set(*role, None);
                 if let Some(flow) = self.flows.get_mut(flow_id) {
                     flow.updated_at = timestamp;

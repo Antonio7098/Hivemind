@@ -42,20 +42,15 @@ use crate::adapters::runtime::{
 };
 use crate::adapters::{runtime_descriptors, SUPPORTED_ADAPTERS};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MergeExecuteMode {
+    #[default]
     Local,
     Pr,
 }
 
-impl Default for MergeExecuteMode {
-    fn default() -> Self {
-        Self::Local
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct MergeExecuteOptions {
     #[serde(default)]
     pub mode: MergeExecuteMode,
@@ -2443,7 +2438,6 @@ impl Registry {
     }
 
     fn effective_runtime_for_task(
-        &self,
         state: &AppState,
         flow: &TaskFlow,
         task_id: Uuid,
@@ -2453,7 +2447,7 @@ impl Registry {
         let task = state.tasks.get(&task_id).ok_or_else(|| {
             HivemindError::system(
                 "task_not_found",
-                format!("Task '{}' not found", task_id),
+                format!("Task '{task_id}' not found"),
                 origin,
             )
         })?;
@@ -2675,6 +2669,7 @@ impl Registry {
         self.runtime_health_with_role(project, task_id, None, RuntimeRole::Worker)
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn runtime_health_with_role(
         &self,
         project: Option<&str>,
@@ -2700,7 +2695,7 @@ impl Registry {
                     .get(&flow.project_id)
                     .and_then(|project| Self::project_runtime_for_role(project, role))
             })
-            .or_else(|| match role {
+            .or(match role {
                 RuntimeRole::Worker => state.global_runtime_defaults.worker,
                 RuntimeRole::Validator => state.global_runtime_defaults.validator,
             })
@@ -2740,7 +2735,7 @@ impl Registry {
                         "registry:runtime_health",
                     )
                 })?;
-            let runtime = self.effective_runtime_for_task(
+            let runtime = Self::effective_runtime_for_task(
                 &state,
                 &flow,
                 task_uuid,
@@ -3359,7 +3354,7 @@ impl Registry {
             return Ok(flow);
         };
 
-        let runtime = self.effective_runtime_for_task(
+        let runtime = Self::effective_runtime_for_task(
             &state,
             &flow,
             task_id,
@@ -4200,10 +4195,7 @@ impl Registry {
                 )
             })?;
 
-            let has_verifying = latest
-                .tasks_in_state(TaskExecState::Verifying)
-                .first()
-                .is_some();
+            let has_verifying = !latest.tasks_in_state(TaskExecState::Verifying).is_empty();
             let has_auto_runnable = latest
                 .tasks_in_state(TaskExecState::Retry)
                 .into_iter()
@@ -7474,14 +7466,15 @@ impl Registry {
     ) -> Result<crate::core::state::MergeState> {
         match options.mode {
             MergeExecuteMode::Local => self.merge_execute(flow_id),
-            MergeExecuteMode::Pr => self.merge_execute_via_pr(flow_id, &options),
+            MergeExecuteMode::Pr => self.merge_execute_via_pr(flow_id, options),
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn merge_execute_via_pr(
         &self,
         flow_id: &str,
-        options: &MergeExecuteOptions,
+        options: MergeExecuteOptions,
     ) -> Result<crate::core::state::MergeState> {
         let origin = "registry:merge_execute_via_pr";
         let flow = self.get_flow(flow_id)?;
@@ -7658,8 +7651,7 @@ impl Registry {
             }
         }
 
-        let mut merged_now = false;
-        if options.auto_merge {
+        let merged_now = if options.auto_merge {
             let mut args = vec!["pr", "merge", &pr_number, "--squash", "--delete-branch"];
             if !options.monitor_ci {
                 args.push("--auto");
@@ -7676,8 +7668,10 @@ impl Registry {
                     origin,
                 ));
             }
-            merged_now = options.monitor_ci;
-        }
+            options.monitor_ci
+        } else {
+            false
+        };
 
         if options.pull_after && merged_now {
             let checkout = std::process::Command::new("git")

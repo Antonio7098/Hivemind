@@ -436,6 +436,7 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
         return ExitCode::Error;
