@@ -1,6 +1,6 @@
 # Beta Testing Fix Report Template
 
-> Use this template for fixes discovered during beta testing that require rapid stabilization outside the formal sprint cadence.
+> Use this template for fixes discovered during beta testing that require rapid stabilization outside the formal phase cadence.
 
 ---
 
@@ -17,14 +17,14 @@
 
 ---
 
-## 2. Source Reports & Sprints
+## 2. Source Reports & Phases
 
-| Artifact / Information | Origin Sprint or Report | Reference / Link |
+| Artifact / Information | Origin Phase or Report | Reference / Link |
 |------------------------|------------------------|------------------|
 | Overall beta tier status | TIER-0 FINAL REPORT | `24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/TIER-0-FINAL-REPORT.md` |
 | Specific scenario (e.g. SMK-006) | SMK-006 FINAL REPORT | `24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/SMK-006/SMK-006-FINAL-REPORT.md` |
 
-_Use this table to cite every prior report, sprint, or Tier artifact (Tier-0/1/2 FINAL reports, SMK-XXX reports, sprint reports) that informed the fix. Add as many rows as needed and keep paths exact so they are navigable from the repo._
+_Use this table to cite every prior report, phase, or Tier artifact (Tier-0/1/2 FINAL reports, SMK-XXX reports, phase reports) that informed the fix. Add as many rows as needed and keep paths exact so they are navigable from the repo._
 
 ---
 
@@ -86,7 +86,7 @@ _Add extra rows for any additional validation (coverage, doc tests, UI checks, e
 ## 9. Outstanding Actions
 
 - [ ] Changelog updated
-- [ ] PR prepared per `ops/process/sprint-execution.md`
+- [ ] PR prepared per `ops/process/phase-execution.md`
 - [ ] Additional TODOs
 
 ---
