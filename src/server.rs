@@ -1,8 +1,8 @@
 use crate::cli::output::CliResponse;
 use crate::core::error::{HivemindError, Result};
-use crate::core::events::{CorrelationIds, Event, EventPayload};
-use crate::core::flow::RetryMode;
-use crate::core::registry::Registry;
+use crate::core::events::{CorrelationIds, Event, EventPayload, RuntimeRole};
+use crate::core::flow::{RetryMode, RunMode};
+use crate::core::registry::{MergeExecuteMode, MergeExecuteOptions, Registry};
 use crate::core::state::{MergeState, Project, Task};
 use crate::core::verification::CheckConfig;
 use crate::core::{flow::TaskFlow, graph::TaskGraph};
@@ -402,6 +402,55 @@ fn parse_json_body<T: for<'de> Deserialize<'de>>(body: Option<&[u8]>, origin: &s
     })
 }
 
+fn parse_runtime_role(raw: Option<&str>, origin: &str) -> Result<RuntimeRole> {
+    match raw.unwrap_or("worker").to_lowercase().as_str() {
+        "worker" => Ok(RuntimeRole::Worker),
+        "validator" => Ok(RuntimeRole::Validator),
+        other => Err(HivemindError::user(
+            "invalid_runtime_role",
+            format!("Invalid runtime role '{other}'"),
+            origin,
+        )
+        .with_hint("Use 'worker' or 'validator'")),
+    }
+}
+
+fn parse_run_mode(raw: &str, origin: &str) -> Result<RunMode> {
+    match raw.to_lowercase().as_str() {
+        "auto" => Ok(RunMode::Auto),
+        "manual" => Ok(RunMode::Manual),
+        other => Err(HivemindError::user(
+            "invalid_run_mode",
+            format!("Invalid run mode '{other}'"),
+            origin,
+        )
+        .with_hint("Use 'auto' or 'manual'")),
+    }
+}
+
+fn parse_merge_mode(raw: Option<&str>, origin: &str) -> Result<MergeExecuteMode> {
+    match raw.unwrap_or("local").to_lowercase().as_str() {
+        "local" => Ok(MergeExecuteMode::Local),
+        "pr" => Ok(MergeExecuteMode::Pr),
+        other => Err(HivemindError::user(
+            "invalid_merge_mode",
+            format!("Invalid merge mode '{other}'"),
+            origin,
+        )
+        .with_hint("Use 'local' or 'pr'")),
+    }
+}
+
+fn env_pairs_from_map(env: Option<HashMap<String, String>>) -> Vec<String> {
+    let mut env_pairs = Vec::new();
+    if let Some(env) = env {
+        for (k, v) in env {
+            env_pairs.push(format!("{k}={v}"));
+        }
+    }
+    env_pairs
+}
+
 fn method_not_allowed(path: &str, method: ApiMethod, allowed: &'static str) -> Result<ApiResponse> {
     let err = HivemindError::user(
         "method_not_allowed",
@@ -431,6 +480,7 @@ struct ProjectUpdateRequest {
 #[derive(Debug, Deserialize)]
 struct ProjectRuntimeRequest {
     project: String,
+    role: Option<String>,
     adapter: Option<String>,
     binary_path: Option<String>,
     model: Option<String>,
@@ -494,6 +544,25 @@ struct TaskAbortRequest {
 }
 
 #[derive(Debug, Deserialize)]
+struct TaskRuntimeSetRequest {
+    task_id: String,
+    clear: Option<bool>,
+    role: Option<String>,
+    adapter: Option<String>,
+    binary_path: Option<String>,
+    model: Option<String>,
+    args: Option<Vec<String>>,
+    env: Option<HashMap<String, String>>,
+    timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskSetRunModeRequest {
+    task_id: String,
+    mode: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct GraphCreateRequest {
     project: String,
     name: String,
@@ -548,6 +617,32 @@ struct FlowAbortRequest {
 }
 
 #[derive(Debug, Deserialize)]
+struct FlowSetRunModeRequest {
+    flow_id: String,
+    mode: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FlowAddDependencyRequest {
+    flow_id: String,
+    depends_on_flow_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FlowRuntimeSetRequest {
+    flow_id: String,
+    clear: Option<bool>,
+    role: Option<String>,
+    adapter: Option<String>,
+    binary_path: Option<String>,
+    model: Option<String>,
+    args: Option<Vec<String>>,
+    env: Option<HashMap<String, String>>,
+    timeout_ms: Option<u64>,
+    max_parallel_tasks: Option<u16>,
+}
+
+#[derive(Debug, Deserialize)]
 struct VerifyOverrideRequest {
     task_id: String,
     decision: String,
@@ -573,6 +668,10 @@ struct MergeApproveRequest {
 #[derive(Debug, Deserialize)]
 struct MergeExecuteRequest {
     flow_id: String,
+    mode: Option<String>,
+    monitor_ci: Option<bool>,
+    auto_merge: Option<bool>,
+    pull_after: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -585,6 +684,18 @@ struct CheckpointCompleteRequest {
 #[derive(Debug, Deserialize)]
 struct WorktreeCleanupRequest {
     flow_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RuntimeDefaultsSetRequest {
+    role: Option<String>,
+    adapter: Option<String>,
+    binary_path: Option<String>,
+    model: Option<String>,
+    args: Option<Vec<String>>,
+    env: Option<HashMap<String, String>>,
+    timeout_ms: Option<u64>,
+    max_parallel_tasks: Option<u16>,
 }
 
 #[derive(Debug, Serialize)]
@@ -624,6 +735,8 @@ fn api_catalog() -> ApiCatalog {
             "/api/graphs",
             "/api/flows",
             "/api/merges",
+            "/api/runtimes",
+            "/api/runtimes/health?project=<id|name>&task=<id>&flow=<id>&role=worker|validator",
             "/api/events",
             "/api/events/inspect?event_id=<id>",
             "/api/verify/results?attempt_id=<id>&output=true|false",
@@ -637,10 +750,13 @@ fn api_catalog() -> ApiCatalog {
             "/api/projects/create",
             "/api/projects/update",
             "/api/projects/runtime",
+            "/api/runtime/defaults",
             "/api/projects/repos/attach",
             "/api/projects/repos/detach",
             "/api/tasks/create",
             "/api/tasks/update",
+            "/api/tasks/runtime",
+            "/api/tasks/run-mode",
             "/api/tasks/close",
             "/api/tasks/start",
             "/api/tasks/complete",
@@ -656,6 +772,9 @@ fn api_catalog() -> ApiCatalog {
             "/api/flows/pause",
             "/api/flows/resume",
             "/api/flows/abort",
+            "/api/flows/run-mode",
+            "/api/flows/dependencies/add",
+            "/api/flows/runtime",
             "/api/verify/override",
             "/api/verify/run",
             "/api/merge/prepare",
@@ -781,6 +900,28 @@ fn handle_api_request_inner(
         }
         "/api/merges" if method == ApiMethod::Get => {
             let wrapped = CliResponse::success(list_merge_states(registry)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/runtimes" if method == ApiMethod::Get => {
+            let wrapped = CliResponse::success(registry.runtime_list());
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/runtimes/health" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let role = parse_runtime_role(
+                query.get("role").map(String::as_str),
+                "server:runtimes:health",
+            )?;
+            let wrapped = CliResponse::success(registry.runtime_health_with_role(
+                query.get("project").map(String::as_str),
+                query.get("task").map(String::as_str),
+                query.get("flow").map(String::as_str),
+                role,
+            )?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
@@ -962,14 +1103,11 @@ fn handle_api_request_inner(
         }
         "/api/projects/runtime" if method == ApiMethod::Post => {
             let req: ProjectRuntimeRequest = parse_json_body(body, "server:projects:runtime")?;
-            let mut env_pairs = Vec::new();
-            if let Some(env) = req.env {
-                for (k, v) in env {
-                    env_pairs.push(format!("{k}={v}"));
-                }
-            }
-            let wrapped = CliResponse::success(registry.project_runtime_set(
+            let env_pairs = env_pairs_from_map(req.env);
+            let role = parse_runtime_role(req.role.as_deref(), "server:projects:runtime")?;
+            let wrapped = CliResponse::success(registry.project_runtime_set_role(
                 &req.project,
+                role,
                 req.adapter.as_deref().unwrap_or("opencode"),
                 req.binary_path.as_deref().unwrap_or("opencode"),
                 req.model,
@@ -978,6 +1116,26 @@ fn handle_api_request_inner(
                 req.timeout_ms.unwrap_or(600_000),
                 req.max_parallel_tasks.unwrap_or(1),
             )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/runtime/defaults" if method == ApiMethod::Post => {
+            let req: RuntimeDefaultsSetRequest =
+                parse_json_body(body, "server:runtime:defaults:set")?;
+            let env_pairs = env_pairs_from_map(req.env);
+            let role = parse_runtime_role(req.role.as_deref(), "server:runtime:defaults:set")?;
+            registry.runtime_defaults_set(
+                role,
+                req.adapter.as_deref().unwrap_or("opencode"),
+                req.binary_path.as_deref().unwrap_or("opencode"),
+                req.model,
+                &req.args.unwrap_or_default(),
+                &env_pairs,
+                req.timeout_ms.unwrap_or(600_000),
+                req.max_parallel_tasks.unwrap_or(1),
+            )?;
+            let wrapped = CliResponse::success(serde_json::json!({ "ok": true }));
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
@@ -1103,6 +1261,38 @@ fn handle_api_request_inner(
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
+        "/api/tasks/runtime" if method == ApiMethod::Post => {
+            let req: TaskRuntimeSetRequest = parse_json_body(body, "server:tasks:runtime")?;
+            let role = parse_runtime_role(req.role.as_deref(), "server:tasks:runtime")?;
+            let wrapped = if req.clear.unwrap_or(false) {
+                CliResponse::success(registry.task_runtime_clear_role(&req.task_id, role)?)
+            } else {
+                let env_pairs = env_pairs_from_map(req.env);
+                CliResponse::success(registry.task_runtime_set_role(
+                    &req.task_id,
+                    role,
+                    req.adapter.as_deref().unwrap_or("opencode"),
+                    req.binary_path.as_deref().unwrap_or("opencode"),
+                    req.model,
+                    &req.args.unwrap_or_default(),
+                    &env_pairs,
+                    req.timeout_ms.unwrap_or(600_000),
+                )?)
+            };
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/tasks/run-mode" if method == ApiMethod::Post => {
+            let req: TaskSetRunModeRequest = parse_json_body(body, "server:tasks:run-mode")?;
+            let wrapped = CliResponse::success(registry.task_set_run_mode(
+                &req.task_id,
+                parse_run_mode(&req.mode, "server:tasks:run-mode")?,
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
         "/api/graphs/create" if method == ApiMethod::Post => {
             let req: GraphCreateRequest = parse_json_body(body, "server:graphs:create")?;
             let wrapped = CliResponse::success(
@@ -1211,6 +1401,49 @@ fn handle_api_request_inner(
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
+        "/api/flows/run-mode" if method == ApiMethod::Post => {
+            let req: FlowSetRunModeRequest = parse_json_body(body, "server:flows:run-mode")?;
+            let wrapped = CliResponse::success(registry.flow_set_run_mode(
+                &req.flow_id,
+                parse_run_mode(&req.mode, "server:flows:run-mode")?,
+            )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/flows/dependencies/add" if method == ApiMethod::Post => {
+            let req: FlowAddDependencyRequest =
+                parse_json_body(body, "server:flows:dependencies:add")?;
+            let wrapped = CliResponse::success(
+                registry.flow_add_dependency(&req.flow_id, &req.depends_on_flow_id)?,
+            );
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/flows/runtime" if method == ApiMethod::Post => {
+            let req: FlowRuntimeSetRequest = parse_json_body(body, "server:flows:runtime")?;
+            let role = parse_runtime_role(req.role.as_deref(), "server:flows:runtime")?;
+            let wrapped = if req.clear.unwrap_or(false) {
+                CliResponse::success(registry.flow_runtime_clear(&req.flow_id, role)?)
+            } else {
+                let env_pairs = env_pairs_from_map(req.env);
+                CliResponse::success(registry.flow_runtime_set(
+                    &req.flow_id,
+                    role,
+                    req.adapter.as_deref().unwrap_or("opencode"),
+                    req.binary_path.as_deref().unwrap_or("opencode"),
+                    req.model,
+                    &req.args.unwrap_or_default(),
+                    &env_pairs,
+                    req.timeout_ms.unwrap_or(600_000),
+                    req.max_parallel_tasks.unwrap_or(1),
+                )?)
+            };
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
         "/api/verify/override" if method == ApiMethod::Post => {
             let req: VerifyOverrideRequest = parse_json_body(body, "server:verify:override")?;
             let wrapped = CliResponse::success(registry.verify_override(
@@ -1246,7 +1479,15 @@ fn handle_api_request_inner(
         }
         "/api/merge/execute" if method == ApiMethod::Post => {
             let req: MergeExecuteRequest = parse_json_body(body, "server:merge:execute")?;
-            let wrapped = CliResponse::success(registry.merge_execute(&req.flow_id)?);
+            let wrapped = CliResponse::success(registry.merge_execute_with_options(
+                &req.flow_id,
+                MergeExecuteOptions {
+                    mode: parse_merge_mode(req.mode.as_deref(), "server:merge:execute")?,
+                    monitor_ci: req.monitor_ci.unwrap_or(false),
+                    auto_merge: req.auto_merge.unwrap_or(false),
+                    pull_after: req.pull_after.unwrap_or(false),
+                },
+            )?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
@@ -1280,6 +1521,8 @@ fn handle_api_request_inner(
         | "/api/graphs"
         | "/api/flows"
         | "/api/merges"
+        | "/api/runtimes"
+        | "/api/runtimes/health"
         | "/api/events"
         | "/api/events/inspect"
         | "/api/verify/results"
@@ -1291,10 +1534,13 @@ fn handle_api_request_inner(
         "/api/projects/create"
         | "/api/projects/update"
         | "/api/projects/runtime"
+        | "/api/runtime/defaults"
         | "/api/projects/repos/attach"
         | "/api/projects/repos/detach"
         | "/api/tasks/create"
         | "/api/tasks/update"
+        | "/api/tasks/runtime"
+        | "/api/tasks/run-mode"
         | "/api/tasks/close"
         | "/api/tasks/start"
         | "/api/tasks/complete"
@@ -1310,6 +1556,9 @@ fn handle_api_request_inner(
         | "/api/flows/pause"
         | "/api/flows/resume"
         | "/api/flows/abort"
+        | "/api/flows/run-mode"
+        | "/api/flows/dependencies/add"
+        | "/api/flows/runtime"
         | "/api/verify/override"
         | "/api/verify/run"
         | "/api/merge/prepare"
