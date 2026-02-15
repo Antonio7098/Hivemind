@@ -251,7 +251,136 @@ Runtime configuration is abstracted behind Hivemind and not exposed directly.
 
 ---
 
-## 10. Failure Semantics
+## 10. Supported Adapters
+
+### 10.1 Codex CLI (OpenAI)
+
+The Codex adapter wraps OpenAI's Codex CLI for code execution.
+
+**Installation:**
+```bash
+npm install -g @openai/codex
+```
+
+**Model Selection:**
+- `gpt-5.3-codex` - Available with ChatGPT accounts
+- `gpt-5.3-codex-high` - Requires API account (not available with ChatGPT accounts)
+
+**Configuration:**
+```bash
+hivemind project runtime-set "my-project" \
+  --role worker \
+  --adapter codex \
+  --binary-path /path/to/codex \
+  --model gpt-5.3-codex \
+  --timeout-ms 600000
+```
+
+**Default Args:**
+The Codex adapter automatically includes:
+- `exec` - Non-interactive execution mode
+- `--skip-git-repo-check` - Allow execution outside git repos
+- `-c reasoning_effort=high` - High reasoning effort for optimal performance
+
+---
+
+### 10.2 OpenCode
+
+The OpenCode adapter supports multiple model providers.
+
+**Installation:**
+```bash
+npm install -g opencode
+```
+
+**Available Models:**
+- `opencode/kimi-k2.5-free` - Free tier model
+- `opencode/minimax-m2.5-free` - Free tier MiniMax
+- `minimax-coding-plan/MiniMax-M2.5` - MiniMax M2.5 for coding tasks
+- `anthropic/claude-*` - Claude models
+- `google/gemini-*` - Gemini models
+
+**Configuration:**
+```bash
+# Worker with Kimi
+hivemind project runtime-set "my-project" \
+  --role worker \
+  --adapter opencode \
+  --binary-path /path/to/opencode \
+  --model opencode/kimi-k2.5-free
+
+# Validator with MiniMax M2.5
+hivemind project runtime-set "my-project" \
+  --role validator \
+  --adapter opencode \
+  --binary-path /path/to/opencode \
+  --model minimax-coding-plan/MiniMax-M2.5
+```
+
+**Listing Available Models:**
+```bash
+opencode models
+```
+
+---
+
+### 10.3 Kilo
+
+Kilo is an OpenCode-compatible adapter with additional capabilities.
+
+**Configuration:**
+```bash
+hivemind project runtime-set "my-project" \
+  --role worker \
+  --adapter kilo \
+  --binary-path /path/to/kilo \
+  --model opencode/kimi-k2.5-free
+```
+
+---
+
+### 10.4 Claude Code
+
+The Claude Code adapter wraps Anthropic's Claude CLI.
+
+**Configuration:**
+```bash
+hivemind project runtime-set "my-project" \
+  --role worker \
+  --adapter claude-code \
+  --binary-path /path/to/claude
+```
+
+---
+
+## 11. Runtime Health Checks
+
+Verify runtime configuration:
+```bash
+# Check project runtime health
+hivemind runtime health --project "my-project"
+
+# Check specific role
+hivemind runtime health --project "my-project" --role worker
+hivemind runtime health --project "my-project" --role validator
+
+# Check task-specific runtime
+hivemind runtime health --task <task-id> --role worker
+```
+
+---
+
+## 12. Runtime Resolution Precedence
+
+Hivemind resolves runtimes in this order:
+1. **Task override** - `task runtime-set` (highest priority)
+2. **Flow default** - `flow runtime-set`
+3. **Project default** - `project runtime-set`
+4. **Global default** - `runtime defaults-set` (fallback)
+
+---
+
+## 13. Failure Semantics
 
 If a runtime:
 - Crashes
@@ -267,7 +396,7 @@ Runtime failure is treated as an execution failure, not a system failure.
 
 ---
 
-## 11. Security Considerations
+## 14. Security Considerations
 
 Runtime adapters are a security boundary.
 
@@ -280,7 +409,7 @@ All safety checks are enforced by Hivemind, not delegated.
 
 ---
 
-## 12. Invariants
+## 15. Invariants
 
 The runtime adapter layer enforces:
 
@@ -292,7 +421,7 @@ Violating these invariants compromises the system.
 
 ---
 
-## 13. Summary
+## 16. Summary
 
 The runtime adapter layer allows Hivemind to:
 - Move fast today with wrappers

@@ -12,7 +12,11 @@ order: 2
 
 - Rust toolchain with `cargo` in `PATH`
 - Git 2.40+
-- A runtime adapter available (e.g. `opencode`) for executing flows
+- A runtime adapter available for executing flows:
+  - **OpenCode**: `npm install -g opencode` (recommended)
+  - **Codex CLI**: `npm install -g @openai/codex`
+  - **Claude Code**: `npm install -g @anthropic-ai/claude-code`
+  - **Kilo**: See project documentation
 - Optional: `~/.cargo/bin` added to your `PATH`
 
 ## Install via crates.io
