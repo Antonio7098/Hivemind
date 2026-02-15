@@ -264,7 +264,7 @@ pub struct FlowTickArgs {
     /// Flow ID
     pub flow_id: String,
 
-    /// Enable interactive mode (prompt between steps)
+    /// Deprecated: interactive mode is no longer supported
     #[arg(long)]
     pub interactive: bool,
 
