@@ -5,7 +5,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /// `TaskFlow` lifecycle state.
@@ -56,6 +56,14 @@ pub enum RetryMode {
     #[default]
     Clean,
     Continue,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RunMode {
+    #[default]
+    Auto,
+    Manual,
 }
 
 /// Execution state for a single task within a flow.
@@ -142,6 +150,10 @@ pub struct TaskFlow {
     pub project_id: Uuid,
     #[serde(default)]
     pub base_revision: Option<String>,
+    #[serde(default)]
+    pub run_mode: RunMode,
+    #[serde(default)]
+    pub depends_on_flows: HashSet<Uuid>,
     /// Current flow state.
     pub state: FlowState,
     /// Task execution states.
@@ -172,6 +184,8 @@ impl TaskFlow {
             graph_id,
             project_id,
             base_revision: None,
+            run_mode: RunMode::Manual,
+            depends_on_flows: HashSet::new(),
             state: FlowState::Created,
             task_executions,
             created_at: now,

@@ -6,13 +6,14 @@
 use crate::core::diff::{unified_diff, Baseline, ChangeType, Diff, FileChange};
 use crate::core::enforcement::{ScopeEnforcer, VerificationResult};
 use crate::core::error::{ErrorCategory, HivemindError, Result};
-use crate::core::events::{CorrelationIds, Event, EventPayload, RuntimeOutputStream};
-use crate::core::flow::{FlowState, RetryMode, TaskExecState, TaskFlow};
+use crate::core::events::{CorrelationIds, Event, EventPayload, RuntimeOutputStream, RuntimeRole};
+use crate::core::flow::{FlowState, RetryMode, RunMode, TaskExecState, TaskFlow};
 use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, TaskGraph};
 use crate::core::runtime_event_projection::{ProjectedRuntimeObservation, RuntimeEventProjector};
 use crate::core::scope::{check_compatibility, RepoAccessMode, Scope, ScopeCompatibility};
 use crate::core::state::{
-    AppState, AttemptCheckpointState, AttemptState, Project, ProjectRuntimeConfig, Task, TaskState,
+    AppState, AttemptCheckpointState, AttemptState, Project, ProjectRuntimeConfig, RuntimeRoleDefaults,
+    Task, TaskRuntimeConfig, TaskState,
 };
 use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
 use crate::storage::event_store::{EventFilter, EventStore, IndexedEventStore};
@@ -40,6 +41,31 @@ use crate::adapters::runtime::{
     RuntimeAdapter, RuntimeError,
 };
 use crate::adapters::{runtime_descriptors, SUPPORTED_ADAPTERS};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MergeExecuteMode {
+    Local,
+    Pr,
+}
+
+impl Default for MergeExecuteMode {
+    fn default() -> Self {
+        Self::Local
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MergeExecuteOptions {
+    #[serde(default)]
+    pub mode: MergeExecuteMode,
+    #[serde(default)]
+    pub monitor_ci: bool,
+    #[serde(default)]
+    pub auto_merge: bool,
+    #[serde(default)]
+    pub pull_after: bool,
+}
 
 /// Configuration for the registry.
 #[derive(Debug, Clone)]
@@ -1261,7 +1287,8 @@ impl Registry {
                         updated.id,
                     ),
                 );
-                let _ = self.store.append(event);
+                self.append_event(event, origin)?;
+                self.maybe_autostart_dependent_flows(updated.id)?;
             }
 
             return self.get_flow(flow_id);
@@ -2319,6 +2346,185 @@ impl Registry {
         timeout_ms: u64,
         max_parallel_tasks: u16,
     ) -> Result<Project> {
+        self.project_runtime_set_role(
+            id_or_name,
+            RuntimeRole::Worker,
+            adapter,
+            binary_path,
+            model,
+            args,
+            env,
+            timeout_ms,
+            max_parallel_tasks,
+        )
+    }
+
+    fn ensure_supported_runtime_adapter(adapter: &str, origin: &'static str) -> Result<()> {
+        if !SUPPORTED_ADAPTERS.contains(&adapter) {
+            return Err(HivemindError::user(
+                "invalid_runtime_adapter",
+                format!(
+                    "Unsupported runtime adapter '{adapter}'. Supported: {}",
+                    SUPPORTED_ADAPTERS.join(", ")
+                ),
+                origin,
+            ));
+        }
+        Ok(())
+    }
+
+    fn parse_runtime_env_pairs(
+        env: &[String],
+        origin: &'static str,
+    ) -> Result<HashMap<String, String>> {
+        let mut env_map = HashMap::new();
+        for pair in env {
+            let Some((k, v)) = pair.split_once('=') else {
+                return Err(HivemindError::user(
+                    "invalid_env",
+                    format!("Invalid env var '{pair}'. Expected KEY=VALUE"),
+                    origin,
+                ));
+            };
+            if k.trim().is_empty() {
+                return Err(HivemindError::user(
+                    "invalid_env",
+                    format!("Invalid env var '{pair}'. KEY cannot be empty"),
+                    origin,
+                ));
+            }
+            env_map.insert(k.to_string(), v.to_string());
+        }
+        Ok(env_map)
+    }
+
+    fn project_runtime_for_role(project: &Project, role: RuntimeRole) -> Option<ProjectRuntimeConfig> {
+        match role {
+            RuntimeRole::Worker => project
+                .runtime_defaults
+                .worker
+                .clone()
+                .or_else(|| project.runtime.clone()),
+            RuntimeRole::Validator => project.runtime_defaults.validator.clone(),
+        }
+    }
+
+    fn task_runtime_override_for_role(task: &Task, role: RuntimeRole) -> Option<TaskRuntimeConfig> {
+        match role {
+            RuntimeRole::Worker => task
+                .runtime_overrides
+                .worker
+                .clone()
+                .or_else(|| task.runtime_override.clone()),
+            RuntimeRole::Validator => task.runtime_overrides.validator.clone(),
+        }
+    }
+
+    fn task_runtime_to_project_runtime(
+        runtime: TaskRuntimeConfig,
+        max_parallel_tasks: u16,
+    ) -> ProjectRuntimeConfig {
+        ProjectRuntimeConfig {
+            adapter_name: runtime.adapter_name,
+            binary_path: runtime.binary_path,
+            model: runtime.model,
+            args: runtime.args,
+            env: runtime.env,
+            timeout_ms: runtime.timeout_ms,
+            max_parallel_tasks,
+        }
+    }
+
+    fn max_parallel_from_defaults(defaults: &RuntimeRoleDefaults) -> Option<u16> {
+        defaults.worker.as_ref().map(|cfg| cfg.max_parallel_tasks)
+    }
+
+    fn effective_runtime_for_task(
+        &self,
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        role: RuntimeRole,
+        origin: &'static str,
+    ) -> Result<ProjectRuntimeConfig> {
+        let task = state.tasks.get(&task_id).ok_or_else(|| {
+            HivemindError::system(
+                "task_not_found",
+                format!("Task '{}' not found", task_id),
+                origin,
+            )
+        })?;
+
+        let project = state.projects.get(&flow.project_id).ok_or_else(|| {
+            HivemindError::system(
+                "project_not_found",
+                format!("Project '{}' not found", flow.project_id),
+                origin,
+            )
+        })?;
+
+        let flow_defaults = state
+            .flow_runtime_defaults
+            .get(&flow.id)
+            .cloned()
+            .unwrap_or_default();
+
+        let project_defaults = project.runtime_defaults.clone();
+        let global_defaults = state.global_runtime_defaults.clone();
+
+        let max_parallel = match role {
+            RuntimeRole::Worker => Self::max_parallel_from_defaults(&flow_defaults)
+                .or_else(|| Self::max_parallel_from_defaults(&project_defaults))
+                .or_else(|| project.runtime.as_ref().map(|cfg| cfg.max_parallel_tasks))
+                .or_else(|| Self::max_parallel_from_defaults(&global_defaults))
+                .unwrap_or(1),
+            RuntimeRole::Validator => Self::max_parallel_from_defaults(&flow_defaults)
+                .or_else(|| Self::max_parallel_from_defaults(&project_defaults))
+                .or_else(|| project.runtime.as_ref().map(|cfg| cfg.max_parallel_tasks))
+                .or_else(|| Self::max_parallel_from_defaults(&global_defaults))
+                .unwrap_or(1),
+        };
+
+        if let Some(task_rt) = Self::task_runtime_override_for_role(task, role) {
+            return Ok(Self::task_runtime_to_project_runtime(task_rt, max_parallel));
+        }
+        if let Some(flow_rt) = match role {
+            RuntimeRole::Worker => flow_defaults.worker,
+            RuntimeRole::Validator => flow_defaults.validator,
+        } {
+            return Ok(flow_rt);
+        }
+        if let Some(project_rt) = Self::project_runtime_for_role(project, role) {
+            return Ok(project_rt);
+        }
+        if let Some(global_rt) = match role {
+            RuntimeRole::Worker => global_defaults.worker,
+            RuntimeRole::Validator => global_defaults.validator,
+        } {
+            return Ok(global_rt);
+        }
+
+        Err(HivemindError::new(
+            ErrorCategory::Runtime,
+            "runtime_not_configured",
+            format!("No runtime configured for role '{role:?}'"),
+            origin,
+        ))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn project_runtime_set_role(
+        &self,
+        id_or_name: &str,
+        role: RuntimeRole,
+        adapter: &str,
+        binary_path: &str,
+        model: Option<String>,
+        args: &[String],
+        env: &[String],
+        timeout_ms: u64,
+        max_parallel_tasks: u16,
+    ) -> Result<Project> {
         let project = self
             .get_project(id_or_name)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
@@ -2334,41 +2540,19 @@ impl Registry {
             return Err(err);
         }
 
-        if !SUPPORTED_ADAPTERS.contains(&adapter) {
-            let err = HivemindError::user(
-                "invalid_runtime_adapter",
-                format!(
-                    "Unsupported runtime adapter '{adapter}'. Supported: {}",
-                    SUPPORTED_ADAPTERS.join(", ")
-                ),
-                "registry:project_runtime_set",
-            );
+        if let Err(err) = Self::ensure_supported_runtime_adapter(adapter, "registry:project_runtime_set")
+        {
             self.record_error_event(&err, CorrelationIds::for_project(project.id));
             return Err(err);
         }
 
-        let mut env_map = HashMap::new();
-        for pair in env {
-            let Some((k, v)) = pair.split_once('=') else {
-                let err = HivemindError::user(
-                    "invalid_env",
-                    format!("Invalid env var '{pair}'. Expected KEY=VALUE"),
-                    "registry:project_runtime_set",
-                );
-                self.record_error_event(&err, CorrelationIds::for_project(project.id));
-                return Err(err);
-            };
-            if k.trim().is_empty() {
-                let err = HivemindError::user(
-                    "invalid_env",
-                    format!("Invalid env var '{pair}'. KEY cannot be empty"),
-                    "registry:project_runtime_set",
-                );
+        let env_map = match Self::parse_runtime_env_pairs(env, "registry:project_runtime_set") {
+            Ok(parsed) => parsed,
+            Err(err) => {
                 self.record_error_event(&err, CorrelationIds::for_project(project.id));
                 return Err(err);
             }
-            env_map.insert(k.to_string(), v.to_string());
-        }
+        };
 
         let desired = crate::core::state::ProjectRuntimeConfig {
             adapter_name: adapter.to_string(),
@@ -2379,23 +2563,40 @@ impl Registry {
             timeout_ms,
             max_parallel_tasks,
         };
-        if project.runtime.as_ref() == Some(&desired) {
+        let current = Self::project_runtime_for_role(&project, role);
+        if current.as_ref() == Some(&desired) {
             return Ok(project);
         }
 
-        let event = Event::new(
-            EventPayload::ProjectRuntimeConfigured {
-                project_id: project.id,
-                adapter_name: adapter.to_string(),
-                binary_path: binary_path.to_string(),
-                model,
-                args: args.to_vec(),
-                env: env_map,
-                timeout_ms,
-                max_parallel_tasks,
-            },
-            CorrelationIds::for_project(project.id),
-        );
+        let event = match role {
+            RuntimeRole::Worker => Event::new(
+                EventPayload::ProjectRuntimeConfigured {
+                    project_id: project.id,
+                    adapter_name: adapter.to_string(),
+                    binary_path: binary_path.to_string(),
+                    model,
+                    args: args.to_vec(),
+                    env: env_map,
+                    timeout_ms,
+                    max_parallel_tasks,
+                },
+                CorrelationIds::for_project(project.id),
+            ),
+            RuntimeRole::Validator => Event::new(
+                EventPayload::ProjectRuntimeRoleConfigured {
+                    project_id: project.id,
+                    role,
+                    adapter_name: adapter.to_string(),
+                    binary_path: binary_path.to_string(),
+                    model,
+                    args: args.to_vec(),
+                    env: env_map,
+                    timeout_ms,
+                    max_parallel_tasks,
+                },
+                CorrelationIds::for_project(project.id),
+            ),
+        };
 
         self.store.append(event).map_err(|e| {
             HivemindError::system(
@@ -2406,6 +2607,47 @@ impl Registry {
         })?;
 
         self.get_project(&project.id.to_string())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn runtime_defaults_set(
+        &self,
+        role: RuntimeRole,
+        adapter: &str,
+        binary_path: &str,
+        model: Option<String>,
+        args: &[String],
+        env: &[String],
+        timeout_ms: u64,
+        max_parallel_tasks: u16,
+    ) -> Result<()> {
+        if max_parallel_tasks == 0 {
+            return Err(HivemindError::user(
+                "invalid_max_parallel_tasks",
+                "max_parallel_tasks must be at least 1",
+                "registry:runtime_defaults_set",
+            )
+            .with_hint("Use --max-parallel-tasks 1 or higher"));
+        }
+        Self::ensure_supported_runtime_adapter(adapter, "registry:runtime_defaults_set")?;
+        let env_map = Self::parse_runtime_env_pairs(env, "registry:runtime_defaults_set")?;
+
+        self.append_event(
+            Event::new(
+                EventPayload::GlobalRuntimeConfigured {
+                    role,
+                    adapter_name: adapter.to_string(),
+                    binary_path: binary_path.to_string(),
+                    model,
+                    args: args.to_vec(),
+                    env: env_map,
+                    timeout_ms,
+                    max_parallel_tasks,
+                },
+                CorrelationIds::none(),
+            ),
+            "registry:runtime_defaults_set",
+        )
     }
 
     #[must_use]
@@ -2426,43 +2668,86 @@ impl Registry {
         project: Option<&str>,
         task_id: Option<&str>,
     ) -> Result<RuntimeHealthStatus> {
-        if let Some(task_id) = task_id {
-            let task = self.get_task(task_id)?;
-            let project = self.get_project(&task.project_id.to_string())?;
-            let project_max_parallel = project
-                .runtime
-                .as_ref()
-                .map_or(1, |cfg| cfg.max_parallel_tasks);
-            let project_runtime = project.runtime.ok_or_else(|| {
+        self.runtime_health_with_role(project, task_id, None, RuntimeRole::Worker)
+    }
+
+    pub fn runtime_health_with_role(
+        &self,
+        project: Option<&str>,
+        task_id: Option<&str>,
+        flow_id: Option<&str>,
+        role: RuntimeRole,
+    ) -> Result<RuntimeHealthStatus> {
+        if let Some(flow_id) = flow_id {
+            let flow = self.get_flow(flow_id)?;
+            let state = self.state()?;
+            let flow_defaults = state
+                .flow_runtime_defaults
+                .get(&flow.id)
+                .cloned()
+                .unwrap_or_default();
+            let runtime = match role {
+                RuntimeRole::Worker => flow_defaults.worker,
+                RuntimeRole::Validator => flow_defaults.validator,
+            }
+            .or_else(|| {
+                state
+                    .projects
+                    .get(&flow.project_id)
+                    .and_then(|project| Self::project_runtime_for_role(project, role))
+            })
+            .or_else(|| match role {
+                RuntimeRole::Worker => state.global_runtime_defaults.worker,
+                RuntimeRole::Validator => state.global_runtime_defaults.validator,
+            })
+            .ok_or_else(|| {
                 HivemindError::new(
                     ErrorCategory::Runtime,
                     "runtime_not_configured",
-                    "Project has no runtime configured",
+                    "Flow has no effective runtime configured for this role",
                     "registry:runtime_health",
                 )
             })?;
-            let runtime = task.runtime_override.map_or_else(
-                || project_runtime,
-                |r| ProjectRuntimeConfig {
-                    adapter_name: r.adapter_name,
-                    binary_path: r.binary_path,
-                    model: r.model,
-                    args: r.args,
-                    env: r.env,
-                    timeout_ms: r.timeout_ms,
-                    max_parallel_tasks: project_max_parallel,
-                },
-            );
+            return Ok(Self::health_for_runtime(
+                &runtime,
+                Some(format!("flow:{flow_id}:{role:?}")),
+            ));
+        }
+
+        if let Some(task_id) = task_id {
+            let task_uuid = Uuid::parse_str(task_id).map_err(|_| {
+                HivemindError::user(
+                    "invalid_task_id",
+                    format!("'{task_id}' is not a valid task ID"),
+                    "registry:runtime_health",
+                )
+            })?;
+            let state = self.state()?;
+            let flow = state
+                .flows
+                .values()
+                .filter(|f| f.task_executions.contains_key(&task_uuid))
+                .max_by_key(|f| f.updated_at)
+                .cloned()
+                .ok_or_else(|| {
+                    HivemindError::user(
+                        "task_not_in_flow",
+                        "Task is not part of any flow",
+                        "registry:runtime_health",
+                    )
+                })?;
+            let runtime =
+                self.effective_runtime_for_task(&state, &flow, task_uuid, role, "registry:runtime_health")?;
 
             return Ok(Self::health_for_runtime(
                 &runtime,
-                Some(format!("task:{task_id}")),
+                Some(format!("task:{task_id}:{role:?}")),
             ));
         }
 
         if let Some(project_id_or_name) = project {
             let project = self.get_project(project_id_or_name)?;
-            let runtime = project.runtime.ok_or_else(|| {
+            let runtime = Self::project_runtime_for_role(&project, role).ok_or_else(|| {
                 HivemindError::new(
                     ErrorCategory::Runtime,
                     "runtime_not_configured",
@@ -2472,7 +2757,7 @@ impl Registry {
             })?;
             return Ok(Self::health_for_runtime(
                 &runtime,
-                Some(format!("project:{project_id_or_name}")),
+                Some(format!("project:{project_id_or_name}:{role:?}")),
             ));
         }
 
@@ -2509,49 +2794,61 @@ impl Registry {
         env: &[String],
         timeout_ms: u64,
     ) -> Result<Task> {
+        self.task_runtime_set_role(
+            task_id,
+            RuntimeRole::Worker,
+            adapter,
+            binary_path,
+            model,
+            args,
+            env,
+            timeout_ms,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn task_runtime_set_role(
+        &self,
+        task_id: &str,
+        role: RuntimeRole,
+        adapter: &str,
+        binary_path: &str,
+        model: Option<String>,
+        args: &[String],
+        env: &[String],
+        timeout_ms: u64,
+    ) -> Result<Task> {
         let task = self.get_task(task_id)?;
-        if !SUPPORTED_ADAPTERS.contains(&adapter) {
-            return Err(HivemindError::user(
-                "invalid_runtime_adapter",
-                format!(
-                    "Unsupported runtime adapter '{adapter}'. Supported: {}",
-                    SUPPORTED_ADAPTERS.join(", ")
-                ),
-                "registry:task_runtime_set",
-            ));
-        }
+        Self::ensure_supported_runtime_adapter(adapter, "registry:task_runtime_set")?;
+        let env_map = Self::parse_runtime_env_pairs(env, "registry:task_runtime_set")?;
 
-        let mut env_map = HashMap::new();
-        for pair in env {
-            let Some((k, v)) = pair.split_once('=') else {
-                return Err(HivemindError::user(
-                    "invalid_env",
-                    format!("Invalid env var '{pair}'. Expected KEY=VALUE"),
-                    "registry:task_runtime_set",
-                ));
-            };
-            if k.trim().is_empty() {
-                return Err(HivemindError::user(
-                    "invalid_env",
-                    format!("Invalid env var '{pair}'. KEY cannot be empty"),
-                    "registry:task_runtime_set",
-                ));
-            }
-            env_map.insert(k.to_string(), v.to_string());
-        }
-
-        let event = Event::new(
-            EventPayload::TaskRuntimeConfigured {
-                task_id: task.id,
-                adapter_name: adapter.to_string(),
-                binary_path: binary_path.to_string(),
-                model,
-                args: args.to_vec(),
-                env: env_map,
-                timeout_ms,
-            },
-            CorrelationIds::for_task(task.project_id, task.id),
-        );
+        let event = match role {
+            RuntimeRole::Worker => Event::new(
+                EventPayload::TaskRuntimeConfigured {
+                    task_id: task.id,
+                    adapter_name: adapter.to_string(),
+                    binary_path: binary_path.to_string(),
+                    model,
+                    args: args.to_vec(),
+                    env: env_map,
+                    timeout_ms,
+                },
+                CorrelationIds::for_task(task.project_id, task.id),
+            ),
+            RuntimeRole::Validator => Event::new(
+                EventPayload::TaskRuntimeRoleConfigured {
+                    task_id: task.id,
+                    role,
+                    adapter_name: adapter.to_string(),
+                    binary_path: binary_path.to_string(),
+                    model,
+                    args: args.to_vec(),
+                    env: env_map,
+                    timeout_ms,
+                },
+                CorrelationIds::for_task(task.project_id, task.id),
+            ),
+        };
         self.store.append(event).map_err(|e| {
             HivemindError::system(
                 "event_append_failed",
@@ -2563,15 +2860,32 @@ impl Registry {
     }
 
     pub fn task_runtime_clear(&self, task_id: &str) -> Result<Task> {
+        self.task_runtime_clear_role(task_id, RuntimeRole::Worker)
+    }
+
+    pub fn task_runtime_clear_role(&self, task_id: &str, role: RuntimeRole) -> Result<Task> {
         let task = self.get_task(task_id)?;
-        if task.runtime_override.is_none() {
+        let already_cleared = match role {
+            RuntimeRole::Worker => task.runtime_override.is_none() && task.runtime_overrides.worker.is_none(),
+            RuntimeRole::Validator => task.runtime_overrides.validator.is_none(),
+        };
+        if already_cleared {
             return Ok(task);
         }
 
-        let event = Event::new(
-            EventPayload::TaskRuntimeCleared { task_id: task.id },
-            CorrelationIds::for_task(task.project_id, task.id),
-        );
+        let event = match role {
+            RuntimeRole::Worker => Event::new(
+                EventPayload::TaskRuntimeCleared { task_id: task.id },
+                CorrelationIds::for_task(task.project_id, task.id),
+            ),
+            RuntimeRole::Validator => Event::new(
+                EventPayload::TaskRuntimeRoleCleared {
+                    task_id: task.id,
+                    role,
+                },
+                CorrelationIds::for_task(task.project_id, task.id),
+            ),
+        };
         self.store.append(event).map_err(|e| {
             HivemindError::system(
                 "event_append_failed",
@@ -2580,6 +2894,198 @@ impl Registry {
             )
         })?;
         self.get_task(task_id)
+    }
+
+    pub fn task_set_run_mode(&self, task_id: &str, mode: RunMode) -> Result<Task> {
+        let task = self.get_task(task_id)?;
+        if task.run_mode == mode {
+            return Ok(task);
+        }
+
+        self.append_event(
+            Event::new(
+                EventPayload::TaskRunModeSet {
+                    task_id: task.id,
+                    mode,
+                },
+                CorrelationIds::for_task(task.project_id, task.id),
+            ),
+            "registry:task_set_run_mode",
+        )?;
+        if mode == RunMode::Auto {
+            let state = self.state()?;
+            if let Some(flow) = state
+                .flows
+                .values()
+                .filter(|flow| flow.task_executions.contains_key(&task.id))
+                .max_by_key(|flow| flow.updated_at)
+                .filter(|flow| flow.run_mode == RunMode::Auto && flow.state == FlowState::Running)
+            {
+                let _ = self.auto_progress_flow(&flow.id.to_string());
+            }
+        }
+        self.get_task(task_id)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn flow_runtime_set(
+        &self,
+        flow_id: &str,
+        role: RuntimeRole,
+        adapter: &str,
+        binary_path: &str,
+        model: Option<String>,
+        args: &[String],
+        env: &[String],
+        timeout_ms: u64,
+        max_parallel_tasks: u16,
+    ) -> Result<TaskFlow> {
+        let flow = self.get_flow(flow_id)?;
+        if max_parallel_tasks == 0 {
+            return Err(HivemindError::user(
+                "invalid_max_parallel_tasks",
+                "max_parallel_tasks must be at least 1",
+                "registry:flow_runtime_set",
+            )
+            .with_hint("Use --max-parallel-tasks 1 or higher"));
+        }
+        Self::ensure_supported_runtime_adapter(adapter, "registry:flow_runtime_set")?;
+        let env_map = Self::parse_runtime_env_pairs(env, "registry:flow_runtime_set")?;
+        self.append_event(
+            Event::new(
+                EventPayload::TaskFlowRuntimeConfigured {
+                    flow_id: flow.id,
+                    role,
+                    adapter_name: adapter.to_string(),
+                    binary_path: binary_path.to_string(),
+                    model,
+                    args: args.to_vec(),
+                    env: env_map,
+                    timeout_ms,
+                    max_parallel_tasks,
+                },
+                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            ),
+            "registry:flow_runtime_set",
+        )?;
+        self.get_flow(flow_id)
+    }
+
+    pub fn flow_runtime_clear(&self, flow_id: &str, role: RuntimeRole) -> Result<TaskFlow> {
+        let flow = self.get_flow(flow_id)?;
+        self.append_event(
+            Event::new(
+                EventPayload::TaskFlowRuntimeCleared {
+                    flow_id: flow.id,
+                    role,
+                },
+                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            ),
+            "registry:flow_runtime_clear",
+        )?;
+        self.get_flow(flow_id)
+    }
+
+    pub fn flow_set_run_mode(&self, flow_id: &str, mode: RunMode) -> Result<TaskFlow> {
+        let flow = self.get_flow(flow_id)?;
+        if flow.run_mode == mode {
+            return Ok(flow);
+        }
+        self.append_event(
+            Event::new(
+                EventPayload::TaskFlowRunModeSet {
+                    flow_id: flow.id,
+                    mode,
+                },
+                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            ),
+            "registry:flow_set_run_mode",
+        )?;
+        let updated = self.get_flow(flow_id)?;
+        if mode == RunMode::Auto {
+            if updated.state == FlowState::Created {
+                let state = self.state()?;
+                if Self::unmet_flow_dependencies(&state, &updated).is_empty() {
+                    return self.start_flow(flow_id);
+                }
+            }
+            if updated.state == FlowState::Running {
+                return self.auto_progress_flow(flow_id);
+            }
+        }
+        Ok(updated)
+    }
+
+    pub fn flow_add_dependency(
+        &self,
+        flow_id: &str,
+        depends_on_flow_id: &str,
+    ) -> Result<TaskFlow> {
+        let flow = self.get_flow(flow_id)?;
+        let dependency = self.get_flow(depends_on_flow_id)?;
+        if flow.id == dependency.id {
+            return Err(HivemindError::user(
+                "flow_dependency_self",
+                "A flow cannot depend on itself",
+                "registry:flow_add_dependency",
+            ));
+        }
+        if flow.project_id != dependency.project_id {
+            return Err(HivemindError::user(
+                "flow_dependency_cross_project",
+                "Flows must belong to the same project",
+                "registry:flow_add_dependency",
+            ));
+        }
+        if flow.state != FlowState::Created {
+            return Err(HivemindError::user(
+                "flow_dependency_locked",
+                "Flow dependencies can only be changed while flow is in CREATED state",
+                "registry:flow_add_dependency",
+            ));
+        }
+
+        let state = self.state()?;
+        let mut deps = flow.depends_on_flows.clone();
+        deps.insert(dependency.id);
+
+        let has_cycle = |state: &AppState, start: Uuid, deps_snapshot: &HashSet<Uuid>| {
+            let mut stack: Vec<Uuid> = deps_snapshot.iter().copied().collect();
+            let mut seen: HashSet<Uuid> = HashSet::new();
+            while let Some(next) = stack.pop() {
+                if next == start {
+                    return true;
+                }
+                if !seen.insert(next) {
+                    continue;
+                }
+                if let Some(other) = state.flows.get(&next) {
+                    for dep in &other.depends_on_flows {
+                        stack.push(*dep);
+                    }
+                }
+            }
+            false
+        };
+        if has_cycle(&state, flow.id, &deps) {
+            return Err(HivemindError::user(
+                "flow_dependency_cycle",
+                "Flow dependency introduces a cycle",
+                "registry:flow_add_dependency",
+            ));
+        }
+
+        self.append_event(
+            Event::new(
+                EventPayload::TaskFlowDependencyAdded {
+                    flow_id: flow.id,
+                    depends_on_flow_id: dependency.id,
+                },
+                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            ),
+            "registry:flow_add_dependency",
+        )?;
+        self.get_flow(flow_id)
     }
 
     fn binary_available(binary: &str) -> bool {
@@ -2810,10 +3316,17 @@ impl Registry {
         let mut ready = flow.tasks_in_state(TaskExecState::Ready);
         ready.sort();
 
-        let preferred =
-            preferred_task.filter(|task_id| retrying.contains(task_id) || ready.contains(task_id));
-        let task_to_run =
-            preferred.or_else(|| retrying.first().copied().or_else(|| ready.first().copied()));
+        let preferred = preferred_task.filter(|task_id| {
+            (retrying.contains(task_id) || ready.contains(task_id))
+                && Self::can_auto_run_task(&state, *task_id)
+        });
+        let task_to_run = preferred.or_else(|| {
+            retrying
+                .iter()
+                .chain(ready.iter())
+                .find(|task_id| Self::can_auto_run_task(&state, **task_id))
+                .copied()
+        });
 
         let Some(task_id) = task_to_run else {
             let all_success = flow
@@ -2832,44 +3345,15 @@ impl Registry {
                         "registry:tick_flow",
                     )
                 })?;
+                self.maybe_autostart_dependent_flows(flow.id)?;
                 return self.get_flow(flow_id);
             }
 
             return Ok(flow);
         };
 
-        let project = state.projects.get(&flow.project_id).ok_or_else(|| {
-            HivemindError::system(
-                "project_not_found",
-                format!("Project '{}' not found", flow.project_id),
-                "registry:tick_flow",
-            )
-        })?;
-
-        let project_runtime = project.runtime.clone().ok_or_else(|| {
-            HivemindError::new(
-                ErrorCategory::Runtime,
-                "runtime_not_configured",
-                "Project has no runtime configured",
-                "registry:tick_flow",
-            )
-        })?;
-        let task_runtime_override = state
-            .tasks
-            .get(&task_id)
-            .and_then(|task| task.runtime_override.clone());
-        let runtime = task_runtime_override.map_or_else(
-            || project_runtime.clone(),
-            |ovr| ProjectRuntimeConfig {
-                adapter_name: ovr.adapter_name,
-                binary_path: ovr.binary_path,
-                model: ovr.model,
-                args: ovr.args,
-                env: ovr.env,
-                timeout_ms: ovr.timeout_ms,
-                max_parallel_tasks: project_runtime.max_parallel_tasks,
-            },
-        );
+        let runtime =
+            self.effective_runtime_for_task(&state, &flow, task_id, RuntimeRole::Worker, "registry:tick_flow")?;
 
         let worktree_status =
             Self::ensure_task_worktree(&flow, &state, task_id, "registry:tick_flow")?;
@@ -3471,10 +3955,27 @@ impl Registry {
             )
         })?;
 
-        let configured_limit = project
-            .runtime
+        let flow_defaults = state
+            .flow_runtime_defaults
+            .get(&flow.id)
+            .cloned()
+            .unwrap_or_default();
+        let configured_limit = flow_defaults
+            .worker
             .as_ref()
-            .map_or(1_u16, |cfg| cfg.max_parallel_tasks.max(1));
+            .map(|cfg| cfg.max_parallel_tasks.max(1))
+            .or_else(|| {
+                Self::project_runtime_for_role(project, RuntimeRole::Worker)
+                    .map(|cfg| cfg.max_parallel_tasks.max(1))
+            })
+            .or_else(|| {
+                state
+                    .global_runtime_defaults
+                    .worker
+                    .as_ref()
+                    .map(|cfg| cfg.max_parallel_tasks.max(1))
+            })
+            .unwrap_or(1_u16);
         let requested_limit = max_parallel.unwrap_or(configured_limit);
         let global_limit = match env::var("HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL") {
             Ok(raw) => Self::parse_global_parallel_limit(Some(raw))?,
@@ -3552,6 +4053,9 @@ impl Registry {
             let mut chosen: Option<(Uuid, Scope)> = None;
 
             for candidate_id in candidates {
+                if !Self::can_auto_run_task(&state, candidate_id) {
+                    continue;
+                }
                 let Some(task) = graph.tasks.get(&candidate_id) else {
                     continue;
                 };
@@ -3664,6 +4168,56 @@ impl Registry {
         }
 
         Ok(latest_flow)
+    }
+
+    fn auto_progress_flow(&self, flow_id: &str) -> Result<TaskFlow> {
+        const MAX_AUTO_ITERATIONS: usize = 1024;
+
+        for _ in 0..MAX_AUTO_ITERATIONS {
+            let latest = self.get_flow(flow_id)?;
+            if latest.state != FlowState::Running {
+                return Ok(latest);
+            }
+
+            let state = self.state()?;
+            let graph = state.graphs.get(&latest.graph_id).ok_or_else(|| {
+                HivemindError::system(
+                    "graph_not_found",
+                    "Graph not found",
+                    "registry:auto_progress_flow",
+                )
+            })?;
+
+            let has_verifying = latest
+                .tasks_in_state(TaskExecState::Verifying)
+                .first()
+                .is_some();
+            let has_auto_runnable = latest
+                .tasks_in_state(TaskExecState::Retry)
+                .into_iter()
+                .chain(latest.tasks_in_state(TaskExecState::Ready))
+                .any(|task_id| {
+                    graph.tasks.contains_key(&task_id) && Self::can_auto_run_task(&state, task_id)
+                });
+
+            if !has_verifying && !has_auto_runnable {
+                return Ok(latest);
+            }
+
+            let before_state = latest.state;
+            let before_counts = latest.task_state_counts();
+            let next = self.tick_flow(flow_id, false, None)?;
+            let after_counts = next.task_state_counts();
+            if before_state == next.state && before_counts == after_counts {
+                return Ok(next);
+            }
+        }
+
+        Err(HivemindError::system(
+            "auto_progress_limit_exceeded",
+            "Auto flow progression exceeded safety iteration limit",
+            "registry:auto_progress_flow",
+        ))
     }
 
     fn parse_global_parallel_limit(raw: Option<String>) -> Result<u16> {
@@ -4478,6 +5032,50 @@ impl Registry {
         })
     }
 
+    fn unmet_flow_dependencies(state: &AppState, flow: &TaskFlow) -> Vec<Uuid> {
+        let mut unmet: Vec<Uuid> = flow
+            .depends_on_flows
+            .iter()
+            .filter(|dep_id| {
+                state
+                    .flows
+                    .get(dep_id)
+                    .is_none_or(|dep| dep.state != FlowState::Completed)
+            })
+            .copied()
+            .collect();
+        unmet.sort();
+        unmet
+    }
+
+    fn can_auto_run_task(state: &AppState, task_id: Uuid) -> bool {
+        state
+            .tasks
+            .get(&task_id)
+            .is_none_or(|task| task.run_mode == RunMode::Auto)
+    }
+
+    fn maybe_autostart_dependent_flows(&self, completed_flow_id: Uuid) -> Result<()> {
+        let state = self.state()?;
+        let mut candidates: Vec<Uuid> = state
+            .flows
+            .values()
+            .filter(|flow| {
+                flow.state == FlowState::Created
+                    && flow.run_mode == RunMode::Auto
+                    && flow.depends_on_flows.contains(&completed_flow_id)
+                    && Self::unmet_flow_dependencies(&state, flow).is_empty()
+            })
+            .map(|flow| flow.id)
+            .collect();
+        candidates.sort();
+
+        for candidate in candidates {
+            let _ = self.start_flow(&candidate.to_string())?;
+        }
+        Ok(())
+    }
+
     pub fn create_flow(&self, graph_id: &str, name: Option<&str>) -> Result<TaskFlow> {
         let graph = self
             .get_graph(graph_id)
@@ -4586,7 +5184,11 @@ impl Registry {
                         "registry:start_flow",
                     )
                 })?;
-                return self.get_flow(flow_id);
+                let resumed = self.get_flow(flow_id)?;
+                if resumed.run_mode == RunMode::Auto {
+                    return self.auto_progress_flow(flow_id);
+                }
+                return Ok(resumed);
             }
             FlowState::Running => {
                 let err = HivemindError::user(
@@ -4648,6 +5250,30 @@ impl Registry {
         }
 
         let state = self.state()?;
+        let unmet = Self::unmet_flow_dependencies(&state, &flow);
+        if !unmet.is_empty() {
+            let preview = unmet
+                .iter()
+                .take(5)
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let suffix = if unmet.len() > 5 {
+                format!(" (+{} more)", unmet.len().saturating_sub(5))
+            } else {
+                String::new()
+            };
+            let err = HivemindError::user(
+                "flow_dependencies_unmet",
+                format!("Flow dependencies are not completed: {preview}{suffix}"),
+                "registry:start_flow",
+            );
+            self.record_error_event(
+                &err,
+                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            );
+            return Err(err);
+        }
 
         let base_revision = state
             .projects
@@ -4719,7 +5345,11 @@ impl Registry {
             }
         }
 
-        self.get_flow(flow_id)
+        let started = self.get_flow(flow_id)?;
+        if started.run_mode == RunMode::Auto {
+            return self.auto_progress_flow(flow_id);
+        }
+        Ok(started)
     }
 
     pub fn worktree_list(&self, flow_id: &str) -> Result<Vec<WorktreeStatus>> {
@@ -4834,7 +5464,11 @@ impl Registry {
             HivemindError::system("event_append_failed", e.to_string(), "registry:resume_flow")
         })?;
 
-        self.get_flow(flow_id)
+        let resumed = self.get_flow(flow_id)?;
+        if resumed.run_mode == RunMode::Auto {
+            return self.auto_progress_flow(flow_id);
+        }
+        Ok(resumed)
     }
 
     pub fn abort_flow(
@@ -5450,7 +6084,11 @@ impl Registry {
             origin,
         )?;
 
-        self.get_flow(&flow.id.to_string())
+        let updated = self.get_flow(&flow.id.to_string())?;
+        if updated.run_mode == RunMode::Auto {
+            return self.auto_progress_flow(&flow.id.to_string());
+        }
+        Ok(updated)
     }
 
     pub fn get_attempt(&self, attempt_id: &str) -> Result<AttemptState> {
@@ -6817,6 +7455,298 @@ impl Registry {
         })
     }
 
+    pub fn merge_execute_with_options(
+        &self,
+        flow_id: &str,
+        options: MergeExecuteOptions,
+    ) -> Result<crate::core::state::MergeState> {
+        match options.mode {
+            MergeExecuteMode::Local => self.merge_execute(flow_id),
+            MergeExecuteMode::Pr => self.merge_execute_via_pr(flow_id, &options),
+        }
+    }
+
+    fn merge_execute_via_pr(
+        &self,
+        flow_id: &str,
+        options: &MergeExecuteOptions,
+    ) -> Result<crate::core::state::MergeState> {
+        let origin = "registry:merge_execute_via_pr";
+        let flow = self.get_flow(flow_id)?;
+
+        let state = self.state()?;
+        let ms = state.merge_states.get(&flow.id).ok_or_else(|| {
+            HivemindError::user(
+                "merge_not_prepared",
+                "No merge preparation exists for this flow",
+                origin,
+            )
+        })?;
+
+        if ms.status != crate::core::state::MergeStatus::Approved {
+            return Err(HivemindError::user(
+                "merge_not_approved",
+                "Merge has not been approved",
+                origin,
+            ));
+        }
+        if flow.state != FlowState::FrozenForMerge {
+            return Err(HivemindError::user(
+                "flow_not_frozen_for_merge",
+                "Flow must be frozen for merge before execution",
+                origin,
+            ));
+        }
+
+        let _integration_lock = self.acquire_flow_integration_lock(flow.id, origin)?;
+        self.emit_integration_lock_acquired(&flow, "merge_execute_pr", origin)?;
+
+        let managers = Self::worktree_managers_for_flow(&flow, &state, origin)?;
+        if managers.len() != 1 {
+            return Err(HivemindError::user(
+                "pr_merge_multi_repo_unsupported",
+                "PR merge mode currently supports exactly one repository",
+                origin,
+            ));
+        }
+        let (_repo_name, manager) = managers.into_iter().next().ok_or_else(|| {
+            HivemindError::system(
+                "repo_not_found",
+                "No repository attached to project",
+                origin,
+            )
+        })?;
+        let repo_path = manager.repo_path().to_path_buf();
+        let merge_branch = format!("integration/{}/prepare", flow.id);
+        let merge_ref = format!("refs/heads/{merge_branch}");
+        if !Self::git_ref_exists(&repo_path, &merge_ref) {
+            return Err(
+                HivemindError::user(
+                    "merge_branch_not_found",
+                    "Prepared integration branch not found",
+                    origin,
+                )
+                .with_hint("Run 'hivemind merge prepare' again"),
+            );
+        }
+
+        let target_branch = ms.target_branch.clone().unwrap_or_else(|| "main".to_string());
+        let old_target_head = std::process::Command::new("git")
+            .current_dir(&repo_path)
+            .args(["rev-parse", &target_branch])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+        let push = std::process::Command::new("git")
+            .current_dir(&repo_path)
+            .args(["push", "--set-upstream", "origin", &merge_branch])
+            .output()
+            .map_err(|e| HivemindError::system("git_push_failed", e.to_string(), origin))?;
+        if !push.status.success() {
+            return Err(HivemindError::git(
+                "git_push_failed",
+                String::from_utf8_lossy(&push.stderr).to_string(),
+                origin,
+            ));
+        }
+
+        let title = format!("Hivemind flow {} merge", flow.id);
+        let body = format!(
+            "Automated merge PR for flow {}\n\nTarget: {}\n\nGenerated by Hivemind.",
+            flow.id, target_branch
+        );
+
+        let create = std::process::Command::new("gh")
+            .current_dir(&repo_path)
+            .args([
+                "pr",
+                "create",
+                "--base",
+                &target_branch,
+                "--head",
+                &merge_branch,
+                "--title",
+                &title,
+                "--body",
+                &body,
+            ])
+            .output()
+            .map_err(|e| HivemindError::system("gh_not_available", e.to_string(), origin))?;
+
+        if !create.status.success() {
+            let list_existing = std::process::Command::new("gh")
+                .current_dir(&repo_path)
+                .args([
+                    "pr",
+                    "list",
+                    "--state",
+                    "open",
+                    "--base",
+                    &target_branch,
+                    "--head",
+                    &merge_branch,
+                    "--json",
+                    "number",
+                    "--jq",
+                    ".[0].number",
+                ])
+                .output()
+                .map_err(|e| HivemindError::system("gh_pr_list_failed", e.to_string(), origin))?;
+
+            let existing = String::from_utf8_lossy(&list_existing.stdout)
+                .trim()
+                .to_string();
+            if existing.is_empty() {
+                return Err(HivemindError::system(
+                    "gh_pr_create_failed",
+                    String::from_utf8_lossy(&create.stderr).to_string(),
+                    origin,
+                ));
+            }
+        }
+
+        let pr_number_out = std::process::Command::new("gh")
+            .current_dir(&repo_path)
+            .args(["pr", "view", "--json", "number", "--jq", ".number"])
+            .output()
+            .map_err(|e| HivemindError::system("gh_pr_view_failed", e.to_string(), origin))?;
+        if !pr_number_out.status.success() {
+            return Err(HivemindError::system(
+                "gh_pr_view_failed",
+                String::from_utf8_lossy(&pr_number_out.stderr).to_string(),
+                origin,
+            ));
+        }
+        let pr_number = String::from_utf8_lossy(&pr_number_out.stdout).trim().to_string();
+        if pr_number.is_empty() {
+            return Err(HivemindError::system(
+                "gh_pr_view_failed",
+                "Unable to resolve PR number".to_string(),
+                origin,
+            ));
+        }
+
+        if options.monitor_ci {
+            let checks = std::process::Command::new("gh")
+                .current_dir(&repo_path)
+                .args(["pr", "checks", &pr_number, "--watch", "--required"])
+                .output()
+                .map_err(|e| HivemindError::system("gh_pr_checks_failed", e.to_string(), origin))?;
+            if !checks.status.success() {
+                return Err(HivemindError::system(
+                    "gh_pr_checks_failed",
+                    String::from_utf8_lossy(&checks.stderr).to_string(),
+                    origin,
+                ));
+            }
+        }
+
+        let mut merged_now = false;
+        if options.auto_merge {
+            let mut args = vec!["pr", "merge", &pr_number, "--squash", "--delete-branch"];
+            if !options.monitor_ci {
+                args.push("--auto");
+            }
+            let merge = std::process::Command::new("gh")
+                .current_dir(&repo_path)
+                .args(args)
+                .output()
+                .map_err(|e| HivemindError::system("gh_pr_merge_failed", e.to_string(), origin))?;
+            if !merge.status.success() {
+                return Err(HivemindError::system(
+                    "gh_pr_merge_failed",
+                    String::from_utf8_lossy(&merge.stderr).to_string(),
+                    origin,
+                ));
+            }
+            merged_now = options.monitor_ci;
+        }
+
+        if options.pull_after && merged_now {
+            let checkout = std::process::Command::new("git")
+                .current_dir(&repo_path)
+                .args(["checkout", &target_branch])
+                .output()
+                .map_err(|e| HivemindError::system("git_checkout_failed", e.to_string(), origin))?;
+            if !checkout.status.success() {
+                return Err(HivemindError::git(
+                    "git_checkout_failed",
+                    String::from_utf8_lossy(&checkout.stderr).to_string(),
+                    origin,
+                ));
+            }
+
+            let pull = std::process::Command::new("git")
+                .current_dir(&repo_path)
+                .args(["pull", "--ff-only", "origin", &target_branch])
+                .output()
+                .map_err(|e| HivemindError::system("git_pull_failed", e.to_string(), origin))?;
+            if !pull.status.success() {
+                return Err(HivemindError::git(
+                    "git_pull_failed",
+                    String::from_utf8_lossy(&pull.stderr).to_string(),
+                    origin,
+                ));
+            }
+        }
+
+        if merged_now {
+            let new_target_head = std::process::Command::new("git")
+                .current_dir(&repo_path)
+                .args(["rev-parse", &target_branch])
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                .unwrap_or_default();
+
+            let mut commits = Vec::new();
+            if let Some(old_head) = old_target_head {
+                let rev_list = std::process::Command::new("git")
+                    .current_dir(&repo_path)
+                    .args(["rev-list", "--reverse", &format!("{old_head}..{new_target_head}")])
+                    .output()
+                    .ok()
+                    .filter(|o| o.status.success())
+                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    .unwrap_or_default();
+                if !rev_list.is_empty() {
+                    commits.extend(
+                        rev_list
+                            .lines()
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .map(String::from),
+                    );
+                }
+            } else if !new_target_head.is_empty() {
+                commits.push(new_target_head);
+            }
+
+            self.append_event(
+                Event::new(
+                    EventPayload::MergeCompleted {
+                        flow_id: flow.id,
+                        commits,
+                    },
+                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                ),
+                origin,
+            )?;
+        }
+
+        let state = self.state()?;
+        state.merge_states.get(&flow.id).cloned().ok_or_else(|| {
+            HivemindError::system(
+                "merge_state_not_found",
+                "Merge state not found after PR execution",
+                origin,
+            )
+        })
+    }
+
     pub fn replay_flow(&self, flow_id: &str) -> Result<TaskFlow> {
         let fid = Uuid::parse_str(flow_id).map_err(|_| {
             HivemindError::user(
@@ -7448,6 +8378,190 @@ mod tests {
                 EventPayload::RuntimeStarted { adapter_name, .. } if adapter_name == "kilo"
             )
         }));
+    }
+
+    #[test]
+    fn task_run_mode_manual_prevents_automatic_tick_execution() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        registry
+            .task_set_run_mode(&task.id.to_string(), RunMode::Manual)
+            .unwrap();
+
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &["sh".to_string(), "-c".to_string(), "echo should_not_run".to_string()],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let updated = registry.tick_flow(&flow.id.to_string(), false, None).unwrap();
+        assert_eq!(
+            updated
+                .task_executions
+                .get(&task.id)
+                .map(|e| e.state),
+            Some(TaskExecState::Ready)
+        );
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(!events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::RuntimeStarted { .. }
+                    if e.metadata.correlation.flow_id == Some(flow.id)
+            )
+        }));
+    }
+
+    #[test]
+    fn runtime_defaults_follow_task_then_flow_then_project_then_global_precedence() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+
+        registry
+            .runtime_defaults_set(
+                RuntimeRole::Worker,
+                "codex",
+                "/usr/bin/env",
+                None,
+                &[],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+        registry
+            .project_runtime_set_role(
+                "proj",
+                RuntimeRole::Worker,
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &[],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+        registry
+            .flow_runtime_set(
+                &flow.id.to_string(),
+                RuntimeRole::Worker,
+                "kilo",
+                "/usr/bin/env",
+                None,
+                &[],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+        registry
+            .task_runtime_set_role(
+                &task.id.to_string(),
+                RuntimeRole::Worker,
+                "claude-code",
+                "/usr/bin/env",
+                None,
+                &[],
+                &[],
+                1000,
+            )
+            .unwrap();
+
+        let task_level = registry
+            .runtime_health_with_role(None, Some(&task.id.to_string()), None, RuntimeRole::Worker)
+            .unwrap();
+        assert_eq!(task_level.adapter_name, "claude-code");
+
+        registry
+            .task_runtime_clear_role(&task.id.to_string(), RuntimeRole::Worker)
+            .unwrap();
+        let flow_level = registry
+            .runtime_health_with_role(None, Some(&task.id.to_string()), None, RuntimeRole::Worker)
+            .unwrap();
+        assert_eq!(flow_level.adapter_name, "kilo");
+    }
+
+    #[test]
+    fn flow_dependencies_auto_start_downstream_flow_when_upstream_completes() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task_a = registry.create_task("proj", "Task A", None, None).unwrap();
+        let task_b = registry.create_task("proj", "Task B", None, None).unwrap();
+        registry
+            .task_set_run_mode(&task_b.id.to_string(), RunMode::Manual)
+            .unwrap();
+
+        let graph_a = registry.create_graph("proj", "g-a", &[task_a.id]).unwrap();
+        let graph_b = registry.create_graph("proj", "g-b", &[task_b.id]).unwrap();
+        let flow_a = registry.create_flow(&graph_a.id.to_string(), None).unwrap();
+        let flow_b = registry.create_flow(&graph_b.id.to_string(), None).unwrap();
+
+        registry
+            .flow_add_dependency(&flow_b.id.to_string(), &flow_a.id.to_string())
+            .unwrap();
+        registry
+            .flow_set_run_mode(&flow_b.id.to_string(), RunMode::Auto)
+            .unwrap();
+
+        let flow_a = registry.start_flow(&flow_a.id.to_string()).unwrap();
+        let attempt_id = registry.start_task_execution(&task_a.id.to_string()).unwrap();
+        registry
+            .checkpoint_complete(&attempt_id.to_string(), "checkpoint-1", None)
+            .unwrap();
+        registry.complete_task_execution(&task_a.id.to_string()).unwrap();
+        let _ = registry.tick_flow(&flow_a.id.to_string(), false, None).unwrap();
+        let maybe_running = registry.get_flow(&flow_a.id.to_string()).unwrap();
+        if maybe_running.state == FlowState::Running {
+            let _ = registry.tick_flow(&flow_a.id.to_string(), false, None).unwrap();
+        }
+        let completed_a = registry.get_flow(&flow_a.id.to_string()).unwrap();
+        assert_eq!(completed_a.state, FlowState::Completed);
+
+        let downstream = registry.get_flow(&flow_b.id.to_string()).unwrap();
+        assert_eq!(downstream.state, FlowState::Running);
     }
 
     #[test]

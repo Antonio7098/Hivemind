@@ -151,6 +151,8 @@ Capabilities:
 - Start TaskFlow
 - Tick TaskFlow deterministically (`flow tick`)
 - Override per-tick scheduling width (`flow tick --max-parallel`)
+- Set flow run mode (`flow set-run-mode manual|auto`)
+- Add inter-flow dependencies (`flow add-dependency`)
 - Pause TaskFlow
 - Resume TaskFlow
 - Abort TaskFlow
@@ -162,6 +164,7 @@ Capabilities:
 
 Capabilities:
 - Inspect task execution state
+- Set task run mode (`task set-run-mode manual|auto`)
 - Retry task
 - Abort task
 - Escalate task to human
@@ -272,7 +275,8 @@ Capabilities:
 Capabilities:
 - Approve merge
 - Reject merge
-- Apply merge
+- Apply merge locally or via PR automation (`merge execute --mode local|pr`)
+- Monitor CI and request auto-merge for PR mode
 
 ---
 
@@ -281,9 +285,12 @@ Capabilities:
 ### 11.1 Runtime Selection
 
 Capabilities:
-- Select runtime per project
+- Select runtime defaults globally (`runtime defaults-set`)
+- Select runtime per project and role (`project runtime-set --role`)
+- Select runtime per flow and role (`flow runtime-set --role`)
 - Override runtime per task
-- Inspect runtime status
+- Override runtime per task and role (`task runtime-set --role`)
+- Inspect runtime status with role-aware resolution (`runtime health --role --project/--flow/--task`)
 
 ---
 

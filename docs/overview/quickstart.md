@@ -109,6 +109,7 @@ $HM -f json project inspect "expense-tracker"
 
 ```bash
 $HM project runtime-set "expense-tracker" \
+  --role worker \
   --adapter opencode \
   --binary-path /absolute/path/to/opencode \
   --model opencode/kimi-k2.5-free \
@@ -121,6 +122,16 @@ Notes:
 - `--model` is optional; if omitted, the adapter may use its own default.
 - `--max-parallel-tasks` controls per-project scheduling concurrency policy.
 - If the runtime requires credentials, set them in your environment (do not hardcode secrets in scripts).
+- Runtime resolution precedence is: `task override -> flow default -> project default -> global default`.
+
+Optional global fallback defaults:
+
+```bash
+$HM runtime defaults-set \
+  --role worker \
+  --adapter opencode \
+  --binary-path /absolute/path/to/opencode
+```
 
 Optional runtime diagnostics:
 
@@ -133,6 +144,7 @@ Optional task-level override (uses task runtime instead of project default):
 
 ```bash
 $HM task runtime-set "$TASK_A" \
+  --role worker \
   --adapter kilo \
   --binary-path /absolute/path/to/kilo \
   --model opencode/kimi-k2.5-free
@@ -190,13 +202,33 @@ $HM graph add-dependency "$GRAPH_ID" "$TASK_C" "$TASK_B"
 FLOW_ID=$($HM -f json flow create "$GRAPH_ID" --name "expense-tracker-beta" | hm_id)
 ```
 
-### 7.2 Start it
+### 7.2 Choose run mode (manual or auto)
+
+Manual mode (default) requires explicit `flow start` and `flow tick`:
+
+```bash
+$HM flow set-run-mode "$FLOW_ID" manual
+```
+
+Auto mode progresses when dependencies are met:
+
+```bash
+$HM flow set-run-mode "$FLOW_ID" auto
+```
+
+You can also control per-task scheduling:
+
+```bash
+$HM task set-run-mode "$TASK_B" manual
+```
+
+### 7.3 Start it (manual flow mode)
 
 ```bash
 $HM flow start "$FLOW_ID"
 ```
 
-### 7.3 Tick it until it completes
+### 7.4 Tick it until it completes (manual flow mode)
 
 Hivemind is deterministic and explicit: you advance execution using `flow tick`.
 For concurrency governance, optionally set a global cap:
@@ -218,6 +250,20 @@ while true; do
   sleep 1
 done
 ```
+
+### 7.5 Inter-flow dependencies
+
+To make a downstream flow wait for an upstream flow:
+
+```bash
+UPSTREAM_FLOW_ID=$($HM -f json flow create "$GRAPH_ID" --name "upstream" | hm_id)
+DOWNSTREAM_FLOW_ID=$($HM -f json flow create "$GRAPH_ID" --name "downstream" | hm_id)
+$HM flow add-dependency "$DOWNSTREAM_FLOW_ID" "$UPSTREAM_FLOW_ID"
+$HM flow set-run-mode "$DOWNSTREAM_FLOW_ID" auto
+$HM flow set-run-mode "$UPSTREAM_FLOW_ID" auto
+```
+
+When the upstream flow completes, Hivemind automatically starts the downstream flow (if it is `auto`).
 
 ---
 
@@ -274,7 +320,17 @@ $HM -f json merge approve "$FLOW_ID"
 3) Execute
 
 ```bash
-$HM -f json merge execute "$FLOW_ID"
+$HM -f json merge execute "$FLOW_ID" --mode local
+```
+
+Or execute via GitHub PR automation:
+
+```bash
+$HM -f json merge execute "$FLOW_ID" \
+  --mode pr \
+  --monitor-ci \
+  --auto-merge \
+  --pull-after
 ```
 
 Preconditions for `merge execute`:

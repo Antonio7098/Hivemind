@@ -5,6 +5,24 @@
 use super::output::OutputFormat;
 use clap::{Args, Parser, Subcommand};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum RuntimeRoleArg {
+    Worker,
+    Validator,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum RunModeArg {
+    Manual,
+    Auto,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum MergeExecuteModeArg {
+    Local,
+    Pr,
+}
+
 /// Hivemind CLI - Structured orchestration for agentic coding workflows.
 #[derive(Parser)]
 #[command(name = "hivemind")]
@@ -235,6 +253,12 @@ pub enum FlowCommands {
     Abort(FlowAbortArgs),
     /// Show flow state and per-task execution state
     Status(FlowStatusArgs),
+    /// Set flow run mode (`manual` or `auto`)
+    SetRunMode(FlowSetRunModeArgs),
+    /// Add a dependency between flows (`flow` depends on `depends_on_flow`)
+    AddDependency(FlowAddDependencyArgs),
+    /// Configure or clear a flow-level runtime default by role
+    RuntimeSet(FlowRuntimeSetArgs),
 }
 
 #[derive(Args)]
@@ -296,6 +320,65 @@ pub struct FlowAbortArgs {
     pub force: bool,
     #[arg(long)]
     pub reason: Option<String>,
+}
+
+#[derive(Args)]
+pub struct FlowSetRunModeArgs {
+    /// Flow ID
+    pub flow_id: String,
+    /// Run mode
+    #[arg(value_enum)]
+    pub mode: RunModeArg,
+}
+
+#[derive(Args)]
+pub struct FlowAddDependencyArgs {
+    /// Dependent flow ID
+    pub flow_id: String,
+    /// Required upstream flow ID
+    pub depends_on_flow_id: String,
+}
+
+#[derive(Args)]
+pub struct FlowRuntimeSetArgs {
+    /// Flow ID
+    pub flow_id: String,
+
+    /// Clear existing flow-level runtime default for role
+    #[arg(long)]
+    pub clear: bool,
+
+    /// Runtime role
+    #[arg(long, value_enum, default_value = "worker")]
+    pub role: RuntimeRoleArg,
+
+    /// Runtime adapter name
+    #[arg(long, default_value = "opencode")]
+    pub adapter: String,
+
+    /// Path to runtime binary
+    #[arg(long, default_value = "opencode")]
+    pub binary_path: String,
+
+    /// Optional model identifier
+    #[arg(long)]
+    pub model: Option<String>,
+
+    /// Extra args to pass to runtime
+    #[arg(long = "arg", allow_hyphen_values = true)]
+    pub args: Vec<String>,
+
+    /// Extra environment variables in KEY=VALUE form
+    #[arg(long = "env")]
+    pub env: Vec<String>,
+
+    /// Execution timeout in milliseconds
+    #[arg(long, default_value = "600000")]
+    pub timeout_ms: u64,
+
+    /// Max number of tasks that may execute concurrently per flow tick
+    #[arg(long, default_value_t = 1)]
+    pub max_parallel_tasks: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -397,6 +480,10 @@ pub struct ProjectRuntimeSetArgs {
     /// Max number of tasks that may execute concurrently per flow tick
     #[arg(long, default_value_t = 1)]
     pub max_parallel_tasks: u16,
+
+    /// Runtime role
+    #[arg(long, value_enum, default_value = "worker")]
+    pub role: RuntimeRoleArg,
 }
 
 /// Arguments for project inspect.
@@ -479,6 +566,8 @@ pub enum TaskCommands {
     Retry(TaskRetryArgs),
     /// Abort a task within its flow
     Abort(TaskAbortArgs),
+    /// Set task run mode (`manual` or `auto`)
+    SetRunMode(TaskSetRunModeArgs),
 }
 
 #[derive(Args)]
@@ -578,6 +667,19 @@ pub struct TaskRuntimeSetArgs {
     /// Execution timeout in milliseconds
     #[arg(long, default_value = "600000")]
     pub timeout_ms: u64,
+
+    /// Runtime role
+    #[arg(long, value_enum, default_value = "worker")]
+    pub role: RuntimeRoleArg,
+}
+
+#[derive(Args)]
+pub struct TaskSetRunModeArgs {
+    /// Task ID
+    pub task_id: String,
+    /// Run mode
+    #[arg(value_enum)]
+    pub mode: RunModeArg,
 }
 
 /// Runtime subcommands.
@@ -587,6 +689,8 @@ pub enum RuntimeCommands {
     List,
     /// Run runtime adapter health checks
     Health(RuntimeHealthArgs),
+    /// Configure global runtime defaults by role
+    DefaultsSet(RuntimeDefaultsSetArgs),
 }
 
 /// Arguments for runtime health checks.
@@ -599,6 +703,49 @@ pub struct RuntimeHealthArgs {
     /// Optional task ID to health-check effective runtime (task override or project default)
     #[arg(long)]
     pub task: Option<String>,
+
+    /// Optional flow ID to health-check effective runtime defaults
+    #[arg(long)]
+    pub flow: Option<String>,
+
+    /// Runtime role to evaluate
+    #[arg(long, value_enum, default_value = "worker")]
+    pub role: RuntimeRoleArg,
+}
+
+#[derive(Args)]
+pub struct RuntimeDefaultsSetArgs {
+    /// Runtime role
+    #[arg(long, value_enum, default_value = "worker")]
+    pub role: RuntimeRoleArg,
+
+    /// Runtime adapter name
+    #[arg(long, default_value = "opencode")]
+    pub adapter: String,
+
+    /// Path to the runtime binary
+    #[arg(long, default_value = "opencode")]
+    pub binary_path: String,
+
+    /// Optional model identifier for the runtime
+    #[arg(long)]
+    pub model: Option<String>,
+
+    /// Extra args to pass to the runtime (repeatable)
+    #[arg(long = "arg", allow_hyphen_values = true)]
+    pub args: Vec<String>,
+
+    /// Extra environment variables for the runtime in KEY=VALUE form (repeatable)
+    #[arg(long = "env")]
+    pub env: Vec<String>,
+
+    /// Execution timeout in milliseconds
+    #[arg(long, default_value = "600000")]
+    pub timeout_ms: u64,
+
+    /// Max number of tasks that may execute concurrently per flow tick
+    #[arg(long, default_value_t = 1)]
+    pub max_parallel_tasks: u16,
 }
 
 /// Arguments for task close.
@@ -806,6 +953,22 @@ pub struct MergeApproveArgs {
 pub struct MergeExecuteArgs {
     /// Flow ID
     pub flow_id: String,
+
+    /// Merge execution mode (`local` or `pr`)
+    #[arg(long, value_enum, default_value = "local")]
+    pub mode: MergeExecuteModeArg,
+
+    /// For `pr` mode: wait for CI checks to complete
+    #[arg(long)]
+    pub monitor_ci: bool,
+
+    /// For `pr` mode: request automatic squash merge
+    #[arg(long)]
+    pub auto_merge: bool,
+
+    /// After merge, pull target branch from origin
+    #[arg(long)]
+    pub pull_after: bool,
 }
 
 /// Attempt subcommands.

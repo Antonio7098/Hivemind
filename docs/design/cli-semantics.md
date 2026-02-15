@@ -132,15 +132,16 @@ RepositoryAttachedToProject:
 
 **Synopsis:**
 ```
-hivemind project runtime-set <project> [--adapter <name>] [--binary-path <path>] [--model <model>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>] [--max-parallel-tasks <n>]
+hivemind project runtime-set <project> [--role worker|validator] [--adapter <name>] [--binary-path <path>] [--model <model>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>] [--max-parallel-tasks <n>]
 ```
 
 **Preconditions:**
 - Project `<project>` exists
 
 **Effects:**
-- Project runtime configuration is set (or replaced)
-- Adapter selection becomes explicit for TaskFlow execution
+- Project runtime default for the selected role is set (or replaced)
+- Worker defaults influence task execution scheduling/runtime selection
+- Validator defaults influence verification/runtime selection for validator role
 
 **Events:**
 ```
@@ -153,10 +154,22 @@ ProjectRuntimeConfigured:
   env: { <key>: <value>, ... }
   timeout_ms: <ms>
   max_parallel_tasks: <n>
+
+ProjectRuntimeRoleConfigured:
+  project_id: <project_id>
+  role: WORKER|VALIDATOR
+  adapter_name: <name>
+  binary_path: <path>
+  model: <model> | null
+  args: [<args...>]
+  env: { <key>: <value>, ... }
+  timeout_ms: <ms>
+  max_parallel_tasks: <n>
 ```
 
 **Failures:**
 - `project_not_found`
+- `invalid_runtime_adapter`
 - `invalid_env`: invalid env formatting
 - `invalid_max_parallel_tasks`: `--max-parallel-tasks` must be >= 1
 
@@ -386,15 +399,15 @@ TaskUpdated:
 
 **Synopsis:**
 ```
-hivemind task runtime-set <task-id> [--clear] [--adapter <name>] [--binary-path <path>] [--model <model>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>]
+hivemind task runtime-set <task-id> [--role worker|validator] [--clear] [--adapter <name>] [--binary-path <path>] [--model <model>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>]
 ```
 
 **Preconditions:**
 - Task `<task-id>` exists
 
 **Effects:**
-- Sets a task-level runtime override used for execution of that task
-- `--clear` removes the task-level override and falls back to project runtime
+- Sets a task-level runtime override for the selected role
+- `--clear` removes the task-level override and falls back to flow/project/global defaults
 
 **Events:**
 ```
@@ -407,8 +420,22 @@ TaskRuntimeConfigured:
   env: { <key>: <value>, ... }
   timeout_ms: <ms>
 
+TaskRuntimeRoleConfigured:
+  task_id: <task_id>
+  role: WORKER|VALIDATOR
+  adapter_name: <name>
+  binary_path: <path>
+  model: <model> | null
+  args: [<args...>]
+  env: { <key>: <value>, ... }
+  timeout_ms: <ms>
+
 TaskRuntimeCleared:
   task_id: <task_id>
+
+TaskRuntimeRoleCleared:
+  task_id: <task_id>
+  role: WORKER|VALIDATOR
 ```
 
 **Failures:**
@@ -417,6 +444,35 @@ TaskRuntimeCleared:
 - `invalid_env`
 
 **Idempotence:** `--clear` is idempotent when no override is present.
+
+---
+
+### 3.7 task set-run-mode
+
+**Synopsis:**
+```
+hivemind task set-run-mode <task-id> <manual|auto>
+```
+
+**Preconditions:**
+- Task exists
+
+**Effects:**
+- Sets task execution mode:
+  - `auto`: task is eligible for scheduler dispatch when dependencies are met
+  - `manual`: task remains `READY` until explicitly ticked or switched back to `auto`
+
+**Events:**
+```
+TaskRunModeSet:
+  task_id: <task-id>
+  mode: MANUAL|AUTO
+```
+
+**Failures:**
+- `task_not_found`
+
+**Idempotence:** Idempotent when mode is unchanged.
 
 ---
 
@@ -559,6 +615,7 @@ hivemind flow start <flow-id>
 **Preconditions:**
 - Flow exists
 - Flow state is CREATED or PAUSED
+- All declared upstream flow dependencies are completed
 
 **Effects:**
 - Flow state changes to RUNNING
@@ -577,6 +634,7 @@ TaskFlowStarted:
 - `FLOW_ALREADY_RUNNING`: Flow is already running
 - `FLOW_COMPLETED`: Flow has already completed
 - `FLOW_ABORTED`: Flow was aborted
+- `flow_dependencies_unmet`: One or more required upstream flows are not completed
 
 **Idempotence:** Idempotent if flow is PAUSED. Not idempotent if CREATED.
 
@@ -716,7 +774,11 @@ hivemind flow tick <flow-id> [--interactive] [--max-parallel <n>]
 **Preconditions:**
 - Flow exists
 - Flow state is RUNNING
-- Project has runtime configured
+- A runtime can be resolved for runnable tasks using precedence:
+  - task role override
+  - flow role default
+  - project role default
+  - global role default
 
 **Effects:**
 - Transitions any dependency-satisfied `PENDING` tasks to `READY`
@@ -799,6 +861,113 @@ TaskExecutionStateChanged:
 - `invalid_global_parallel_limit`: `HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL` is invalid
 
 **Idempotence:** Not idempotent. Each tick may schedule and/or execute work.
+
+---
+
+### 5.8 flow set-run-mode
+
+**Synopsis:**
+```
+hivemind flow set-run-mode <flow-id> <manual|auto>
+```
+
+**Preconditions:**
+- Flow exists
+
+**Effects:**
+- Sets flow scheduling mode:
+  - `manual`: scheduling advances only via explicit `flow start/resume/tick`
+  - `auto`: flow may automatically progress when runnable
+- If flow is `CREATED`, mode is `auto`, and dependencies are satisfied, flow may start immediately
+- If flow is `RUNNING` and mode changes to `auto`, scheduler attempts immediate progress
+
+**Events:**
+```
+TaskFlowRunModeSet:
+  flow_id: <flow-id>
+  mode: MANUAL|AUTO
+```
+
+**Failures:**
+- `FLOW_NOT_FOUND`
+
+**Idempotence:** Idempotent when mode is unchanged.
+
+---
+
+### 5.9 flow add-dependency
+
+**Synopsis:**
+```
+hivemind flow add-dependency <flow-id> <depends-on-flow-id>
+```
+
+**Preconditions:**
+- Both flows exist
+- Both flows belong to the same project
+- Target flow is in `CREATED` state
+- Dependency does not create a cycle
+
+**Effects:**
+- Declares that `<flow-id>` cannot start until `<depends-on-flow-id>` reaches `COMPLETED`
+
+**Events:**
+```
+TaskFlowDependencyAdded:
+  flow_id: <flow-id>
+  depends_on_flow_id: <depends-on-flow-id>
+```
+
+**Failures:**
+- `FLOW_NOT_FOUND`
+- `flow_dependency_locked`
+- `flow_dependency_cross_project`
+- `flow_dependency_self`
+- `flow_dependency_cycle`
+
+**Idempotence:** Idempotent when dependency already exists.
+
+---
+
+### 5.10 flow runtime-set
+
+**Synopsis:**
+```
+hivemind flow runtime-set <flow-id> [--role worker|validator] [--clear] [--adapter <name>] [--binary-path <path>] [--model <model>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>] [--max-parallel-tasks <n>]
+```
+
+**Preconditions:**
+- Flow exists
+
+**Effects:**
+- Sets or clears a flow-level runtime default for the selected role
+- Flow-level runtime defaults take precedence over project/global defaults and are lower precedence than task overrides
+
+**Events:**
+```
+TaskFlowRuntimeConfigured:
+  flow_id: <flow-id>
+  role: WORKER|VALIDATOR
+  adapter_name: <name>
+  binary_path: <path>
+  model: <model> | null
+  args: [<args...>]
+  env: { <key>: <value>, ... }
+  timeout_ms: <ms>
+  max_parallel_tasks: <n>
+
+TaskFlowRuntimeCleared:
+  flow_id: <flow-id>
+  role: WORKER|VALIDATOR
+```
+
+**Failures:**
+- `FLOW_NOT_FOUND`
+- `invalid_runtime_adapter`
+- `invalid_env`
+- `invalid_max_parallel_tasks`
+
+**Idempotence:** `--clear` is idempotent when no role default exists.
 
 ---
 
@@ -1197,7 +1366,7 @@ MergeApproved:
 
 **Synopsis:**
 ```
-hivemind merge execute <flow-id>
+hivemind merge execute <flow-id> [--mode local|pr] [--monitor-ci] [--auto-merge] [--pull-after]
 ```
 
 **Preconditions:**
@@ -1205,9 +1374,18 @@ hivemind merge execute <flow-id>
 - Merge is approved
 
 **Effects:**
-- Integration commits pushed to target branches
-- Execution branches cleaned up (per policy)
-- Flow marked as merged
+- `--mode local` (default):
+  - acquires integration lock
+  - fast-forwards target from `integration/<flow>/prepare`
+  - cleans integration/exec branches
+  - emits `MergeCompleted`
+- `--mode pr`:
+  - pushes `integration/<flow>/prepare` to origin
+  - creates or reuses a pull request via `gh`
+  - optional CI monitoring (`--monitor-ci`)
+  - optional auto squash merge (`--auto-merge`)
+  - optional pull target branch after merge (`--pull-after`)
+  - emits `MergeCompleted` when merge completion is confirmed
 
 **Events:**
 ```
@@ -1221,6 +1399,10 @@ MergeCompleted:
 - `MERGE_NOT_APPROVED`: Merge not approved
 - `MERGE_CONFLICT`: Conflict occurred during merge
 - `PUSH_FAILED`: Could not push to remote
+- `pr_merge_multi_repo_unsupported`
+- `pr_merge_no_origin`
+- `gh_not_available` / `gh_command_failed`
+- `ci_monitor_failed`
 
 **Idempotence:** Not idempotent. Cannot merge twice.
 
@@ -1244,17 +1426,33 @@ hivemind runtime list
 
 **Synopsis:**
 ```
-hivemind runtime health [--project <project>] [--task <task-id>]
+hivemind runtime health [--project <project>] [--flow <flow-id>] [--task <task-id>] [--role worker|validator]
 ```
 
 **Effects:**
 - Runs adapter health check for the selected runtime target
 - If no target is provided, reports aggregate default-binary availability
+- Reports the effective runtime target selected by role-aware precedence
+
+### runtime defaults-set
+
+**Synopsis:**
+```
+hivemind runtime defaults-set [--role worker|validator] [--adapter <name>] [--binary-path <path>] [--model <model>] [--arg <arg>...] [--env KEY=VALUE...] [--timeout-ms <ms>] [--max-parallel-tasks <n>]
+```
+
+**Effects:**
+- Sets global runtime defaults for the selected role
+- Serves as the final fallback in runtime resolution
 
 **Failures:**
 - `runtime_not_configured` (when checking project/task with no configured runtime)
 - `task_not_found`
+- `flow_not_found`
 - `project_not_found`
+- `invalid_runtime_adapter`
+- `invalid_env`
+- `invalid_max_parallel_tasks`
 
 **Exit behavior:** Returns non-zero when the target runtime is unhealthy.
 

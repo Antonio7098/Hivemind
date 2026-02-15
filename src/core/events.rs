@@ -6,7 +6,7 @@
 use crate::core::diff::ChangeType;
 use crate::core::enforcement::ScopeViolation;
 use crate::core::error::HivemindError;
-use crate::core::flow::{RetryMode, TaskExecState};
+use crate::core::flow::{RetryMode, RunMode, TaskExecState};
 use crate::core::graph::GraphTask;
 use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::verification::CheckConfig;
@@ -18,6 +18,18 @@ use uuid::Uuid;
 
 const fn default_max_parallel_tasks() -> u16 {
     1
+}
+
+const fn default_runtime_role_worker() -> RuntimeRole {
+    RuntimeRole::Worker
+}
+
+/// Runtime role for model/runtime defaults.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RuntimeRole {
+    Worker,
+    Validator,
 }
 
 /// Unique identifier for an event.
@@ -252,6 +264,37 @@ pub enum EventPayload {
         #[serde(default = "default_max_parallel_tasks")]
         max_parallel_tasks: u16,
     },
+    ProjectRuntimeRoleConfigured {
+        project_id: Uuid,
+        #[serde(default = "default_runtime_role_worker")]
+        role: RuntimeRole,
+        adapter_name: String,
+        binary_path: String,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default)]
+        env: HashMap<String, String>,
+        timeout_ms: u64,
+        #[serde(default = "default_max_parallel_tasks")]
+        max_parallel_tasks: u16,
+    },
+    GlobalRuntimeConfigured {
+        #[serde(default = "default_runtime_role_worker")]
+        role: RuntimeRole,
+        adapter_name: String,
+        binary_path: String,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default)]
+        env: HashMap<String, String>,
+        timeout_ms: u64,
+        #[serde(default = "default_max_parallel_tasks")]
+        max_parallel_tasks: u16,
+    },
     /// A new task was created.
     TaskCreated {
         id: Uuid,
@@ -279,8 +322,31 @@ pub enum EventPayload {
         env: HashMap<String, String>,
         timeout_ms: u64,
     },
+    TaskRuntimeRoleConfigured {
+        task_id: Uuid,
+        #[serde(default = "default_runtime_role_worker")]
+        role: RuntimeRole,
+        adapter_name: String,
+        binary_path: String,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default)]
+        env: HashMap<String, String>,
+        timeout_ms: u64,
+    },
     TaskRuntimeCleared {
         task_id: Uuid,
+    },
+    TaskRuntimeRoleCleared {
+        task_id: Uuid,
+        #[serde(default = "default_runtime_role_worker")]
+        role: RuntimeRole,
+    },
+    TaskRunModeSet {
+        task_id: Uuid,
+        mode: RunMode,
     },
     /// A task was closed.
     TaskClosed {
@@ -349,6 +415,35 @@ pub enum EventPayload {
         #[serde(default)]
         name: Option<String>,
         task_ids: Vec<Uuid>,
+    },
+    TaskFlowDependencyAdded {
+        flow_id: Uuid,
+        depends_on_flow_id: Uuid,
+    },
+    TaskFlowRunModeSet {
+        flow_id: Uuid,
+        mode: RunMode,
+    },
+    TaskFlowRuntimeConfigured {
+        flow_id: Uuid,
+        #[serde(default = "default_runtime_role_worker")]
+        role: RuntimeRole,
+        adapter_name: String,
+        binary_path: String,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default)]
+        env: HashMap<String, String>,
+        timeout_ms: u64,
+        #[serde(default = "default_max_parallel_tasks")]
+        max_parallel_tasks: u16,
+    },
+    TaskFlowRuntimeCleared {
+        flow_id: Uuid,
+        #[serde(default = "default_runtime_role_worker")]
+        role: RuntimeRole,
     },
     TaskFlowStarted {
         flow_id: Uuid,

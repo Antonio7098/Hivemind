@@ -114,12 +114,17 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::ProjectCreated { .. } => "ProjectCreated",
         EventPayload::ProjectUpdated { .. } => "ProjectUpdated",
         EventPayload::ProjectRuntimeConfigured { .. } => "ProjectRuntimeConfigured",
+        EventPayload::ProjectRuntimeRoleConfigured { .. } => "ProjectRuntimeRoleConfigured",
+        EventPayload::GlobalRuntimeConfigured { .. } => "GlobalRuntimeConfigured",
         EventPayload::RepositoryAttached { .. } => "RepositoryAttached",
         EventPayload::RepositoryDetached { .. } => "RepositoryDetached",
         EventPayload::TaskCreated { .. } => "TaskCreated",
         EventPayload::TaskUpdated { .. } => "TaskUpdated",
         EventPayload::TaskRuntimeConfigured { .. } => "TaskRuntimeConfigured",
+        EventPayload::TaskRuntimeRoleConfigured { .. } => "TaskRuntimeRoleConfigured",
         EventPayload::TaskRuntimeCleared { .. } => "TaskRuntimeCleared",
+        EventPayload::TaskRuntimeRoleCleared { .. } => "TaskRuntimeRoleCleared",
+        EventPayload::TaskRunModeSet { .. } => "TaskRunModeSet",
         EventPayload::TaskClosed { .. } => "TaskClosed",
         EventPayload::TaskGraphCreated { .. } => "TaskGraphCreated",
         EventPayload::TaskAddedToGraph { .. } => "TaskAddedToGraph",
@@ -129,6 +134,10 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::TaskGraphValidated { .. } => "TaskGraphValidated",
         EventPayload::TaskGraphLocked { .. } => "TaskGraphLocked",
         EventPayload::TaskFlowCreated { .. } => "TaskFlowCreated",
+        EventPayload::TaskFlowDependencyAdded { .. } => "TaskFlowDependencyAdded",
+        EventPayload::TaskFlowRunModeSet { .. } => "TaskFlowRunModeSet",
+        EventPayload::TaskFlowRuntimeConfigured { .. } => "TaskFlowRuntimeConfigured",
+        EventPayload::TaskFlowRuntimeCleared { .. } => "TaskFlowRuntimeCleared",
         EventPayload::TaskFlowStarted { .. } => "TaskFlowStarted",
         EventPayload::TaskFlowPaused { .. } => "TaskFlowPaused",
         EventPayload::TaskFlowResumed { .. } => "TaskFlowResumed",
@@ -191,13 +200,18 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         EventPayload::ProjectCreated { .. }
         | EventPayload::ProjectUpdated { .. }
         | EventPayload::ProjectRuntimeConfigured { .. }
+        | EventPayload::ProjectRuntimeRoleConfigured { .. }
+        | EventPayload::GlobalRuntimeConfigured { .. }
         | EventPayload::RepositoryAttached { .. }
         | EventPayload::RepositoryDetached { .. } => "project",
 
         EventPayload::TaskCreated { .. }
         | EventPayload::TaskUpdated { .. }
         | EventPayload::TaskRuntimeConfigured { .. }
+        | EventPayload::TaskRuntimeRoleConfigured { .. }
         | EventPayload::TaskRuntimeCleared { .. }
+        | EventPayload::TaskRuntimeRoleCleared { .. }
+        | EventPayload::TaskRunModeSet { .. }
         | EventPayload::TaskClosed { .. } => "task",
 
         EventPayload::TaskGraphCreated { .. }
@@ -209,6 +223,10 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskGraphLocked { .. } => "graph",
 
         EventPayload::TaskFlowCreated { .. }
+        | EventPayload::TaskFlowDependencyAdded { .. }
+        | EventPayload::TaskFlowRunModeSet { .. }
+        | EventPayload::TaskFlowRuntimeConfigured { .. }
+        | EventPayload::TaskFlowRuntimeCleared { .. }
         | EventPayload::TaskFlowStarted { .. }
         | EventPayload::TaskFlowPaused { .. }
         | EventPayload::TaskFlowResumed { .. }
