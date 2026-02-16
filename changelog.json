@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.23",
+      "date": "2026-02-16",
+      "phase": 33,
+      "changes": [
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add `flow restart` to recreate aborted flows from the same graph with copied run mode, dependencies, and flow-level runtime defaults"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add `attempt list` and `checkpoint list` commands to improve attempt/checkpoint discoverability for operators and automation"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Improve `worktree cleanup` output to report how many worktrees were cleaned (or would be cleaned in dry-run mode)"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add unit and integration coverage for flow restart semantics, attempt/checkpoint listing, and cleanup feedback UX"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update quickstart and CLI semantics for flow restart, attempt/checkpoint list commands, and cleanup output behavior"
+        },
+        {
+          "type": "changed",
+          "area": "ops",
+          "description": "Refresh beta testing fix report templates in `ops/process` and `ops/reports` with standardized validation, DX, and PR/CI tracking sections"
+        }
+      ]
+    },
+    {
       "version": "v0.1.22",
       "date": "2026-02-15",
       "phase": 32,
