@@ -250,6 +250,10 @@ pub enum EventPayload {
         name: Option<String>,
         description: Option<String>,
     },
+    /// A project was deleted.
+    ProjectDeleted {
+        project_id: Uuid,
+    },
     ProjectRuntimeConfigured {
         project_id: Uuid,
         adapter_name: String,
@@ -354,6 +358,11 @@ pub enum EventPayload {
         #[serde(default)]
         reason: Option<String>,
     },
+    /// A task was deleted.
+    TaskDeleted {
+        task_id: Uuid,
+        project_id: Uuid,
+    },
     /// A repository was attached to a project.
     RepositoryAttached {
         project_id: Uuid,
@@ -404,6 +413,10 @@ pub enum EventPayload {
     },
 
     TaskGraphLocked {
+        graph_id: Uuid,
+        project_id: Uuid,
+    },
+    TaskGraphDeleted {
         graph_id: Uuid,
         project_id: Uuid,
     },
@@ -466,6 +479,11 @@ pub enum EventPayload {
         #[serde(default)]
         reason: Option<String>,
         forced: bool,
+    },
+    TaskFlowDeleted {
+        flow_id: Uuid,
+        graph_id: Uuid,
+        project_id: Uuid,
     },
 
     TaskReady {

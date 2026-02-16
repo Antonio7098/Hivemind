@@ -2785,6 +2785,93 @@ impl Registry {
         self.get_project(&project.id.to_string())
     }
 
+    /// Deletes a project.
+    ///
+    /// # Errors
+    /// Returns an error if the project still has tasks, graphs, or flows.
+    pub fn delete_project(&self, id_or_name: &str) -> Result<Uuid> {
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let state = self.state()?;
+
+        let task_count = state
+            .tasks
+            .values()
+            .filter(|task| task.project_id == project.id)
+            .count();
+        if task_count > 0 {
+            let err = HivemindError::user(
+                "project_has_tasks",
+                format!(
+                    "Project '{}' cannot be deleted while it still has tasks",
+                    project.name
+                ),
+                "registry:delete_project",
+            )
+            .with_context("task_count", task_count.to_string())
+            .with_hint("Delete project tasks first");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
+        }
+
+        let graph_count = state
+            .graphs
+            .values()
+            .filter(|graph| graph.project_id == project.id)
+            .count();
+        if graph_count > 0 {
+            let err = HivemindError::user(
+                "project_has_graphs",
+                format!(
+                    "Project '{}' cannot be deleted while it still has graphs",
+                    project.name
+                ),
+                "registry:delete_project",
+            )
+            .with_context("graph_count", graph_count.to_string())
+            .with_hint("Delete project graphs first");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
+        }
+
+        let flow_count = state
+            .flows
+            .values()
+            .filter(|flow| flow.project_id == project.id)
+            .count();
+        if flow_count > 0 {
+            let err = HivemindError::user(
+                "project_has_flows",
+                format!(
+                    "Project '{}' cannot be deleted while it still has flows",
+                    project.name
+                ),
+                "registry:delete_project",
+            )
+            .with_context("flow_count", flow_count.to_string())
+            .with_hint("Delete project flows first");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
+        }
+
+        let event = Event::new(
+            EventPayload::ProjectDeleted {
+                project_id: project.id,
+            },
+            CorrelationIds::for_project(project.id),
+        );
+        self.store.append(event).map_err(|e| {
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:delete_project",
+            )
+        })?;
+
+        Ok(project.id)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn project_runtime_set(
         &self,
@@ -5098,6 +5185,60 @@ impl Registry {
         self.get_task(task_id)
     }
 
+    /// Deletes a task.
+    ///
+    /// # Errors
+    /// Returns an error if the task is referenced by a graph or flow.
+    pub fn delete_task(&self, task_id: &str) -> Result<Uuid> {
+        let task = self
+            .get_task(task_id)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let state = self.state()?;
+
+        if state
+            .graphs
+            .values()
+            .any(|graph| graph.tasks.contains_key(&task.id))
+        {
+            let err = HivemindError::user(
+                "task_in_graph",
+                "Task is referenced by a graph",
+                "registry:delete_task",
+            )
+            .with_hint("Remove the graph(s) that reference this task first");
+            self.record_error_event(&err, CorrelationIds::for_task(task.project_id, task.id));
+            return Err(err);
+        }
+
+        if state
+            .flows
+            .values()
+            .any(|flow| flow.task_executions.contains_key(&task.id))
+        {
+            let err = HivemindError::user(
+                "task_in_flow",
+                "Task is referenced by a flow",
+                "registry:delete_task",
+            )
+            .with_hint("Delete the flow(s) that reference this task first");
+            self.record_error_event(&err, CorrelationIds::for_task(task.project_id, task.id));
+            return Err(err);
+        }
+
+        let event = Event::new(
+            EventPayload::TaskDeleted {
+                task_id: task.id,
+                project_id: task.project_id,
+            },
+            CorrelationIds::for_task(task.project_id, task.id),
+        );
+        self.store.append(event).map_err(|e| {
+            HivemindError::system("event_append_failed", e.to_string(), "registry:delete_task")
+        })?;
+
+        Ok(task.id)
+    }
+
     pub fn get_graph(&self, graph_id: &str) -> Result<TaskGraph> {
         let id = Uuid::parse_str(graph_id).map_err(|_| {
             HivemindError::user(
@@ -5468,6 +5609,41 @@ impl Registry {
         })
     }
 
+    /// Deletes a graph.
+    ///
+    /// # Errors
+    /// Returns an error if the graph is referenced by any flow.
+    pub fn delete_graph(&self, graph_id: &str) -> Result<Uuid> {
+        let graph = self
+            .get_graph(graph_id)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let state = self.state()?;
+
+        if state.flows.values().any(|flow| flow.graph_id == graph.id) {
+            let err = HivemindError::user(
+                "graph_in_use",
+                "Graph is referenced by an existing flow",
+                "registry:delete_graph",
+            )
+            .with_hint("Delete the flow(s) that reference this graph first");
+            self.record_error_event(&err, CorrelationIds::for_graph(graph.project_id, graph.id));
+            return Err(err);
+        }
+
+        let event = Event::new(
+            EventPayload::TaskGraphDeleted {
+                graph_id: graph.id,
+                project_id: graph.project_id,
+            },
+            CorrelationIds::for_graph(graph.project_id, graph.id),
+        );
+        self.store.append(event).map_err(|e| {
+            HivemindError::system("event_append_failed", e.to_string(), "registry:delete_graph")
+        })?;
+
+        Ok(graph.id)
+    }
+
     pub fn list_flows(&self, project_id_or_name: Option<&str>) -> Result<Vec<TaskFlow>> {
         let project_filter = match project_id_or_name {
             Some(id_or_name) => Some(self.get_project(id_or_name)?.id),
@@ -5502,6 +5678,47 @@ impl Registry {
                 "registry:get_flow",
             )
         })
+    }
+
+    /// Deletes a flow.
+    ///
+    /// # Errors
+    /// Returns an error if the flow is currently active.
+    pub fn delete_flow(&self, flow_id: &str) -> Result<Uuid> {
+        let flow = self
+            .get_flow(flow_id)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+
+        if matches!(
+            flow.state,
+            FlowState::Running | FlowState::Paused | FlowState::FrozenForMerge
+        ) {
+            let err = HivemindError::user(
+                "flow_active",
+                "Cannot delete an active flow",
+                "registry:delete_flow",
+            )
+            .with_hint("Abort or complete the flow before deleting it");
+            self.record_error_event(
+                &err,
+                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            );
+            return Err(err);
+        }
+
+        let event = Event::new(
+            EventPayload::TaskFlowDeleted {
+                flow_id: flow.id,
+                graph_id: flow.graph_id,
+                project_id: flow.project_id,
+            },
+            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+        );
+        self.store.append(event).map_err(|e| {
+            HivemindError::system("event_append_failed", e.to_string(), "registry:delete_flow")
+        })?;
+
+        Ok(flow.id)
     }
 
     pub fn list_attempts(
@@ -8695,6 +8912,34 @@ mod tests {
     }
 
     #[test]
+    fn delete_project_requires_empty_project() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry.create_task("proj", "Task 1", None, None).unwrap();
+
+        let err = registry.delete_project("proj").unwrap_err();
+        assert_eq!(err.code, "project_has_tasks");
+    }
+
+    #[test]
+    fn delete_project_removes_project_and_emits_event() {
+        let registry = test_registry();
+        let project = registry.create_project("proj-delete", None).unwrap();
+
+        let deleted_id = registry.delete_project("proj-delete").unwrap();
+        assert_eq!(deleted_id, project.id);
+        assert!(registry.get_project("proj-delete").is_err());
+
+        let events = registry.store.read_all().unwrap();
+        assert!(events.iter().any(|event| {
+            matches!(
+                event.payload,
+                EventPayload::ProjectDeleted { project_id } if project_id == project.id
+            )
+        }));
+    }
+
+    #[test]
     fn list_graphs_and_flows_support_project_filters() {
         let registry = test_registry();
         registry.create_project("proj-a", None).unwrap();
@@ -9616,6 +9861,19 @@ mod tests {
     }
 
     #[test]
+    fn delete_task_requires_no_graph_references() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let _graph = registry
+            .create_graph("proj", "graph-1", &[task.id])
+            .unwrap();
+
+        let err = registry.delete_task(&task.id.to_string()).unwrap_err();
+        assert_eq!(err.code, "task_in_graph");
+    }
+
+    #[test]
     fn graph_create_from_tasks_and_dependency() {
         let registry = test_registry();
         let proj = registry.create_project("proj", None).unwrap();
@@ -9654,6 +9912,20 @@ mod tests {
             again.dependencies.get(&t2.id),
             updated.dependencies.get(&t2.id)
         );
+    }
+
+    #[test]
+    fn delete_graph_requires_no_flow_references() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry
+            .create_graph("proj", "graph-1", &[task.id])
+            .unwrap();
+        let _flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+
+        let err = registry.delete_graph(&graph.id.to_string()).unwrap_err();
+        assert_eq!(err.code, "graph_in_use");
     }
 
     #[test]
@@ -9743,6 +10015,30 @@ mod tests {
             started.task_executions.get(&t2.id).map(|e| e.state),
             Some(TaskExecState::Pending)
         );
+    }
+
+    #[test]
+    fn flow_delete_rejects_active_and_allows_terminal() {
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+
+        let started = registry.start_flow(&flow.id.to_string()).unwrap();
+        let active_err = registry.delete_flow(&started.id.to_string()).unwrap_err();
+        assert_eq!(active_err.code, "flow_active");
+
+        let aborted = registry
+            .abort_flow(&started.id.to_string(), Some("cleanup"), true)
+            .unwrap();
+        assert_eq!(aborted.state, FlowState::Aborted);
+
+        let deleted_id = registry.delete_flow(&started.id.to_string()).unwrap();
+        assert_eq!(deleted_id, started.id);
+        let not_found = registry.get_flow(&started.id.to_string()).unwrap_err();
+        assert_eq!(not_found.code, "flow_not_found");
     }
 
     #[test]

@@ -256,6 +256,26 @@ impl AppState {
                     project.updated_at = timestamp;
                 }
             }
+            EventPayload::ProjectDeleted { project_id } => {
+                self.projects.remove(project_id);
+
+                let flow_ids: HashSet<Uuid> = self
+                    .flows
+                    .values()
+                    .filter(|flow| flow.project_id == *project_id)
+                    .map(|flow| flow.id)
+                    .collect();
+
+                self.tasks.retain(|_, task| task.project_id != *project_id);
+                self.graphs.retain(|_, graph| graph.project_id != *project_id);
+                self.flows.retain(|_, flow| flow.project_id != *project_id);
+                self.flow_runtime_defaults
+                    .retain(|flow_id, _| !flow_ids.contains(flow_id));
+                self.merge_states
+                    .retain(|flow_id, _| !flow_ids.contains(flow_id));
+                self.attempts
+                    .retain(|_, attempt| !flow_ids.contains(&attempt.flow_id));
+            }
 
             EventPayload::TaskExecutionFrozen {
                 flow_id,
@@ -476,6 +496,12 @@ impl AppState {
                     task.updated_at = timestamp;
                 }
             }
+            EventPayload::TaskDeleted {
+                task_id,
+                project_id: _,
+            } => {
+                self.tasks.remove(task_id);
+            }
             EventPayload::RepositoryAttached {
                 project_id,
                 path,
@@ -587,6 +613,12 @@ impl AppState {
                     graph.state = GraphState::Locked;
                     graph.updated_at = timestamp;
                 }
+            }
+            EventPayload::TaskGraphDeleted {
+                graph_id,
+                project_id: _,
+            } => {
+                self.graphs.remove(graph_id);
             }
             EventPayload::TaskFlowCreated {
                 flow_id,
@@ -738,6 +770,16 @@ impl AppState {
                     flow.completed_at = Some(timestamp);
                     flow.updated_at = timestamp;
                 }
+            }
+            EventPayload::TaskFlowDeleted {
+                flow_id,
+                graph_id: _,
+                project_id: _,
+            } => {
+                self.flows.remove(flow_id);
+                self.flow_runtime_defaults.remove(flow_id);
+                self.merge_states.remove(flow_id);
+                self.attempts.retain(|_, attempt| attempt.flow_id != *flow_id);
             }
             EventPayload::TaskReady { flow_id, task_id } => {
                 if let Some(flow) = self.flows.get_mut(flow_id) {

@@ -455,6 +455,13 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
+        GraphCommands::Delete(args) => match registry.delete_graph(&args.graph_id) {
+            Ok(graph_id) => {
+                print_graph_id(graph_id, format);
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
     }
 }
 
@@ -616,6 +623,13 @@ fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
+        FlowCommands::Delete(args) => match registry.delete_flow(&args.flow_id) {
+            Ok(flow_id) => {
+                print_flow_id(flow_id, format);
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
     }
 }
 
@@ -698,6 +712,24 @@ fn print_project(project: &Project, format: OutputFormat) {
         _ => {
             if let Err(err) = output(project, format) {
                 eprintln!("Failed to render project: {err}");
+            }
+        }
+    }
+}
+
+fn print_project_id(project_id: Uuid, format: OutputFormat) {
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::json!({"project_id": project_id}));
+        }
+        OutputFormat::Table => {
+            println!("Project ID: {project_id}");
+        }
+        OutputFormat::Yaml => {
+            if let Ok(yaml) =
+                serde_yaml::to_string(&serde_json::json!({"project_id": project_id.to_string()}))
+            {
+                print!("{yaml}");
             }
         }
     }
@@ -819,6 +851,13 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
+        ProjectCommands::Delete(args) => match registry.delete_project(&args.project) {
+            Ok(project_id) => {
+                print_project_id(project_id, format);
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
     }
 }
 
@@ -869,6 +908,24 @@ fn print_tasks(tasks: &[Task], format: OutputFormat) {
         _ => {
             if let Err(err) = output(tasks, format) {
                 eprintln!("Failed to render tasks: {err}");
+            }
+        }
+    }
+}
+
+fn print_task_id(task_id: Uuid, format: OutputFormat) {
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::json!({"task_id": task_id}));
+        }
+        OutputFormat::Table => {
+            println!("Task ID: {task_id}");
+        }
+        OutputFormat::Yaml => {
+            if let Ok(yaml) =
+                serde_yaml::to_string(&serde_json::json!({"task_id": task_id.to_string()}))
+            {
+                print!("{yaml}");
             }
         }
     }
@@ -1122,6 +1179,13 @@ fn handle_task(cmd: TaskCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
+        TaskCommands::Delete(args) => match registry.delete_task(&args.task_id) {
+            Ok(task_id) => {
+                print_task_id(task_id, format);
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
     }
 }
 
@@ -1222,6 +1286,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::ErrorOccurred { .. } => "error_occurred",
         EventPayload::ProjectCreated { .. } => "project_created",
         EventPayload::ProjectUpdated { .. } => "project_updated",
+        EventPayload::ProjectDeleted { .. } => "project_deleted",
         EventPayload::ProjectRuntimeConfigured { .. } => "project_runtime_configured",
         EventPayload::ProjectRuntimeRoleConfigured { .. } => "project_runtime_role_configured",
         EventPayload::GlobalRuntimeConfigured { .. } => "global_runtime_configured",
@@ -1233,6 +1298,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::TaskRuntimeRoleCleared { .. } => "task_runtime_role_cleared",
         EventPayload::TaskRunModeSet { .. } => "task_run_mode_set",
         EventPayload::TaskClosed { .. } => "task_closed",
+        EventPayload::TaskDeleted { .. } => "task_deleted",
         EventPayload::RepositoryAttached { .. } => "repo_attached",
         EventPayload::RepositoryDetached { .. } => "repo_detached",
         EventPayload::TaskGraphCreated { .. } => "graph_created",
@@ -1242,6 +1308,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::ScopeAssigned { .. } => "graph_scope_assigned",
         EventPayload::TaskGraphValidated { .. } => "graph_validated",
         EventPayload::TaskGraphLocked { .. } => "graph_locked",
+        EventPayload::TaskGraphDeleted { .. } => "graph_deleted",
         EventPayload::TaskFlowCreated { .. } => "flow_created",
         EventPayload::TaskFlowDependencyAdded { .. } => "flow_dependency_added",
         EventPayload::TaskFlowRunModeSet { .. } => "flow_run_mode_set",
@@ -1252,6 +1319,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::TaskFlowResumed { .. } => "flow_resumed",
         EventPayload::TaskFlowCompleted { .. } => "flow_completed",
         EventPayload::TaskFlowAborted { .. } => "flow_aborted",
+        EventPayload::TaskFlowDeleted { .. } => "flow_deleted",
         EventPayload::TaskReady { .. } => "task_ready",
         EventPayload::TaskBlocked { .. } => "task_blocked",
         EventPayload::ScopeConflictDetected { .. } => "scope_conflict_detected",

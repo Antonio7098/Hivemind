@@ -113,6 +113,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::ErrorOccurred { .. } => "ErrorOccurred",
         EventPayload::ProjectCreated { .. } => "ProjectCreated",
         EventPayload::ProjectUpdated { .. } => "ProjectUpdated",
+        EventPayload::ProjectDeleted { .. } => "ProjectDeleted",
         EventPayload::ProjectRuntimeConfigured { .. } => "ProjectRuntimeConfigured",
         EventPayload::ProjectRuntimeRoleConfigured { .. } => "ProjectRuntimeRoleConfigured",
         EventPayload::GlobalRuntimeConfigured { .. } => "GlobalRuntimeConfigured",
@@ -126,6 +127,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::TaskRuntimeRoleCleared { .. } => "TaskRuntimeRoleCleared",
         EventPayload::TaskRunModeSet { .. } => "TaskRunModeSet",
         EventPayload::TaskClosed { .. } => "TaskClosed",
+        EventPayload::TaskDeleted { .. } => "TaskDeleted",
         EventPayload::TaskGraphCreated { .. } => "TaskGraphCreated",
         EventPayload::TaskAddedToGraph { .. } => "TaskAddedToGraph",
         EventPayload::DependencyAdded { .. } => "DependencyAdded",
@@ -133,6 +135,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::ScopeAssigned { .. } => "ScopeAssigned",
         EventPayload::TaskGraphValidated { .. } => "TaskGraphValidated",
         EventPayload::TaskGraphLocked { .. } => "TaskGraphLocked",
+        EventPayload::TaskGraphDeleted { .. } => "TaskGraphDeleted",
         EventPayload::TaskFlowCreated { .. } => "TaskFlowCreated",
         EventPayload::TaskFlowDependencyAdded { .. } => "TaskFlowDependencyAdded",
         EventPayload::TaskFlowRunModeSet { .. } => "TaskFlowRunModeSet",
@@ -143,6 +146,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::TaskFlowResumed { .. } => "TaskFlowResumed",
         EventPayload::TaskFlowCompleted { .. } => "TaskFlowCompleted",
         EventPayload::TaskFlowAborted { .. } => "TaskFlowAborted",
+        EventPayload::TaskFlowDeleted { .. } => "TaskFlowDeleted",
         EventPayload::TaskReady { .. } => "TaskReady",
         EventPayload::TaskBlocked { .. } => "TaskBlocked",
         EventPayload::ScopeConflictDetected { .. } => "ScopeConflictDetected",
@@ -200,6 +204,7 @@ fn payload_category(payload: &EventPayload) -> &'static str {
 
         EventPayload::ProjectCreated { .. }
         | EventPayload::ProjectUpdated { .. }
+        | EventPayload::ProjectDeleted { .. }
         | EventPayload::ProjectRuntimeConfigured { .. }
         | EventPayload::ProjectRuntimeRoleConfigured { .. }
         | EventPayload::GlobalRuntimeConfigured { .. }
@@ -213,7 +218,8 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskRuntimeCleared { .. }
         | EventPayload::TaskRuntimeRoleCleared { .. }
         | EventPayload::TaskRunModeSet { .. }
-        | EventPayload::TaskClosed { .. } => "task",
+        | EventPayload::TaskClosed { .. }
+        | EventPayload::TaskDeleted { .. } => "task",
 
         EventPayload::TaskGraphCreated { .. }
         | EventPayload::TaskAddedToGraph { .. }
@@ -221,7 +227,8 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::GraphTaskCheckAdded { .. }
         | EventPayload::ScopeAssigned { .. }
         | EventPayload::TaskGraphValidated { .. }
-        | EventPayload::TaskGraphLocked { .. } => "graph",
+        | EventPayload::TaskGraphLocked { .. }
+        | EventPayload::TaskGraphDeleted { .. } => "graph",
 
         EventPayload::TaskFlowCreated { .. }
         | EventPayload::TaskFlowDependencyAdded { .. }
@@ -233,6 +240,7 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskFlowResumed { .. }
         | EventPayload::TaskFlowCompleted { .. }
         | EventPayload::TaskFlowAborted { .. }
+        | EventPayload::TaskFlowDeleted { .. }
         | EventPayload::WorktreeCleanupPerformed { .. } => "flow",
 
         EventPayload::TaskReady { .. }
@@ -480,6 +488,11 @@ struct ProjectUpdateRequest {
 }
 
 #[derive(Debug, Deserialize)]
+struct ProjectDeleteRequest {
+    project: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct ProjectRuntimeRequest {
     project: String,
     role: Option<String>,
@@ -519,6 +532,11 @@ struct TaskUpdateRequest {
     task_id: String,
     title: Option<String>,
     description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskDeleteRequest {
+    task_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -594,6 +612,11 @@ struct GraphValidateRequest {
 }
 
 #[derive(Debug, Deserialize)]
+struct GraphDeleteRequest {
+    graph_id: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct FlowCreateRequest {
     graph_id: String,
     name: Option<String>,
@@ -601,6 +624,11 @@ struct FlowCreateRequest {
 
 #[derive(Debug, Deserialize)]
 struct FlowIdRequest {
+    flow_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FlowDeleteRequest {
     flow_id: String,
 }
 
@@ -755,12 +783,14 @@ fn api_catalog() -> ApiCatalog {
         write_endpoints: vec![
             "/api/projects/create",
             "/api/projects/update",
+            "/api/projects/delete",
             "/api/projects/runtime",
             "/api/runtime/defaults",
             "/api/projects/repos/attach",
             "/api/projects/repos/detach",
             "/api/tasks/create",
             "/api/tasks/update",
+            "/api/tasks/delete",
             "/api/tasks/runtime",
             "/api/tasks/run-mode",
             "/api/tasks/close",
@@ -769,10 +799,12 @@ fn api_catalog() -> ApiCatalog {
             "/api/tasks/retry",
             "/api/tasks/abort",
             "/api/graphs/create",
+            "/api/graphs/delete",
             "/api/graphs/dependencies/add",
             "/api/graphs/checks/add",
             "/api/graphs/validate",
             "/api/flows/create",
+            "/api/flows/delete",
             "/api/flows/start",
             "/api/flows/tick",
             "/api/flows/pause",
@@ -1107,6 +1139,15 @@ fn handle_api_request_inner(
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
+        "/api/projects/delete" if method == ApiMethod::Post => {
+            let req: ProjectDeleteRequest = parse_json_body(body, "server:projects:delete")?;
+            let wrapped = CliResponse::success(serde_json::json!({
+                "project_id": registry.delete_project(&req.project)?,
+            }));
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
         "/api/projects/runtime" if method == ApiMethod::Post => {
             let req: ProjectRuntimeRequest = parse_json_body(body, "server:projects:runtime")?;
             let env_pairs = env_pairs_from_map(req.env);
@@ -1203,6 +1244,15 @@ fn handle_api_request_inner(
                 req.title.as_deref(),
                 req.description.as_deref(),
             )?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/tasks/delete" if method == ApiMethod::Post => {
+            let req: TaskDeleteRequest = parse_json_body(body, "server:tasks:delete")?;
+            let wrapped = CliResponse::success(serde_json::json!({
+                "task_id": registry.delete_task(&req.task_id)?,
+            }));
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
@@ -1323,6 +1373,15 @@ fn handle_api_request_inner(
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
+        "/api/graphs/delete" if method == ApiMethod::Post => {
+            let req: GraphDeleteRequest = parse_json_body(body, "server:graphs:delete")?;
+            let wrapped = CliResponse::success(serde_json::json!({
+                "graph_id": registry.delete_graph(&req.graph_id)?,
+            }));
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
         "/api/graphs/dependencies/add" if method == ApiMethod::Post => {
             let req: GraphDependencyRequest =
                 parse_json_body(body, "server:graphs:dependencies:add")?;
@@ -1360,6 +1419,15 @@ fn handle_api_request_inner(
             let req: FlowCreateRequest = parse_json_body(body, "server:flows:create")?;
             let wrapped =
                 CliResponse::success(registry.create_flow(&req.graph_id, req.name.as_deref())?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/flows/delete" if method == ApiMethod::Post => {
+            let req: FlowDeleteRequest = parse_json_body(body, "server:flows:delete")?;
+            let wrapped = CliResponse::success(serde_json::json!({
+                "flow_id": registry.delete_flow(&req.flow_id)?,
+            }));
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
@@ -1539,12 +1607,14 @@ fn handle_api_request_inner(
         | "/api/worktrees/inspect" => method_not_allowed(path, method, "GET"),
         "/api/projects/create"
         | "/api/projects/update"
+        | "/api/projects/delete"
         | "/api/projects/runtime"
         | "/api/runtime/defaults"
         | "/api/projects/repos/attach"
         | "/api/projects/repos/detach"
         | "/api/tasks/create"
         | "/api/tasks/update"
+        | "/api/tasks/delete"
         | "/api/tasks/runtime"
         | "/api/tasks/run-mode"
         | "/api/tasks/close"
@@ -1553,10 +1623,12 @@ fn handle_api_request_inner(
         | "/api/tasks/retry"
         | "/api/tasks/abort"
         | "/api/graphs/create"
+        | "/api/graphs/delete"
         | "/api/graphs/dependencies/add"
         | "/api/graphs/checks/add"
         | "/api/graphs/validate"
         | "/api/flows/create"
+        | "/api/flows/delete"
         | "/api/flows/start"
         | "/api/flows/tick"
         | "/api/flows/pause"
@@ -1716,5 +1788,35 @@ mod tests {
         let v = json_value(&resp.body);
         assert_eq!(v["success"], true);
         assert_eq!(v["data"]["name"], "proj-a");
+    }
+
+    #[test]
+    fn api_post_project_delete_ok() {
+        let reg = test_registry();
+        let create = serde_json::json!({ "name": "proj-delete" });
+        let create = serde_json::to_vec(&create).expect("json body");
+        let _ = handle_api_request_inner(
+            ApiMethod::Post,
+            "/api/projects/create",
+            10,
+            Some(&create),
+            &reg,
+        )
+        .unwrap();
+
+        let body = serde_json::json!({ "project": "proj-delete" });
+        let body = serde_json::to_vec(&body).expect("json body");
+        let resp = handle_api_request_inner(
+            ApiMethod::Post,
+            "/api/projects/delete",
+            10,
+            Some(&body),
+            &reg,
+        )
+        .unwrap();
+        assert_eq!(resp.status_code, 200);
+        let v = json_value(&resp.body);
+        assert_eq!(v["success"], true);
+        assert!(v["data"]["project_id"].is_string());
     }
 }

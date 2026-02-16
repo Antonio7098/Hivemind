@@ -71,7 +71,7 @@ Capabilities:
 - List projects
 - Inspect project
 - Update project metadata
-- Archive project
+- Delete project
 
 ---
 
@@ -104,6 +104,7 @@ Capabilities:
 - List tasks
 - Inspect task
 - Close task
+- Delete task
 
 Tasks may exist without execution semantics.
 
@@ -128,6 +129,7 @@ Capabilities:
 - Add dependencies
 - Assign scopes
 - Validate TaskGraph
+- Delete TaskGraph
 
 ---
 
@@ -157,6 +159,7 @@ Capabilities:
 - Resume TaskFlow
 - Abort TaskFlow
 - Inspect TaskFlow state
+- Delete TaskFlow
 
 ---
 

@@ -257,6 +257,38 @@ RepositoryDetached:
 
 ---
 
+### 2.8 project delete
+
+**Synopsis:**
+```
+hivemind project delete <project>
+```
+
+**Preconditions:**
+- Project exists
+- Project has no remaining tasks
+- Project has no remaining graphs
+- Project has no remaining flows
+
+**Effects:**
+- Project is removed from derived state
+
+**Events:**
+```
+ProjectDeleted:
+  project_id: <project-id>
+```
+
+**Failures:**
+- `project_not_found`
+- `project_has_tasks`
+- `project_has_graphs`
+- `project_has_flows`
+
+**Idempotence:** Not idempotent. Second call fails.
+
+---
+
 ## 3. Task Commands
 
 ### 3.1 task create
@@ -476,6 +508,38 @@ TaskRunModeSet:
 
 ---
 
+### 3.8 task delete
+
+**Synopsis:**
+```
+hivemind task delete <task-id>
+```
+
+**Preconditions:**
+- Task exists
+- Task is not referenced by any TaskGraph
+- Task is not referenced by any TaskFlow
+
+**Effects:**
+- Task is removed from derived state
+
+**Events:**
+```
+TaskDeleted:
+  task_id: <task-id>
+  project_id: <project-id>
+```
+
+**Failures:**
+- `invalid_task_id`
+- `task_not_found`
+- `task_in_graph`
+- `task_in_flow`
+
+**Idempotence:** Not idempotent. Second call fails.
+
+---
+
 ## 4. TaskGraph Commands
 
 ### 4.1 graph create
@@ -566,6 +630,36 @@ hivemind graph validate <graph-id>
 - `GRAPH_NOT_FOUND`
 
 **Idempotence:** Idempotent.
+
+---
+
+### 4.4 graph delete
+
+**Synopsis:**
+```
+hivemind graph delete <graph-id>
+```
+
+**Preconditions:**
+- Graph exists
+- Graph is not referenced by any TaskFlow
+
+**Effects:**
+- Graph is removed from derived state
+
+**Events:**
+```
+TaskGraphDeleted:
+  graph_id: <graph-id>
+  project_id: <project-id>
+```
+
+**Failures:**
+- `invalid_graph_id`
+- `graph_not_found`
+- `graph_in_use`
+
+**Idempotence:** Not idempotent. Second call fails.
 
 ---
 
@@ -1017,6 +1111,38 @@ TaskFlowRuntimeCleared:
 - `invalid_max_parallel_tasks`
 
 **Idempotence:** `--clear` is idempotent when no role default exists.
+
+---
+
+### 5.12 flow delete
+
+**Synopsis:**
+```
+hivemind flow delete <flow-id>
+```
+
+**Preconditions:**
+- Flow exists
+- Flow is not active (`running`, `paused`, or `frozen_for_merge`)
+
+**Effects:**
+- Flow is removed from derived state
+- Flow-scoped runtime defaults, merge state, and attempts are removed from derived state
+
+**Events:**
+```
+TaskFlowDeleted:
+  flow_id: <flow-id>
+  graph_id: <graph-id>
+  project_id: <project-id>
+```
+
+**Failures:**
+- `invalid_flow_id`
+- `flow_not_found`
+- `flow_active`
+
+**Idempotence:** Not idempotent. Second call fails.
 
 ---
 
