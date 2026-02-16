@@ -1,6 +1,6 @@
 # Beta Testing Fix Report Template
 
-> Use this template for fixes discovered during beta testing that require rapid stabilization outside the formal phase cadence.
+> Use this template for fixes discovered during beta testing that require rapid stabilization outside the formal sprint cadence.
 
 ---
 
@@ -10,29 +10,30 @@
 |-------|-------|
 | Fix Title | |
 | Date | YYYY-MM-DD |
-| Fix Window | e.g. 2026-02-09 → 2026-02-10 |
-| Branch | `feat/...` |
+| Fix Window | e.g. 2026-02-16 18:00 → 20:45 UTC |
+| Branch | `fix/...` |
 | Owner(s) | |
-| Related Issues / Reports | Tier reports, GitHub issues, etc. |
+| Related Issues / Reports | Tier reports, sprint reports, GitHub issues |
 
 ---
 
-## 2. Source Reports & Phases
+## 2. Source Reports & Inputs
 
-| Artifact / Information | Origin Phase or Report | Reference / Link |
-|------------------------|------------------------|------------------|
-| Overall beta tier status | TIER-0 FINAL REPORT | `24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/TIER-0-FINAL-REPORT.md` |
-| Specific scenario (e.g. SMK-006) | SMK-006 FINAL REPORT | `24-hour-hivemind/runs/tier_0_setup_smoke_must_pass_before_deeper_testing/SMK-006/SMK-006-FINAL-REPORT.md` |
+| Artifact / Information | Origin Sprint/Report | Reference / Link |
+|------------------------|----------------------|------------------|
+| Tier aggregate status | Tier FINAL report | `24-hour-hivemind/runs/...-FINAL-REPORT.md` |
+| Scenario-level evidence | Scenario FINAL report | `24-hour-hivemind/runs/.../<SCENARIO>-FINAL-REPORT.md` |
+| Existing fix notes (if any) | Prior beta fix report | `ops/reports/beta-testing-fix-*.md` |
 
-_Use this table to cite every prior report, phase, or Tier artifact (Tier-0/1/2 FINAL reports, SMK-XXX reports, phase reports) that informed the fix. Add as many rows as needed and keep paths exact so they are navigable from the repo._
+_Add every upstream report that informed this fix. Keep paths exact and repo-relative._
 
 ---
 
 ## 3. Problem Statement
 
-- **Symptoms:** What failures surfaced during beta testing?
-- **Impact:** Scope of affected commands/users.
-- **Detection Source:** Tier script, manual QA, customer beta, etc.
+- **Symptoms:** What failed during beta testing?
+- **Impact:** Which commands/flows/users were blocked or degraded?
+- **Detection Source:** Tier harness, manual QA, dogfooding, customer beta, etc.
 
 ---
 
@@ -40,7 +41,7 @@ _Use this table to cite every prior report, phase, or Tier artifact (Tier-0/1/2 
 
 - **Primary Cause:**
 - **Contributing Factors:**
-- **Why Now:**
+- **Why Not Detected Earlier:**
 
 ---
 
@@ -50,6 +51,7 @@ _Use this table to cite every prior report, phase, or Tier artifact (Tier-0/1/2 
 |------|---------|
 | CLI | |
 | Core/Registry | |
+| Adapters/Runtime | |
 | Docs | |
 | Tooling/Tests | |
 | Other | |
@@ -63,37 +65,55 @@ _Use this table to cite every prior report, phase, or Tier artifact (Tier-0/1/2 
 | cargo fmt --all --check | PASS/FAIL | |
 | cargo clippy --all-targets --all-features -- -D warnings | PASS/FAIL | |
 | cargo test --all-features | PASS/FAIL | |
-| Tier / Shell Scripts | PASS/FAIL | List scripts + links |
-| Manual QA / CLI scenarios | PASS/FAIL | Notes |
+| Targeted regression tests | PASS/FAIL | list test names |
+| Manual QA scenarios | PASS/FAIL | list commands + outcomes |
 
-_Add extra rows for any additional validation (coverage, doc tests, UI checks, etc.)._
-
----
-
-## 7. Observability & Documentation Updates
-
-- Bullet list any doc changes, dashboards, logging tweaks, or instructions added to keep testers aligned.
+_Add rows for extra checks (coverage, perf, UI snapshots, replay verification, etc.) as needed._
 
 ---
 
-## 8. Residual Risk & Follow-ups
+## 7. DX Issues Identified (Optional)
+
+| Issue | Severity | Description | Follow-up |
+|-------|----------|-------------|-----------|
+| | | | |
+
+_Use this section when the fix run surfaces adjacent DX debt not addressed in this patch._
+
+---
+
+## 8. Observability & Documentation Updates
+
+- Event/schema changes:
+- Docs updated:
+- Operational runbook/process updates:
+
+---
+
+## 9. Residual Risk & Follow-ups
 
 | Risk / Debt | Mitigation Plan | Owner | Due |
 |-------------|-----------------|-------|-----|
+| | | | |
 
 ---
 
-## 9. Outstanding Actions
+## 10. Outstanding Actions
 
-- [ ] Changelog updated
-- [ ] PR prepared per `ops/process/phase-execution.md`
-- [ ] Additional TODOs
+- [ ] Changelog updated (`changelog.json`)
+- [ ] PR opened and linked
+- [ ] CI green
+- [ ] Squash merge completed
+- [ ] Follow-up tasks filed (if any)
 
 ---
 
-## 10. Attachments / Evidence
+## 11. Attachments / Evidence
 
-- Links to diffs, logs, Tier artifacts, screenshots, etc.
+- PR link:
+- CI run link:
+- Logs/artifacts:
+- Screenshots (if applicable):
 
 ---
 

@@ -747,7 +747,41 @@ TaskFlowAborted:
 
 ---
 
-### 5.6 flow status
+### 5.6 flow restart
+
+**Synopsis:**
+```
+hivemind flow restart <flow-id> [--name <name>] [--start]
+```
+
+**Preconditions:**
+- Flow exists
+- Flow state is ABORTED
+
+**Effects:**
+- Creates a new flow from the same graph
+- Copies flow dependencies and flow-level runtime defaults
+- Copies run mode (`manual|auto`) from the source flow
+- If `--start` is set, immediately starts the restarted flow
+
+**Events:**
+- Emits the same event sequence as creating/configuring a new flow:
+  - `TaskFlowCreated`
+  - `TaskFlowDependencyAdded` (if dependencies existed)
+  - `TaskFlowRuntimeConfigured` (if flow runtime defaults existed)
+  - `TaskFlowRunModeSet` (if source run mode was `auto`)
+  - `TaskFlowStarted` (if started via `--start` or auto-start)
+
+**Failures:**
+- `FLOW_NOT_FOUND`
+- `flow_not_aborted`: Source flow is not aborted
+- `graph_invalid`: Source graph can no longer validate
+
+**Idempotence:** Not idempotent. Each invocation creates a new flow.
+
+---
+
+### 5.7 flow status
 
 **Synopsis:**
 ```
@@ -774,7 +808,7 @@ hivemind flow status <flow-id>
 
 ---
 
-### 5.7 flow tick
+### 5.8 flow tick
 
 **Synopsis:**
 ```
@@ -879,7 +913,7 @@ TaskExecutionStateChanged:
 
 ---
 
-### 5.8 flow set-run-mode
+### 5.9 flow set-run-mode
 
 **Synopsis:**
 ```
@@ -910,7 +944,7 @@ TaskFlowRunModeSet:
 
 ---
 
-### 5.9 flow add-dependency
+### 5.10 flow add-dependency
 
 **Synopsis:**
 ```
@@ -944,7 +978,7 @@ TaskFlowDependencyAdded:
 
 ---
 
-### 5.10 flow runtime-set
+### 5.11 flow runtime-set
 
 **Synopsis:**
 ```
@@ -1157,7 +1191,32 @@ TaskAborted:
 
 ---
 
-### 6.5 attempt inspect
+### 6.5 attempt list
+
+**Synopsis:**
+```
+hivemind attempt list [--flow <flow-id>] [--task <task-id>] [--limit <n>]
+```
+
+**Preconditions:** None
+
+**Effects:** None (read-only)
+
+**Output:**
+- Attempt metadata (attempt ID, flow ID, task ID, attempt number, checkpoint completion status)
+- Optional filtering by flow/task
+
+**Events:** None
+
+**Failures:**
+- `invalid_flow_id`
+- `invalid_task_id`
+
+**Idempotence:** Idempotent.
+
+---
+
+### 6.6 attempt inspect
 
 **Synopsis:**
 ```
@@ -1188,7 +1247,34 @@ hivemind attempt inspect <attempt-id> [--context] [--diff] [--output]
 
 ---
 
-### 6.6 worktree list
+### 6.7 checkpoint list
+
+**Synopsis:**
+```
+hivemind checkpoint list <attempt-id>
+```
+
+**Preconditions:**
+- Attempt exists
+
+**Effects:** None (read-only)
+
+**Output:**
+- Declared checkpoints for the attempt
+- Current checkpoint state (`declared`, `active`, `completed`)
+- Associated checkpoint commit hash (if completed)
+
+**Events:** None
+
+**Failures:**
+- `invalid_attempt_id`
+- `attempt_not_found`
+
+**Idempotence:** Idempotent.
+
+---
+
+### 6.8 worktree list
 
 **Synopsis:**
 ```
@@ -1215,7 +1301,7 @@ hivemind worktree list <flow-id>
 
 ---
 
-### 6.7 worktree inspect
+### 6.9 worktree inspect
 
 **Synopsis:**
 ```
@@ -1246,7 +1332,7 @@ hivemind worktree inspect <task-id>
 
 ---
 
-### 6.8 worktree cleanup
+### 6.10 worktree cleanup
 
 **Synopsis:**
 ```
@@ -1261,6 +1347,9 @@ hivemind worktree cleanup <flow-id> [--force] [--dry-run]
 **Effects:**
 - Removes all task worktrees for the flow under `.hivemind/worktrees/<flow-id>/...`
 - With `--dry-run`, returns success without removing worktrees
+
+**Output:**
+- Number of worktrees cleaned (or that would be cleaned in `--dry-run`)
 
 **Events:**
 ```
