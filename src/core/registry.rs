@@ -5638,7 +5638,11 @@ impl Registry {
             CorrelationIds::for_graph(graph.project_id, graph.id),
         );
         self.store.append(event).map_err(|e| {
-            HivemindError::system("event_append_failed", e.to_string(), "registry:delete_graph")
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:delete_graph",
+            )
         })?;
 
         Ok(graph.id)

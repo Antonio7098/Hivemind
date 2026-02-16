@@ -267,7 +267,8 @@ impl AppState {
                     .collect();
 
                 self.tasks.retain(|_, task| task.project_id != *project_id);
-                self.graphs.retain(|_, graph| graph.project_id != *project_id);
+                self.graphs
+                    .retain(|_, graph| graph.project_id != *project_id);
                 self.flows.retain(|_, flow| flow.project_id != *project_id);
                 self.flow_runtime_defaults
                     .retain(|flow_id, _| !flow_ids.contains(flow_id));
@@ -779,7 +780,8 @@ impl AppState {
                 self.flows.remove(flow_id);
                 self.flow_runtime_defaults.remove(flow_id);
                 self.merge_states.remove(flow_id);
-                self.attempts.retain(|_, attempt| attempt.flow_id != *flow_id);
+                self.attempts
+                    .retain(|_, attempt| attempt.flow_id != *flow_id);
             }
             EventPayload::TaskReady { flow_id, task_id } => {
                 if let Some(flow) = self.flows.get_mut(flow_id) {
