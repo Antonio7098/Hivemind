@@ -421,6 +421,45 @@ pub enum EventPayload {
         projection_version: u32,
     },
 
+    ConstitutionInitialized {
+        project_id: Uuid,
+        path: String,
+        schema_version: String,
+        constitution_version: u32,
+        digest: String,
+        #[serde(default)]
+        revision: u64,
+        actor: String,
+        mutation_intent: String,
+        confirmed: bool,
+    },
+
+    ConstitutionUpdated {
+        project_id: Uuid,
+        path: String,
+        schema_version: String,
+        constitution_version: u32,
+        previous_digest: String,
+        digest: String,
+        #[serde(default)]
+        revision: u64,
+        actor: String,
+        mutation_intent: String,
+        confirmed: bool,
+    },
+
+    ConstitutionValidated {
+        project_id: Uuid,
+        path: String,
+        schema_version: String,
+        constitution_version: u32,
+        digest: String,
+        valid: bool,
+        #[serde(default)]
+        issues: Vec<String>,
+        validated_by: String,
+    },
+
     TemplateInstantiated {
         project_id: Uuid,
         template_id: String,

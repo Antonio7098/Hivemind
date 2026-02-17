@@ -618,6 +618,270 @@ fn cli_sprint35_governance_artifacts_and_template_instantiation() {
     );
 }
 
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_sprint36_constitution_lifecycle_and_auditability() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "governance", "init", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let constitution_path = tmp.path().join("constitution.yaml");
+    std::fs::write(
+        &constitution_path,
+        r"version: 1
+schema_version: constitution.v1
+compatibility:
+  minimum_hivemind_version: 0.1.27
+  governance_schema_version: governance.v1
+partitions:
+  - id: domain
+    path: src/domain
+  - id: infrastructure
+    path: src/infrastructure
+rules:
+  - type: forbidden_dependency
+    id: no_domain_to_infra
+    from: domain
+    to: infrastructure
+    severity: hard
+",
+    )
+    .expect("write constitution");
+
+    let constitution_path_arg = constitution_path.to_string_lossy().to_string();
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "constitution",
+            "init",
+            "proj",
+            "--from-file",
+            &constitution_path_arg,
+        ],
+    );
+    assert_ne!(code, 0, "expected confirmation-required failure");
+    assert!(
+        err.contains("constitution_confirmation_required") || err.contains("--confirm"),
+        "{err}"
+    );
+
+    let (code, init_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "constitution",
+            "init",
+            "proj",
+            "--from-file",
+            &constitution_path_arg,
+            "--confirm",
+            "--actor",
+            "tester",
+            "--intent",
+            "bootstrap constitution",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let init_json: serde_json::Value = serde_json::from_str(&init_out).expect("init json");
+    assert_eq!(
+        init_json
+            .get("data")
+            .and_then(|v| v.get("confirmed"))
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        init_json
+            .get("data")
+            .and_then(|v| v.get("actor"))
+            .and_then(serde_json::Value::as_str),
+        Some("tester")
+    );
+
+    let (code, show_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "constitution", "show", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let show_json: serde_json::Value = serde_json::from_str(&show_out).expect("show json");
+    let show_data = show_json.get("data").expect("show data");
+    assert_eq!(
+        show_data
+            .get("schema_version")
+            .and_then(serde_json::Value::as_str),
+        Some("constitution.v1")
+    );
+    assert_eq!(
+        show_data
+            .get("constitution_version")
+            .and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        show_data
+            .get("partitions")
+            .and_then(serde_json::Value::as_array)
+            .map(std::vec::Vec::len),
+        Some(2)
+    );
+    assert_eq!(
+        show_data
+            .get("rules")
+            .and_then(serde_json::Value::as_array)
+            .map(std::vec::Vec::len),
+        Some(1)
+    );
+
+    let (code, validate_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "constitution", "validate", "proj"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let validate_json: serde_json::Value =
+        serde_json::from_str(&validate_out).expect("validate json");
+    assert_eq!(
+        validate_json
+            .get("data")
+            .and_then(|v| v.get("valid"))
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+
+    let bad_constitution_path = tmp.path().join("constitution-bad.yaml");
+    std::fs::write(
+        &bad_constitution_path,
+        r"version: 1
+schema_version: constitution.v1
+compatibility:
+  minimum_hivemind_version: 0.1.27
+  governance_schema_version: governance.v1
+partitions:
+  - id: domain
+    path: src/domain
+rules:
+  - type: forbidden_dependency
+    id: bad_rule
+    from: domain
+    to: missing_partition
+    severity: hard
+",
+    )
+    .expect("write bad constitution");
+    let bad_constitution_path_arg = bad_constitution_path.to_string_lossy().to_string();
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "constitution",
+            "update",
+            "proj",
+            "--from-file",
+            &bad_constitution_path_arg,
+            "--confirm",
+        ],
+    );
+    assert_ne!(code, 0, "expected validation failure");
+    assert!(
+        err.contains("constitution_validation_failed") || err.contains("unknown partition"),
+        "{err}"
+    );
+
+    let update_constitution_path = tmp.path().join("constitution-updated.yaml");
+    std::fs::write(
+        &update_constitution_path,
+        r"version: 1
+schema_version: constitution.v1
+compatibility:
+  minimum_hivemind_version: 0.1.27
+  governance_schema_version: governance.v1
+partitions:
+  - id: domain
+    path: src/domain
+  - id: infrastructure
+    path: src/infrastructure
+rules:
+  - type: forbidden_dependency
+    id: no_domain_to_infra
+    from: domain
+    to: infrastructure
+    severity: hard
+  - type: coverage_requirement
+    id: require_domain_coverage
+    target: domain
+    threshold: 70
+    severity: advisory
+",
+    )
+    .expect("write update constitution");
+    let update_constitution_path_arg = update_constitution_path.to_string_lossy().to_string();
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "constitution",
+            "update",
+            "proj",
+            "--from-file",
+            &update_constitution_path_arg,
+            "--confirm",
+            "--actor",
+            "reviewer",
+            "--intent",
+            "add advisory coverage rule",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, project_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "project", "inspect", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let project_json: serde_json::Value = serde_json::from_str(&project_out).expect("project json");
+    let project_data = project_json.get("data").expect("project data");
+    assert!(project_data
+        .get("constitution_digest")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|digest| !digest.is_empty()));
+    assert_eq!(
+        project_data
+            .get("constitution_schema_version")
+            .and_then(serde_json::Value::as_str),
+        Some("constitution.v1")
+    );
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "stream",
+            "--project",
+            "proj",
+            "--limit",
+            "600",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        events_out.contains("constitution_initialized"),
+        "{events_out}"
+    );
+    assert!(
+        events_out.contains("constitution_validated"),
+        "{events_out}"
+    );
+    assert!(events_out.contains("constitution_updated"), "{events_out}");
+}
+
 fn hivemind_bin() -> PathBuf {
     option_env!("CARGO_BIN_EXE_hivemind").map_or_else(
         || {

@@ -91,31 +91,31 @@
 > **Principles 5, 7, 14:** Structured operations, CLI-first control, human authority on critical governance boundaries.
 
 ### 36.1 Constitution Schema v1
-- [ ] Define schema with partitions, rule types, parameters, and severity (`hard`, `advisory`, `informational`)
-- [ ] Add strict schema validation with compatibility/version fields
-- [ ] Document rule semantics and invalid configuration failure modes
+- [x] Define schema with partitions, rule types, parameters, and severity (`hard`, `advisory`, `informational`)
+- [x] Add strict schema validation with compatibility/version fields
+- [x] Document rule semantics and invalid configuration failure modes
 
 ### 36.2 Constitution Lifecycle Commands
-- [ ] Add `hivemind constitution init/show/validate/update`
-- [ ] Require exactly one constitution per project
-- [ ] Require explicit confirmation for constitution mutation commands
+- [x] Add `hivemind constitution init/show/validate/update`
+- [x] Require exactly one constitution per project
+- [x] Require explicit confirmation for constitution mutation commands
 
 ### 36.3 Constitution Event Model
-- [ ] Emit lifecycle events (`ConstitutionInitialized`, `ConstitutionUpdated`, validation events)
-- [ ] Preserve full audit trail for mutation intent and actor attribution
-- [ ] Record constitution digest/version in project state projection
+- [x] Emit lifecycle events (`ConstitutionInitialized`, `ConstitutionUpdated`, validation events)
+- [x] Preserve full audit trail for mutation intent and actor attribution
+- [x] Record constitution digest/version in project state projection
 
 ### 36.4 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 36 manual checklist under `@hivemind-test`
-- [ ] Manually validate constitution init/show/validate/update behavior and confirmation gates
-- [ ] Manually validate auditability of constitution events and projection state updates
-- [ ] Publish Sprint 36 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 36 manual checklist under `@hivemind-test`
+- [x] Manually validate constitution init/show/validate/update behavior and confirmation gates
+- [x] Manually validate auditability of constitution events and projection state updates
+- [x] Publish Sprint 36 manual test report artifact in `@hivemind-test`
 
 ### 36.5 Exit Criteria
-- [ ] Every active project has one valid constitution
-- [ ] Constitution cannot be silently changed or bypassed
-- [ ] Constitution mutations are attributable, inspectable, and replayable
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Every active project has one valid constitution
+- [x] Constitution cannot be silently changed or bypassed
+- [x] Constitution mutations are attributable, inspectable, and replayable
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

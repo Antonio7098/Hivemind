@@ -1,0 +1,612 @@
+=== Sprint 36 Manual Test Start ===
+TMP_ROOT=/tmp/tmp.RrdJYvesrH
+HM_HOME=/tmp/tmp.RrdJYvesrH/home
+REPO=/tmp/tmp.RrdJYvesrH/repo
+{
+  "success": true,
+  "data": {
+    "id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+    "name": "proj36",
+    "description": null,
+    "created_at": "2026-02-17T19:17:54.612936781Z",
+    "updated_at": "2026-02-17T19:17:54.612936781Z",
+    "repositories": [],
+    "runtime": null,
+    "runtime_defaults": {
+      "worker": null,
+      "validator": null
+    },
+    "constitution_digest": null,
+    "constitution_schema_version": null,
+    "constitution_version": null,
+    "constitution_updated_at": null
+  }
+}
+{
+  "success": true,
+  "data": {
+    "id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+    "name": "proj36",
+    "description": null,
+    "created_at": "2026-02-17T19:17:54.612936781Z",
+    "updated_at": "2026-02-17T19:17:54.617826172Z",
+    "repositories": [
+      {
+        "name": "repo",
+        "path": "/tmp/tmp.RrdJYvesrH/repo",
+        "access_mode": "readwrite"
+      }
+    ],
+    "runtime": null,
+    "runtime_defaults": {
+      "worker": null,
+      "validator": null
+    },
+    "constitution_digest": null,
+    "constitution_schema_version": null,
+    "constitution_version": null,
+    "constitution_updated_at": null
+  }
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+    "root_path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53",
+    "schema_version": "governance.v1",
+    "projection_version": 1,
+    "created_paths": [
+      "/tmp/tmp.RrdJYvesrH/home/.hivemind/global/notepad.md",
+      "/tmp/tmp.RrdJYvesrH/home/.hivemind/global/skills",
+      "/tmp/tmp.RrdJYvesrH/home/.hivemind/global/system_prompts",
+      "/tmp/tmp.RrdJYvesrH/home/.hivemind/global/templates",
+      "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+      "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/documents",
+      "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/graph_snapshot.json",
+      "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/notepad.md"
+    ]
+  }
+}
+{"success":false,"error":{"category":"user","code":"constitution_confirmation_required","message":"Constitution mutation requires explicit confirmation","origin":"registry:constitution_init","hint":"Re-run with --confirm"}}
+init_without_confirm_exit=1
+{
+  "success": true,
+  "data": {
+    "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+    "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+    "revision": 2,
+    "digest": "2214f2a7ec2a3436",
+    "previous_digest": null,
+    "schema_version": "constitution.v1",
+    "constitution_version": 1,
+    "actor": "manual-tester",
+    "mutation_intent": "bootstrap constitution",
+    "confirmed": true,
+    "updated_at": "2026-02-17T19:17:54.639462892Z"
+  }
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+    "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+    "revision": 2,
+    "digest": "2214f2a7ec2a3436",
+    "schema_version": "constitution.v1",
+    "constitution_version": 1,
+    "compatibility": {
+      "minimum_hivemind_version": "0.1.27",
+      "governance_schema_version": "governance.v1"
+    },
+    "partitions": [
+      {
+        "id": "domain",
+        "path": "src/domain"
+      },
+      {
+        "id": "infrastructure",
+        "path": "src/infrastructure"
+      }
+    ],
+    "rules": [
+      {
+        "type": "forbidden_dependency",
+        "id": "no_domain_to_infra",
+        "from": "domain",
+        "to": "infrastructure",
+        "severity": "hard"
+      }
+    ]
+  }
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+    "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+    "digest": "2214f2a7ec2a3436",
+    "schema_version": "constitution.v1",
+    "constitution_version": 1,
+    "valid": true,
+    "issues": [],
+    "validated_by": "antonio",
+    "validated_at": "2026-02-17T19:17:54.650606293Z"
+  }
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+    "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+    "revision": 3,
+    "digest": "27ca655cb323514d",
+    "previous_digest": "2214f2a7ec2a3436",
+    "schema_version": "constitution.v1",
+    "constitution_version": 1,
+    "actor": "manual-tester",
+    "mutation_intent": "add app partition rule",
+    "confirmed": true,
+    "updated_at": "2026-02-17T19:17:54.658205254Z"
+  }
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+    "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+    "digest": "27ca655cb323514d",
+    "schema_version": "constitution.v1",
+    "constitution_version": 1,
+    "valid": true,
+    "issues": [],
+    "validated_by": "antonio",
+    "validated_at": "2026-02-17T19:17:54.664368673Z"
+  }
+}
+{
+  "success": true,
+  "data": {
+    "id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+    "name": "proj36",
+    "description": null,
+    "created_at": "2026-02-17T19:17:54.612936781Z",
+    "updated_at": "2026-02-17T19:17:54.657465452Z",
+    "repositories": [
+      {
+        "name": "repo",
+        "path": "/tmp/tmp.RrdJYvesrH/repo",
+        "access_mode": "readwrite"
+      }
+    ],
+    "runtime": null,
+    "runtime_defaults": {
+      "worker": null,
+      "validator": null
+    },
+    "constitution_digest": "27ca655cb323514d",
+    "constitution_schema_version": "constitution.v1",
+    "constitution_version": 1,
+    "constitution_updated_at": "2026-02-17T19:17:54.657465452Z"
+  }
+}
+{
+  "success": true,
+  "data": [
+    {
+      "metadata": {
+        "id": "00000000-0000-0000-bc44-2a686bc3d35b",
+        "timestamp": "2026-02-17T19:17:54.612936781Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 0
+      },
+      "payload": {
+        "type": "project_created",
+        "id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "name": "proj36",
+        "description": null
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0001-9965-1cf2f4f99ec7",
+        "timestamp": "2026-02-17T19:17:54.617826172Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 1
+      },
+      "payload": {
+        "type": "repository_attached",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "path": "/tmp/tmp.RrdJYvesrH/repo",
+        "name": "repo",
+        "access_mode": "readwrite"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0002-9c00-0112192d4d1e",
+        "timestamp": "2026-02-17T19:17:54.622992165Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 2
+      },
+      "payload": {
+        "type": "governance_project_storage_initialized",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "schema_version": "governance.v1",
+        "projection_version": 1,
+        "root_path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0003-9826-9bc59342e92c",
+        "timestamp": "2026-02-17T19:17:54.623376107Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 3
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "scope": "project",
+        "artifact_kind": "constitution",
+        "artifact_key": "constitution.yaml",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0004-ac55-cd292ee009b9",
+        "timestamp": "2026-02-17T19:17:54.623709404Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 4
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "scope": "project",
+        "artifact_kind": "documents",
+        "artifact_key": "documents",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/documents",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0005-9371-9dab4a281d6e",
+        "timestamp": "2026-02-17T19:17:54.624063150Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 5
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "scope": "project",
+        "artifact_kind": "notepad",
+        "artifact_key": "notepad.md",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/notepad.md",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0006-82b9-5e6408768ac8",
+        "timestamp": "2026-02-17T19:17:54.624461169Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 6
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "scope": "project",
+        "artifact_kind": "graph_snapshot",
+        "artifact_key": "graph_snapshot.json",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/graph_snapshot.json",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0007-a6e8-3c82a835341d",
+        "timestamp": "2026-02-17T19:17:54.624889626Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 7
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": null,
+        "scope": "global",
+        "artifact_kind": "skills",
+        "artifact_key": "skills",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/global/skills",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0008-ba0c-82bfb8539c46",
+        "timestamp": "2026-02-17T19:17:54.625346776Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 8
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": null,
+        "scope": "global",
+        "artifact_kind": "system_prompts",
+        "artifact_key": "system_prompts",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/global/system_prompts",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0009-9341-a516ef5ff813",
+        "timestamp": "2026-02-17T19:17:54.625863608Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 9
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": null,
+        "scope": "global",
+        "artifact_kind": "templates",
+        "artifact_key": "templates",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/global/templates",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-000a-b47a-7f0a1006bccd",
+        "timestamp": "2026-02-17T19:17:54.626381453Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 10
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": null,
+        "scope": "global",
+        "artifact_kind": "notepad",
+        "artifact_key": "notepad.md",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/global/notepad.md",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-000b-a002-2d5a6bd4413c",
+        "timestamp": "2026-02-17T19:17:54.638075801Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 11
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "scope": "project",
+        "artifact_kind": "constitution",
+        "artifact_key": "constitution.yaml",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+        "revision": 2,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-000c-acd6-6d81647ee04a",
+        "timestamp": "2026-02-17T19:17:54.638795185Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 12
+      },
+      "payload": {
+        "type": "constitution_initialized",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+        "schema_version": "constitution.v1",
+        "constitution_version": 1,
+        "digest": "2214f2a7ec2a3436",
+        "revision": 2,
+        "actor": "manual-tester",
+        "mutation_intent": "bootstrap constitution",
+        "confirmed": true
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-000d-8146-b84b4c4152a9",
+        "timestamp": "2026-02-17T19:17:54.649784597Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 13
+      },
+      "payload": {
+        "type": "constitution_validated",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+        "schema_version": "constitution.v1",
+        "constitution_version": 1,
+        "digest": "2214f2a7ec2a3436",
+        "valid": true,
+        "issues": [],
+        "validated_by": "antonio"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-000e-9034-e48c630e812c",
+        "timestamp": "2026-02-17T19:17:54.656610683Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 14
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "scope": "project",
+        "artifact_kind": "constitution",
+        "artifact_key": "constitution.yaml",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+        "revision": 3,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-000f-aafd-ab93dff0a690",
+        "timestamp": "2026-02-17T19:17:54.657465452Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 15
+      },
+      "payload": {
+        "type": "constitution_updated",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+        "schema_version": "constitution.v1",
+        "constitution_version": 1,
+        "previous_digest": "2214f2a7ec2a3436",
+        "digest": "27ca655cb323514d",
+        "revision": 3,
+        "actor": "manual-tester",
+        "mutation_intent": "add app partition rule",
+        "confirmed": true
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0010-bde5-62c415a21aa5",
+        "timestamp": "2026-02-17T19:17:54.663458661Z",
+        "correlation": {
+          "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 16
+      },
+      "payload": {
+        "type": "constitution_validated",
+        "project_id": "59902fb2-0472-4e44-9bb0-0a0185675e53",
+        "path": "/tmp/tmp.RrdJYvesrH/home/.hivemind/projects/59902fb2-0472-4e44-9bb0-0a0185675e53/constitution.yaml",
+        "schema_version": "constitution.v1",
+        "constitution_version": 1,
+        "digest": "27ca655cb323514d",
+        "valid": true,
+        "issues": [],
+        "validated_by": "antonio"
+      }
+    }
+  ]
+}
+=== Sprint 36 Manual Test End ===
