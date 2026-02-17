@@ -257,6 +257,111 @@ RepositoryDetached:
 
 ---
 
+### 2.8 project governance init
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance init <project>
+```
+
+**Preconditions:**
+- Project exists
+
+**Effects:**
+- Creates/ensures canonical governance storage under `~/.hivemind/projects/<project-id>/` and `~/.hivemind/global/`
+- Initializes deterministic governance projection state for the project
+
+**Events:**
+```
+GovernanceProjectStorageInitialized:
+  project_id: <project-id>
+  schema_version: governance.v1
+  projection_version: 1
+  root_path: ~/.hivemind/projects/<project-id>
+
+GovernanceArtifactUpserted:
+  project_id: <project-id>|null
+  scope: project|global
+  artifact_kind: constitution|documents|notepad|graph_snapshot|skills|system_prompts|templates
+  artifact_key: <artifact-key>
+  path: <absolute-path>
+  revision: <n>
+  schema_version: governance.v1
+  projection_version: 1
+```
+
+**Failures:**
+- `project_not_found`
+- `governance_storage_create_failed`
+- `governance_path_conflict`
+
+**Idempotence:** Idempotent. Re-running preserves existing files/directories and only emits missing projection events.
+
+---
+
+### 2.9 project governance migrate
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance migrate <project>
+```
+
+**Preconditions:**
+- Project exists
+
+**Effects:**
+- Migrates legacy repo-local governance artifacts from `<repo>/.hivemind/...` into canonical global/project governance storage
+- Preserves existing non-empty canonical artifacts unless they match scaffold defaults
+- Ensures governance layout and projection state are initialized
+
+**Events:**
+```
+GovernanceStorageMigrated:
+  project_id: <project-id>
+  from_layout: repo_local_hivemind_v1
+  to_layout: global_governance_v1
+  migrated_paths: [<absolute-path>...]
+  rollback_hint: <text>
+  schema_version: governance.v1
+  projection_version: 1
+```
+
+**Failures:**
+- `project_not_found`
+- `governance_migration_failed`
+- `governance_storage_create_failed`
+
+**Idempotence:** Idempotent for already-migrated content.
+
+---
+
+### 2.10 project governance inspect
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance inspect <project>
+```
+
+**Preconditions:**
+- Project exists
+
+**Effects:** None (read-only)
+
+**Output:**
+- Governance root path, schema/projection metadata, export/import boundary note
+- Canonical artifact paths and projection revision status
+- Legacy candidate paths still present in repo-local layout
+- Migration history summaries for the project
+
+**Events:** None
+
+**Failures:**
+- `project_not_found`
+
+**Idempotence:** Idempotent.
+
+---
+
 ## 3. Task Commands
 
 ### 3.1 task create
@@ -1345,7 +1450,7 @@ hivemind worktree cleanup <flow-id> [--force] [--dry-run]
 - If flow state is RUNNING, `--force` is required
 
 **Effects:**
-- Removes all task worktrees for the flow under `.hivemind/worktrees/<flow-id>/...`
+- Removes all task worktrees for the flow under `~/hivemind/worktrees/<flow-id>/...`
 - With `--dry-run`, returns success without removing worktrees
 
 **Output:**

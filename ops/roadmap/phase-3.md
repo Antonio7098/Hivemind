@@ -5,27 +5,27 @@
 > **Principles 1, 8, 11, 15:** Observability is truth, no hidden state, incremental foundations, no magic.
 
 ### 34.1 Storage Topology and Boundaries
-- [ ] Define canonical governance layout under `~/.hivemind/`:
-  - [ ] `projects/<project-id>/constitution.yaml`
-  - [ ] `projects/<project-id>/documents/`
-  - [ ] `projects/<project-id>/notepad.md`
-  - [ ] `projects/<project-id>/graph_snapshot.json`
-  - [ ] `global/skills/`
-  - [ ] `global/system_prompts/`
-  - [ ] `global/templates/`
-  - [ ] `global/notepad.md`
-- [ ] Keep code ownership in Git and governance ownership in Hivemind with no implicit repo writes
-- [ ] Add explicit export/import boundary design (not auto-enabled)
+- [x] Define canonical governance layout under `~/hivemind/` managed by the registry CLI:
+  - [x] `projects/<project-id>/constitution.yaml`
+  - [x] `projects/<project-id>/documents/`
+  - [x] `projects/<project-id>/notepad.md`
+  - [x] `projects/<project-id>/graph_snapshot.json`
+  - [x] `global/skills/`
+  - [x] `global/system_prompts/`
+  - [x] `global/templates/`
+  - [x] `global/notepad.md`
+- [x] Keep code ownership in Git and governance ownership in Hivemind with no implicit repo writes
+- [x] Add explicit export/import boundary design (not auto-enabled)
 
 ### 34.2 Event and Projection Contracts
-- [ ] Introduce governance event families for create/update/delete and attachment lifecycle
-- [ ] Ensure all governance state is reconstructable from events plus deterministic projections
-- [ ] Add projection versioning and schema markers for forward-safe migrations
+- [x] Introduce governance event families for create/update/migrate and attachment lifecycle
+- [x] Ensure all governance state is reconstructable from events plus deterministic projections
+- [x] Add projection versioning and schema markers for forward-safe migrations
 
 ### 34.3 Backward-Compatible Migration
-- [ ] Add migration from current local registry layout to governance-aware layout
-- [ ] Preserve existing project/task/flow behavior and event replay determinism
-- [ ] Emit explicit migration events and include rollback instructions in output hints
+- [x] Add migration from current local registry layout to governance-aware layout
+- [x] Preserve existing project/task/flow behavior and event replay determinism
+- [x] Emit explicit migration events and include rollback instructions in output hints
 
 ### 34.4 Manual Testing (`@hivemind-test`)
 - [ ] Add/update Sprint 34 manual checklist under `@hivemind-test` (`/home/antonio/programming/Hivemind/hivemind-test`)
@@ -34,11 +34,11 @@
 - [ ] Publish Sprint 34 manual test report artifact in `@hivemind-test`
 
 ### 34.5 Exit Criteria
-- [ ] Governance directory structure is created and managed by CLI
-- [ ] Governance mutations emit structured events with correlation IDs
-- [ ] Replay can rebuild governance projections deterministically
-- [ ] Existing non-governance workflows remain stable
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Governance directory structure is created and managed by CLI
+- [x] Governance mutations emit structured events with correlation IDs
+- [x] Replay can rebuild governance projections deterministically
+- [x] Existing non-governance workflows remain stable
+- [ ] Manual validation in `@hivemind-test` is completed and documented (pending manual runs)
 
 ---
 

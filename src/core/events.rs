@@ -368,6 +368,59 @@ pub enum EventPayload {
         name: String,
     },
 
+    GovernanceProjectStorageInitialized {
+        project_id: Uuid,
+        schema_version: String,
+        projection_version: u32,
+        root_path: String,
+    },
+
+    GovernanceArtifactUpserted {
+        #[serde(default)]
+        project_id: Option<Uuid>,
+        scope: String,
+        artifact_kind: String,
+        artifact_key: String,
+        path: String,
+        #[serde(default)]
+        revision: u64,
+        schema_version: String,
+        projection_version: u32,
+    },
+
+    GovernanceArtifactDeleted {
+        #[serde(default)]
+        project_id: Option<Uuid>,
+        scope: String,
+        artifact_kind: String,
+        artifact_key: String,
+        path: String,
+        schema_version: String,
+        projection_version: u32,
+    },
+
+    GovernanceAttachmentLifecycleUpdated {
+        project_id: Uuid,
+        task_id: Uuid,
+        artifact_kind: String,
+        artifact_key: String,
+        attached: bool,
+        schema_version: String,
+        projection_version: u32,
+    },
+
+    GovernanceStorageMigrated {
+        #[serde(default)]
+        project_id: Option<Uuid>,
+        from_layout: String,
+        to_layout: String,
+        #[serde(default)]
+        migrated_paths: Vec<String>,
+        rollback_hint: String,
+        schema_version: String,
+        projection_version: u32,
+    },
+
     TaskGraphCreated {
         graph_id: Uuid,
         project_id: Uuid,
