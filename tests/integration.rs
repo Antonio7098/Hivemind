@@ -51,6 +51,99 @@ fn init_git_repo(repo_dir: &std::path::Path) {
 }
 
 #[test]
+fn cli_project_governance_lifecycle_is_observable() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let legacy_constitution = repo_dir.join(".hivemind").join("constitution.yaml");
+    let legacy_global_notepad = repo_dir.join(".hivemind").join("global").join("notepad.md");
+    std::fs::create_dir_all(legacy_constitution.parent().expect("legacy parent")).expect("mkdir");
+    std::fs::create_dir_all(legacy_global_notepad.parent().expect("legacy parent")).expect("mkdir");
+    std::fs::write(&legacy_constitution, "legacy_constitution: true\n").expect("legacy file");
+    std::fs::write(&legacy_global_notepad, "legacy notes\n").expect("legacy file");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "governance", "init", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, inspect_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "project", "governance", "inspect", "proj"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let inspect_json: serde_json::Value = serde_json::from_str(&inspect_out).expect("inspect json");
+    let inspect_data = inspect_json.get("data").expect("inspect data");
+    assert_eq!(
+        inspect_data
+            .get("initialized")
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert!(
+        inspect_data
+            .get("artifacts")
+            .and_then(|v| v.as_array())
+            .is_some_and(|items| !items.is_empty()),
+        "{inspect_out}"
+    );
+
+    let (code, migrate_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "project", "governance", "migrate", "proj"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let migrate_json: serde_json::Value = serde_json::from_str(&migrate_out).expect("migrate json");
+    let migrated_paths = migrate_json
+        .get("data")
+        .and_then(|v| v.get("migrated_paths"))
+        .and_then(|v| v.as_array())
+        .expect("migrated paths");
+    assert!(
+        migrated_paths.iter().any(|p| {
+            p.as_str()
+                .is_some_and(|s| s.contains("constitution.yaml") || s.contains("notepad.md"))
+        }),
+        "{migrate_out}"
+    );
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "stream",
+            "--project",
+            "proj",
+            "--limit",
+            "400",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        events_out.contains("governance_project_storage_initialized"),
+        "{events_out}"
+    );
+    assert!(
+        events_out.contains("governance_artifact_upserted"),
+        "{events_out}"
+    );
+    assert!(
+        events_out.contains("governance_storage_migrated"),
+        "{events_out}"
+    );
+}
+
+#[test]
 fn cli_scope_violation_is_fatal_and_preserves_worktree() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
@@ -153,7 +246,640 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
         run_hivemind(tmp.path(), &["-f", "json", "worktree", "inspect", &t1_id]);
     assert_eq!(code, 0, "{err}");
     assert!(wt_out.contains("\"is_worktree\": true"), "{wt_out}");
-    assert!(wt_out.contains(".hivemind/worktrees"), "{wt_out}");
+    assert!(
+        wt_out.contains(worktree_root(tmp.path()).to_string_lossy().as_ref()),
+        "{wt_out}"
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_sprint35_governance_artifacts_and_template_instantiation() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "governance", "init", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "document",
+            "create",
+            "proj",
+            "doc1",
+            "--title",
+            "Architecture Notes",
+            "--owner",
+            "alice",
+            "--tag",
+            "architecture",
+            "--content",
+            "first revision",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "document",
+            "update",
+            "proj",
+            "doc1",
+            "--owner",
+            "bob",
+            "--content",
+            "second revision",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, inspect_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "document",
+            "inspect",
+            "proj",
+            "doc1",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let inspect_json: serde_json::Value = serde_json::from_str(&inspect_out).expect("inspect json");
+    let inspect_data = inspect_json.get("data").expect("inspect data");
+    assert_eq!(
+        inspect_data
+            .get("latest_content")
+            .and_then(serde_json::Value::as_str),
+        Some("second revision")
+    );
+    assert_eq!(
+        inspect_data
+            .get("revisions")
+            .and_then(serde_json::Value::as_array)
+            .map(std::vec::Vec::len),
+        Some(2)
+    );
+    assert_eq!(
+        inspect_data
+            .get("summary")
+            .and_then(|s| s.get("owner"))
+            .and_then(serde_json::Value::as_str),
+        Some("bob")
+    );
+    assert!(
+        inspect_data
+            .get("summary")
+            .and_then(|s| s.get("tags"))
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|tags| {
+                tags.iter()
+                    .any(|tag| tag.as_str().is_some_and(|value| value == "architecture"))
+            }),
+        "{inspect_out}"
+    );
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let task_id = out
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("ID:")
+                .map(|value| value.trim().to_string())
+        })
+        .expect("task id");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "attachment",
+            "include",
+            "proj",
+            &task_id,
+            "doc1",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let project_notepad_marker = "PROJECT_NOTEPAD_SHOULD_NOT_APPEAR";
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "notepad",
+            "create",
+            "proj",
+            "--content",
+            project_notepad_marker,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--binary-path",
+            "/usr/bin/env",
+            "--arg",
+            "sh",
+            "--arg",
+            "-c",
+            "--arg",
+            "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+            "--timeout-ms",
+            "1000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &task_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("Graph ID:")
+                .map(|value| value.trim().to_string())
+        })
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("Flow ID:")
+                .map(|value| value.trim().to_string())
+        })
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "400",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let events_json: serde_json::Value = serde_json::from_str(&events_out).expect("events json");
+    let runtime_prompt = events_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|events| {
+            events.iter().find_map(|event| {
+                let payload = event.get("payload")?;
+                let typ = payload.get("type")?.as_str()?;
+                if typ != "runtime_started" {
+                    return None;
+                }
+                payload
+                    .get("prompt")
+                    .and_then(serde_json::Value::as_str)
+                    .map(std::string::ToString::to_string)
+            })
+        })
+        .expect("runtime prompt");
+    assert!(
+        runtime_prompt.contains("Execution attachments (explicit includes)"),
+        "{runtime_prompt}"
+    );
+    assert!(
+        runtime_prompt.contains("document_id: doc1"),
+        "{runtime_prompt}"
+    );
+    assert!(
+        runtime_prompt.contains("second revision"),
+        "{runtime_prompt}"
+    );
+    assert!(
+        !runtime_prompt.contains(project_notepad_marker),
+        "project notepad content must not be injected by default: {runtime_prompt}"
+    );
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "skill",
+            "create",
+            "skill-a",
+            "--name",
+            "Skill A",
+            "--content",
+            "Do skill A",
+            "--tag",
+            "alpha",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "system-prompt",
+            "create",
+            "sp-main",
+            "--content",
+            "You are strict.",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "template",
+            "create",
+            "tpl-main",
+            "--system-prompt-id",
+            "sp-main",
+            "--skill-id",
+            "skill-a",
+            "--document-id",
+            "doc1",
+            "--description",
+            "Template body",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["global", "template", "instantiate", "proj", "tpl-main"],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, project_events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "stream",
+            "--project",
+            "proj",
+            "--limit",
+            "500",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        project_events_out.contains("template_instantiated"),
+        "{project_events_out}"
+    );
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["global", "notepad", "create", "--content", "GLOBAL NOTE"],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, global_notepad_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "global", "notepad", "show"]);
+    assert_eq!(code, 0, "{err}");
+    let global_notepad_json: serde_json::Value =
+        serde_json::from_str(&global_notepad_out).expect("global notepad json");
+    let global_notepad_data = global_notepad_json
+        .get("data")
+        .expect("global notepad data");
+    assert_eq!(
+        global_notepad_data
+            .get("content")
+            .and_then(serde_json::Value::as_str),
+        Some("GLOBAL NOTE")
+    );
+    assert_eq!(
+        global_notepad_data
+            .get("non_executional")
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        global_notepad_data
+            .get("non_validating")
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["global", "notepad", "update", "--content", "GLOBAL NOTE V2"],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["global", "notepad", "delete"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, global_notepad_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "global", "notepad", "show"]);
+    assert_eq!(code, 0, "{err}");
+    let global_notepad_json: serde_json::Value =
+        serde_json::from_str(&global_notepad_out).expect("global notepad json");
+    let global_notepad_data = global_notepad_json
+        .get("data")
+        .expect("global notepad data");
+    assert_eq!(
+        global_notepad_data
+            .get("exists")
+            .and_then(serde_json::Value::as_bool),
+        Some(false)
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_sprint36_constitution_lifecycle_and_auditability() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "governance", "init", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let constitution_path = tmp.path().join("constitution.yaml");
+    std::fs::write(
+        &constitution_path,
+        r"version: 1
+schema_version: constitution.v1
+compatibility:
+  minimum_hivemind_version: 0.1.27
+  governance_schema_version: governance.v1
+partitions:
+  - id: domain
+    path: src/domain
+  - id: infrastructure
+    path: src/infrastructure
+rules:
+  - type: forbidden_dependency
+    id: no_domain_to_infra
+    from: domain
+    to: infrastructure
+    severity: hard
+",
+    )
+    .expect("write constitution");
+
+    let constitution_path_arg = constitution_path.to_string_lossy().to_string();
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "constitution",
+            "init",
+            "proj",
+            "--from-file",
+            &constitution_path_arg,
+        ],
+    );
+    assert_ne!(code, 0, "expected confirmation-required failure");
+    assert!(
+        err.contains("constitution_confirmation_required") || err.contains("--confirm"),
+        "{err}"
+    );
+
+    let (code, init_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "constitution",
+            "init",
+            "proj",
+            "--from-file",
+            &constitution_path_arg,
+            "--confirm",
+            "--actor",
+            "tester",
+            "--intent",
+            "bootstrap constitution",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let init_json: serde_json::Value = serde_json::from_str(&init_out).expect("init json");
+    assert_eq!(
+        init_json
+            .get("data")
+            .and_then(|v| v.get("confirmed"))
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        init_json
+            .get("data")
+            .and_then(|v| v.get("actor"))
+            .and_then(serde_json::Value::as_str),
+        Some("tester")
+    );
+
+    let (code, show_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "constitution", "show", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let show_json: serde_json::Value = serde_json::from_str(&show_out).expect("show json");
+    let show_data = show_json.get("data").expect("show data");
+    assert_eq!(
+        show_data
+            .get("schema_version")
+            .and_then(serde_json::Value::as_str),
+        Some("constitution.v1")
+    );
+    assert_eq!(
+        show_data
+            .get("constitution_version")
+            .and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        show_data
+            .get("partitions")
+            .and_then(serde_json::Value::as_array)
+            .map(std::vec::Vec::len),
+        Some(2)
+    );
+    assert_eq!(
+        show_data
+            .get("rules")
+            .and_then(serde_json::Value::as_array)
+            .map(std::vec::Vec::len),
+        Some(1)
+    );
+
+    let (code, validate_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "constitution", "validate", "proj"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let validate_json: serde_json::Value =
+        serde_json::from_str(&validate_out).expect("validate json");
+    assert_eq!(
+        validate_json
+            .get("data")
+            .and_then(|v| v.get("valid"))
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+
+    let bad_constitution_path = tmp.path().join("constitution-bad.yaml");
+    std::fs::write(
+        &bad_constitution_path,
+        r"version: 1
+schema_version: constitution.v1
+compatibility:
+  minimum_hivemind_version: 0.1.27
+  governance_schema_version: governance.v1
+partitions:
+  - id: domain
+    path: src/domain
+rules:
+  - type: forbidden_dependency
+    id: bad_rule
+    from: domain
+    to: missing_partition
+    severity: hard
+",
+    )
+    .expect("write bad constitution");
+    let bad_constitution_path_arg = bad_constitution_path.to_string_lossy().to_string();
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "constitution",
+            "update",
+            "proj",
+            "--from-file",
+            &bad_constitution_path_arg,
+            "--confirm",
+        ],
+    );
+    assert_ne!(code, 0, "expected validation failure");
+    assert!(
+        err.contains("constitution_validation_failed") || err.contains("unknown partition"),
+        "{err}"
+    );
+
+    let update_constitution_path = tmp.path().join("constitution-updated.yaml");
+    std::fs::write(
+        &update_constitution_path,
+        r"version: 1
+schema_version: constitution.v1
+compatibility:
+  minimum_hivemind_version: 0.1.27
+  governance_schema_version: governance.v1
+partitions:
+  - id: domain
+    path: src/domain
+  - id: infrastructure
+    path: src/infrastructure
+rules:
+  - type: forbidden_dependency
+    id: no_domain_to_infra
+    from: domain
+    to: infrastructure
+    severity: hard
+  - type: coverage_requirement
+    id: require_domain_coverage
+    target: domain
+    threshold: 70
+    severity: advisory
+",
+    )
+    .expect("write update constitution");
+    let update_constitution_path_arg = update_constitution_path.to_string_lossy().to_string();
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "constitution",
+            "update",
+            "proj",
+            "--from-file",
+            &update_constitution_path_arg,
+            "--confirm",
+            "--actor",
+            "reviewer",
+            "--intent",
+            "add advisory coverage rule",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, project_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "project", "inspect", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let project_json: serde_json::Value = serde_json::from_str(&project_out).expect("project json");
+    let project_data = project_json.get("data").expect("project data");
+    assert!(project_data
+        .get("constitution_digest")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|digest| !digest.is_empty()));
+    assert_eq!(
+        project_data
+            .get("constitution_schema_version")
+            .and_then(serde_json::Value::as_str),
+        Some("constitution.v1")
+    );
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "stream",
+            "--project",
+            "proj",
+            "--limit",
+            "600",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        events_out.contains("constitution_initialized"),
+        "{events_out}"
+    );
+    assert!(
+        events_out.contains("constitution_validated"),
+        "{events_out}"
+    );
+    assert!(events_out.contains("constitution_updated"), "{events_out}");
 }
 
 fn hivemind_bin() -> PathBuf {
@@ -179,6 +905,10 @@ fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, String, String) 
         String::from_utf8_lossy(&output.stdout).to_string(),
         String::from_utf8_lossy(&output.stderr).to_string(),
     )
+}
+
+fn worktree_root(home: &std::path::Path) -> PathBuf {
+    home.join("hivemind").join("worktrees")
 }
 
 fn run_hivemind_with_env(
@@ -535,7 +1265,10 @@ fn cli_graph_flow_and_task_control_smoke() {
 
     let (code, out, err) = run_hivemind(tmp.path(), &["-f", "json", "worktree", "list", &flow_id]);
     assert_eq!(code, 0, "{err}");
-    assert!(out.contains(".hivemind/worktrees"), "{out}");
+    assert!(
+        out.contains(worktree_root(tmp.path()).to_string_lossy().as_ref()),
+        "{out}"
+    );
 
     let (code, _out, err) = run_hivemind(tmp.path(), &["task", "start", &t1_id]);
     assert_eq!(code, 0, "{err}");
@@ -630,14 +1363,8 @@ fn cli_task_retry_clean_resets_worktree_but_continue_preserves_it() {
     let (code, _out, err) = run_hivemind(tmp.path(), &["task", "start", &t2_id]);
     assert_eq!(code, 0, "{err}");
 
-    let t1_worktree = repo_dir
-        .join(".hivemind/worktrees")
-        .join(&flow_id)
-        .join(&t1_id);
-    let t2_worktree = repo_dir
-        .join(".hivemind/worktrees")
-        .join(&flow_id)
-        .join(&t2_id);
+    let t1_worktree = worktree_root(tmp.path()).join(&flow_id).join(&t1_id);
+    let t2_worktree = worktree_root(tmp.path()).join(&flow_id).join(&t2_id);
 
     let t1_marker = t1_worktree.join("retry_marker.txt");
     let t2_marker = t2_worktree.join("retry_marker.txt");
@@ -879,8 +1606,7 @@ fn cli_attempt_inspect_diff_after_manual_execution() {
         .find_map(|l| l.strip_prefix("Attempt ID:").map(|s| s.trim().to_string()))
         .expect("attempt id");
 
-    let worktree_readme = repo_dir
-        .join(".hivemind/worktrees")
+    let worktree_readme = worktree_root(tmp.path())
         .join(&flow_id)
         .join(&t1_id)
         .join("README.md");

@@ -215,7 +215,8 @@ Worktrees are the primary isolation mechanism in Sprint 1.
 
 1. **Creation**
    - `git worktree add` from TaskFlow base revision
-   - Unique path per task: `<workdir>/.hivemind/worktrees/<taskflow>/<task>`
+   - Unique path per task: `~/hivemind/worktrees/<taskflow>/<task>` (global location)
+   - Location configurable via `HIVEMIND_WORKTREE_DIR` environment variable
 
 2. **Ownership**
    - Worktree is owned by exactly one task at a time

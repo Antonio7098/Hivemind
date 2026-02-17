@@ -58,6 +58,14 @@ pub enum Commands {
     #[command(subcommand)]
     Project(ProjectCommands),
 
+    /// Global governance artifact registry commands
+    #[command(subcommand)]
+    Global(GlobalCommands),
+
+    /// Project constitution lifecycle and validation commands
+    #[command(subcommand)]
+    Constitution(ConstitutionCommands),
+
     /// Task management commands
     #[command(subcommand)]
     Task(TaskCommands),
@@ -97,6 +105,83 @@ pub enum Commands {
     /// Inspect and manage git worktrees used for task execution
     #[command(subcommand)]
     Worktree(WorktreeCommands),
+}
+
+/// Constitution subcommands.
+#[derive(Subcommand)]
+pub enum ConstitutionCommands {
+    /// Initialize a project constitution (requires explicit confirmation)
+    Init(ConstitutionInitArgs),
+    /// Show the current project constitution
+    Show(ConstitutionShowArgs),
+    /// Validate the current project constitution schema and semantics
+    Validate(ConstitutionValidateArgs),
+    /// Update the current project constitution (requires explicit confirmation)
+    Update(ConstitutionUpdateArgs),
+}
+
+#[derive(Args)]
+pub struct ConstitutionInitArgs {
+    /// Project ID or name
+    pub project: String,
+
+    /// Optional YAML content payload for initialization
+    #[arg(long, conflicts_with = "from_file")]
+    pub content: Option<String>,
+
+    /// Optional path to YAML constitution content
+    #[arg(long = "from-file", conflicts_with = "content")]
+    pub from_file: Option<String>,
+
+    /// Explicit confirmation gate for constitution mutation
+    #[arg(long, default_value_t = false)]
+    pub confirm: bool,
+
+    /// Optional actor attribution override (defaults to OS user)
+    #[arg(long)]
+    pub actor: Option<String>,
+
+    /// Optional mutation intent note for audit trail
+    #[arg(long)]
+    pub intent: Option<String>,
+}
+
+#[derive(Args)]
+pub struct ConstitutionShowArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ConstitutionValidateArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ConstitutionUpdateArgs {
+    /// Project ID or name
+    pub project: String,
+
+    /// Inline YAML constitution content
+    #[arg(long, conflicts_with = "from_file")]
+    pub content: Option<String>,
+
+    /// Path to YAML constitution content
+    #[arg(long = "from-file", conflicts_with = "content")]
+    pub from_file: Option<String>,
+
+    /// Explicit confirmation gate for constitution mutation
+    #[arg(long, default_value_t = false)]
+    pub confirm: bool,
+
+    /// Optional actor attribution override (defaults to OS user)
+    #[arg(long)]
+    pub actor: Option<String>,
+
+    /// Optional mutation intent note for audit trail
+    #[arg(long)]
+    pub intent: Option<String>,
 }
 
 /// Checkpoint subcommands.
@@ -482,6 +567,398 @@ pub enum ProjectCommands {
 
     /// Delete a project with no remaining tasks, graphs, or flows
     Delete(ProjectDeleteArgs),
+    /// Governance storage lifecycle commands
+    #[command(subcommand)]
+    Governance(ProjectGovernanceCommands),
+}
+
+/// Project governance subcommands.
+#[derive(Subcommand)]
+pub enum ProjectGovernanceCommands {
+    /// Initialize governance storage layout for a project
+    Init(ProjectGovernanceInitArgs),
+    /// Migrate legacy governance artifacts to the canonical global layout
+    Migrate(ProjectGovernanceMigrateArgs),
+    /// Inspect governance storage paths and projection metadata for a project
+    Inspect(ProjectGovernanceInspectArgs),
+    /// Project document lifecycle and metadata commands
+    #[command(subcommand)]
+    Document(ProjectGovernanceDocumentCommands),
+    /// Task-level document attachment inclusion/exclusion controls
+    #[command(subcommand)]
+    Attachment(ProjectGovernanceAttachmentCommands),
+    /// Project notepad lifecycle commands (non-executional)
+    #[command(subcommand)]
+    Notepad(ProjectGovernanceNotepadCommands),
+}
+
+/// Global governance artifact commands.
+#[derive(Subcommand)]
+pub enum GlobalCommands {
+    /// Global skill registry lifecycle commands
+    #[command(subcommand)]
+    Skill(GlobalSkillCommands),
+    /// Global system prompt registry lifecycle commands
+    #[command(subcommand)]
+    SystemPrompt(GlobalSystemPromptCommands),
+    /// Global template registry and instantiation commands
+    #[command(subcommand)]
+    Template(GlobalTemplateCommands),
+    /// Global notepad lifecycle commands (non-executional)
+    #[command(subcommand)]
+    Notepad(GlobalNotepadCommands),
+}
+
+#[derive(Subcommand)]
+pub enum ProjectGovernanceDocumentCommands {
+    /// Create a project document with metadata and revision history
+    Create(ProjectGovernanceDocumentCreateArgs),
+    /// List project documents
+    List(ProjectGovernanceDocumentListArgs),
+    /// Inspect a single project document and revision history
+    Inspect(ProjectGovernanceDocumentInspectArgs),
+    /// Update a project document (creates a new immutable revision)
+    Update(ProjectGovernanceDocumentUpdateArgs),
+    /// Delete a project document
+    Delete(ProjectGovernanceDocumentDeleteArgs),
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceDocumentCreateArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Stable document identifier
+    pub document_id: String,
+    /// Human title for the document
+    #[arg(long)]
+    pub title: String,
+    /// Document owner metadata
+    #[arg(long)]
+    pub owner: String,
+    /// Tags (repeatable)
+    #[arg(long = "tag")]
+    pub tags: Vec<String>,
+    /// Document body content
+    #[arg(long)]
+    pub content: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceDocumentListArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceDocumentInspectArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Stable document identifier
+    pub document_id: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceDocumentUpdateArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Stable document identifier
+    pub document_id: String,
+    /// Optional title override
+    #[arg(long)]
+    pub title: Option<String>,
+    /// Optional owner override
+    #[arg(long)]
+    pub owner: Option<String>,
+    /// Optional tags override (repeatable, when provided)
+    #[arg(long = "tag")]
+    pub tags: Option<Vec<String>>,
+    /// Optional content update (creates next revision)
+    #[arg(long)]
+    pub content: Option<String>,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceDocumentDeleteArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Stable document identifier
+    pub document_id: String,
+}
+
+#[derive(Subcommand)]
+pub enum ProjectGovernanceAttachmentCommands {
+    /// Explicitly include a project document for task execution context
+    Include(ProjectGovernanceAttachmentSetArgs),
+    /// Explicitly exclude a project document from task execution context
+    Exclude(ProjectGovernanceAttachmentSetArgs),
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceAttachmentSetArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Task ID
+    pub task_id: String,
+    /// Document identifier
+    pub document_id: String,
+}
+
+#[derive(Subcommand)]
+pub enum ProjectGovernanceNotepadCommands {
+    /// Create project notepad content
+    Create(ProjectGovernanceNotepadCreateArgs),
+    /// Show project notepad content
+    Show(ProjectGovernanceNotepadShowArgs),
+    /// Update project notepad content
+    Update(ProjectGovernanceNotepadUpdateArgs),
+    /// Delete project notepad content
+    Delete(ProjectGovernanceNotepadDeleteArgs),
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceNotepadCreateArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Notepad content
+    #[arg(long)]
+    pub content: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceNotepadShowArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceNotepadUpdateArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Notepad content
+    #[arg(long)]
+    pub content: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceNotepadDeleteArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Subcommand)]
+pub enum GlobalSkillCommands {
+    /// Create a global reusable skill artifact
+    Create(GlobalSkillCreateArgs),
+    /// List global skill artifacts
+    List,
+    /// Inspect a single global skill artifact
+    Inspect(GlobalSkillInspectArgs),
+    /// Update a global skill artifact
+    Update(GlobalSkillUpdateArgs),
+    /// Delete a global skill artifact
+    Delete(GlobalSkillDeleteArgs),
+}
+
+#[derive(Args)]
+pub struct GlobalSkillCreateArgs {
+    /// Skill identifier
+    pub skill_id: String,
+    /// Skill display name
+    #[arg(long)]
+    pub name: String,
+    /// Skill body content
+    #[arg(long)]
+    pub content: String,
+    /// Skill tags (repeatable)
+    #[arg(long = "tag")]
+    pub tags: Vec<String>,
+}
+
+#[derive(Args)]
+pub struct GlobalSkillInspectArgs {
+    /// Skill identifier
+    pub skill_id: String,
+}
+
+#[derive(Args)]
+pub struct GlobalSkillUpdateArgs {
+    /// Skill identifier
+    pub skill_id: String,
+    /// Optional display name update
+    #[arg(long)]
+    pub name: Option<String>,
+    /// Optional content update
+    #[arg(long)]
+    pub content: Option<String>,
+    /// Optional tags update (repeatable, when provided)
+    #[arg(long = "tag")]
+    pub tags: Option<Vec<String>>,
+}
+
+#[derive(Args)]
+pub struct GlobalSkillDeleteArgs {
+    /// Skill identifier
+    pub skill_id: String,
+}
+
+#[derive(Subcommand)]
+pub enum GlobalSystemPromptCommands {
+    /// Create a global system prompt artifact
+    Create(GlobalSystemPromptCreateArgs),
+    /// List global system prompt artifacts
+    List,
+    /// Inspect a global system prompt artifact
+    Inspect(GlobalSystemPromptInspectArgs),
+    /// Update a global system prompt artifact
+    Update(GlobalSystemPromptUpdateArgs),
+    /// Delete a global system prompt artifact
+    Delete(GlobalSystemPromptDeleteArgs),
+}
+
+#[derive(Args)]
+pub struct GlobalSystemPromptCreateArgs {
+    /// System prompt identifier
+    pub prompt_id: String,
+    /// System prompt body content
+    #[arg(long)]
+    pub content: String,
+}
+
+#[derive(Args)]
+pub struct GlobalSystemPromptInspectArgs {
+    /// System prompt identifier
+    pub prompt_id: String,
+}
+
+#[derive(Args)]
+pub struct GlobalSystemPromptUpdateArgs {
+    /// System prompt identifier
+    pub prompt_id: String,
+    /// Updated prompt body content
+    #[arg(long)]
+    pub content: String,
+}
+
+#[derive(Args)]
+pub struct GlobalSystemPromptDeleteArgs {
+    /// System prompt identifier
+    pub prompt_id: String,
+}
+
+#[derive(Subcommand)]
+pub enum GlobalTemplateCommands {
+    /// Create a global template artifact
+    Create(GlobalTemplateCreateArgs),
+    /// List global template artifacts
+    List,
+    /// Inspect a global template artifact
+    Inspect(GlobalTemplateInspectArgs),
+    /// Update a global template artifact
+    Update(GlobalTemplateUpdateArgs),
+    /// Delete a global template artifact
+    Delete(GlobalTemplateDeleteArgs),
+    /// Instantiate template references for a project and emit resolved artifact event
+    Instantiate(GlobalTemplateInstantiateArgs),
+}
+
+#[derive(Args)]
+pub struct GlobalTemplateCreateArgs {
+    /// Template identifier
+    pub template_id: String,
+    /// Required global system prompt identifier
+    #[arg(long)]
+    pub system_prompt_id: String,
+    /// Referenced global skill identifiers (repeatable)
+    #[arg(long = "skill-id")]
+    pub skill_ids: Vec<String>,
+    /// Referenced project document identifiers (repeatable)
+    #[arg(long = "document-id")]
+    pub document_ids: Vec<String>,
+    /// Optional template description/body
+    #[arg(long)]
+    pub description: Option<String>,
+}
+
+#[derive(Args)]
+pub struct GlobalTemplateInspectArgs {
+    /// Template identifier
+    pub template_id: String,
+}
+
+#[derive(Args)]
+pub struct GlobalTemplateUpdateArgs {
+    /// Template identifier
+    pub template_id: String,
+    /// Optional system prompt identifier override
+    #[arg(long)]
+    pub system_prompt_id: Option<String>,
+    /// Optional skill identifiers override (repeatable, when provided)
+    #[arg(long = "skill-id")]
+    pub skill_ids: Option<Vec<String>>,
+    /// Optional document identifiers override (repeatable, when provided)
+    #[arg(long = "document-id")]
+    pub document_ids: Option<Vec<String>>,
+    /// Optional template description/body override
+    #[arg(long)]
+    pub description: Option<String>,
+}
+
+#[derive(Args)]
+pub struct GlobalTemplateDeleteArgs {
+    /// Template identifier
+    pub template_id: String,
+}
+
+#[derive(Args)]
+pub struct GlobalTemplateInstantiateArgs {
+    /// Project ID or name used for document resolution
+    pub project: String,
+    /// Template identifier
+    pub template_id: String,
+}
+
+#[derive(Subcommand)]
+pub enum GlobalNotepadCommands {
+    /// Create global notepad content
+    Create(GlobalNotepadCreateArgs),
+    /// Show global notepad content
+    Show,
+    /// Update global notepad content
+    Update(GlobalNotepadUpdateArgs),
+    /// Delete global notepad content
+    Delete,
+}
+
+#[derive(Args)]
+pub struct GlobalNotepadCreateArgs {
+    /// Notepad content
+    #[arg(long)]
+    pub content: String,
+}
+
+#[derive(Args)]
+pub struct GlobalNotepadUpdateArgs {
+    /// Notepad content
+    #[arg(long)]
+    pub content: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceInitArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceMigrateArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceInspectArgs {
+    /// Project ID or name
+    pub project: String,
 }
 
 /// Arguments for project create.

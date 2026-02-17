@@ -119,6 +119,19 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::GlobalRuntimeConfigured { .. } => "GlobalRuntimeConfigured",
         EventPayload::RepositoryAttached { .. } => "RepositoryAttached",
         EventPayload::RepositoryDetached { .. } => "RepositoryDetached",
+        EventPayload::GovernanceProjectStorageInitialized { .. } => {
+            "GovernanceProjectStorageInitialized"
+        }
+        EventPayload::GovernanceArtifactUpserted { .. } => "GovernanceArtifactUpserted",
+        EventPayload::GovernanceArtifactDeleted { .. } => "GovernanceArtifactDeleted",
+        EventPayload::GovernanceAttachmentLifecycleUpdated { .. } => {
+            "GovernanceAttachmentLifecycleUpdated"
+        }
+        EventPayload::GovernanceStorageMigrated { .. } => "GovernanceStorageMigrated",
+        EventPayload::ConstitutionInitialized { .. } => "ConstitutionInitialized",
+        EventPayload::ConstitutionUpdated { .. } => "ConstitutionUpdated",
+        EventPayload::ConstitutionValidated { .. } => "ConstitutionValidated",
+        EventPayload::TemplateInstantiated { .. } => "TemplateInstantiated",
         EventPayload::TaskCreated { .. } => "TaskCreated",
         EventPayload::TaskUpdated { .. } => "TaskUpdated",
         EventPayload::TaskRuntimeConfigured { .. } => "TaskRuntimeConfigured",
@@ -189,6 +202,8 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::RuntimeInterrupted { .. } => "RuntimeInterrupted",
         EventPayload::RuntimeExited { .. } => "RuntimeExited",
         EventPayload::RuntimeTerminated { .. } => "RuntimeTerminated",
+        EventPayload::RuntimeErrorClassified { .. } => "RuntimeErrorClassified",
+        EventPayload::RuntimeRecoveryScheduled { .. } => "RuntimeRecoveryScheduled",
         EventPayload::RuntimeFilesystemObserved { .. } => "RuntimeFilesystemObserved",
         EventPayload::RuntimeCommandObserved { .. } => "RuntimeCommandObserved",
         EventPayload::RuntimeToolCallObserved { .. } => "RuntimeToolCallObserved",
@@ -209,7 +224,16 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::ProjectRuntimeRoleConfigured { .. }
         | EventPayload::GlobalRuntimeConfigured { .. }
         | EventPayload::RepositoryAttached { .. }
-        | EventPayload::RepositoryDetached { .. } => "project",
+        | EventPayload::RepositoryDetached { .. }
+        | EventPayload::GovernanceProjectStorageInitialized { .. }
+        | EventPayload::GovernanceArtifactUpserted { .. }
+        | EventPayload::GovernanceArtifactDeleted { .. }
+        | EventPayload::GovernanceAttachmentLifecycleUpdated { .. }
+        | EventPayload::GovernanceStorageMigrated { .. }
+        | EventPayload::ConstitutionInitialized { .. }
+        | EventPayload::ConstitutionUpdated { .. }
+        | EventPayload::ConstitutionValidated { .. }
+        | EventPayload::TemplateInstantiated { .. } => "project",
 
         EventPayload::TaskCreated { .. }
         | EventPayload::TaskUpdated { .. }
@@ -285,6 +309,8 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::RuntimeInterrupted { .. }
         | EventPayload::RuntimeExited { .. }
         | EventPayload::RuntimeTerminated { .. }
+        | EventPayload::RuntimeErrorClassified { .. }
+        | EventPayload::RuntimeRecoveryScheduled { .. }
         | EventPayload::RuntimeFilesystemObserved { .. }
         | EventPayload::RuntimeCommandObserved { .. }
         | EventPayload::RuntimeToolCallObserved { .. }

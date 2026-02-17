@@ -2,7 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [ -d "$SCRIPT_DIR/../hivemind" ]; then
+  REPO_ROOT="$(cd "$SCRIPT_DIR/../hivemind" && pwd)"
+else
+  REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
 HIVEMIND="${HIVEMIND:-$REPO_ROOT/target/release/hivemind}"
 
 TMP_BASE="${TMPDIR:-/tmp}/hivemind-test"
@@ -61,6 +65,6 @@ echo "=== Inspecting worktree ==="
 $HIVEMIND worktree inspect "$TASK_ID" 2>&1
 
 echo "=== Listing worktree directory ==="
-ls -la "$PWD/.hivemind/worktrees/" 2>&1 || echo "Directory does not exist"
+ls -la "$HOME/hivemind/worktrees/" 2>&1 || echo "Directory does not exist"
 
 echo "=== Test complete ==="

@@ -389,6 +389,15 @@ Adapter translates runtime-specific errors to Hivemind errors.
 | Auth failure | RUNTIME_CONNECTION_FAILED |
 | Malformed output | RUNTIME_OUTPUT_MALFORMED |
 
+Production hardening notes:
+
+- Failure handling is centralized in the registry and emits `runtime_error_classified` for
+  every runtime failure path (initialize/prepare/execute/nonzero exit/checkpoint gating).
+- Recovery intent is emitted via `runtime_recovery_scheduled` when automatic retry/fallback
+  is selected.
+- Stdout/stderr are retained for failed execution reports so rate-limit/auth signals can be
+  classified even for wrapped runtimes that return exit code `0` but emit fatal errors on stderr.
+
 ### 9.3 Error Context
 
 All runtime errors include:
@@ -493,6 +502,8 @@ No code changes required for basic support.
 | RuntimeInterrupted | User interrupted runtime (interactive mode only) |
 | RuntimeExited | Process terminated |
 | RuntimeTerminated | Cleanup complete |
+| RuntimeErrorClassified | Runtime failure normalized into code/category/recoverability |
+| RuntimeRecoveryScheduled | Retry/fallback strategy and backoff recorded |
 | FileModified | Per changed file |
 | DiffComputed | After observation |
 | CheckpointCommitCreated | If runtime committed |

@@ -86,6 +86,27 @@ Examples:
 
 Project events are **infrequent** and non-executional.
 
+### 5.1 Governance / Context Artifact Events
+
+Governance artifacts are first-class project/global state and emit explicit lifecycle events.
+
+Examples:
+- `GovernanceProjectStorageInitialized`
+- `GovernanceStorageMigrated`
+- `GovernanceArtifactUpserted`
+- `GovernanceArtifactDeleted`
+- `GovernanceAttachmentLifecycleUpdated`
+- `ConstitutionInitialized`
+- `ConstitutionUpdated`
+- `ConstitutionValidated`
+- `TemplateInstantiated`
+
+Properties:
+- Global and project scopes are explicit in payloads (`scope: global|project`)
+- Attachment lifecycle is task-scoped and auditable
+- Constitution lifecycle events include digest, schema/version metadata, confirmation flag, mutation intent, and actor attribution
+- Template instantiation records resolved artifact IDs for replay-safe context provenance
+
 ---
 
 ## 6. TaskGraph Events (Planning)
@@ -371,4 +392,3 @@ By expressing all behavior as structured, replayable events, Hivemind achieves:
 - Evolvability
 
 Everything else — state, UI, automation — is a consequence of this model.
-

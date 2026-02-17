@@ -257,35 +257,433 @@ RepositoryDetached:
 
 ---
 
-### 2.8 project delete
+### 2.8 project governance init
 
 **Synopsis:**
 ```
-hivemind project delete <project>
+hivemind [-f json|table|yaml] project governance init <project>
 ```
 
 **Preconditions:**
 - Project exists
-- Project has no remaining tasks
-- Project has no remaining graphs
-- Project has no remaining flows
 
 **Effects:**
-- Project is removed from derived state
+- Creates/ensures canonical governance storage under `~/.hivemind/projects/<project-id>/` and `~/.hivemind/global/`
+- Initializes deterministic governance projection state for the project
 
 **Events:**
 ```
-ProjectDeleted:
+GovernanceProjectStorageInitialized:
   project_id: <project-id>
+  schema_version: governance.v1
+  projection_version: 1
+  root_path: ~/.hivemind/projects/<project-id>
+
+GovernanceArtifactUpserted:
+  project_id: <project-id>|null
+  scope: project|global
+  artifact_kind: constitution|documents|notepad|graph_snapshot|skills|system_prompts|templates
+  artifact_key: <artifact-key>
+  path: <absolute-path>
+  revision: <n>
+  schema_version: governance.v1
+  projection_version: 1
 ```
 
 **Failures:**
 - `project_not_found`
-- `project_has_tasks`
-- `project_has_graphs`
-- `project_has_flows`
+- `governance_storage_create_failed`
+- `governance_path_conflict`
 
-**Idempotence:** Not idempotent. Second call fails.
+**Idempotence:** Idempotent. Re-running preserves existing files/directories and only emits missing projection events.
+
+---
+
+### 2.9 project governance migrate
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance migrate <project>
+```
+
+**Preconditions:**
+- Project exists
+
+**Effects:**
+- Migrates legacy repo-local governance artifacts from `<repo>/.hivemind/...` into canonical global/project governance storage
+- Preserves existing non-empty canonical artifacts unless they match scaffold defaults
+- Ensures governance layout and projection state are initialized
+
+**Events:**
+```
+GovernanceStorageMigrated:
+  project_id: <project-id>
+  from_layout: repo_local_hivemind_v1
+  to_layout: global_governance_v1
+  migrated_paths: [<absolute-path>...]
+  rollback_hint: <text>
+  schema_version: governance.v1
+  projection_version: 1
+```
+
+**Failures:**
+- `project_not_found`
+- `governance_migration_failed`
+- `governance_storage_create_failed`
+
+**Idempotence:** Idempotent for already-migrated content.
+
+---
+
+### 2.10 project governance inspect
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance inspect <project>
+```
+
+**Preconditions:**
+- Project exists
+
+**Effects:** None (read-only)
+
+**Output:**
+- Governance root path, schema/projection metadata, export/import boundary note
+- Canonical artifact paths and projection revision status
+- Legacy candidate paths still present in repo-local layout
+- Migration history summaries for the project
+
+**Events:** None
+
+**Failures:**
+- `project_not_found`
+
+**Idempotence:** Idempotent.
+
+---
+
+### 2.10.1 constitution
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] constitution init <project> [--content <yaml> | --from-file <path>] --confirm [--actor <name>] [--intent <text>]
+hivemind [-f json|table|yaml] constitution show <project>
+hivemind [-f json|table|yaml] constitution validate <project>
+hivemind [-f json|table|yaml] constitution update <project> (--content <yaml> | --from-file <path>) --confirm [--actor <name>] [--intent <text>]
+```
+
+**Preconditions:**
+- Project exists
+- Canonical constitution path is `~/.hivemind/projects/<project-id>/constitution.yaml`
+- `init` and `update` require explicit `--confirm`
+- `update` requires constitution to be initialized first
+
+**Effects:**
+- Defines and validates Constitution Schema v1 (`version`, `schema_version`, `compatibility`, `partitions[]`, `rules[]`)
+- Enforces strict rule semantics:
+  - `forbidden_dependency` / `allowed_dependency` require known partition IDs for `from` + `to`
+  - `coverage_requirement` requires known `target` partition and `threshold` in `0..=100`
+- Maintains per-project constitution digest/version projection fields on project state
+- Preserves mutation audit metadata (`actor`, `mutation_intent`, confirmation flag)
+
+**Events:**
+```
+ConstitutionInitialized:
+  project_id: <project-id>
+  path: <constitution-path>
+  schema_version: constitution.v1
+  constitution_version: 1
+  digest: <content-digest>
+  revision: <n>
+  actor: <actor>
+  mutation_intent: <text>
+  confirmed: true
+
+ConstitutionUpdated:
+  project_id: <project-id>
+  path: <constitution-path>
+  schema_version: constitution.v1
+  constitution_version: 1
+  previous_digest: <digest>
+  digest: <digest>
+  revision: <n>
+  actor: <actor>
+  mutation_intent: <text>
+  confirmed: true
+
+ConstitutionValidated:
+  project_id: <project-id>
+  path: <constitution-path>
+  schema_version: constitution.v1
+  constitution_version: 1
+  digest: <digest>
+  valid: true|false
+  issues: [<code:field:message>...]
+  validated_by: <actor>
+```
+
+`init` and `update` also emit `GovernanceArtifactUpserted` for `artifact_kind: constitution`.
+
+**Failures:**
+- `constitution_confirmation_required`
+- `constitution_schema_invalid`
+- `constitution_validation_failed`
+- `constitution_not_initialized`
+- `constitution_not_found`
+- `constitution_input_read_failed`
+- `constitution_content_missing`
+
+**Idempotence:**
+- `show`: idempotent
+- `validate`: idempotent relative to file content (always emits a validation event)
+- `init`: non-idempotent after initial constitution lifecycle event (must use `update` for subsequent mutations)
+- `update`: idempotent when content digest is unchanged, but still explicit and confirmed
+
+---
+
+### 2.11 project governance document
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance document create <project> <document-id> --title <text> --owner <text> [--tag <tag>...] --content <text>
+hivemind [-f json|table|yaml] project governance document list <project>
+hivemind [-f json|table|yaml] project governance document inspect <project> <document-id>
+hivemind [-f json|table|yaml] project governance document update <project> <document-id> [--title <text>] [--owner <text>] [--tag <tag>...] [--content <text>]
+hivemind [-f json|table|yaml] project governance document delete <project> <document-id>
+```
+
+**Preconditions:**
+- Project exists
+- `document-id` uses governance identifier format
+
+**Effects:**
+- `create` and `update` write canonical artifact JSON under `~/.hivemind/projects/<project-id>/documents/`
+- Document metadata (`title`, `owner`, `tags`, `updated_at`) is maintained
+- Revision history is immutable (new revisions are appended)
+
+**Events:**
+```
+GovernanceArtifactUpserted:
+  project_id: <project-id>
+  scope: project
+  artifact_kind: document
+  artifact_key: <document-id>
+  path: <absolute-path>
+  revision: <n>
+  schema_version: governance.v1
+  projection_version: 1
+
+GovernanceArtifactDeleted:
+  project_id: <project-id>
+  scope: project
+  artifact_kind: document
+  artifact_key: <document-id>
+  path: <absolute-path>
+  schema_version: governance.v1
+  projection_version: 1
+```
+
+**Failures:**
+- `project_not_found`
+- `invalid_governance_identifier`
+- `document_not_found`
+- `governance_artifact_schema_invalid`
+
+**Idempotence:**
+- `list`/`inspect`: idempotent
+- `create`: non-idempotent (conflicts when artifact already exists)
+- `update`: idempotent when no effective change
+- `delete`: non-idempotent (fails if document is absent)
+
+---
+
+### 2.12 project governance attachment
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance attachment include <project> <task-id> <document-id>
+hivemind [-f json|table|yaml] project governance attachment exclude <project> <task-id> <document-id>
+```
+
+**Preconditions:**
+- Project and task exist
+- Referenced document exists for `include`
+
+**Effects:**
+- Sets explicit per-task attachment lifecycle for project documents
+- Included documents are injected into runtime execution context
+
+**Events:**
+```
+GovernanceAttachmentLifecycleUpdated:
+  project_id: <project-id>
+  task_id: <task-id>
+  artifact_kind: document
+  artifact_key: <document-id>
+  attached: true|false
+  schema_version: governance.v1
+  projection_version: 1
+```
+
+**Failures:**
+- `project_not_found`
+- `task_not_found`
+- `document_not_found`
+
+**Idempotence:** Idempotent when attachment state is unchanged.
+
+---
+
+### 2.13 project governance notepad
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance notepad create <project> --content <text>
+hivemind [-f json|table|yaml] project governance notepad show <project>
+hivemind [-f json|table|yaml] project governance notepad update <project> --content <text>
+hivemind [-f json|table|yaml] project governance notepad delete <project>
+```
+
+**Preconditions:**
+- Project exists
+
+**Effects:**
+- Maintains project-level notepad at `~/.hivemind/projects/<project-id>/notepad.md`
+- Notepad is explicitly **non-executional** and **non-validating**
+- Notepad content is never attached to runtime input by default
+
+**Events:**
+- `create`/`update`: `GovernanceArtifactUpserted` (`artifact_kind: notepad`)
+- `delete`: `GovernanceArtifactDeleted` (`artifact_kind: notepad`)
+- `show`: no events
+
+**Failures:**
+- `project_not_found`
+- `governance_artifact_read_failed`
+
+**Idempotence:**
+- `show`: idempotent
+- `create`/`update`: idempotent when content unchanged
+- `delete`: idempotent if already absent
+
+---
+
+### 2.14 global skill
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] global skill create <skill-id> --name <text> --content <text> [--tag <tag>...]
+hivemind [-f json|table|yaml] global skill list
+hivemind [-f json|table|yaml] global skill inspect <skill-id>
+hivemind [-f json|table|yaml] global skill update <skill-id> [--name <text>] [--content <text>] [--tag <tag>...]
+hivemind [-f json|table|yaml] global skill delete <skill-id>
+```
+
+**Effects:**
+- Maintains globally reusable skill artifacts under `~/.hivemind/global/skills/`
+- Enforces schema/identifier validation with structured failures
+
+**Events:**
+- Mutations emit governance upsert/delete events with `scope: global` and `artifact_kind: skill`
+
+**Failures:**
+- `invalid_governance_identifier`
+- `governance_artifact_schema_invalid`
+- `skill_not_found`
+
+---
+
+### 2.15 global system-prompt
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] global system-prompt create <prompt-id> --content <text>
+hivemind [-f json|table|yaml] global system-prompt list
+hivemind [-f json|table|yaml] global system-prompt inspect <prompt-id>
+hivemind [-f json|table|yaml] global system-prompt update <prompt-id> --content <text>
+hivemind [-f json|table|yaml] global system-prompt delete <prompt-id>
+```
+
+**Effects:**
+- Maintains globally reusable system prompt artifacts under `~/.hivemind/global/system_prompts/`
+
+**Events:**
+- Mutations emit governance upsert/delete events with `scope: global` and `artifact_kind: system_prompt`
+
+**Failures:**
+- `invalid_governance_identifier`
+- `governance_artifact_schema_invalid`
+- `system_prompt_not_found`
+
+---
+
+### 2.16 global template
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] global template create <template-id> --system-prompt-id <prompt-id> [--skill-id <skill-id>...] [--document-id <document-id>...] [--description <text>]
+hivemind [-f json|table|yaml] global template list
+hivemind [-f json|table|yaml] global template inspect <template-id>
+hivemind [-f json|table|yaml] global template update <template-id> [--system-prompt-id <prompt-id>] [--skill-id <skill-id>...] [--document-id <document-id>...] [--description <text>]
+hivemind [-f json|table|yaml] global template delete <template-id>
+hivemind [-f json|table|yaml] global template instantiate <project> <template-id>
+```
+
+**Effects:**
+- Stores template references in `~/.hivemind/global/templates/`
+- Validates referenced system prompt and skill IDs
+- `instantiate` resolves all references against project/global registries and emits immutable resolution event
+
+**Events:**
+```
+TemplateInstantiated:
+  project_id: <project-id>
+  template_id: <template-id>
+  system_prompt_id: <prompt-id>
+  skill_ids: [<skill-id>...]
+  document_ids: [<document-id>...]
+  schema_version: governance.v1
+  projection_version: 1
+```
+
+Template create/update/delete operations also emit governance upsert/delete events (`scope: global`, `artifact_kind: template`).
+
+**Failures:**
+- `template_not_found`
+- `system_prompt_not_found`
+- `skill_not_found`
+- `document_not_found`
+- `governance_artifact_schema_invalid`
+
+---
+
+### 2.17 global notepad
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] global notepad create --content <text>
+hivemind [-f json|table|yaml] global notepad show
+hivemind [-f json|table|yaml] global notepad update --content <text>
+hivemind [-f json|table|yaml] global notepad delete
+```
+
+**Effects:**
+- Maintains global notepad at `~/.hivemind/global/notepad.md`
+- Contract: notepad is always `non_executional=true` and `non_validating=true`
+- Empty scaffold notepad is treated as absent (`exists=false`) for read semantics
+
+**Events:**
+- `create`/`update`: `GovernanceArtifactUpserted` (`scope: global`, `artifact_kind: notepad`)
+- `delete`: `GovernanceArtifactDeleted` (`scope: global`, `artifact_kind: notepad`)
+
+**Failures:**
+- `governance_artifact_read_failed`
+- `governance_artifact_write_failed`
+
+**Idempotence:**
+- `show`: idempotent
+- `create`/`update`: idempotent when content unchanged
+- `delete`: idempotent if already absent
 
 ---
 
@@ -508,38 +906,6 @@ TaskRunModeSet:
 
 ---
 
-### 3.8 task delete
-
-**Synopsis:**
-```
-hivemind task delete <task-id>
-```
-
-**Preconditions:**
-- Task exists
-- Task is not referenced by any TaskGraph
-- Task is not referenced by any TaskFlow
-
-**Effects:**
-- Task is removed from derived state
-
-**Events:**
-```
-TaskDeleted:
-  task_id: <task-id>
-  project_id: <project-id>
-```
-
-**Failures:**
-- `invalid_task_id`
-- `task_not_found`
-- `task_in_graph`
-- `task_in_flow`
-
-**Idempotence:** Not idempotent. Second call fails.
-
----
-
 ## 4. TaskGraph Commands
 
 ### 4.1 graph create
@@ -630,36 +996,6 @@ hivemind graph validate <graph-id>
 - `GRAPH_NOT_FOUND`
 
 **Idempotence:** Idempotent.
-
----
-
-### 4.4 graph delete
-
-**Synopsis:**
-```
-hivemind graph delete <graph-id>
-```
-
-**Preconditions:**
-- Graph exists
-- Graph is not referenced by any TaskFlow
-
-**Effects:**
-- Graph is removed from derived state
-
-**Events:**
-```
-TaskGraphDeleted:
-  graph_id: <graph-id>
-  project_id: <project-id>
-```
-
-**Failures:**
-- `invalid_graph_id`
-- `graph_not_found`
-- `graph_in_use`
-
-**Idempotence:** Not idempotent. Second call fails.
 
 ---
 
@@ -1114,38 +1450,6 @@ TaskFlowRuntimeCleared:
 
 ---
 
-### 5.12 flow delete
-
-**Synopsis:**
-```
-hivemind flow delete <flow-id>
-```
-
-**Preconditions:**
-- Flow exists
-- Flow is not active (`running`, `paused`, or `frozen_for_merge`)
-
-**Effects:**
-- Flow is removed from derived state
-- Flow-scoped runtime defaults, merge state, and attempts are removed from derived state
-
-**Events:**
-```
-TaskFlowDeleted:
-  flow_id: <flow-id>
-  graph_id: <graph-id>
-  project_id: <project-id>
-```
-
-**Failures:**
-- `invalid_flow_id`
-- `flow_not_found`
-- `flow_active`
-
-**Idempotence:** Not idempotent. Second call fails.
-
----
-
 ## 6. Task Execution Commands
 
 ### 6.1 task start
@@ -1471,7 +1775,7 @@ hivemind worktree cleanup <flow-id> [--force] [--dry-run]
 - If flow state is RUNNING, `--force` is required
 
 **Effects:**
-- Removes all task worktrees for the flow under `.hivemind/worktrees/<flow-id>/...`
+- Removes all task worktrees for the flow under `~/hivemind/worktrees/<flow-id>/...`
 - With `--dry-run`, returns success without removing worktrees
 
 **Output:**

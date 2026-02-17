@@ -4,29 +4,155 @@
   "format_version": "1.0.0",
   "entries": [
     {
-      "version": "v0.1.24",
-      "date": "2026-02-16",
-      "phase": 33,
+      "version": "v0.1.27",
+      "date": "2026-02-17",
+      "phase": 36,
       "changes": [
         {
           "type": "added",
           "area": "cli",
-          "description": "Add `project delete`, `task delete`, `graph delete`, and `flow delete` commands with explicit dependency and active-state safety checks"
+          "description": "Add top-level constitution lifecycle commands: `hivemind constitution init/show/validate/update` with explicit confirmation gates for mutations"
         },
         {
           "type": "added",
           "area": "core",
-          "description": "Introduce event-sourced delete events (`ProjectDeleted`, `TaskDeleted`, `TaskGraphDeleted`, `TaskFlowDeleted`) and derived-state projection handling for entity removal"
+          "description": "Implement Constitution Schema v1 with strict YAML validation for compatibility/version fields, partition definitions, rule types, and semantic references"
         },
         {
           "type": "added",
-          "area": "api",
-          "description": "Expose delete endpoints in `src/server.rs`: `/api/projects/delete`, `/api/tasks/delete`, `/api/graphs/delete`, and `/api/flows/delete`"
+          "area": "core",
+          "description": "Emit constitution lifecycle events (`ConstitutionInitialized`, `ConstitutionUpdated`, `ConstitutionValidated`) including digest, revision, actor attribution, and mutation intent"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Project state projection now records constitution digest/schema/version metadata (`constitution_digest`, `constitution_schema_version`, `constitution_version`, `constitution_updated_at`)"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 36 integration coverage for confirmation gating, constitution lifecycle commands, validation outcomes, event observability, and projection metadata updates"
         },
         {
           "type": "changed",
           "area": "docs",
-          "description": "Update CLI semantics and capability docs to document delete command preconditions, effects, events, and failure modes"
+          "description": "Update roadmap, architecture/design docs, manual test artifacts, and Sprint 36 report for constitution core behavior and audit contracts"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.26",
+      "date": "2026-02-17",
+      "phase": 35,
+      "changes": [
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add project governance document lifecycle commands (`create`, `list`, `inspect`, `update`, `delete`), task-level attachment include/exclude controls, and project notepad CRUD operations"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add global governance registries for skills, system prompts, templates (including `instantiate`), and global notepad CRUD commands"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Implement governance artifact schema validation, immutable document revision history, and strict template reference resolution with actionable failures"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Emit and project `TemplateInstantiated` lifecycle events across CLI labels, state replay handling, and server/UI payload mappings"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Inject explicitly attached project documents into runtime execution context while keeping project/global notepad content non-injectable by default"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Treat empty scaffold notepad files as logically absent in notepad show output (`exists=false`, `content=null`) after delete operations"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 35 integration coverage for governance artifact lifecycle, runtime attachment context inclusion, notepad non-injection, and template instantiation observability"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update CLI semantics, architecture capabilities, event model, roadmap checklist state, and Sprint 35 manual validation artifacts/reporting"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.25",
+      "date": "2026-02-17",
+      "phase": 34,
+      "changes": [
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add `project governance init`, `migrate`, and `inspect` commands for managing project-level governance artifacts with observability events"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Migrate worktree storage from repo-local `.hivemind/worktrees` to global `~/hivemind/worktrees` with HIVEMIND_WORKTREE_DIR override support"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Implement resilient file locking with retry mechanism for flow integration operations to reduce transient contention failures"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add legacy governance migration support to import older repo-local governance files into global storage"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add unit and integration coverage for governance CLI lifecycle, event observability, and migration semantics"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Document project governance CLI semantics and update worktree paths to reflect global storage location"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.24",
+      "date": "2026-02-17",
+      "phase": 30,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Centralize runtime failure handling to classify errors, emit RuntimeErrorClassified/RuntimeRecoveryScheduled events, and schedule backup-runtime recovery for transient failures (rate limiting/timeouts)"
+        },
+        {
+          "type": "fixed",
+          "area": "adapters",
+          "description": "Preserve stdout/stderr on nonzero runtime exits so parser-based rate-limit/auth detection has full execution context"
+        },
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "Detect runtime auth/rate-limit failures from stderr even when wrapped runtimes return exit code 0 and checkpoint completion is otherwise missing"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add registry coverage for rate-limit recovery scheduling and zero-exit stderr auth-failure classification, plus expanded tick_flow regression validation"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Document runtime error first-class observability, recovery scheduling semantics, and Sprint 30 production-hardening validation outcomes"
         }
       ]
     },

@@ -5,27 +5,27 @@
 > **Principles 1, 8, 11, 15:** Observability is truth, no hidden state, incremental foundations, no magic.
 
 ### 34.1 Storage Topology and Boundaries
-- [ ] Define canonical governance layout under `~/.hivemind/`:
-  - [ ] `projects/<project-id>/constitution.yaml`
-  - [ ] `projects/<project-id>/documents/`
-  - [ ] `projects/<project-id>/notepad.md`
-  - [ ] `projects/<project-id>/graph_snapshot.json`
-  - [ ] `global/skills/`
-  - [ ] `global/system_prompts/`
-  - [ ] `global/templates/`
-  - [ ] `global/notepad.md`
-- [ ] Keep code ownership in Git and governance ownership in Hivemind with no implicit repo writes
-- [ ] Add explicit export/import boundary design (not auto-enabled)
+- [x] Define canonical governance layout under `~/hivemind/` managed by the registry CLI:
+  - [x] `projects/<project-id>/constitution.yaml`
+  - [x] `projects/<project-id>/documents/`
+  - [x] `projects/<project-id>/notepad.md`
+  - [x] `projects/<project-id>/graph_snapshot.json`
+  - [x] `global/skills/`
+  - [x] `global/system_prompts/`
+  - [x] `global/templates/`
+  - [x] `global/notepad.md`
+- [x] Keep code ownership in Git and governance ownership in Hivemind with no implicit repo writes
+- [x] Add explicit export/import boundary design (not auto-enabled)
 
 ### 34.2 Event and Projection Contracts
-- [ ] Introduce governance event families for create/update/delete and attachment lifecycle
-- [ ] Ensure all governance state is reconstructable from events plus deterministic projections
-- [ ] Add projection versioning and schema markers for forward-safe migrations
+- [x] Introduce governance event families for create/update/migrate and attachment lifecycle
+- [x] Ensure all governance state is reconstructable from events plus deterministic projections
+- [x] Add projection versioning and schema markers for forward-safe migrations
 
 ### 34.3 Backward-Compatible Migration
-- [ ] Add migration from current local registry layout to governance-aware layout
-- [ ] Preserve existing project/task/flow behavior and event replay determinism
-- [ ] Emit explicit migration events and include rollback instructions in output hints
+- [x] Add migration from current local registry layout to governance-aware layout
+- [x] Preserve existing project/task/flow behavior and event replay determinism
+- [x] Emit explicit migration events and include rollback instructions in output hints
 
 ### 34.4 Manual Testing (`@hivemind-test`)
 - [ ] Add/update Sprint 34 manual checklist under `@hivemind-test` (`/home/antonio/programming/Hivemind/hivemind-test`)
@@ -34,11 +34,11 @@
 - [ ] Publish Sprint 34 manual test report artifact in `@hivemind-test`
 
 ### 34.5 Exit Criteria
-- [ ] Governance directory structure is created and managed by CLI
-- [ ] Governance mutations emit structured events with correlation IDs
-- [ ] Replay can rebuild governance projections deterministically
-- [ ] Existing non-governance workflows remain stable
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Governance directory structure is created and managed by CLI
+- [x] Governance mutations emit structured events with correlation IDs
+- [x] Replay can rebuild governance projections deterministically
+- [x] Existing non-governance workflows remain stable
+- [ ] Manual validation in `@hivemind-test` is completed and documented (pending manual runs)
 
 ---
 
@@ -49,38 +49,38 @@
 > **User Story 11:** Teams manage context artifacts as first-class, observable Hivemind state.
 
 ### 35.1 Project Documents
-- [ ] Add CLI for project document lifecycle (`create`, `list`, `inspect`, `update`, `delete`)
-- [ ] Support metadata (`title`, `tags`, `owner`, `updated_at`) and immutable revision history
-- [ ] Add attachment controls for execution inclusion (explicit include/exclude)
+- [x] Add CLI for project document lifecycle (`create`, `list`, `inspect`, `update`, `delete`)
+- [x] Support metadata (`title`, `tags`, `owner`, `updated_at`) and immutable revision history
+- [x] Add attachment controls for execution inclusion (explicit include/exclude)
 
 ### 35.2 Global Skills and System Prompts
-- [ ] Add CLI for global skill registry management
-- [ ] Add CLI for global system prompt registry management
-- [ ] Validate artifact schemas and reject malformed content with structured errors
+- [x] Add CLI for global skill registry management
+- [x] Add CLI for global system prompt registry management
+- [x] Validate artifact schemas and reject malformed content with structured errors
 
 ### 35.3 Templates and Instantiation Inputs
-- [ ] Add template lifecycle commands referencing `system_prompt_id`, `skill_ids[]`, `document_ids[]`
-- [ ] Resolve template references with strict validation and actionable failure hints
-- [ ] Emit `TemplateInstantiated`-style events with resolved artifact IDs
+- [x] Add template lifecycle commands referencing `system_prompt_id`, `skill_ids[]`, `document_ids[]`
+- [x] Resolve template references with strict validation and actionable failure hints
+- [x] Emit `TemplateInstantiated`-style events with resolved artifact IDs
 
 ### 35.4 Notepads (Non-Injectable)
-- [ ] Add `global notepad` and `project notepad` CRUD commands
-- [ ] Mark notepads as non-executional and non-validating by contract
-- [ ] Ensure notepad content is never injected into runtime input by default
+- [x] Add `global notepad` and `project notepad` CRUD commands
+- [x] Mark notepads as non-executional and non-validating by contract
+- [x] Ensure notepad content is never injected into runtime input by default
 
 ### 35.5 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 35 manual checklist under `@hivemind-test`
-- [ ] Manually validate document/skill/system prompt/template/notepad CRUD and inspect flows
-- [ ] Manually validate attachment resolution behavior and failure paths
-- [ ] Confirm notepad content is not injected into runtime context in manual runs
-- [ ] Publish Sprint 35 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 35 manual checklist under `@hivemind-test`
+- [x] Manually validate document/skill/system prompt/template/notepad CRUD and inspect flows
+- [x] Manually validate attachment resolution behavior and failure paths
+- [x] Confirm notepad content is not injected into runtime context in manual runs
+- [x] Publish Sprint 35 manual test report artifact in `@hivemind-test`
 
 ### 35.6 Exit Criteria
-- [ ] All document-related artifacts are CLI-manageable and event-observable
-- [ ] Skills/system prompts/templates are globally reusable across projects
-- [ ] Notepads are clearly separated from execution context
-- [ ] Artifact operations are replay-safe and deterministic
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] All document-related artifacts are CLI-manageable and event-observable
+- [x] Skills/system prompts/templates are globally reusable across projects
+- [x] Notepads are clearly separated from execution context
+- [x] Artifact operations are replay-safe and deterministic
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 
@@ -91,31 +91,31 @@
 > **Principles 5, 7, 14:** Structured operations, CLI-first control, human authority on critical governance boundaries.
 
 ### 36.1 Constitution Schema v1
-- [ ] Define schema with partitions, rule types, parameters, and severity (`hard`, `advisory`, `informational`)
-- [ ] Add strict schema validation with compatibility/version fields
-- [ ] Document rule semantics and invalid configuration failure modes
+- [x] Define schema with partitions, rule types, parameters, and severity (`hard`, `advisory`, `informational`)
+- [x] Add strict schema validation with compatibility/version fields
+- [x] Document rule semantics and invalid configuration failure modes
 
 ### 36.2 Constitution Lifecycle Commands
-- [ ] Add `hivemind constitution init/show/validate/update`
-- [ ] Require exactly one constitution per project
-- [ ] Require explicit confirmation for constitution mutation commands
+- [x] Add `hivemind constitution init/show/validate/update`
+- [x] Require exactly one constitution per project
+- [x] Require explicit confirmation for constitution mutation commands
 
 ### 36.3 Constitution Event Model
-- [ ] Emit lifecycle events (`ConstitutionInitialized`, `ConstitutionUpdated`, validation events)
-- [ ] Preserve full audit trail for mutation intent and actor attribution
-- [ ] Record constitution digest/version in project state projection
+- [x] Emit lifecycle events (`ConstitutionInitialized`, `ConstitutionUpdated`, validation events)
+- [x] Preserve full audit trail for mutation intent and actor attribution
+- [x] Record constitution digest/version in project state projection
 
 ### 36.4 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 36 manual checklist under `@hivemind-test`
-- [ ] Manually validate constitution init/show/validate/update behavior and confirmation gates
-- [ ] Manually validate auditability of constitution events and projection state updates
-- [ ] Publish Sprint 36 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 36 manual checklist under `@hivemind-test`
+- [x] Manually validate constitution init/show/validate/update behavior and confirmation gates
+- [x] Manually validate auditability of constitution events and projection state updates
+- [x] Publish Sprint 36 manual test report artifact in `@hivemind-test`
 
 ### 36.5 Exit Criteria
-- [ ] Every active project has one valid constitution
-- [ ] Constitution cannot be silently changed or bypassed
-- [ ] Constitution mutations are attributable, inspectable, and replayable
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Every active project has one valid constitution
+- [x] Constitution cannot be silently changed or bypassed
+- [x] Constitution mutations are attributable, inspectable, and replayable
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

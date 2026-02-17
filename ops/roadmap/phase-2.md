@@ -108,95 +108,29 @@
 
 ---
 
-## Sprint 30: Automation & Scheduling
-
-**Goal:** Triggered TaskFlows.
-
-> **User Story 9:** Scheduled TaskFlows.
-
-### 30.1 Automation Events
-- [ ] `AutomationCreated`
-- [ ] `AutomationTriggered`
-
-### 30.2 Automation Commands
-- [ ] `hivemind automation create <flow> --schedule <cron>`
-- [ ] `hivemind automation list`
-- [ ] `hivemind automation disable`
-- [ ] `hivemind automation trigger` (manual)
-
-### 30.3 Exit Criteria
-- [ ] Scheduled triggers work
-- [ ] Manual triggers work
-- [ ] Automations are observable
-- [ ] User Story 9 achievable
-
----
-
-## Sprint 31: Agent Meta-Operation
-
-**Goal:** Agents can operate Hivemind itself.
-
-### 31.1 CLI as API
-- [ ] All commands scriptable
-- [ ] JSON output reliable
-- [ ] Exit codes semantic
-
-### 31.2 Attribution
-- [ ] Agent actions attributed in events
-- [ ] Scope applies to meta-operations
-
-### 31.3 Exit Criteria
-- [ ] Agents can invoke CLI commands
-- [ ] Actions are audited
-- [ ] Meta-orchestration possible
-
----
-
-## Sprint 32: UI Foundation (Optional)
-
-**Goal:** UI is a projection over CLI-accessible state.
-
-### 32.1 Views
-- [ ] Project overview
-- [ ] Task list / Kanban
-- [ ] TaskFlow document view
-- [ ] Dependency graph
-- [ ] Diff and verification views
-
-### 32.2 Principles
-- [ ] UI reads via CLI/events only
-- [ ] UI does not modify state directly
-- [ ] UI is secondary to CLI
-
-### 32.3 Exit Criteria
-- [ ] UI reflects CLI state accurately
-- [ ] No UI-only features
-
----
-
-## Sprint 33: Production Hardening
+## Sprint 30: Production Hardening
 
 **Goal:** Production-ready quality.
 
 ### 33.1 Error Handling
-- [ ] All error paths tested
-- [ ] Recovery hints useful
-- [ ] No silent failures
+- [x] All error paths tested
+- [x] Recovery hints useful
+- [x] No silent failures
 
 ### 33.2 Performance
-- [ ] Event replay scales to 10k+ events
-- [ ] CLI response time < 100ms for reads
-- [ ] Parallel execution efficient
+- [x] Event replay scales to 10k+ events
+- [x] CLI response time < 100ms for reads
+- [x] Parallel execution efficient
 
 ### 33.3 Documentation
-- [ ] CLI help complete
-- [ ] Architecture docs match implementation
-- [ ] User guide written
+- [x] CLI help complete
+- [x] Architecture docs match implementation
+- [x] User guide written
 
 ### 33.4 Exit Criteria
-- [ ] All user stories achievable
-- [ ] All principles upheld
-- [ ] Ready for real use
+- [x] All user stories achievable
+- [x] All principles upheld
+- [x] Ready for real use
 
 ---
 

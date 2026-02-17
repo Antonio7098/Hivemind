@@ -90,6 +90,7 @@ Project state represents **long‑lived organizational context**.
 - Project identity
 - Associated repositories
 - Project‑level configuration
+- Project constitution projection metadata (digest, schema/version, last updated timestamp)
 - Linked documentation
 - Task registry
 
@@ -334,4 +335,3 @@ Hivemind’s state model is:
 It treats runtimes as **non‑deterministic executors** and elevates **effects and decisions** to first‑class state.
 
 This discipline is what makes long‑running, agentic workflows trustworthy.
-

@@ -21,8 +21,17 @@ pub struct WorktreeConfig {
 
 impl Default for WorktreeConfig {
     fn default() -> Self {
+        let base_dir = std::env::var("HIVEMIND_WORKTREE_DIR").map_or_else(
+            |_| {
+                dirs::home_dir().map_or_else(
+                    || PathBuf::from("hivemind/worktrees"),
+                    |home| home.join("hivemind").join("worktrees"),
+                )
+            },
+            PathBuf::from,
+        );
         Self {
-            base_dir: PathBuf::from(".hivemind/worktrees"),
+            base_dir,
             cleanup_on_success: true,
             preserve_on_failure: true,
         }
@@ -479,8 +488,15 @@ mod tests {
         let repo_dir = tmp.path().join("repo");
         init_git_repo(&repo_dir);
 
-        let manager =
-            WorktreeManager::new(repo_dir, WorktreeConfig::default()).expect("worktree manager");
+        let manager = WorktreeManager::new(
+            repo_dir,
+            WorktreeConfig {
+                base_dir: tmp.path().join("worktrees"),
+                cleanup_on_success: true,
+                preserve_on_failure: true,
+            },
+        )
+        .expect("worktree manager");
 
         let flow_id = Uuid::new_v4();
         let task_id = Uuid::new_v4();

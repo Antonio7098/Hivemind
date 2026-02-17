@@ -73,6 +73,7 @@ A **Project** is a logical container defined by the user. It may include:
 
 - One or more repositories
 - Zero or more non-repo directories
+- One mandatory constitution artifact managed by Hivemind governance storage
 - Documentation (overviews, plans, constraints)
 - TaskGraphs, TaskFlows, and free tasks
 

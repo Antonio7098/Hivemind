@@ -377,6 +377,110 @@ pub enum EventPayload {
         name: String,
     },
 
+    GovernanceProjectStorageInitialized {
+        project_id: Uuid,
+        schema_version: String,
+        projection_version: u32,
+        root_path: String,
+    },
+
+    GovernanceArtifactUpserted {
+        #[serde(default)]
+        project_id: Option<Uuid>,
+        scope: String,
+        artifact_kind: String,
+        artifact_key: String,
+        path: String,
+        #[serde(default)]
+        revision: u64,
+        schema_version: String,
+        projection_version: u32,
+    },
+
+    GovernanceArtifactDeleted {
+        #[serde(default)]
+        project_id: Option<Uuid>,
+        scope: String,
+        artifact_kind: String,
+        artifact_key: String,
+        path: String,
+        schema_version: String,
+        projection_version: u32,
+    },
+
+    GovernanceAttachmentLifecycleUpdated {
+        project_id: Uuid,
+        task_id: Uuid,
+        artifact_kind: String,
+        artifact_key: String,
+        attached: bool,
+        schema_version: String,
+        projection_version: u32,
+    },
+
+    GovernanceStorageMigrated {
+        #[serde(default)]
+        project_id: Option<Uuid>,
+        from_layout: String,
+        to_layout: String,
+        #[serde(default)]
+        migrated_paths: Vec<String>,
+        rollback_hint: String,
+        schema_version: String,
+        projection_version: u32,
+    },
+
+    ConstitutionInitialized {
+        project_id: Uuid,
+        path: String,
+        schema_version: String,
+        constitution_version: u32,
+        digest: String,
+        #[serde(default)]
+        revision: u64,
+        actor: String,
+        mutation_intent: String,
+        confirmed: bool,
+    },
+
+    ConstitutionUpdated {
+        project_id: Uuid,
+        path: String,
+        schema_version: String,
+        constitution_version: u32,
+        previous_digest: String,
+        digest: String,
+        #[serde(default)]
+        revision: u64,
+        actor: String,
+        mutation_intent: String,
+        confirmed: bool,
+    },
+
+    ConstitutionValidated {
+        project_id: Uuid,
+        path: String,
+        schema_version: String,
+        constitution_version: u32,
+        digest: String,
+        valid: bool,
+        #[serde(default)]
+        issues: Vec<String>,
+        validated_by: String,
+    },
+
+    TemplateInstantiated {
+        project_id: Uuid,
+        template_id: String,
+        system_prompt_id: String,
+        #[serde(default)]
+        skill_ids: Vec<String>,
+        #[serde(default)]
+        document_ids: Vec<String>,
+        schema_version: String,
+        projection_version: u32,
+    },
+
     TaskGraphCreated {
         graph_id: Uuid,
         project_id: Uuid,
@@ -801,6 +905,24 @@ pub enum EventPayload {
     RuntimeTerminated {
         attempt_id: Uuid,
         reason: String,
+    },
+    RuntimeErrorClassified {
+        attempt_id: Uuid,
+        adapter_name: String,
+        code: String,
+        category: String,
+        message: String,
+        recoverable: bool,
+        retryable: bool,
+        rate_limited: bool,
+    },
+    RuntimeRecoveryScheduled {
+        attempt_id: Uuid,
+        from_adapter: String,
+        to_adapter: String,
+        strategy: String,
+        reason: String,
+        backoff_ms: u64,
     },
     RuntimeFilesystemObserved {
         attempt_id: Uuid,

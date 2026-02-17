@@ -4,21 +4,28 @@ use chrono::{DateTime, Utc};
 use clap::error::ErrorKind;
 use clap::Parser;
 use hivemind::cli::commands::{
-    AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, EventCommands,
-    FlowCommands, GraphCommands, MergeCommands, MergeExecuteModeArg, ProjectCommands, RunModeArg,
-    RuntimeCommands, RuntimeRoleArg, ServeArgs, TaskAbortArgs, TaskCloseArgs, TaskCommands,
-    TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs, TaskStartArgs,
-    TaskUpdateArgs, VerifyCommands, WorktreeCommands,
+    AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, ConstitutionCommands,
+    EventCommands, FlowCommands, GlobalCommands, GlobalNotepadCommands, GlobalSkillCommands,
+    GlobalSystemPromptCommands, GlobalTemplateCommands, GraphCommands, MergeCommands,
+    MergeExecuteModeArg, ProjectCommands, ProjectGovernanceAttachmentCommands,
+    ProjectGovernanceCommands, ProjectGovernanceDocumentCommands, ProjectGovernanceNotepadCommands,
+    RunModeArg, RuntimeCommands, RuntimeRoleArg, ServeArgs, TaskAbortArgs, TaskCloseArgs,
+    TaskCommands, TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs,
+    TaskStartArgs, TaskUpdateArgs, VerifyCommands, WorktreeCommands,
 };
 use hivemind::cli::output::{output, output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
 use hivemind::core::events::RuntimeRole;
 use hivemind::core::flow::{RetryMode, RunMode};
-use hivemind::core::registry::{MergeExecuteMode, MergeExecuteOptions, Registry};
+use hivemind::core::registry::{
+    MergeExecuteMode, MergeExecuteOptions, ProjectGovernanceInitResult,
+    ProjectGovernanceInspectResult, ProjectGovernanceMigrateResult, Registry,
+};
 use hivemind::core::scope::RepoAccessMode;
 use hivemind::core::scope::Scope;
 use hivemind::core::state::{AttemptState, Project, Task, TaskState};
 use std::ffi::OsString;
+use std::fs;
 use std::process;
 use uuid::Uuid;
 
@@ -49,6 +56,21 @@ fn parse_format_value(value: &str) -> OutputFormat {
         OutputFormat::Yaml
     } else {
         OutputFormat::Table
+    }
+}
+
+fn print_structured<T: serde::Serialize>(value: &T, format: OutputFormat, context: &str) {
+    match format {
+        OutputFormat::Table => {
+            if let Ok(json) = serde_json::to_string_pretty(value) {
+                println!("{json}");
+            }
+        }
+        _ => {
+            if let Err(err) = output(value, format) {
+                eprintln!("Failed to render {context}: {err}");
+            }
+        }
     }
 }
 
@@ -643,6 +665,8 @@ fn run(cli: Cli) -> ExitCode {
         }
         Some(Commands::Serve(args)) => handle_serve(args, format),
         Some(Commands::Project(cmd)) => handle_project(cmd, format),
+        Some(Commands::Global(cmd)) => handle_global(cmd, format),
+        Some(Commands::Constitution(cmd)) => handle_constitution(cmd, format),
         Some(Commands::Task(cmd)) => handle_task(cmd, format),
         Some(Commands::Graph(cmd)) => handle_graph(cmd, format),
         Some(Commands::Flow(cmd)) => handle_flow(cmd, format),
@@ -757,6 +781,114 @@ fn print_projects(projects: &[Project], format: OutputFormat) {
     }
 }
 
+fn print_project_governance_init(result: &ProjectGovernanceInitResult, format: OutputFormat) {
+    match format {
+        OutputFormat::Table => {
+            println!("Project ID:        {}", result.project_id);
+            println!("Governance Root:   {}", result.root_path);
+            println!("Schema Version:    {}", result.schema_version);
+            println!("Projection Version:{}", result.projection_version);
+            if result.created_paths.is_empty() {
+                println!("Created Paths:     none (already initialized)");
+            } else {
+                println!("Created Paths:");
+                for path in &result.created_paths {
+                    println!("  - {path}");
+                }
+            }
+        }
+        _ => {
+            if let Err(err) = output(result, format) {
+                eprintln!("Failed to render governance init result: {err}");
+            }
+        }
+    }
+}
+
+fn print_project_governance_migrate(result: &ProjectGovernanceMigrateResult, format: OutputFormat) {
+    match format {
+        OutputFormat::Table => {
+            println!("Project ID:        {}", result.project_id);
+            println!("From Layout:       {}", result.from_layout);
+            println!("To Layout:         {}", result.to_layout);
+            println!("Schema Version:    {}", result.schema_version);
+            println!("Projection Version:{}", result.projection_version);
+            if result.migrated_paths.is_empty() {
+                println!("Migrated Paths:    none (no legacy artifacts found)");
+            } else {
+                println!("Migrated Paths:");
+                for path in &result.migrated_paths {
+                    println!("  - {path}");
+                }
+            }
+            println!("Rollback Hint:     {}", result.rollback_hint);
+        }
+        _ => {
+            if let Err(err) = output(result, format) {
+                eprintln!("Failed to render governance migration result: {err}");
+            }
+        }
+    }
+}
+
+fn print_project_governance_inspect(result: &ProjectGovernanceInspectResult, format: OutputFormat) {
+    match format {
+        OutputFormat::Table => {
+            println!("Project ID:        {}", result.project_id);
+            println!("Governance Root:   {}", result.root_path);
+            println!("Initialized:       {}", result.initialized);
+            println!("Schema Version:    {}", result.schema_version);
+            println!("Projection Version:{}", result.projection_version);
+            println!("Worktree Base Dir: {}", result.worktree_base_dir);
+            println!("Boundary:          {}", result.export_import_boundary);
+
+            println!("Artifacts:");
+            for artifact in &result.artifacts {
+                println!(
+                    "  - [{}] {}:{} -> {} (exists={}, projected={}, revision={})",
+                    artifact.scope,
+                    artifact.artifact_kind,
+                    artifact.artifact_key,
+                    artifact.path,
+                    artifact.exists,
+                    artifact.projected,
+                    artifact.revision
+                );
+            }
+
+            if result.migrations.is_empty() {
+                println!("Migrations:        none");
+            } else {
+                println!("Migrations:");
+                for migration in &result.migrations {
+                    println!(
+                        "  - {} -> {} @ {}",
+                        migration.from_layout, migration.to_layout, migration.migrated_at
+                    );
+                    if !migration.migrated_paths.is_empty() {
+                        println!("    paths: {}", migration.migrated_paths.join(", "));
+                    }
+                }
+            }
+
+            if result.legacy_candidates.is_empty() {
+                println!("Legacy Candidates: none");
+            } else {
+                println!("Legacy Candidates:");
+                for path in &result.legacy_candidates {
+                    println!("  - {path}");
+                }
+            }
+        }
+        _ => {
+            if let Err(err) = output(result, format) {
+                eprintln!("Failed to render governance inspect result: {err}");
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)]
 fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
         return ExitCode::Error;
@@ -857,6 +989,470 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                 ExitCode::Success
             }
             Err(e) => output_error(&e, format),
+        },
+        ProjectCommands::Governance(cmd) => match cmd {
+            ProjectGovernanceCommands::Init(args) => {
+                match registry.project_governance_init(&args.project) {
+                    Ok(result) => {
+                        print_project_governance_init(&result, format);
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            ProjectGovernanceCommands::Migrate(args) => {
+                match registry.project_governance_migrate(&args.project) {
+                    Ok(result) => {
+                        print_project_governance_migrate(&result, format);
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            ProjectGovernanceCommands::Inspect(args) => {
+                match registry.project_governance_inspect(&args.project) {
+                    Ok(result) => {
+                        print_project_governance_inspect(&result, format);
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            ProjectGovernanceCommands::Document(cmd) => match cmd {
+                ProjectGovernanceDocumentCommands::Create(args) => match registry
+                    .project_governance_document_create(
+                        &args.project,
+                        &args.document_id,
+                        &args.title,
+                        &args.owner,
+                        &args.tags,
+                        &args.content,
+                    ) {
+                    Ok(result) => {
+                        print_structured(&result, format, "governance document create result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                },
+                ProjectGovernanceDocumentCommands::List(args) => {
+                    match registry.project_governance_document_list(&args.project) {
+                        Ok(result) => {
+                            print_structured(&result, format, "governance document list");
+                            ExitCode::Success
+                        }
+                        Err(e) => output_error(&e, format),
+                    }
+                }
+                ProjectGovernanceDocumentCommands::Inspect(args) => match registry
+                    .project_governance_document_inspect(&args.project, &args.document_id)
+                {
+                    Ok(result) => {
+                        print_structured(&result, format, "governance document inspect result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                },
+                ProjectGovernanceDocumentCommands::Update(args) => match registry
+                    .project_governance_document_update(
+                        &args.project,
+                        &args.document_id,
+                        args.title.as_deref(),
+                        args.owner.as_deref(),
+                        args.tags.as_deref(),
+                        args.content.as_deref(),
+                    ) {
+                    Ok(result) => {
+                        print_structured(&result, format, "governance document update result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                },
+                ProjectGovernanceDocumentCommands::Delete(args) => match registry
+                    .project_governance_document_delete(&args.project, &args.document_id)
+                {
+                    Ok(result) => {
+                        print_structured(&result, format, "governance document delete result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                },
+            },
+            ProjectGovernanceCommands::Attachment(cmd) => match cmd {
+                ProjectGovernanceAttachmentCommands::Include(args) => match registry
+                    .project_governance_attachment_set_document(
+                        &args.project,
+                        &args.task_id,
+                        &args.document_id,
+                        true,
+                    ) {
+                    Ok(result) => {
+                        print_structured(&result, format, "governance attachment include result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                },
+                ProjectGovernanceAttachmentCommands::Exclude(args) => match registry
+                    .project_governance_attachment_set_document(
+                        &args.project,
+                        &args.task_id,
+                        &args.document_id,
+                        false,
+                    ) {
+                    Ok(result) => {
+                        print_structured(&result, format, "governance attachment exclude result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                },
+            },
+            ProjectGovernanceCommands::Notepad(cmd) => match cmd {
+                ProjectGovernanceNotepadCommands::Create(args) => {
+                    match registry.project_governance_notepad_create(&args.project, &args.content) {
+                        Ok(result) => {
+                            print_structured(&result, format, "project notepad create result");
+                            ExitCode::Success
+                        }
+                        Err(e) => output_error(&e, format),
+                    }
+                }
+                ProjectGovernanceNotepadCommands::Show(args) => {
+                    match registry.project_governance_notepad_show(&args.project) {
+                        Ok(result) => {
+                            print_structured(&result, format, "project notepad show result");
+                            ExitCode::Success
+                        }
+                        Err(e) => output_error(&e, format),
+                    }
+                }
+                ProjectGovernanceNotepadCommands::Update(args) => {
+                    match registry.project_governance_notepad_update(&args.project, &args.content) {
+                        Ok(result) => {
+                            print_structured(&result, format, "project notepad update result");
+                            ExitCode::Success
+                        }
+                        Err(e) => output_error(&e, format),
+                    }
+                }
+                ProjectGovernanceNotepadCommands::Delete(args) => {
+                    match registry.project_governance_notepad_delete(&args.project) {
+                        Ok(result) => {
+                            print_structured(&result, format, "project notepad delete result");
+                            ExitCode::Success
+                        }
+                        Err(e) => output_error(&e, format),
+                    }
+                }
+            },
+        },
+    }
+}
+
+fn read_constitution_payload(
+    content: Option<&str>,
+    from_file: Option<&str>,
+    origin: &'static str,
+) -> std::result::Result<Option<String>, hivemind::core::error::HivemindError> {
+    if let Some(raw) = content {
+        return Ok(Some(raw.to_string()));
+    }
+    let Some(path) = from_file else {
+        return Ok(None);
+    };
+    let payload = fs::read_to_string(path).map_err(|e| {
+        hivemind::core::error::HivemindError::user(
+            "constitution_input_read_failed",
+            format!("Failed to read constitution file '{path}': {e}"),
+            origin,
+        )
+        .with_hint("Ensure --from-file points to a readable YAML file")
+    })?;
+    Ok(Some(payload))
+}
+
+fn handle_constitution(cmd: ConstitutionCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        ConstitutionCommands::Init(args) => {
+            let payload = match read_constitution_payload(
+                args.content.as_deref(),
+                args.from_file.as_deref(),
+                "cli:constitution:init",
+            ) {
+                Ok(value) => value,
+                Err(err) => return output_error(&err, format),
+            };
+            match registry.constitution_init(
+                &args.project,
+                payload.as_deref(),
+                args.confirm,
+                args.actor.as_deref(),
+                args.intent.as_deref(),
+            ) {
+                Ok(result) => {
+                    print_structured(&result, format, "constitution init result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+        ConstitutionCommands::Show(args) => match registry.constitution_show(&args.project) {
+            Ok(result) => {
+                print_structured(&result, format, "constitution show result");
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
+        ConstitutionCommands::Validate(args) => {
+            match registry.constitution_validate(&args.project, None) {
+                Ok(result) => {
+                    print_structured(&result, format, "constitution validate result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+        ConstitutionCommands::Update(args) => {
+            let payload = match read_constitution_payload(
+                args.content.as_deref(),
+                args.from_file.as_deref(),
+                "cli:constitution:update",
+            ) {
+                Ok(Some(value)) => value,
+                Ok(None) => {
+                    return output_error(
+                        &hivemind::core::error::HivemindError::user(
+                            "constitution_content_missing",
+                            "Constitution update requires --content or --from-file",
+                            "cli:constitution:update",
+                        )
+                        .with_hint(
+                            "Provide a YAML payload via --content '<yaml>' or --from-file <path>",
+                        ),
+                        format,
+                    );
+                }
+                Err(err) => return output_error(&err, format),
+            };
+
+            match registry.constitution_update(
+                &args.project,
+                &payload,
+                args.confirm,
+                args.actor.as_deref(),
+                args.intent.as_deref(),
+            ) {
+                Ok(result) => {
+                    print_structured(&result, format, "constitution update result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        GlobalCommands::Skill(cmd) => match cmd {
+            GlobalSkillCommands::Create(args) => {
+                match registry.global_skill_create(
+                    &args.skill_id,
+                    &args.name,
+                    &args.tags,
+                    &args.content,
+                ) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global skill create result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalSkillCommands::List => match registry.global_skill_list() {
+                Ok(result) => {
+                    print_structured(&result, format, "global skill list");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalSkillCommands::Inspect(args) => {
+                match registry.global_skill_inspect(&args.skill_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global skill inspect result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalSkillCommands::Update(args) => match registry.global_skill_update(
+                &args.skill_id,
+                args.name.as_deref(),
+                args.tags.as_deref(),
+                args.content.as_deref(),
+            ) {
+                Ok(result) => {
+                    print_structured(&result, format, "global skill update result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalSkillCommands::Delete(args) => match registry.global_skill_delete(&args.skill_id)
+            {
+                Ok(result) => {
+                    print_structured(&result, format, "global skill delete result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+        },
+        GlobalCommands::SystemPrompt(cmd) => match cmd {
+            GlobalSystemPromptCommands::Create(args) => {
+                match registry.global_system_prompt_create(&args.prompt_id, &args.content) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global system prompt create result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalSystemPromptCommands::List => match registry.global_system_prompt_list() {
+                Ok(result) => {
+                    print_structured(&result, format, "global system prompt list");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalSystemPromptCommands::Inspect(args) => {
+                match registry.global_system_prompt_inspect(&args.prompt_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global system prompt inspect result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalSystemPromptCommands::Update(args) => {
+                match registry.global_system_prompt_update(&args.prompt_id, &args.content) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global system prompt update result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalSystemPromptCommands::Delete(args) => {
+                match registry.global_system_prompt_delete(&args.prompt_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global system prompt delete result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+        },
+        GlobalCommands::Template(cmd) => match cmd {
+            GlobalTemplateCommands::Create(args) => match registry.global_template_create(
+                &args.template_id,
+                &args.system_prompt_id,
+                &args.skill_ids,
+                &args.document_ids,
+                args.description.as_deref(),
+            ) {
+                Ok(result) => {
+                    print_structured(&result, format, "global template create result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalTemplateCommands::List => match registry.global_template_list() {
+                Ok(result) => {
+                    print_structured(&result, format, "global template list");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalTemplateCommands::Inspect(args) => {
+                match registry.global_template_inspect(&args.template_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global template inspect result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalTemplateCommands::Update(args) => match registry.global_template_update(
+                &args.template_id,
+                args.system_prompt_id.as_deref(),
+                args.skill_ids.as_deref(),
+                args.document_ids.as_deref(),
+                args.description.as_deref(),
+            ) {
+                Ok(result) => {
+                    print_structured(&result, format, "global template update result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalTemplateCommands::Delete(args) => {
+                match registry.global_template_delete(&args.template_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global template delete result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalTemplateCommands::Instantiate(args) => {
+                match registry.global_template_instantiate(&args.project, &args.template_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global template instantiate result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+        },
+        GlobalCommands::Notepad(cmd) => match cmd {
+            GlobalNotepadCommands::Create(args) => {
+                match registry.global_notepad_create(&args.content) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global notepad create result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalNotepadCommands::Show => match registry.global_notepad_show() {
+                Ok(result) => {
+                    print_structured(&result, format, "global notepad show result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalNotepadCommands::Update(args) => {
+                match registry.global_notepad_update(&args.content) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global notepad update result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalNotepadCommands::Delete => match registry.global_notepad_delete() {
+                Ok(result) => {
+                    print_structured(&result, format, "global notepad delete result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
         },
     }
 }
@@ -1301,6 +1897,19 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::TaskDeleted { .. } => "task_deleted",
         EventPayload::RepositoryAttached { .. } => "repo_attached",
         EventPayload::RepositoryDetached { .. } => "repo_detached",
+        EventPayload::GovernanceProjectStorageInitialized { .. } => {
+            "governance_project_storage_initialized"
+        }
+        EventPayload::GovernanceArtifactUpserted { .. } => "governance_artifact_upserted",
+        EventPayload::GovernanceArtifactDeleted { .. } => "governance_artifact_deleted",
+        EventPayload::GovernanceAttachmentLifecycleUpdated { .. } => {
+            "governance_attachment_lifecycle_updated"
+        }
+        EventPayload::GovernanceStorageMigrated { .. } => "governance_storage_migrated",
+        EventPayload::ConstitutionInitialized { .. } => "constitution_initialized",
+        EventPayload::ConstitutionUpdated { .. } => "constitution_updated",
+        EventPayload::ConstitutionValidated { .. } => "constitution_validated",
+        EventPayload::TemplateInstantiated { .. } => "template_instantiated",
         EventPayload::TaskGraphCreated { .. } => "graph_created",
         EventPayload::TaskAddedToGraph { .. } => "graph_task_added",
         EventPayload::DependencyAdded { .. } => "graph_dependency_added",
@@ -1362,6 +1971,8 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::RuntimeInterrupted { .. } => "runtime_interrupted",
         EventPayload::RuntimeExited { .. } => "runtime_exited",
         EventPayload::RuntimeTerminated { .. } => "runtime_terminated",
+        EventPayload::RuntimeErrorClassified { .. } => "runtime_error_classified",
+        EventPayload::RuntimeRecoveryScheduled { .. } => "runtime_recovery_scheduled",
         EventPayload::RuntimeFilesystemObserved { .. } => "runtime_filesystem_observed",
         EventPayload::RuntimeCommandObserved { .. } => "runtime_command_observed",
         EventPayload::RuntimeToolCallObserved { .. } => "runtime_tool_call_observed",

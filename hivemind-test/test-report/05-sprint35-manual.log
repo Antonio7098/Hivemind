@@ -1,0 +1,593 @@
+HOME=/tmp/tmp.0CtoWMNpJJ/home
+$ hivemind project create proj35
+ID:          92b5c0c3-cae6-4b00-a077-f3d02c1c06bf
+Name:        proj35
+Created:     2026-02-17 18:13:38.640919951 UTC
+Updated:     2026-02-17 18:13:38.640919951 UTC
+$ hivemind project governance init proj35
+Project ID:        92b5c0c3-cae6-4b00-a077-f3d02c1c06bf
+Governance Root:   /tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf
+Schema Version:    governance.v1
+Projection Version:1
+Created Paths:
+  - /tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/notepad.md
+  - /tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/skills
+  - /tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/system_prompts
+  - /tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/templates
+  - /tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/constitution.yaml
+  - /tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/documents
+  - /tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/graph_snapshot.json
+  - /tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/notepad.md
+$ hivemind project governance document create proj35 doc-main --title Main Doc --owner owner1 --tag design --content revision one
+{
+  "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+  "document_id": "doc-main",
+  "revision": 1,
+  "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/documents/doc-main.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-17T18:13:39.177592682Z"
+}
+$ hivemind project governance document update proj35 doc-main --owner owner2 --content revision two
+{
+  "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+  "document_id": "doc-main",
+  "revision": 2,
+  "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/documents/doc-main.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-17T18:13:39.433571521Z"
+}
+$ hivemind -f json project governance document inspect proj35 doc-main
+{
+  "success": true,
+  "data": {
+    "summary": {
+      "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+      "document_id": "doc-main",
+      "title": "Main Doc",
+      "owner": "owner2",
+      "tags": [
+        "design"
+      ],
+      "updated_at": "2026-02-17T18:13:39.433571521Z",
+      "revision": 2,
+      "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/documents/doc-main.json"
+    },
+    "revisions": [
+      {
+        "revision": 1,
+        "content": "revision one",
+        "updated_at": "2026-02-17T18:13:39.177592682Z"
+      },
+      {
+        "revision": 2,
+        "content": "revision two",
+        "updated_at": "2026-02-17T18:13:39.433571521Z"
+      }
+    ],
+    "latest_content": "revision two"
+  }
+}
+$ hivemind task create proj35 task-with-doc
+ID:          e5fc326c-e944-4cf6-9779-04a94c1bd5b2
+Project:     92b5c0c3-cae6-4b00-a077-f3d02c1c06bf
+Title:       task-with-doc
+State:       Open
+RunMode:     Auto
+Created:     2026-02-17 18:13:39.924807076 UTC
+TASK_ID=e5fc326c-e944-4cf6-9779-04a94c1bd5b2
+$ hivemind project governance attachment include proj35 <task-id> doc-main
+{
+  "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+  "task_id": "e5fc326c-e944-4cf6-9779-04a94c1bd5b2",
+  "artifact_kind": "document",
+  "artifact_key": "doc-main",
+  "attached": true,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+$ hivemind project governance notepad create proj35 --content PROJECT NOTEPAD NON EXEC
+{
+  "scope": "project",
+  "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+  "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/notepad.md",
+  "exists": true,
+  "content": "PROJECT NOTEPAD NON EXEC",
+  "non_executional": true,
+  "non_validating": true,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+$ hivemind global skill create skill-main --name Main Skill --content Use careful steps --tag reusable
+{
+  "skill_id": "skill-main",
+  "name": "Main Skill",
+  "tags": [
+    "reusable"
+  ],
+  "updated_at": "2026-02-17T18:13:40.964374612Z",
+  "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/skills/skill-main.json"
+}
+$ hivemind global system-prompt create sys-main --content You are rigorous
+{
+  "prompt_id": "sys-main",
+  "updated_at": "2026-02-17T18:13:41.232202034Z",
+  "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/system_prompts/sys-main.json"
+}
+$ hivemind global template create tpl-main --system-prompt-id sys-main --skill-id skill-main --document-id doc-main --description Template desc
+{
+  "template_id": "tpl-main",
+  "system_prompt_id": "sys-main",
+  "skill_ids": [
+    "skill-main"
+  ],
+  "document_ids": [
+    "doc-main"
+  ],
+  "updated_at": "2026-02-17T18:13:41.477481512Z",
+  "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/templates/tpl-main.json"
+}
+$ hivemind global template instantiate proj35 tpl-main
+{
+  "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+  "template_id": "tpl-main",
+  "system_prompt_id": "sys-main",
+  "skill_ids": [
+    "skill-main"
+  ],
+  "document_ids": [
+    "doc-main"
+  ],
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "instantiated_at": "2026-02-17T18:13:41.748475949Z"
+}
+$ hivemind -f json events stream --project proj35 --limit 200
+{
+  "success": true,
+  "data": [
+    {
+      "metadata": {
+        "id": "00000000-0000-0000-b538-2a212ae7f19f",
+        "timestamp": "2026-02-17T18:13:38.640919951Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 0
+      },
+      "payload": {
+        "type": "project_created",
+        "id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "name": "proj35",
+        "description": null
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0001-857b-4ceb29af6326",
+        "timestamp": "2026-02-17T18:13:38.882976830Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 1
+      },
+      "payload": {
+        "type": "governance_project_storage_initialized",
+        "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "schema_version": "governance.v1",
+        "projection_version": 1,
+        "root_path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0002-9d1c-62f71ef97d46",
+        "timestamp": "2026-02-17T18:13:38.883664299Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 2
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "scope": "project",
+        "artifact_kind": "constitution",
+        "artifact_key": "constitution.yaml",
+        "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/constitution.yaml",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0003-b743-fb8ef6d1713c",
+        "timestamp": "2026-02-17T18:13:38.884222324Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 3
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "scope": "project",
+        "artifact_kind": "documents",
+        "artifact_key": "documents",
+        "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/documents",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0004-aa9f-6d0552485d3f",
+        "timestamp": "2026-02-17T18:13:38.884853056Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 4
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "scope": "project",
+        "artifact_kind": "notepad",
+        "artifact_key": "notepad.md",
+        "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/notepad.md",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0005-9d58-0d7c4e9744bf",
+        "timestamp": "2026-02-17T18:13:38.885541376Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 5
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "scope": "project",
+        "artifact_kind": "graph_snapshot",
+        "artifact_key": "graph_snapshot.json",
+        "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/graph_snapshot.json",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0006-b08e-196da4ea769a",
+        "timestamp": "2026-02-17T18:13:38.886454808Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 6
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": null,
+        "scope": "global",
+        "artifact_kind": "skills",
+        "artifact_key": "skills",
+        "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/skills",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0007-be31-45a41e80291e",
+        "timestamp": "2026-02-17T18:13:38.887307185Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 7
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": null,
+        "scope": "global",
+        "artifact_kind": "system_prompts",
+        "artifact_key": "system_prompts",
+        "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/system_prompts",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0008-b91e-083afe4aa6fe",
+        "timestamp": "2026-02-17T18:13:38.889083404Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 8
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": null,
+        "scope": "global",
+        "artifact_kind": "templates",
+        "artifact_key": "templates",
+        "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/templates",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0009-901d-cfb98b957da1",
+        "timestamp": "2026-02-17T18:13:38.890881443Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 9
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": null,
+        "scope": "global",
+        "artifact_kind": "notepad",
+        "artifact_key": "notepad.md",
+        "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/notepad.md",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-000a-9d0a-732103f640db",
+        "timestamp": "2026-02-17T18:13:39.178053536Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 10
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "scope": "project",
+        "artifact_kind": "document",
+        "artifact_key": "doc-main",
+        "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/documents/doc-main.json",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-000b-9826-f1a2ade782d4",
+        "timestamp": "2026-02-17T18:13:39.433964648Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 11
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "scope": "project",
+        "artifact_kind": "document",
+        "artifact_key": "doc-main",
+        "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/documents/doc-main.json",
+        "revision": 2,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-000c-8168-a29850f6f0e9",
+        "timestamp": "2026-02-17T18:13:39.924807076Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": "e5fc326c-e944-4cf6-9779-04a94c1bd5b2",
+          "attempt_id": null
+        },
+        "sequence": 12
+      },
+      "payload": {
+        "type": "task_created",
+        "id": "e5fc326c-e944-4cf6-9779-04a94c1bd5b2",
+        "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "title": "task-with-doc",
+        "description": null,
+        "scope": null
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-000d-9689-f9e45ef9c120",
+        "timestamp": "2026-02-17T18:13:40.460690218Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": "e5fc326c-e944-4cf6-9779-04a94c1bd5b2",
+          "attempt_id": null
+        },
+        "sequence": 13
+      },
+      "payload": {
+        "type": "governance_attachment_lifecycle_updated",
+        "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "task_id": "e5fc326c-e944-4cf6-9779-04a94c1bd5b2",
+        "artifact_kind": "document",
+        "artifact_key": "doc-main",
+        "attached": true,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-000e-9984-eeb85f45d1e2",
+        "timestamp": "2026-02-17T18:13:40.719743749Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 14
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "scope": "project",
+        "artifact_kind": "notepad",
+        "artifact_key": "notepad.md",
+        "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/projects/92b5c0c3-cae6-4b00-a077-f3d02c1c06bf/notepad.md",
+        "revision": 2,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0012-9537-f4961129d7ba",
+        "timestamp": "2026-02-17T18:13:41.748489916Z",
+        "correlation": {
+          "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 18
+      },
+      "payload": {
+        "type": "template_instantiated",
+        "project_id": "92b5c0c3-cae6-4b00-a077-f3d02c1c06bf",
+        "template_id": "tpl-main",
+        "system_prompt_id": "sys-main",
+        "skill_ids": [
+          "skill-main"
+        ],
+        "document_ids": [
+          "doc-main"
+        ],
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    }
+  ]
+}
+$ hivemind global notepad create --content GLOBAL NOTE
+{
+  "scope": "global",
+  "project_id": null,
+  "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/notepad.md",
+  "exists": true,
+  "content": "GLOBAL NOTE",
+  "non_executional": true,
+  "non_validating": true,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+$ hivemind -f json global notepad show
+{
+  "success": true,
+  "data": {
+    "scope": "global",
+    "project_id": null,
+    "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/notepad.md",
+    "exists": true,
+    "content": "GLOBAL NOTE",
+    "non_executional": true,
+    "non_validating": true,
+    "schema_version": "governance.v1",
+    "projection_version": 1
+  }
+}
+$ hivemind global notepad delete
+{
+  "project_id": null,
+  "scope": "global",
+  "artifact_kind": "notepad",
+  "artifact_key": "notepad.md",
+  "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/notepad.md",
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+$ hivemind -f json global notepad show
+{
+  "success": true,
+  "data": {
+    "scope": "global",
+    "project_id": null,
+    "path": "/tmp/tmp.0CtoWMNpJJ/home/.hivemind/global/notepad.md",
+    "exists": false,
+    "content": null,
+    "non_executional": true,
+    "non_validating": true,
+    "schema_version": "governance.v1",
+    "projection_version": 1
+  }
+}
