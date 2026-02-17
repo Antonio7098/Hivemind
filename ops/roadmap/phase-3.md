@@ -49,38 +49,38 @@
 > **User Story 11:** Teams manage context artifacts as first-class, observable Hivemind state.
 
 ### 35.1 Project Documents
-- [ ] Add CLI for project document lifecycle (`create`, `list`, `inspect`, `update`, `delete`)
-- [ ] Support metadata (`title`, `tags`, `owner`, `updated_at`) and immutable revision history
-- [ ] Add attachment controls for execution inclusion (explicit include/exclude)
+- [x] Add CLI for project document lifecycle (`create`, `list`, `inspect`, `update`, `delete`)
+- [x] Support metadata (`title`, `tags`, `owner`, `updated_at`) and immutable revision history
+- [x] Add attachment controls for execution inclusion (explicit include/exclude)
 
 ### 35.2 Global Skills and System Prompts
-- [ ] Add CLI for global skill registry management
-- [ ] Add CLI for global system prompt registry management
-- [ ] Validate artifact schemas and reject malformed content with structured errors
+- [x] Add CLI for global skill registry management
+- [x] Add CLI for global system prompt registry management
+- [x] Validate artifact schemas and reject malformed content with structured errors
 
 ### 35.3 Templates and Instantiation Inputs
-- [ ] Add template lifecycle commands referencing `system_prompt_id`, `skill_ids[]`, `document_ids[]`
-- [ ] Resolve template references with strict validation and actionable failure hints
-- [ ] Emit `TemplateInstantiated`-style events with resolved artifact IDs
+- [x] Add template lifecycle commands referencing `system_prompt_id`, `skill_ids[]`, `document_ids[]`
+- [x] Resolve template references with strict validation and actionable failure hints
+- [x] Emit `TemplateInstantiated`-style events with resolved artifact IDs
 
 ### 35.4 Notepads (Non-Injectable)
-- [ ] Add `global notepad` and `project notepad` CRUD commands
-- [ ] Mark notepads as non-executional and non-validating by contract
-- [ ] Ensure notepad content is never injected into runtime input by default
+- [x] Add `global notepad` and `project notepad` CRUD commands
+- [x] Mark notepads as non-executional and non-validating by contract
+- [x] Ensure notepad content is never injected into runtime input by default
 
 ### 35.5 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 35 manual checklist under `@hivemind-test`
-- [ ] Manually validate document/skill/system prompt/template/notepad CRUD and inspect flows
-- [ ] Manually validate attachment resolution behavior and failure paths
-- [ ] Confirm notepad content is not injected into runtime context in manual runs
-- [ ] Publish Sprint 35 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 35 manual checklist under `@hivemind-test`
+- [x] Manually validate document/skill/system prompt/template/notepad CRUD and inspect flows
+- [x] Manually validate attachment resolution behavior and failure paths
+- [x] Confirm notepad content is not injected into runtime context in manual runs
+- [x] Publish Sprint 35 manual test report artifact in `@hivemind-test`
 
 ### 35.6 Exit Criteria
-- [ ] All document-related artifacts are CLI-manageable and event-observable
-- [ ] Skills/system prompts/templates are globally reusable across projects
-- [ ] Notepads are clearly separated from execution context
-- [ ] Artifact operations are replay-safe and deterministic
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] All document-related artifacts are CLI-manageable and event-observable
+- [x] Skills/system prompts/templates are globally reusable across projects
+- [x] Notepads are clearly separated from execution context
+- [x] Artifact operations are replay-safe and deterministic
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

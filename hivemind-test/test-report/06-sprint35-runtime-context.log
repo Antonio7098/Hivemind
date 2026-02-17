@@ -1,0 +1,685 @@
+HOME=/tmp/tmp.0I8EbEqc4b/home
+Repo=/tmp/tmp.0I8EbEqc4b/repo
+
+$ hivemind project create proj35ctx
+ID:          5581ae73-0556-4d30-94d6-92db73e512f6
+Name:        proj35ctx
+Created:     2026-02-17 18:21:10.910502878 UTC
+Updated:     2026-02-17 18:21:10.910502878 UTC
+
+$ hivemind project attach-repo proj35ctx /tmp/tmp.0I8EbEqc4b/repo
+ID:          5581ae73-0556-4d30-94d6-92db73e512f6
+Name:        proj35ctx
+Created:     2026-02-17 18:21:10.910502878 UTC
+Updated:     2026-02-17 18:21:11.134101858 UTC
+Repositories:
+  - repo (/tmp/tmp.0I8EbEqc4b/repo) [readwrite]
+
+$ hivemind project governance init proj35ctx
+Project ID:        5581ae73-0556-4d30-94d6-92db73e512f6
+Governance Root:   /tmp/tmp.0I8EbEqc4b/home/.hivemind/projects/5581ae73-0556-4d30-94d6-92db73e512f6
+Schema Version:    governance.v1
+Projection Version:1
+Created Paths:
+  - /tmp/tmp.0I8EbEqc4b/home/.hivemind/global/notepad.md
+  - /tmp/tmp.0I8EbEqc4b/home/.hivemind/global/skills
+  - /tmp/tmp.0I8EbEqc4b/home/.hivemind/global/system_prompts
+  - /tmp/tmp.0I8EbEqc4b/home/.hivemind/global/templates
+  - /tmp/tmp.0I8EbEqc4b/home/.hivemind/projects/5581ae73-0556-4d30-94d6-92db73e512f6/constitution.yaml
+  - /tmp/tmp.0I8EbEqc4b/home/.hivemind/projects/5581ae73-0556-4d30-94d6-92db73e512f6/documents
+  - /tmp/tmp.0I8EbEqc4b/home/.hivemind/projects/5581ae73-0556-4d30-94d6-92db73e512f6/graph_snapshot.json
+  - /tmp/tmp.0I8EbEqc4b/home/.hivemind/projects/5581ae73-0556-4d30-94d6-92db73e512f6/notepad.md
+
+$ hivemind project governance document create proj35ctx doc-main --title Main Doc --owner owner1 --tag design --content revision one
+{
+  "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+  "document_id": "doc-main",
+  "revision": 1,
+  "path": "/tmp/tmp.0I8EbEqc4b/home/.hivemind/projects/5581ae73-0556-4d30-94d6-92db73e512f6/documents/doc-main.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-17T18:21:11.597428775Z"
+}
+
+$ hivemind project governance document update proj35ctx doc-main --owner owner2 --content revision two
+{
+  "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+  "document_id": "doc-main",
+  "revision": 2,
+  "path": "/tmp/tmp.0I8EbEqc4b/home/.hivemind/projects/5581ae73-0556-4d30-94d6-92db73e512f6/documents/doc-main.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-17T18:21:11.833113343Z"
+}
+
+$ hivemind task create proj35ctx task-with-doc
+ID:          4fd78f20-6d59-4b1a-87b5-b06ae8a004c3
+Project:     5581ae73-0556-4d30-94d6-92db73e512f6
+Title:       task-with-doc
+State:       Open
+RunMode:     Auto
+Created:     2026-02-17 18:21:12.050346274 UTC
+TASK_ID=4fd78f20-6d59-4b1a-87b5-b06ae8a004c3
+
+$ hivemind project governance attachment include proj35ctx 4fd78f20-6d59-4b1a-87b5-b06ae8a004c3 doc-main
+{
+  "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+  "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+  "artifact_kind": "document",
+  "artifact_key": "doc-main",
+  "attached": true,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+
+$ hivemind project governance notepad create proj35ctx --content PROJECT_NOTEPAD_SHOULD_NOT_APPEAR
+{
+  "scope": "project",
+  "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+  "path": "/tmp/tmp.0I8EbEqc4b/home/.hivemind/projects/5581ae73-0556-4d30-94d6-92db73e512f6/notepad.md",
+  "exists": true,
+  "content": "PROJECT_NOTEPAD_SHOULD_NOT_APPEAR",
+  "non_executional": true,
+  "non_validating": true,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+
+$ hivemind project runtime-set proj35ctx --binary-path /usr/bin/env --arg sh --arg -c --arg echo runtime_ok; "$HIVEMIND_BIN" checkpoint complete --id checkpoint-1 --timeout-ms 1000
+ID:          5581ae73-0556-4d30-94d6-92db73e512f6
+Name:        proj35ctx
+Created:     2026-02-17 18:21:10.910502878 UTC
+Updated:     2026-02-17 18:21:12.978849111 UTC
+Repositories:
+  - repo (/tmp/tmp.0I8EbEqc4b/repo) [readwrite]
+Graph ID: 01ddcee8-a803-4292-a568-f3921bc84e95
+GRAPH_ID=01ddcee8-a803-4292-a568-f3921bc84e95
+Flow ID: c8d7d564-a30e-493b-ac67-30ea1f4a2647
+FLOW_ID=c8d7d564-a30e-493b-ac67-30ea1f4a2647
+
+$ hivemind flow start c8d7d564-a30e-493b-ac67-30ea1f4a2647
+Flow ID: c8d7d564-a30e-493b-ac67-30ea1f4a2647
+
+$ hivemind flow tick c8d7d564-a30e-493b-ac67-30ea1f4a2647
+Flow ID: c8d7d564-a30e-493b-ac67-30ea1f4a2647
+{
+  "success": true,
+  "data": [
+    {
+      "metadata": {
+        "id": "00000000-0000-0015-9221-9e80b706f5b3",
+        "timestamp": "2026-02-17T18:21:13.457185414Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 21
+      },
+      "payload": {
+        "type": "task_flow_created",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+        "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+        "name": null,
+        "task_ids": [
+          "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0016-829a-d255f315214a",
+        "timestamp": "2026-02-17T18:21:13.728684477Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 22
+      },
+      "payload": {
+        "type": "task_flow_started",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "base_revision": "bca7e328da7d358f8f69deba9b8cb9114ed32e46"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0017-a3fd-858254244b9f",
+        "timestamp": "2026-02-17T18:21:13.731516684Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": null
+        },
+        "sequence": 23
+      },
+      "payload": {
+        "type": "task_ready",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0018-a8f4-e0202663f7fc",
+        "timestamp": "2026-02-17T18:21:14.039599713Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": null
+        },
+        "sequence": 24
+      },
+      "payload": {
+        "type": "task_execution_state_changed",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "from": "ready",
+        "to": "running"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0019-806b-efe83985ee3a",
+        "timestamp": "2026-02-17T18:21:14.043027156Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 25
+      },
+      "payload": {
+        "type": "attempt_started",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "attempt_number": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-001a-8132-197bcd6305df",
+        "timestamp": "2026-02-17T18:21:14.046684009Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 26
+      },
+      "payload": {
+        "type": "checkpoint_declared",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "checkpoint_id": "checkpoint-1",
+        "order": 1,
+        "total": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-001b-a0ae-ec17c83469ee",
+        "timestamp": "2026-02-17T18:21:14.050034537Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 27
+      },
+      "payload": {
+        "type": "checkpoint_activated",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "checkpoint_id": "checkpoint-1",
+        "order": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-001c-869c-7db0897c27b8",
+        "timestamp": "2026-02-17T18:21:14.052879148Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 28
+      },
+      "payload": {
+        "type": "task_execution_started",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "attempt_number": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-001d-83b5-e3ade36f835a",
+        "timestamp": "2026-02-17T18:21:14.055773892Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 29
+      },
+      "payload": {
+        "type": "baseline_captured",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "baseline_id": "e2f484b1-7b9b-409d-aa56-11817913bea2",
+        "git_head": "bca7e328da7d358f8f69deba9b8cb9114ed32e46",
+        "file_count": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-001e-aad6-a05d4e37752c",
+        "timestamp": "2026-02-17T18:21:14.060244209Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 30
+      },
+      "payload": {
+        "type": "runtime_started",
+        "adapter_name": "opencode",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "prompt": "Task: task-with-doc\n\nSuccess Criteria: Done\n\nContext:\nMulti-repo worktrees for this attempt:\n- repo: /tmp/tmp.0I8EbEqc4b/home/hivemind/worktrees/c8d7d564-a30e-493b-ac67-30ea1f4a2647/4fd78f20-6d59-4b1a-87b5-b06ae8a004c3\n\nExecution attachments (explicit includes):\n- document_id: doc-main\n  title: Main Doc\n  owner: owner2\n  tags: design\n  revision: 2\n  content:\nrevision two\n\nExecution checkpoints (in order): checkpoint-1\nComplete checkpoints from the runtime using: \"$HIVEMIND_BIN\" checkpoint complete --id <checkpoint-id> [--summary \"...\"]\n(If available, \"$HIVEMIND_AGENT_BIN\" may be used equivalently.)\nAttempt ID for this run: e7ff549c-6c3d-41a5-9d66-f08841ea9db4\n\n",
+        "flags": [
+          "sh",
+          "-c",
+          "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-001f-8d9b-265317d86f50",
+        "timestamp": "2026-02-17T18:21:14.116870654Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 31
+      },
+      "payload": {
+        "type": "checkpoint_completed",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "checkpoint_id": "checkpoint-1",
+        "order": 1,
+        "commit_hash": "64e894038f3d26bea609c6dcfed99bec9844a73c",
+        "timestamp": "2026-02-17T18:21:14.116848953Z",
+        "summary": null
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0020-a2a7-1bb382928e8c",
+        "timestamp": "2026-02-17T18:21:14.121547799Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 32
+      },
+      "payload": {
+        "type": "checkpoint_commit_created",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "commit_sha": "64e894038f3d26bea609c6dcfed99bec9844a73c"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0021-8a09-96041c939cd3",
+        "timestamp": "2026-02-17T18:21:14.126733086Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 33
+      },
+      "payload": {
+        "type": "all_checkpoints_completed",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0022-9b6d-25d8e4b7c792",
+        "timestamp": "2026-02-17T18:21:14.142261655Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 34
+      },
+      "payload": {
+        "type": "runtime_filesystem_observed",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "files_created": [],
+        "files_modified": [],
+        "files_deleted": []
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0023-8a18-3a7f97dab0e4",
+        "timestamp": "2026-02-17T18:21:14.147763355Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 35
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "stream": "stdout",
+        "content": "runtime_ok"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0024-ab15-9598b3c47f15",
+        "timestamp": "2026-02-17T18:21:14.151515356Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 36
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "stream": "stdout",
+        "content": "Attempt:    e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0025-83fe-91bc0907f3d2",
+        "timestamp": "2026-02-17T18:21:14.155376612Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 37
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "stream": "stdout",
+        "content": "Checkpoint: checkpoint-1 (1/1)"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0026-b34b-b3e7723fec7d",
+        "timestamp": "2026-02-17T18:21:14.159984356Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 38
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "stream": "stdout",
+        "content": "Commit:     64e894038f3d26bea609c6dcfed99bec9844a73c"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0027-9a09-b45e87feb396",
+        "timestamp": "2026-02-17T18:21:14.164767570Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 39
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "stream": "stdout",
+        "content": "Next:       none"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0028-86da-ad833ec4700d",
+        "timestamp": "2026-02-17T18:21:14.168510684Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 40
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "stream": "stdout",
+        "content": "All done:   true"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0029-a66a-9f4c367e6280",
+        "timestamp": "2026-02-17T18:21:14.172334109Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 41
+      },
+      "payload": {
+        "type": "runtime_exited",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "exit_code": 0,
+        "duration_ms": 71
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-002a-a4e2-1785044b00ee",
+        "timestamp": "2026-02-17T18:21:14.191519762Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": null
+        },
+        "sequence": 42
+      },
+      "payload": {
+        "type": "task_execution_state_changed",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "from": "running",
+        "to": "verifying"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-002b-ab77-07d8274fc96e",
+        "timestamp": "2026-02-17T18:21:14.196928377Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 43
+      },
+      "payload": {
+        "type": "diff_computed",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "diff_id": "5f2ac29e-b96a-4f52-ac80-c86bc32b960f",
+        "baseline_id": "e2f484b1-7b9b-409d-aa56-11817913bea2",
+        "change_count": 0
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-002c-ad10-4c493713be70",
+        "timestamp": "2026-02-17T18:21:14.214905084Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": null
+        },
+        "sequence": 44
+      },
+      "payload": {
+        "type": "task_execution_state_changed",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4",
+        "from": "verifying",
+        "to": "success"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-002d-93a3-70ebcd3eb360",
+        "timestamp": "2026-02-17T18:21:14.219078726Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+        },
+        "sequence": 45
+      },
+      "payload": {
+        "type": "task_execution_succeeded",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "attempt_id": "e7ff549c-6c3d-41a5-9d66-f08841ea9db4"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-002e-bbbf-46ffed99e058",
+        "timestamp": "2026-02-17T18:21:14.230557506Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+          "attempt_id": null
+        },
+        "sequence": 46
+      },
+      "payload": {
+        "type": "task_execution_frozen",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+        "task_id": "4fd78f20-6d59-4b1a-87b5-b06ae8a004c3",
+        "commit_sha": "64e894038f3d26bea609c6dcfed99bec9844a73c"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-002f-9a0b-3e79160760ce",
+        "timestamp": "2026-02-17T18:21:14.252309077Z",
+        "correlation": {
+          "project_id": "5581ae73-0556-4d30-94d6-92db73e512f6",
+          "graph_id": "01ddcee8-a803-4292-a568-f3921bc84e95",
+          "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 47
+      },
+      "payload": {
+        "type": "task_flow_completed",
+        "flow_id": "c8d7d564-a30e-493b-ac67-30ea1f4a2647"
+      }
+    }
+  ]
+}
+has_attachment_header=true
+has_document_id=true
+has_revision_content=true
+notepad_not_injected=true

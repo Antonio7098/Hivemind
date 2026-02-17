@@ -86,6 +86,23 @@ Examples:
 
 Project events are **infrequent** and non-executional.
 
+### 5.1 Governance / Context Artifact Events
+
+Governance artifacts are first-class project/global state and emit explicit lifecycle events.
+
+Examples:
+- `GovernanceProjectStorageInitialized`
+- `GovernanceStorageMigrated`
+- `GovernanceArtifactUpserted`
+- `GovernanceArtifactDeleted`
+- `GovernanceAttachmentLifecycleUpdated`
+- `TemplateInstantiated`
+
+Properties:
+- Global and project scopes are explicit in payloads (`scope: global|project`)
+- Attachment lifecycle is task-scoped and auditable
+- Template instantiation records resolved artifact IDs for replay-safe context provenance
+
 ---
 
 ## 6. TaskGraph Events (Planning)
