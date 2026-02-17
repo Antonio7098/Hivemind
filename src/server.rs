@@ -118,6 +118,15 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::GlobalRuntimeConfigured { .. } => "GlobalRuntimeConfigured",
         EventPayload::RepositoryAttached { .. } => "RepositoryAttached",
         EventPayload::RepositoryDetached { .. } => "RepositoryDetached",
+        EventPayload::GovernanceProjectStorageInitialized { .. } => {
+            "GovernanceProjectStorageInitialized"
+        }
+        EventPayload::GovernanceArtifactUpserted { .. } => "GovernanceArtifactUpserted",
+        EventPayload::GovernanceArtifactDeleted { .. } => "GovernanceArtifactDeleted",
+        EventPayload::GovernanceAttachmentLifecycleUpdated { .. } => {
+            "GovernanceAttachmentLifecycleUpdated"
+        }
+        EventPayload::GovernanceStorageMigrated { .. } => "GovernanceStorageMigrated",
         EventPayload::TaskCreated { .. } => "TaskCreated",
         EventPayload::TaskUpdated { .. } => "TaskUpdated",
         EventPayload::TaskRuntimeConfigured { .. } => "TaskRuntimeConfigured",
@@ -206,7 +215,12 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::ProjectRuntimeRoleConfigured { .. }
         | EventPayload::GlobalRuntimeConfigured { .. }
         | EventPayload::RepositoryAttached { .. }
-        | EventPayload::RepositoryDetached { .. } => "project",
+        | EventPayload::RepositoryDetached { .. }
+        | EventPayload::GovernanceProjectStorageInitialized { .. }
+        | EventPayload::GovernanceArtifactUpserted { .. }
+        | EventPayload::GovernanceArtifactDeleted { .. }
+        | EventPayload::GovernanceAttachmentLifecycleUpdated { .. }
+        | EventPayload::GovernanceStorageMigrated { .. } => "project",
 
         EventPayload::TaskCreated { .. }
         | EventPayload::TaskUpdated { .. }

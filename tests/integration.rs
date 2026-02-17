@@ -51,6 +51,99 @@ fn init_git_repo(repo_dir: &std::path::Path) {
 }
 
 #[test]
+fn cli_project_governance_lifecycle_is_observable() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let legacy_constitution = repo_dir.join(".hivemind").join("constitution.yaml");
+    let legacy_global_notepad = repo_dir.join(".hivemind").join("global").join("notepad.md");
+    std::fs::create_dir_all(legacy_constitution.parent().expect("legacy parent")).expect("mkdir");
+    std::fs::create_dir_all(legacy_global_notepad.parent().expect("legacy parent")).expect("mkdir");
+    std::fs::write(&legacy_constitution, "legacy_constitution: true\n").expect("legacy file");
+    std::fs::write(&legacy_global_notepad, "legacy notes\n").expect("legacy file");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "governance", "init", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, inspect_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "project", "governance", "inspect", "proj"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let inspect_json: serde_json::Value = serde_json::from_str(&inspect_out).expect("inspect json");
+    let inspect_data = inspect_json.get("data").expect("inspect data");
+    assert_eq!(
+        inspect_data
+            .get("initialized")
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert!(
+        inspect_data
+            .get("artifacts")
+            .and_then(|v| v.as_array())
+            .is_some_and(|items| !items.is_empty()),
+        "{inspect_out}"
+    );
+
+    let (code, migrate_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "project", "governance", "migrate", "proj"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let migrate_json: serde_json::Value = serde_json::from_str(&migrate_out).expect("migrate json");
+    let migrated_paths = migrate_json
+        .get("data")
+        .and_then(|v| v.get("migrated_paths"))
+        .and_then(|v| v.as_array())
+        .expect("migrated paths");
+    assert!(
+        migrated_paths.iter().any(|p| {
+            p.as_str()
+                .is_some_and(|s| s.contains("constitution.yaml") || s.contains("notepad.md"))
+        }),
+        "{migrate_out}"
+    );
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "stream",
+            "--project",
+            "proj",
+            "--limit",
+            "400",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        events_out.contains("governance_project_storage_initialized"),
+        "{events_out}"
+    );
+    assert!(
+        events_out.contains("governance_artifact_upserted"),
+        "{events_out}"
+    );
+    assert!(
+        events_out.contains("governance_storage_migrated"),
+        "{events_out}"
+    );
+}
+
+#[test]
 fn cli_scope_violation_is_fatal_and_preserves_worktree() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
@@ -153,7 +246,10 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
         run_hivemind(tmp.path(), &["-f", "json", "worktree", "inspect", &t1_id]);
     assert_eq!(code, 0, "{err}");
     assert!(wt_out.contains("\"is_worktree\": true"), "{wt_out}");
-    assert!(wt_out.contains(".hivemind/worktrees"), "{wt_out}");
+    assert!(
+        wt_out.contains(worktree_root(tmp.path()).to_string_lossy().as_ref()),
+        "{wt_out}"
+    );
 }
 
 fn hivemind_bin() -> PathBuf {
@@ -179,6 +275,10 @@ fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, String, String) 
         String::from_utf8_lossy(&output.stdout).to_string(),
         String::from_utf8_lossy(&output.stderr).to_string(),
     )
+}
+
+fn worktree_root(home: &std::path::Path) -> PathBuf {
+    home.join("hivemind").join("worktrees")
 }
 
 fn run_hivemind_with_env(
@@ -535,7 +635,10 @@ fn cli_graph_flow_and_task_control_smoke() {
 
     let (code, out, err) = run_hivemind(tmp.path(), &["-f", "json", "worktree", "list", &flow_id]);
     assert_eq!(code, 0, "{err}");
-    assert!(out.contains(".hivemind/worktrees"), "{out}");
+    assert!(
+        out.contains(worktree_root(tmp.path()).to_string_lossy().as_ref()),
+        "{out}"
+    );
 
     let (code, _out, err) = run_hivemind(tmp.path(), &["task", "start", &t1_id]);
     assert_eq!(code, 0, "{err}");
@@ -630,14 +733,8 @@ fn cli_task_retry_clean_resets_worktree_but_continue_preserves_it() {
     let (code, _out, err) = run_hivemind(tmp.path(), &["task", "start", &t2_id]);
     assert_eq!(code, 0, "{err}");
 
-    let t1_worktree = repo_dir
-        .join(".hivemind/worktrees")
-        .join(&flow_id)
-        .join(&t1_id);
-    let t2_worktree = repo_dir
-        .join(".hivemind/worktrees")
-        .join(&flow_id)
-        .join(&t2_id);
+    let t1_worktree = worktree_root(tmp.path()).join(&flow_id).join(&t1_id);
+    let t2_worktree = worktree_root(tmp.path()).join(&flow_id).join(&t2_id);
 
     let t1_marker = t1_worktree.join("retry_marker.txt");
     let t2_marker = t2_worktree.join("retry_marker.txt");
@@ -879,8 +976,7 @@ fn cli_attempt_inspect_diff_after_manual_execution() {
         .find_map(|l| l.strip_prefix("Attempt ID:").map(|s| s.trim().to_string()))
         .expect("attempt id");
 
-    let worktree_readme = repo_dir
-        .join(".hivemind/worktrees")
+    let worktree_readme = worktree_root(tmp.path())
         .join(&flow_id)
         .join(&t1_id)
         .join("README.md");

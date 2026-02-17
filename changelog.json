@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.25",
+      "date": "2026-02-17",
+      "phase": 34,
+      "changes": [
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add `project governance init`, `migrate`, and `inspect` commands for managing project-level governance artifacts with observability events"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Migrate worktree storage from repo-local `.hivemind/worktrees` to global `~/hivemind/worktrees` with HIVEMIND_WORKTREE_DIR override support"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Implement resilient file locking with retry mechanism for flow integration operations to reduce transient contention failures"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add legacy governance migration support to import older repo-local governance files into global storage"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add unit and integration coverage for governance CLI lifecycle, event observability, and migration semantics"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Document project governance CLI semantics and update worktree paths to reflect global storage location"
+        }
+      ]
+    },
+    {
       "version": "v0.1.24",
       "date": "2026-02-17",
       "phase": 30,

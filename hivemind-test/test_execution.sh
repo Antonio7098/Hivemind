@@ -87,6 +87,6 @@ echo "=== Checking events ==="
 $HIVEMIND events list --project "$PROJECT_ID" --limit 50 2>&1
 
 echo "=== Listing files in worktree ==="
-ls -la .hivemind/worktrees/*/ 2>&1 || echo "No worktrees"
+ls -la "$HOME/hivemind/worktrees"/*/ 2>&1 || echo "No worktrees"
 
 echo "=== Done ==="

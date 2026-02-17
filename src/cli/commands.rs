@@ -463,6 +463,39 @@ pub enum ProjectCommands {
 
     /// Detach a repository from a project
     DetachRepo(DetachRepoArgs),
+
+    /// Governance storage lifecycle commands
+    #[command(subcommand)]
+    Governance(ProjectGovernanceCommands),
+}
+
+/// Project governance subcommands.
+#[derive(Subcommand)]
+pub enum ProjectGovernanceCommands {
+    /// Initialize governance storage layout for a project
+    Init(ProjectGovernanceInitArgs),
+    /// Migrate legacy governance artifacts to the canonical global layout
+    Migrate(ProjectGovernanceMigrateArgs),
+    /// Inspect governance storage paths and projection metadata for a project
+    Inspect(ProjectGovernanceInspectArgs),
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceInitArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceMigrateArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceInspectArgs {
+    /// Project ID or name
+    pub project: String,
 }
 
 /// Arguments for project create.

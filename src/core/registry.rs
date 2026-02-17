@@ -20,7 +20,7 @@ use crate::storage::event_store::{EventFilter, EventStore, IndexedEventStore};
 use chrono::Utc;
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
@@ -199,6 +199,84 @@ pub struct WorktreeCleanupResult {
     pub cleaned_worktrees: usize,
     pub forced: bool,
     pub dry_run: bool,
+}
+
+const GOVERNANCE_SCHEMA_VERSION: &str = "governance.v1";
+const GOVERNANCE_PROJECTION_VERSION: u32 = 1;
+const GOVERNANCE_FROM_LAYOUT: &str = "repo_local_hivemind_v1";
+const GOVERNANCE_TO_LAYOUT: &str = "global_governance_v1";
+const GOVERNANCE_EXPORT_IMPORT_BOUNDARY: &str = "Manual export/import only (not auto-enabled).";
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GovernanceArtifactInspect {
+    pub scope: String,
+    pub artifact_kind: String,
+    pub artifact_key: String,
+    pub path: String,
+    pub exists: bool,
+    pub projected: bool,
+    pub revision: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GovernanceMigrationSummary {
+    pub from_layout: String,
+    pub to_layout: String,
+    pub migrated_paths: Vec<String>,
+    pub rollback_hint: String,
+    pub schema_version: String,
+    pub projection_version: u32,
+    pub migrated_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectGovernanceInitResult {
+    pub project_id: Uuid,
+    pub root_path: String,
+    pub schema_version: String,
+    pub projection_version: u32,
+    pub created_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectGovernanceMigrateResult {
+    pub project_id: Uuid,
+    pub from_layout: String,
+    pub to_layout: String,
+    pub migrated_paths: Vec<String>,
+    pub rollback_hint: String,
+    pub schema_version: String,
+    pub projection_version: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectGovernanceInspectResult {
+    pub project_id: Uuid,
+    pub root_path: String,
+    pub initialized: bool,
+    pub schema_version: String,
+    pub projection_version: u32,
+    pub export_import_boundary: String,
+    pub worktree_base_dir: String,
+    pub artifacts: Vec<GovernanceArtifactInspect>,
+    pub migrations: Vec<GovernanceMigrationSummary>,
+    pub legacy_candidates: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct GovernanceArtifactLocation {
+    project_id: Option<Uuid>,
+    scope: &'static str,
+    artifact_kind: &'static str,
+    artifact_key: String,
+    is_dir: bool,
+    path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+struct LegacyGovernanceArtifactMapping {
+    source: PathBuf,
+    destination: GovernanceArtifactLocation,
 }
 
 enum SelectedRuntimeAdapter {
@@ -858,25 +936,40 @@ impl Registry {
             .map_err(|e| HivemindError::system("create_dir_failed", e.to_string(), origin))?;
 
         let lock_path = lock_dir.join(format!("flow_integration_{flow_id}.lock"));
-        let file = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .truncate(false)
-            .open(&lock_path)
-            .map_err(|e| HivemindError::system("lock_open_failed", e.to_string(), origin))?;
+        for attempt in 0..5 {
+            let file = OpenOptions::new()
+                .create(true)
+                .read(true)
+                .write(true)
+                .truncate(false)
+                .open(&lock_path)
+                .map_err(|e| HivemindError::system("lock_open_failed", e.to_string(), origin))?;
 
-        file.try_lock_exclusive().map_err(|e| {
-            HivemindError::user(
-                "integration_in_progress",
-                "Another integration operation is already in progress for this flow",
-                origin,
-            )
-            .with_context("flow_id", flow_id.to_string())
-            .with_context("lock_error", e.to_string())
-        })?;
+            match file.try_lock_exclusive() {
+                Ok(()) => return Ok(file),
+                Err(err) => {
+                    if attempt < 4 {
+                        std::thread::sleep(Duration::from_millis(20));
+                        continue;
+                    }
+                    return Err(HivemindError::user(
+                        "integration_in_progress",
+                        "Another integration operation is already in progress for this flow",
+                        origin,
+                    )
+                    .with_context("flow_id", flow_id.to_string())
+                    .with_context("lock_error", err.to_string()));
+                }
+            }
+        }
 
-        Ok(file)
+        Err(HivemindError::user(
+            "integration_in_progress",
+            "Another integration operation is already in progress for this flow",
+            origin,
+        )
+        .with_context("flow_id", flow_id.to_string())
+        .with_context("lock_error", "retry_exhausted"))
     }
 
     fn resolve_git_ref(repo_path: &Path, reference: &str) -> Option<String> {
@@ -2571,6 +2664,318 @@ impl Registry {
     fn scope_baseline_path(&self, attempt_id: Uuid) -> PathBuf {
         self.scope_baselines_dir()
             .join(format!("{attempt_id}.json"))
+    }
+
+    fn governance_projects_dir(&self) -> PathBuf {
+        self.config.data_dir.join("projects")
+    }
+
+    fn governance_project_root(&self, project_id: Uuid) -> PathBuf {
+        self.governance_projects_dir().join(project_id.to_string())
+    }
+
+    fn governance_global_root(&self) -> PathBuf {
+        self.config.data_dir.join("global")
+    }
+
+    fn governance_artifact_locations(&self, project_id: Uuid) -> Vec<GovernanceArtifactLocation> {
+        let project_root = self.governance_project_root(project_id);
+        let global_root = self.governance_global_root();
+        vec![
+            GovernanceArtifactLocation {
+                project_id: Some(project_id),
+                scope: "project",
+                artifact_kind: "constitution",
+                artifact_key: "constitution.yaml".to_string(),
+                is_dir: false,
+                path: project_root.join("constitution.yaml"),
+            },
+            GovernanceArtifactLocation {
+                project_id: Some(project_id),
+                scope: "project",
+                artifact_kind: "documents",
+                artifact_key: "documents".to_string(),
+                is_dir: true,
+                path: project_root.join("documents"),
+            },
+            GovernanceArtifactLocation {
+                project_id: Some(project_id),
+                scope: "project",
+                artifact_kind: "notepad",
+                artifact_key: "notepad.md".to_string(),
+                is_dir: false,
+                path: project_root.join("notepad.md"),
+            },
+            GovernanceArtifactLocation {
+                project_id: Some(project_id),
+                scope: "project",
+                artifact_kind: "graph_snapshot",
+                artifact_key: "graph_snapshot.json".to_string(),
+                is_dir: false,
+                path: project_root.join("graph_snapshot.json"),
+            },
+            GovernanceArtifactLocation {
+                project_id: None,
+                scope: "global",
+                artifact_kind: "skills",
+                artifact_key: "skills".to_string(),
+                is_dir: true,
+                path: global_root.join("skills"),
+            },
+            GovernanceArtifactLocation {
+                project_id: None,
+                scope: "global",
+                artifact_kind: "system_prompts",
+                artifact_key: "system_prompts".to_string(),
+                is_dir: true,
+                path: global_root.join("system_prompts"),
+            },
+            GovernanceArtifactLocation {
+                project_id: None,
+                scope: "global",
+                artifact_kind: "templates",
+                artifact_key: "templates".to_string(),
+                is_dir: true,
+                path: global_root.join("templates"),
+            },
+            GovernanceArtifactLocation {
+                project_id: None,
+                scope: "global",
+                artifact_kind: "notepad",
+                artifact_key: "notepad.md".to_string(),
+                is_dir: false,
+                path: global_root.join("notepad.md"),
+            },
+        ]
+    }
+
+    fn governance_default_file_contents(location: &GovernanceArtifactLocation) -> &'static [u8] {
+        match (location.scope, location.artifact_kind) {
+            ("project", "constitution") => {
+                b"# Hivemind project constitution\nversion: 1\nrules: []\n"
+            }
+            ("project", "graph_snapshot") => b"{}\n",
+            _ => b"\n",
+        }
+    }
+
+    fn governance_artifact_projection_key(location: &GovernanceArtifactLocation) -> String {
+        format!(
+            "{}::{}::{}::{}",
+            location
+                .project_id
+                .map_or_else(|| "global".to_string(), |id| id.to_string()),
+            location.scope,
+            location.artifact_kind,
+            location.artifact_key
+        )
+    }
+
+    fn governance_projection_for_location<'a>(
+        state: &'a AppState,
+        location: &GovernanceArtifactLocation,
+    ) -> Option<&'a crate::core::state::GovernanceArtifact> {
+        state
+            .governance_artifacts
+            .get(&Self::governance_artifact_projection_key(location))
+    }
+
+    fn next_governance_revision(
+        state: &AppState,
+        location: &GovernanceArtifactLocation,
+        pending_revisions: &mut HashMap<String, u64>,
+    ) -> u64 {
+        let key = Self::governance_artifact_projection_key(location);
+        if let Some(next) = pending_revisions.get_mut(&key) {
+            *next = next.saturating_add(1);
+            return *next;
+        }
+        let next = Self::governance_projection_for_location(state, location)
+            .map_or(1, |existing| existing.revision.saturating_add(1));
+        pending_revisions.insert(key, next);
+        next
+    }
+
+    fn ensure_governance_layout(
+        &self,
+        project_id: Uuid,
+        origin: &'static str,
+    ) -> Result<Vec<PathBuf>> {
+        let mut created = Vec::new();
+        for location in self.governance_artifact_locations(project_id) {
+            if location.is_dir {
+                if location.path.exists() {
+                    if !location.path.is_dir() {
+                        return Err(HivemindError::system(
+                            "governance_path_conflict",
+                            format!(
+                                "Expected governance directory at '{}' but found a file",
+                                location.path.display()
+                            ),
+                            origin,
+                        ));
+                    }
+                } else {
+                    fs::create_dir_all(&location.path).map_err(|e| {
+                        HivemindError::system(
+                            "governance_storage_create_failed",
+                            e.to_string(),
+                            origin,
+                        )
+                    })?;
+                    created.push(location.path.clone());
+                }
+                continue;
+            }
+
+            if let Some(parent) = location.path.parent() {
+                fs::create_dir_all(parent).map_err(|e| {
+                    HivemindError::system("governance_storage_create_failed", e.to_string(), origin)
+                })?;
+            }
+
+            if location.path.exists() {
+                if location.path.is_dir() {
+                    return Err(HivemindError::system(
+                        "governance_path_conflict",
+                        format!(
+                            "Expected governance file at '{}' but found a directory",
+                            location.path.display()
+                        ),
+                        origin,
+                    ));
+                }
+            } else {
+                fs::write(
+                    &location.path,
+                    Self::governance_default_file_contents(&location),
+                )
+                .map_err(|e| {
+                    HivemindError::system("governance_storage_create_failed", e.to_string(), origin)
+                })?;
+                created.push(location.path.clone());
+            }
+        }
+        Ok(created)
+    }
+
+    fn legacy_governance_mappings(
+        &self,
+        project: &Project,
+    ) -> Vec<LegacyGovernanceArtifactMapping> {
+        let mut mappings = Vec::new();
+        let canonical = self.governance_artifact_locations(project.id);
+        for repo in &project.repositories {
+            let legacy_root = PathBuf::from(&repo.path).join(".hivemind");
+            for destination in &canonical {
+                let source = if destination.scope == "project" {
+                    legacy_root.join(&destination.artifact_key)
+                } else if destination.artifact_key == "notepad.md" {
+                    legacy_root.join("global").join("notepad.md")
+                } else {
+                    legacy_root.join("global").join(&destination.artifact_key)
+                };
+                mappings.push(LegacyGovernanceArtifactMapping {
+                    source,
+                    destination: destination.clone(),
+                });
+            }
+        }
+        mappings
+    }
+
+    fn copy_dir_if_missing(
+        source: &Path,
+        destination: &Path,
+        origin: &'static str,
+    ) -> Result<bool> {
+        if !source.exists() || !source.is_dir() {
+            return Ok(false);
+        }
+
+        fs::create_dir_all(destination).map_err(|e| {
+            HivemindError::system("governance_migration_failed", e.to_string(), origin)
+        })?;
+
+        let mut copied = false;
+        let mut stack = vec![(source.to_path_buf(), destination.to_path_buf())];
+        while let Some((src_dir, dst_dir)) = stack.pop() {
+            for entry in fs::read_dir(&src_dir).map_err(|e| {
+                HivemindError::system("governance_migration_failed", e.to_string(), origin)
+            })? {
+                let entry = entry.map_err(|e| {
+                    HivemindError::system("governance_migration_failed", e.to_string(), origin)
+                })?;
+                let src_path = entry.path();
+                let dst_path = dst_dir.join(entry.file_name());
+                let file_type = entry.file_type().map_err(|e| {
+                    HivemindError::system("governance_migration_failed", e.to_string(), origin)
+                })?;
+                if file_type.is_dir() {
+                    fs::create_dir_all(&dst_path).map_err(|e| {
+                        HivemindError::system("governance_migration_failed", e.to_string(), origin)
+                    })?;
+                    stack.push((src_path, dst_path));
+                    continue;
+                }
+
+                if dst_path.exists() {
+                    continue;
+                }
+                fs::copy(&src_path, &dst_path).map_err(|e| {
+                    HivemindError::system("governance_migration_failed", e.to_string(), origin)
+                })?;
+                copied = true;
+            }
+        }
+
+        Ok(copied)
+    }
+
+    fn copy_file_if_missing(
+        source: &Path,
+        destination: &Path,
+        default_contents: Option<&[u8]>,
+        origin: &'static str,
+    ) -> Result<bool> {
+        if !source.exists() || !source.is_file() {
+            return Ok(false);
+        }
+        if destination.exists() {
+            let source_bytes = fs::read(source).map_err(|e| {
+                HivemindError::system("governance_migration_failed", e.to_string(), origin)
+            })?;
+            if source_bytes.is_empty() {
+                return Ok(false);
+            }
+
+            let destination_bytes = fs::read(destination).map_err(|e| {
+                HivemindError::system("governance_migration_failed", e.to_string(), origin)
+            })?;
+            if destination_bytes == source_bytes {
+                return Ok(false);
+            }
+
+            let can_overwrite_scaffold = default_contents
+                .is_some_and(|default_bytes| destination_bytes.as_slice() == default_bytes);
+            if !destination_bytes.is_empty() && !can_overwrite_scaffold {
+                return Ok(false);
+            }
+
+            fs::write(destination, source_bytes).map_err(|e| {
+                HivemindError::system("governance_migration_failed", e.to_string(), origin)
+            })?;
+            return Ok(true);
+        }
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                HivemindError::system("governance_migration_failed", e.to_string(), origin)
+            })?;
+        }
+        fs::copy(source, destination).map_err(|e| {
+            HivemindError::system("governance_migration_failed", e.to_string(), origin)
+        })?;
+        Ok(true)
     }
 
     fn write_baseline_artifact(&self, baseline: &Baseline) -> Result<()> {
@@ -5306,6 +5711,263 @@ impl Registry {
         })?;
 
         self.get_project(&project.id.to_string())
+    }
+
+    /// Initializes canonical governance storage and projections for a project.
+    ///
+    /// # Errors
+    /// Returns an error if the project cannot be resolved, storage cannot be created,
+    /// or governance events cannot be appended.
+    pub fn project_governance_init(&self, id_or_name: &str) -> Result<ProjectGovernanceInitResult> {
+        let origin = "registry:project_governance_init";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let state = self.state()?;
+
+        let created_paths = self.ensure_governance_layout(project.id, origin)?;
+        let created_set: HashSet<PathBuf> = created_paths.iter().cloned().collect();
+        let corr = CorrelationIds::for_project(project.id);
+
+        if !state.governance_projects.contains_key(&project.id) || !created_paths.is_empty() {
+            self.append_event(
+                Event::new(
+                    EventPayload::GovernanceProjectStorageInitialized {
+                        project_id: project.id,
+                        schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+                        projection_version: GOVERNANCE_PROJECTION_VERSION,
+                        root_path: self
+                            .governance_project_root(project.id)
+                            .to_string_lossy()
+                            .to_string(),
+                    },
+                    corr.clone(),
+                ),
+                origin,
+            )?;
+        }
+
+        let mut pending_revisions = HashMap::new();
+        for location in self.governance_artifact_locations(project.id) {
+            let exists = if location.is_dir {
+                location.path.is_dir()
+            } else {
+                location.path.is_file()
+            };
+            if !exists {
+                continue;
+            }
+
+            let projected_exists =
+                Self::governance_projection_for_location(&state, &location).is_some();
+            let should_emit = created_set.contains(&location.path) || !projected_exists;
+            if !should_emit {
+                continue;
+            }
+
+            let revision =
+                Self::next_governance_revision(&state, &location, &mut pending_revisions);
+            self.append_event(
+                Event::new(
+                    EventPayload::GovernanceArtifactUpserted {
+                        project_id: location.project_id,
+                        scope: location.scope.to_string(),
+                        artifact_kind: location.artifact_kind.to_string(),
+                        artifact_key: location.artifact_key.clone(),
+                        path: location.path.to_string_lossy().to_string(),
+                        revision,
+                        schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+                        projection_version: GOVERNANCE_PROJECTION_VERSION,
+                    },
+                    corr.clone(),
+                ),
+                origin,
+            )?;
+        }
+
+        let mut created_paths_rendered: Vec<String> = created_paths
+            .iter()
+            .map(|path| path.to_string_lossy().to_string())
+            .collect();
+        created_paths_rendered.sort();
+
+        Ok(ProjectGovernanceInitResult {
+            project_id: project.id,
+            root_path: self
+                .governance_project_root(project.id)
+                .to_string_lossy()
+                .to_string(),
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+            created_paths: created_paths_rendered,
+        })
+    }
+
+    /// Migrates legacy governance artifacts from repo-local layout into canonical
+    /// global governance storage for the selected project.
+    ///
+    /// # Errors
+    /// Returns an error if migration copy operations fail or governance events
+    /// cannot be appended.
+    pub fn project_governance_migrate(
+        &self,
+        id_or_name: &str,
+    ) -> Result<ProjectGovernanceMigrateResult> {
+        let origin = "registry:project_governance_migrate";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+
+        let mut migrated_paths = BTreeSet::new();
+        for mapping in self
+            .legacy_governance_mappings(&project)
+            .into_iter()
+            .filter(|m| m.source.exists())
+        {
+            let copied = if mapping.destination.is_dir {
+                Self::copy_dir_if_missing(&mapping.source, &mapping.destination.path, origin)?
+            } else {
+                Self::copy_file_if_missing(
+                    &mapping.source,
+                    &mapping.destination.path,
+                    Some(Self::governance_default_file_contents(&mapping.destination)),
+                    origin,
+                )?
+            };
+
+            if copied {
+                migrated_paths.insert(mapping.destination.path.to_string_lossy().to_string());
+            }
+        }
+
+        let _ = self.project_governance_init(&project.id.to_string())?;
+
+        let rollback_hint = format!(
+            "Rollback by restoring repo-local governance paths from backups under each attached repo '.hivemind/' directory. New layout root: {}",
+            self.governance_project_root(project.id).to_string_lossy()
+        );
+        let migrated_paths_vec: Vec<String> = migrated_paths.into_iter().collect();
+
+        self.append_event(
+            Event::new(
+                EventPayload::GovernanceStorageMigrated {
+                    project_id: Some(project.id),
+                    from_layout: GOVERNANCE_FROM_LAYOUT.to_string(),
+                    to_layout: GOVERNANCE_TO_LAYOUT.to_string(),
+                    migrated_paths: migrated_paths_vec.clone(),
+                    rollback_hint: rollback_hint.clone(),
+                    schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+                    projection_version: GOVERNANCE_PROJECTION_VERSION,
+                },
+                CorrelationIds::for_project(project.id),
+            ),
+            origin,
+        )?;
+
+        Ok(ProjectGovernanceMigrateResult {
+            project_id: project.id,
+            from_layout: GOVERNANCE_FROM_LAYOUT.to_string(),
+            to_layout: GOVERNANCE_TO_LAYOUT.to_string(),
+            migrated_paths: migrated_paths_vec,
+            rollback_hint,
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Inspects governance storage and projection status for a project.
+    ///
+    /// # Errors
+    /// Returns an error if the project cannot be resolved or state replay fails.
+    pub fn project_governance_inspect(
+        &self,
+        id_or_name: &str,
+    ) -> Result<ProjectGovernanceInspectResult> {
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let state = self.state()?;
+
+        let mut artifacts: Vec<GovernanceArtifactInspect> = self
+            .governance_artifact_locations(project.id)
+            .into_iter()
+            .map(|location| {
+                let projection = Self::governance_projection_for_location(&state, &location);
+                GovernanceArtifactInspect {
+                    scope: location.scope.to_string(),
+                    artifact_kind: location.artifact_kind.to_string(),
+                    artifact_key: location.artifact_key,
+                    path: location.path.to_string_lossy().to_string(),
+                    exists: if location.is_dir {
+                        location.path.is_dir()
+                    } else {
+                        location.path.is_file()
+                    },
+                    projected: projection.is_some(),
+                    revision: projection.map_or(0, |item| item.revision),
+                }
+            })
+            .collect();
+        artifacts.sort_by(|a, b| {
+            a.scope
+                .cmp(&b.scope)
+                .then(a.artifact_kind.cmp(&b.artifact_kind))
+                .then(a.artifact_key.cmp(&b.artifact_key))
+        });
+
+        let mut migrations: Vec<GovernanceMigrationSummary> = state
+            .governance_migrations
+            .iter()
+            .filter(|migration| {
+                migration.project_id.is_none() || migration.project_id == Some(project.id)
+            })
+            .map(|migration| GovernanceMigrationSummary {
+                from_layout: migration.from_layout.clone(),
+                to_layout: migration.to_layout.clone(),
+                migrated_paths: migration.migrated_paths.clone(),
+                rollback_hint: migration.rollback_hint.clone(),
+                schema_version: migration.schema_version.clone(),
+                projection_version: migration.projection_version,
+                migrated_at: migration.migrated_at,
+            })
+            .collect();
+        migrations.sort_by(|a, b| b.migrated_at.cmp(&a.migrated_at));
+
+        let mut legacy_candidates = BTreeSet::new();
+        for mapping in self.legacy_governance_mappings(&project) {
+            if mapping.source.exists() {
+                legacy_candidates.insert(mapping.source.to_string_lossy().to_string());
+            }
+        }
+
+        let projected_storage = state.governance_projects.get(&project.id);
+        Ok(ProjectGovernanceInspectResult {
+            project_id: project.id,
+            root_path: projected_storage.map_or_else(
+                || {
+                    self.governance_project_root(project.id)
+                        .to_string_lossy()
+                        .to_string()
+                },
+                |item| item.root_path.clone(),
+            ),
+            initialized: projected_storage.is_some(),
+            schema_version: projected_storage.map_or_else(
+                || GOVERNANCE_SCHEMA_VERSION.to_string(),
+                |item| item.schema_version.clone(),
+            ),
+            projection_version: projected_storage.map_or(GOVERNANCE_PROJECTION_VERSION, |item| {
+                item.projection_version
+            }),
+            export_import_boundary: GOVERNANCE_EXPORT_IMPORT_BOUNDARY.to_string(),
+            worktree_base_dir: WorktreeConfig::default()
+                .base_dir
+                .to_string_lossy()
+                .to_string(),
+            artifacts,
+            migrations,
+            legacy_candidates: legacy_candidates.into_iter().collect(),
+        })
     }
 
     // ========== Task Management ==========
@@ -8961,7 +9623,10 @@ mod tests {
 
     fn test_registry() -> Registry {
         let store = Arc::new(InMemoryEventStore::new());
-        let config = RegistryConfig::with_dir(PathBuf::from("/tmp/test"));
+        let data_dir =
+            std::env::temp_dir().join(format!("hivemind-registry-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&data_dir).expect("create test registry data dir");
+        let config = RegistryConfig::with_dir(data_dir);
         Registry::with_store(store, config)
     }
 
@@ -9092,6 +9757,81 @@ mod tests {
 
         assert_eq!(updated.name, "new-name");
         assert_eq!(updated.description, Some("New desc".to_string()));
+    }
+
+    #[test]
+    fn project_governance_init_creates_layout_and_projection_state() {
+        let registry = test_registry();
+        let project = registry.create_project("proj", None).unwrap();
+
+        let result = registry.project_governance_init("proj").unwrap();
+
+        assert_eq!(result.project_id, project.id);
+        assert!(!result.created_paths.is_empty());
+        assert!(std::path::Path::new(&result.root_path).is_dir());
+
+        let state = registry.state().unwrap();
+        assert!(state.governance_projects.contains_key(&project.id));
+        assert!(state.governance_artifacts.values().any(|artifact| {
+            artifact.project_id == Some(project.id) && artifact.artifact_kind == "constitution"
+        }));
+    }
+
+    #[test]
+    fn project_governance_migrate_copies_legacy_artifacts_and_emits_migration_event() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        let project = registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                repo_dir.to_string_lossy().as_ref(),
+                Some("main"),
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let legacy_constitution = repo_dir.join(".hivemind").join("constitution.yaml");
+        let legacy_global_notepad = repo_dir.join(".hivemind").join("global").join("notepad.md");
+        std::fs::create_dir_all(legacy_constitution.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(legacy_global_notepad.parent().unwrap()).unwrap();
+        std::fs::write(&legacy_constitution, "legacy_constitution: true\n").unwrap();
+        std::fs::write(&legacy_global_notepad, "legacy global notes\n").unwrap();
+
+        let result = registry.project_governance_migrate("proj").unwrap();
+
+        assert_eq!(result.project_id, project.id);
+        assert!(!result.migrated_paths.is_empty());
+        assert!(result
+            .migrated_paths
+            .iter()
+            .any(|path| path.ends_with("constitution.yaml")));
+
+        let canonical_constitution = registry
+            .config()
+            .data_dir
+            .join("projects")
+            .join(project.id.to_string())
+            .join("constitution.yaml");
+        let canonical_global_notepad = registry.config().data_dir.join("global").join("notepad.md");
+        assert_eq!(
+            std::fs::read_to_string(&canonical_constitution).unwrap(),
+            "legacy_constitution: true\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&canonical_global_notepad).unwrap(),
+            "legacy global notes\n"
+        );
+
+        let inspect = registry.project_governance_inspect("proj").unwrap();
+        assert!(inspect.initialized);
+        assert!(inspect
+            .migrations
+            .iter()
+            .any(|migration| migration.to_layout == GOVERNANCE_TO_LAYOUT));
     }
 
     #[test]
@@ -11066,9 +11806,10 @@ mod tests {
         .to_string();
 
         let prepare_branch = format!("integration/{}/prepare", flow.id);
-        let prepare_worktree = repo_b
-            .join(".hivemind")
-            .join("worktrees")
+        let prepare_worktree = WorktreeManager::new(repo_b.clone(), WorktreeConfig::default())
+            .unwrap()
+            .config()
+            .base_dir
             .join(flow.id.to_string())
             .join("_integration_prepare");
         let _ = Command::new("git")
@@ -11161,7 +11902,7 @@ mod tests {
         let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
         let flow = registry.start_flow(&flow.id.to_string()).unwrap();
 
-        let manager = WorktreeManager::new(repo_dir.clone(), WorktreeConfig::default()).unwrap();
+        let manager = WorktreeManager::new(repo_dir, WorktreeConfig::default()).unwrap();
         let wt1_path = manager.path_for(flow.id, t1.id);
         if !wt1_path.exists() {
             let _ = manager.create(flow.id, t1.id, Some("HEAD")).unwrap();
@@ -11271,8 +12012,9 @@ mod tests {
         assert_eq!(ms.status, crate::core::state::MergeStatus::Completed);
         assert!(!ms.commits.is_empty());
 
-        let merge_path = repo_dir
-            .join(".hivemind/worktrees")
+        let merge_path = manager
+            .config()
+            .base_dir
             .join(flow.id.to_string())
             .join("_merge");
         assert!(!merge_path.exists());

@@ -315,13 +315,17 @@ Cross-repo dependencies are enforced:
 
 ### 8.1 Multi-Repo Worktree Layout
 
+Worktrees are stored in a global location by default:
+
 ```
-.hivemind/worktrees/
+~/hivemind/worktrees/
   └── taskflow-42/
       └── task-update-api/
           ├── backend/     ← backend repo worktree
           └── frontend/    ← frontend repo worktree
 ```
+
+The location can be overridden via `HIVEMIND_WORKTREE_DIR` environment variable.
 
 ### 8.2 Agent Access
 

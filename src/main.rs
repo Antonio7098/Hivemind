@@ -5,16 +5,19 @@ use clap::error::ErrorKind;
 use clap::Parser;
 use hivemind::cli::commands::{
     AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, EventCommands,
-    FlowCommands, GraphCommands, MergeCommands, MergeExecuteModeArg, ProjectCommands, RunModeArg,
-    RuntimeCommands, RuntimeRoleArg, ServeArgs, TaskAbortArgs, TaskCloseArgs, TaskCommands,
-    TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs, TaskStartArgs,
-    TaskUpdateArgs, VerifyCommands, WorktreeCommands,
+    FlowCommands, GraphCommands, MergeCommands, MergeExecuteModeArg, ProjectCommands,
+    ProjectGovernanceCommands, RunModeArg, RuntimeCommands, RuntimeRoleArg, ServeArgs,
+    TaskAbortArgs, TaskCloseArgs, TaskCommands, TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs,
+    TaskListArgs, TaskRetryArgs, TaskStartArgs, TaskUpdateArgs, VerifyCommands, WorktreeCommands,
 };
 use hivemind::cli::output::{output, output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
 use hivemind::core::events::RuntimeRole;
 use hivemind::core::flow::{RetryMode, RunMode};
-use hivemind::core::registry::{MergeExecuteMode, MergeExecuteOptions, Registry};
+use hivemind::core::registry::{
+    MergeExecuteMode, MergeExecuteOptions, ProjectGovernanceInitResult,
+    ProjectGovernanceInspectResult, ProjectGovernanceMigrateResult, Registry,
+};
 use hivemind::core::scope::RepoAccessMode;
 use hivemind::core::scope::Scope;
 use hivemind::core::state::{AttemptState, Project, Task, TaskState};
@@ -725,6 +728,114 @@ fn print_projects(projects: &[Project], format: OutputFormat) {
     }
 }
 
+fn print_project_governance_init(result: &ProjectGovernanceInitResult, format: OutputFormat) {
+    match format {
+        OutputFormat::Table => {
+            println!("Project ID:        {}", result.project_id);
+            println!("Governance Root:   {}", result.root_path);
+            println!("Schema Version:    {}", result.schema_version);
+            println!("Projection Version:{}", result.projection_version);
+            if result.created_paths.is_empty() {
+                println!("Created Paths:     none (already initialized)");
+            } else {
+                println!("Created Paths:");
+                for path in &result.created_paths {
+                    println!("  - {path}");
+                }
+            }
+        }
+        _ => {
+            if let Err(err) = output(result, format) {
+                eprintln!("Failed to render governance init result: {err}");
+            }
+        }
+    }
+}
+
+fn print_project_governance_migrate(result: &ProjectGovernanceMigrateResult, format: OutputFormat) {
+    match format {
+        OutputFormat::Table => {
+            println!("Project ID:        {}", result.project_id);
+            println!("From Layout:       {}", result.from_layout);
+            println!("To Layout:         {}", result.to_layout);
+            println!("Schema Version:    {}", result.schema_version);
+            println!("Projection Version:{}", result.projection_version);
+            if result.migrated_paths.is_empty() {
+                println!("Migrated Paths:    none (no legacy artifacts found)");
+            } else {
+                println!("Migrated Paths:");
+                for path in &result.migrated_paths {
+                    println!("  - {path}");
+                }
+            }
+            println!("Rollback Hint:     {}", result.rollback_hint);
+        }
+        _ => {
+            if let Err(err) = output(result, format) {
+                eprintln!("Failed to render governance migration result: {err}");
+            }
+        }
+    }
+}
+
+fn print_project_governance_inspect(result: &ProjectGovernanceInspectResult, format: OutputFormat) {
+    match format {
+        OutputFormat::Table => {
+            println!("Project ID:        {}", result.project_id);
+            println!("Governance Root:   {}", result.root_path);
+            println!("Initialized:       {}", result.initialized);
+            println!("Schema Version:    {}", result.schema_version);
+            println!("Projection Version:{}", result.projection_version);
+            println!("Worktree Base Dir: {}", result.worktree_base_dir);
+            println!("Boundary:          {}", result.export_import_boundary);
+
+            println!("Artifacts:");
+            for artifact in &result.artifacts {
+                println!(
+                    "  - [{}] {}:{} -> {} (exists={}, projected={}, revision={})",
+                    artifact.scope,
+                    artifact.artifact_kind,
+                    artifact.artifact_key,
+                    artifact.path,
+                    artifact.exists,
+                    artifact.projected,
+                    artifact.revision
+                );
+            }
+
+            if result.migrations.is_empty() {
+                println!("Migrations:        none");
+            } else {
+                println!("Migrations:");
+                for migration in &result.migrations {
+                    println!(
+                        "  - {} -> {} @ {}",
+                        migration.from_layout, migration.to_layout, migration.migrated_at
+                    );
+                    if !migration.migrated_paths.is_empty() {
+                        println!("    paths: {}", migration.migrated_paths.join(", "));
+                    }
+                }
+            }
+
+            if result.legacy_candidates.is_empty() {
+                println!("Legacy Candidates: none");
+            } else {
+                println!("Legacy Candidates:");
+                for path in &result.legacy_candidates {
+                    println!("  - {path}");
+                }
+            }
+        }
+        _ => {
+            if let Err(err) = output(result, format) {
+                eprintln!("Failed to render governance inspect result: {err}");
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)]
 fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
         return ExitCode::Error;
@@ -819,6 +930,35 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
+        ProjectCommands::Governance(cmd) => match cmd {
+            ProjectGovernanceCommands::Init(args) => {
+                match registry.project_governance_init(&args.project) {
+                    Ok(result) => {
+                        print_project_governance_init(&result, format);
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            ProjectGovernanceCommands::Migrate(args) => {
+                match registry.project_governance_migrate(&args.project) {
+                    Ok(result) => {
+                        print_project_governance_migrate(&result, format);
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            ProjectGovernanceCommands::Inspect(args) => {
+                match registry.project_governance_inspect(&args.project) {
+                    Ok(result) => {
+                        print_project_governance_inspect(&result, format);
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+        },
     }
 }
 
@@ -1235,6 +1375,15 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::TaskClosed { .. } => "task_closed",
         EventPayload::RepositoryAttached { .. } => "repo_attached",
         EventPayload::RepositoryDetached { .. } => "repo_detached",
+        EventPayload::GovernanceProjectStorageInitialized { .. } => {
+            "governance_project_storage_initialized"
+        }
+        EventPayload::GovernanceArtifactUpserted { .. } => "governance_artifact_upserted",
+        EventPayload::GovernanceArtifactDeleted { .. } => "governance_artifact_deleted",
+        EventPayload::GovernanceAttachmentLifecycleUpdated { .. } => {
+            "governance_attachment_lifecycle_updated"
+        }
+        EventPayload::GovernanceStorageMigrated { .. } => "governance_storage_migrated",
         EventPayload::TaskGraphCreated { .. } => "graph_created",
         EventPayload::TaskAddedToGraph { .. } => "graph_task_added",
         EventPayload::DependencyAdded { .. } => "graph_dependency_added",

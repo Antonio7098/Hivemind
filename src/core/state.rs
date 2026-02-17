@@ -100,6 +100,56 @@ impl RuntimeRoleDefaults {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GovernanceProjectStorage {
+    pub project_id: Uuid,
+    pub schema_version: String,
+    pub projection_version: u32,
+    pub root_path: String,
+    pub initialized_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GovernanceArtifact {
+    #[serde(default)]
+    pub project_id: Option<Uuid>,
+    pub scope: String,
+    pub artifact_kind: String,
+    pub artifact_key: String,
+    pub path: String,
+    #[serde(default)]
+    pub revision: u64,
+    pub schema_version: String,
+    pub projection_version: u32,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GovernanceAttachment {
+    pub project_id: Uuid,
+    pub task_id: Uuid,
+    pub artifact_kind: String,
+    pub artifact_key: String,
+    pub attached: bool,
+    pub schema_version: String,
+    pub projection_version: u32,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GovernanceMigration {
+    #[serde(default)]
+    pub project_id: Option<Uuid>,
+    pub from_layout: String,
+    pub to_layout: String,
+    #[serde(default)]
+    pub migrated_paths: Vec<String>,
+    pub rollback_hint: String,
+    pub schema_version: String,
+    pub projection_version: u32,
+    pub migrated_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct TaskRuntimeRoleOverrides {
     #[serde(default)]
@@ -193,6 +243,10 @@ pub struct MergeState {
 #[derive(Debug, Default, Clone)]
 pub struct AppState {
     pub projects: HashMap<Uuid, Project>,
+    pub governance_projects: HashMap<Uuid, GovernanceProjectStorage>,
+    pub governance_artifacts: HashMap<String, GovernanceArtifact>,
+    pub governance_attachments: HashMap<String, GovernanceAttachment>,
+    pub governance_migrations: Vec<GovernanceMigration>,
     pub tasks: HashMap<Uuid, Task>,
     pub graphs: HashMap<Uuid, TaskGraph>,
     pub flows: HashMap<Uuid, TaskFlow>,
@@ -496,6 +550,110 @@ impl AppState {
                     project.repositories.retain(|r| r.name != *name);
                     project.updated_at = timestamp;
                 }
+            }
+
+            EventPayload::GovernanceProjectStorageInitialized {
+                project_id,
+                schema_version,
+                projection_version,
+                root_path,
+            } => {
+                self.governance_projects.insert(
+                    *project_id,
+                    GovernanceProjectStorage {
+                        project_id: *project_id,
+                        schema_version: schema_version.clone(),
+                        projection_version: *projection_version,
+                        root_path: root_path.clone(),
+                        initialized_at: timestamp,
+                    },
+                );
+            }
+            EventPayload::GovernanceArtifactUpserted {
+                project_id,
+                scope,
+                artifact_kind,
+                artifact_key,
+                path,
+                revision,
+                schema_version,
+                projection_version,
+            } => {
+                let project_key =
+                    project_id.map_or_else(|| "global".to_string(), |id| id.to_string());
+                let key = format!("{project_key}::{scope}::{artifact_kind}::{artifact_key}");
+                self.governance_artifacts.insert(
+                    key,
+                    GovernanceArtifact {
+                        project_id: *project_id,
+                        scope: scope.clone(),
+                        artifact_kind: artifact_kind.clone(),
+                        artifact_key: artifact_key.clone(),
+                        path: path.clone(),
+                        revision: *revision,
+                        schema_version: schema_version.clone(),
+                        projection_version: *projection_version,
+                        updated_at: timestamp,
+                    },
+                );
+            }
+            EventPayload::GovernanceArtifactDeleted {
+                project_id,
+                scope,
+                artifact_kind,
+                artifact_key,
+                path: _,
+                schema_version: _,
+                projection_version: _,
+            } => {
+                let project_key =
+                    project_id.map_or_else(|| "global".to_string(), |id| id.to_string());
+                let key = format!("{project_key}::{scope}::{artifact_kind}::{artifact_key}");
+                self.governance_artifacts.remove(&key);
+            }
+            EventPayload::GovernanceAttachmentLifecycleUpdated {
+                project_id,
+                task_id,
+                artifact_kind,
+                artifact_key,
+                attached,
+                schema_version,
+                projection_version,
+            } => {
+                let key = format!("{project_id}::{task_id}::{artifact_kind}::{artifact_key}");
+                self.governance_attachments.insert(
+                    key,
+                    GovernanceAttachment {
+                        project_id: *project_id,
+                        task_id: *task_id,
+                        artifact_kind: artifact_kind.clone(),
+                        artifact_key: artifact_key.clone(),
+                        attached: *attached,
+                        schema_version: schema_version.clone(),
+                        projection_version: *projection_version,
+                        updated_at: timestamp,
+                    },
+                );
+            }
+            EventPayload::GovernanceStorageMigrated {
+                project_id,
+                from_layout,
+                to_layout,
+                migrated_paths,
+                rollback_hint,
+                schema_version,
+                projection_version,
+            } => {
+                self.governance_migrations.push(GovernanceMigration {
+                    project_id: *project_id,
+                    from_layout: from_layout.clone(),
+                    to_layout: to_layout.clone(),
+                    migrated_paths: migrated_paths.clone(),
+                    rollback_hint: rollback_hint.clone(),
+                    schema_version: schema_version.clone(),
+                    projection_version: *projection_version,
+                    migrated_at: timestamp,
+                });
             }
 
             EventPayload::TaskGraphCreated {
