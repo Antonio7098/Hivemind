@@ -274,6 +274,8 @@ pub enum GraphCommands {
     Validate(GraphValidateArgs),
     /// List graphs (optionally filtered by project)
     List(GraphListArgs),
+    /// Delete a graph that is not referenced by any flow
+    Delete(GraphDeleteArgs),
 }
 
 #[derive(Args)]
@@ -335,6 +337,12 @@ pub struct GraphListArgs {
     pub project: Option<String>,
 }
 
+#[derive(Args)]
+pub struct GraphDeleteArgs {
+    /// Graph ID
+    pub graph_id: String,
+}
+
 #[derive(Subcommand)]
 pub enum FlowCommands {
     /// Create a new flow from a graph (locks the graph)
@@ -361,6 +369,8 @@ pub enum FlowCommands {
     AddDependency(FlowAddDependencyArgs),
     /// Configure or clear a flow-level runtime default by role
     RuntimeSet(FlowRuntimeSetArgs),
+    /// Delete a flow that is not currently active
+    Delete(FlowDeleteArgs),
 }
 
 #[derive(Args)]
@@ -495,6 +505,12 @@ pub struct FlowRuntimeSetArgs {
     pub max_parallel_tasks: u16,
 }
 
+#[derive(Args)]
+pub struct FlowDeleteArgs {
+    /// Flow ID
+    pub flow_id: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum TaskRetryMode {
     Clean,
@@ -549,6 +565,8 @@ pub enum ProjectCommands {
     /// Detach a repository from a project
     DetachRepo(DetachRepoArgs),
 
+    /// Delete a project with no remaining tasks, graphs, or flows
+    Delete(ProjectDeleteArgs),
     /// Governance storage lifecycle commands
     #[command(subcommand)]
     Governance(ProjectGovernanceCommands),
@@ -1043,6 +1061,12 @@ pub struct DetachRepoArgs {
     pub repo_name: String,
 }
 
+#[derive(Args)]
+pub struct ProjectDeleteArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
 /// Task subcommands.
 #[derive(Subcommand)]
 pub enum TaskCommands {
@@ -1075,6 +1099,9 @@ pub enum TaskCommands {
     Abort(TaskAbortArgs),
     /// Set task run mode (`manual` or `auto`)
     SetRunMode(TaskSetRunModeArgs),
+
+    /// Delete a task that is not referenced by a graph or flow
+    Delete(TaskDeleteArgs),
 }
 
 #[derive(Args)]
@@ -1187,6 +1214,12 @@ pub struct TaskSetRunModeArgs {
     /// Run mode
     #[arg(value_enum)]
     pub mode: RunModeArg,
+}
+
+#[derive(Args)]
+pub struct TaskDeleteArgs {
+    /// Task ID
+    pub task_id: String,
 }
 
 /// Runtime subcommands.
