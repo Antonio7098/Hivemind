@@ -1876,6 +1876,7 @@ fn handle_runtime(cmd: RuntimeCommands, format: OutputFormat) -> ExitCode {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static str {
     use hivemind::core::events::EventPayload;
     match payload {

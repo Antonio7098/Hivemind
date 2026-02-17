@@ -108,6 +108,7 @@ pub struct UiEvent {
     pub payload: HashMap<String, Value>,
 }
 
+#[allow(clippy::too_many_lines)]
 fn payload_pascal_type(payload: &EventPayload) -> &'static str {
     match payload {
         EventPayload::ErrorOccurred { .. } => "ErrorOccurred",
