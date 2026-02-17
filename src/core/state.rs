@@ -1078,6 +1078,7 @@ impl AppState {
             }
 
             EventPayload::CheckStarted { .. }
+            | EventPayload::TemplateInstantiated { .. }
             | EventPayload::ErrorOccurred { .. }
             | EventPayload::TaskExecutionStarted { .. }
             | EventPayload::TaskExecutionSucceeded { .. }

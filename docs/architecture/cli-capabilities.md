@@ -94,6 +94,20 @@ Capabilities:
 
 ---
 
+### 3.4 Project Governance Artifacts
+
+Capabilities:
+- Initialize/migrate/inspect governance storage for a project
+- Manage project documents (`create`, `list`, `inspect`, `update`, `delete`) with immutable revisions
+- Explicitly include/exclude project documents for task execution context
+- Manage project notepad (`create`, `show`, `update`, `delete`) as non-executional context
+
+Constraints:
+- Project document attachment is explicit and task-scoped
+- Project notepad content is never injected into runtime prompts by default
+
+---
+
 ## 4. Task Management (Lightweight)
 
 ### 4.1 Task Lifecycle
@@ -316,9 +330,38 @@ Constraints:
 
 ---
 
-## 12. Automation & Scheduling
+## 12. Governance Registry (Global)
 
-### 12.1 Automation Management
+### 12.1 Skills
+
+Capabilities:
+- Create/list/inspect/update/delete global skill artifacts
+
+### 12.2 System Prompts
+
+Capabilities:
+- Create/list/inspect/update/delete global system prompt artifacts
+
+### 12.3 Templates
+
+Capabilities:
+- Create/list/inspect/update/delete global templates
+- Instantiate template references for a target project
+- Emit observable template instantiation lifecycle events with resolved IDs
+
+### 12.4 Global Notepad
+
+Capabilities:
+- Create/show/update/delete global notepad content
+
+Constraints:
+- Global notepad is non-executional and non-validating
+
+---
+
+## 13. Automation & Scheduling
+
+### 13.1 Automation Management
 
 Capabilities:
 - Attach automation to TaskFlow
@@ -327,14 +370,14 @@ Capabilities:
 
 ---
 
-### 12.2 Manual Triggering
+### 13.2 Manual Triggering
 
 Capabilities:
 - Trigger automated TaskFlow manually
 
 ---
 
-## 13. Agent Operating Hivemind (Meta-Operation)
+## 14. Agent Operating Hivemind (Meta-Operation)
 
 Hivemind explicitly supports **agents operating Hivemind itself**.
 
@@ -350,7 +393,7 @@ This enables:
 
 ---
 
-## 14. Output & Contracts
+## 15. Output & Contracts
 
 All CLI commands must support:
 - Human-readable output
@@ -363,7 +406,7 @@ Errors must:
 
 ---
 
-## 15. Invariants
+## 16. Invariants
 
 The CLI enforces:
 
@@ -375,7 +418,7 @@ Breaking these invariants compromises the system.
 
 ---
 
-## 16. Summary
+## 17. Summary
 
 The Hivemind CLI is:
 - The authoritative interface

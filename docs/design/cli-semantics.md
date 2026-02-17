@@ -362,6 +362,252 @@ hivemind [-f json|table|yaml] project governance inspect <project>
 
 ---
 
+### 2.11 project governance document
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance document create <project> <document-id> --title <text> --owner <text> [--tag <tag>...] --content <text>
+hivemind [-f json|table|yaml] project governance document list <project>
+hivemind [-f json|table|yaml] project governance document inspect <project> <document-id>
+hivemind [-f json|table|yaml] project governance document update <project> <document-id> [--title <text>] [--owner <text>] [--tag <tag>...] [--content <text>]
+hivemind [-f json|table|yaml] project governance document delete <project> <document-id>
+```
+
+**Preconditions:**
+- Project exists
+- `document-id` uses governance identifier format
+
+**Effects:**
+- `create` and `update` write canonical artifact JSON under `~/.hivemind/projects/<project-id>/documents/`
+- Document metadata (`title`, `owner`, `tags`, `updated_at`) is maintained
+- Revision history is immutable (new revisions are appended)
+
+**Events:**
+```
+GovernanceArtifactUpserted:
+  project_id: <project-id>
+  scope: project
+  artifact_kind: document
+  artifact_key: <document-id>
+  path: <absolute-path>
+  revision: <n>
+  schema_version: governance.v1
+  projection_version: 1
+
+GovernanceArtifactDeleted:
+  project_id: <project-id>
+  scope: project
+  artifact_kind: document
+  artifact_key: <document-id>
+  path: <absolute-path>
+  schema_version: governance.v1
+  projection_version: 1
+```
+
+**Failures:**
+- `project_not_found`
+- `invalid_governance_identifier`
+- `document_not_found`
+- `governance_artifact_schema_invalid`
+
+**Idempotence:**
+- `list`/`inspect`: idempotent
+- `create`: non-idempotent (conflicts when artifact already exists)
+- `update`: idempotent when no effective change
+- `delete`: non-idempotent (fails if document is absent)
+
+---
+
+### 2.12 project governance attachment
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance attachment include <project> <task-id> <document-id>
+hivemind [-f json|table|yaml] project governance attachment exclude <project> <task-id> <document-id>
+```
+
+**Preconditions:**
+- Project and task exist
+- Referenced document exists for `include`
+
+**Effects:**
+- Sets explicit per-task attachment lifecycle for project documents
+- Included documents are injected into runtime execution context
+
+**Events:**
+```
+GovernanceAttachmentLifecycleUpdated:
+  project_id: <project-id>
+  task_id: <task-id>
+  artifact_kind: document
+  artifact_key: <document-id>
+  attached: true|false
+  schema_version: governance.v1
+  projection_version: 1
+```
+
+**Failures:**
+- `project_not_found`
+- `task_not_found`
+- `document_not_found`
+
+**Idempotence:** Idempotent when attachment state is unchanged.
+
+---
+
+### 2.13 project governance notepad
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance notepad create <project> --content <text>
+hivemind [-f json|table|yaml] project governance notepad show <project>
+hivemind [-f json|table|yaml] project governance notepad update <project> --content <text>
+hivemind [-f json|table|yaml] project governance notepad delete <project>
+```
+
+**Preconditions:**
+- Project exists
+
+**Effects:**
+- Maintains project-level notepad at `~/.hivemind/projects/<project-id>/notepad.md`
+- Notepad is explicitly **non-executional** and **non-validating**
+- Notepad content is never attached to runtime input by default
+
+**Events:**
+- `create`/`update`: `GovernanceArtifactUpserted` (`artifact_kind: notepad`)
+- `delete`: `GovernanceArtifactDeleted` (`artifact_kind: notepad`)
+- `show`: no events
+
+**Failures:**
+- `project_not_found`
+- `governance_artifact_read_failed`
+
+**Idempotence:**
+- `show`: idempotent
+- `create`/`update`: idempotent when content unchanged
+- `delete`: idempotent if already absent
+
+---
+
+### 2.14 global skill
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] global skill create <skill-id> --name <text> --content <text> [--tag <tag>...]
+hivemind [-f json|table|yaml] global skill list
+hivemind [-f json|table|yaml] global skill inspect <skill-id>
+hivemind [-f json|table|yaml] global skill update <skill-id> [--name <text>] [--content <text>] [--tag <tag>...]
+hivemind [-f json|table|yaml] global skill delete <skill-id>
+```
+
+**Effects:**
+- Maintains globally reusable skill artifacts under `~/.hivemind/global/skills/`
+- Enforces schema/identifier validation with structured failures
+
+**Events:**
+- Mutations emit governance upsert/delete events with `scope: global` and `artifact_kind: skill`
+
+**Failures:**
+- `invalid_governance_identifier`
+- `governance_artifact_schema_invalid`
+- `skill_not_found`
+
+---
+
+### 2.15 global system-prompt
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] global system-prompt create <prompt-id> --content <text>
+hivemind [-f json|table|yaml] global system-prompt list
+hivemind [-f json|table|yaml] global system-prompt inspect <prompt-id>
+hivemind [-f json|table|yaml] global system-prompt update <prompt-id> --content <text>
+hivemind [-f json|table|yaml] global system-prompt delete <prompt-id>
+```
+
+**Effects:**
+- Maintains globally reusable system prompt artifacts under `~/.hivemind/global/system_prompts/`
+
+**Events:**
+- Mutations emit governance upsert/delete events with `scope: global` and `artifact_kind: system_prompt`
+
+**Failures:**
+- `invalid_governance_identifier`
+- `governance_artifact_schema_invalid`
+- `system_prompt_not_found`
+
+---
+
+### 2.16 global template
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] global template create <template-id> --system-prompt-id <prompt-id> [--skill-id <skill-id>...] [--document-id <document-id>...] [--description <text>]
+hivemind [-f json|table|yaml] global template list
+hivemind [-f json|table|yaml] global template inspect <template-id>
+hivemind [-f json|table|yaml] global template update <template-id> [--system-prompt-id <prompt-id>] [--skill-id <skill-id>...] [--document-id <document-id>...] [--description <text>]
+hivemind [-f json|table|yaml] global template delete <template-id>
+hivemind [-f json|table|yaml] global template instantiate <project> <template-id>
+```
+
+**Effects:**
+- Stores template references in `~/.hivemind/global/templates/`
+- Validates referenced system prompt and skill IDs
+- `instantiate` resolves all references against project/global registries and emits immutable resolution event
+
+**Events:**
+```
+TemplateInstantiated:
+  project_id: <project-id>
+  template_id: <template-id>
+  system_prompt_id: <prompt-id>
+  skill_ids: [<skill-id>...]
+  document_ids: [<document-id>...]
+  schema_version: governance.v1
+  projection_version: 1
+```
+
+Template create/update/delete operations also emit governance upsert/delete events (`scope: global`, `artifact_kind: template`).
+
+**Failures:**
+- `template_not_found`
+- `system_prompt_not_found`
+- `skill_not_found`
+- `document_not_found`
+- `governance_artifact_schema_invalid`
+
+---
+
+### 2.17 global notepad
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] global notepad create --content <text>
+hivemind [-f json|table|yaml] global notepad show
+hivemind [-f json|table|yaml] global notepad update --content <text>
+hivemind [-f json|table|yaml] global notepad delete
+```
+
+**Effects:**
+- Maintains global notepad at `~/.hivemind/global/notepad.md`
+- Contract: notepad is always `non_executional=true` and `non_validating=true`
+- Empty scaffold notepad is treated as absent (`exists=false`) for read semantics
+
+**Events:**
+- `create`/`update`: `GovernanceArtifactUpserted` (`scope: global`, `artifact_kind: notepad`)
+- `delete`: `GovernanceArtifactDeleted` (`scope: global`, `artifact_kind: notepad`)
+
+**Failures:**
+- `governance_artifact_read_failed`
+- `governance_artifact_write_failed`
+
+**Idempotence:**
+- `show`: idempotent
+- `create`/`update`: idempotent when content unchanged
+- `delete`: idempotent if already absent
+
+---
+
 ## 3. Task Commands
 
 ### 3.1 task create

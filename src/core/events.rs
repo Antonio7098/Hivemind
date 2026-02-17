@@ -421,6 +421,18 @@ pub enum EventPayload {
         projection_version: u32,
     },
 
+    TemplateInstantiated {
+        project_id: Uuid,
+        template_id: String,
+        system_prompt_id: String,
+        #[serde(default)]
+        skill_ids: Vec<String>,
+        #[serde(default)]
+        document_ids: Vec<String>,
+        schema_version: String,
+        projection_version: u32,
+    },
+
     TaskGraphCreated {
         graph_id: Uuid,
         project_id: Uuid,

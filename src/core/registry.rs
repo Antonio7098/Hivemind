@@ -19,7 +19,7 @@ use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, Work
 use crate::storage::event_store::{EventFilter, EventStore, IndexedEventStore};
 use chrono::Utc;
 use fs2::FileExt;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fmt::Write as _;
@@ -261,6 +261,176 @@ pub struct ProjectGovernanceInspectResult {
     pub artifacts: Vec<GovernanceArtifactInspect>,
     pub migrations: Vec<GovernanceMigrationSummary>,
     pub legacy_candidates: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectGovernanceDocumentSummary {
+    pub project_id: Uuid,
+    pub document_id: String,
+    pub title: String,
+    pub owner: String,
+    pub tags: Vec<String>,
+    pub updated_at: chrono::DateTime<Utc>,
+    pub revision: u64,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectGovernanceDocumentInspectResult {
+    pub summary: ProjectGovernanceDocumentSummary,
+    pub revisions: Vec<ProjectDocumentRevision>,
+    pub latest_content: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectGovernanceDocumentWriteResult {
+    pub project_id: Uuid,
+    pub document_id: String,
+    pub revision: u64,
+    pub path: String,
+    pub schema_version: String,
+    pub projection_version: u32,
+    pub updated_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GovernanceArtifactDeleteResult {
+    pub project_id: Option<Uuid>,
+    pub scope: String,
+    pub artifact_kind: String,
+    pub artifact_key: String,
+    pub path: String,
+    pub schema_version: String,
+    pub projection_version: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GovernanceAttachmentUpdateResult {
+    pub project_id: Uuid,
+    pub task_id: Uuid,
+    pub artifact_kind: String,
+    pub artifact_key: String,
+    pub attached: bool,
+    pub schema_version: String,
+    pub projection_version: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GovernanceNotepadResult {
+    pub scope: String,
+    pub project_id: Option<Uuid>,
+    pub path: String,
+    pub exists: bool,
+    pub content: Option<String>,
+    pub non_executional: bool,
+    pub non_validating: bool,
+    pub schema_version: String,
+    pub projection_version: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalSkillSummary {
+    pub skill_id: String,
+    pub name: String,
+    pub tags: Vec<String>,
+    pub updated_at: chrono::DateTime<Utc>,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalSkillInspectResult {
+    pub summary: GlobalSkillSummary,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalSystemPromptSummary {
+    pub prompt_id: String,
+    pub updated_at: chrono::DateTime<Utc>,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalSystemPromptInspectResult {
+    pub summary: GlobalSystemPromptSummary,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalTemplateSummary {
+    pub template_id: String,
+    pub system_prompt_id: String,
+    pub skill_ids: Vec<String>,
+    pub document_ids: Vec<String>,
+    pub updated_at: chrono::DateTime<Utc>,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalTemplateInspectResult {
+    pub summary: GlobalTemplateSummary,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TemplateInstantiationResult {
+    pub project_id: Uuid,
+    pub template_id: String,
+    pub system_prompt_id: String,
+    pub skill_ids: Vec<String>,
+    pub document_ids: Vec<String>,
+    pub schema_version: String,
+    pub projection_version: u32,
+    pub instantiated_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectDocumentRevision {
+    pub revision: u64,
+    pub content: String,
+    pub updated_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ProjectDocumentArtifact {
+    pub document_id: String,
+    pub title: String,
+    pub owner: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub updated_at: chrono::DateTime<Utc>,
+    #[serde(default)]
+    pub revisions: Vec<ProjectDocumentRevision>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GlobalSkillArtifact {
+    pub skill_id: String,
+    pub name: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub content: String,
+    pub updated_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GlobalSystemPromptArtifact {
+    pub prompt_id: String,
+    pub content: String,
+    pub updated_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GlobalTemplateArtifact {
+    pub template_id: String,
+    pub system_prompt_id: String,
+    #[serde(default)]
+    pub skill_ids: Vec<String>,
+    #[serde(default)]
+    pub document_ids: Vec<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub updated_at: chrono::DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
@@ -2978,6 +3148,505 @@ impl Registry {
         Ok(true)
     }
 
+    fn validate_governance_identifier(
+        raw: &str,
+        field: &str,
+        origin: &'static str,
+    ) -> Result<String> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Err(HivemindError::user(
+                "invalid_governance_identifier",
+                format!("{field} cannot be empty"),
+                origin,
+            )
+            .with_hint(
+                "Use lowercase letters, numbers, '.', '_' or '-' when naming governance artifacts",
+            ));
+        }
+        if !trimmed
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        {
+            return Err(HivemindError::user(
+                "invalid_governance_identifier",
+                format!(
+                    "{field} '{trimmed}' contains unsupported characters; only [a-zA-Z0-9._-] are allowed"
+                ),
+                origin,
+            )
+            .with_hint("Replace unsupported characters with '-', '_' or '.'"));
+        }
+        Ok(trimmed.to_string())
+    }
+
+    fn normalized_string_list(values: &[String]) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        for value in values {
+            let item = value.trim();
+            if item.is_empty() {
+                continue;
+            }
+            let item_owned = item.to_string();
+            if seen.insert(item_owned.clone()) {
+                out.push(item_owned);
+            }
+        }
+        out
+    }
+
+    fn read_governance_json<T: DeserializeOwned>(
+        path: &Path,
+        artifact_kind: &str,
+        artifact_key: &str,
+        origin: &'static str,
+    ) -> Result<T> {
+        let raw = fs::read_to_string(path).map_err(|e| {
+            HivemindError::system("governance_artifact_read_failed", e.to_string(), origin)
+                .with_context("path", path.to_string_lossy().to_string())
+                .with_context("artifact_kind", artifact_kind.to_string())
+                .with_context("artifact_key", artifact_key.to_string())
+        })?;
+        serde_json::from_str(&raw).map_err(|e| {
+            HivemindError::user(
+                "governance_artifact_schema_invalid",
+                format!(
+                    "Malformed {artifact_kind} artifact '{artifact_key}': {e}"
+                ),
+                origin,
+            )
+            .with_context("path", path.to_string_lossy().to_string())
+            .with_hint(
+                "Inspect and repair this artifact JSON, or recreate it using the corresponding CLI create/update command",
+            )
+        })
+    }
+
+    fn write_governance_json<T: Serialize>(
+        path: &Path,
+        value: &T,
+        origin: &'static str,
+    ) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                HivemindError::system("governance_storage_create_failed", e.to_string(), origin)
+            })?;
+        }
+        let bytes = serde_json::to_vec_pretty(value).map_err(|e| {
+            HivemindError::system(
+                "governance_artifact_serialize_failed",
+                e.to_string(),
+                origin,
+            )
+        })?;
+        fs::write(path, bytes).map_err(|e| {
+            HivemindError::system("governance_artifact_write_failed", e.to_string(), origin)
+        })
+    }
+
+    fn ensure_global_governance_layout(&self, origin: &'static str) -> Result<()> {
+        let global_root = self.governance_global_root();
+        fs::create_dir_all(global_root.join("skills")).map_err(|e| {
+            HivemindError::system("governance_storage_create_failed", e.to_string(), origin)
+        })?;
+        fs::create_dir_all(global_root.join("system_prompts")).map_err(|e| {
+            HivemindError::system("governance_storage_create_failed", e.to_string(), origin)
+        })?;
+        fs::create_dir_all(global_root.join("templates")).map_err(|e| {
+            HivemindError::system("governance_storage_create_failed", e.to_string(), origin)
+        })?;
+        let notepad = global_root.join("notepad.md");
+        if !notepad.exists() {
+            fs::write(&notepad, b"\n").map_err(|e| {
+                HivemindError::system("governance_storage_create_failed", e.to_string(), origin)
+            })?;
+        }
+        Ok(())
+    }
+
+    fn project_document_path(&self, project_id: Uuid, document_id: &str) -> PathBuf {
+        self.governance_project_root(project_id)
+            .join("documents")
+            .join(format!("{document_id}.json"))
+    }
+
+    fn global_skill_path(&self, skill_id: &str) -> PathBuf {
+        self.governance_global_root()
+            .join("skills")
+            .join(format!("{skill_id}.json"))
+    }
+
+    fn global_system_prompt_path(&self, prompt_id: &str) -> PathBuf {
+        self.governance_global_root()
+            .join("system_prompts")
+            .join(format!("{prompt_id}.json"))
+    }
+
+    fn global_template_path(&self, template_id: &str) -> PathBuf {
+        self.governance_global_root()
+            .join("templates")
+            .join(format!("{template_id}.json"))
+    }
+
+    fn governance_document_location(
+        &self,
+        project_id: Uuid,
+        document_id: &str,
+    ) -> GovernanceArtifactLocation {
+        GovernanceArtifactLocation {
+            project_id: Some(project_id),
+            scope: "project",
+            artifact_kind: "document",
+            artifact_key: document_id.to_string(),
+            is_dir: false,
+            path: self.project_document_path(project_id, document_id),
+        }
+    }
+
+    fn governance_global_location(
+        artifact_kind: &'static str,
+        artifact_key: &str,
+        path: PathBuf,
+    ) -> GovernanceArtifactLocation {
+        GovernanceArtifactLocation {
+            project_id: None,
+            scope: "global",
+            artifact_kind,
+            artifact_key: artifact_key.to_string(),
+            is_dir: false,
+            path,
+        }
+    }
+
+    fn governance_notepad_location(&self, project_id: Option<Uuid>) -> GovernanceArtifactLocation {
+        project_id.map_or_else(
+            || GovernanceArtifactLocation {
+                project_id: None,
+                scope: "global",
+                artifact_kind: "notepad",
+                artifact_key: "notepad.md".to_string(),
+                is_dir: false,
+                path: self.governance_global_root().join("notepad.md"),
+            },
+            |project_id| GovernanceArtifactLocation {
+                project_id: Some(project_id),
+                scope: "project",
+                artifact_kind: "notepad",
+                artifact_key: "notepad.md".to_string(),
+                is_dir: false,
+                path: self.governance_project_root(project_id).join("notepad.md"),
+            },
+        )
+    }
+
+    fn append_governance_upsert_for_location(
+        &self,
+        state: &AppState,
+        pending_revisions: &mut HashMap<String, u64>,
+        location: &GovernanceArtifactLocation,
+        corr: CorrelationIds,
+        origin: &'static str,
+    ) -> Result<u64> {
+        let revision = Self::next_governance_revision(state, location, pending_revisions);
+        self.append_event(
+            Event::new(
+                EventPayload::GovernanceArtifactUpserted {
+                    project_id: location.project_id,
+                    scope: location.scope.to_string(),
+                    artifact_kind: location.artifact_kind.to_string(),
+                    artifact_key: location.artifact_key.clone(),
+                    path: location.path.to_string_lossy().to_string(),
+                    revision,
+                    schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+                    projection_version: GOVERNANCE_PROJECTION_VERSION,
+                },
+                corr,
+            ),
+            origin,
+        )?;
+        Ok(revision)
+    }
+
+    fn append_governance_delete_for_location(
+        &self,
+        location: &GovernanceArtifactLocation,
+        corr: CorrelationIds,
+        origin: &'static str,
+    ) -> Result<()> {
+        self.append_event(
+            Event::new(
+                EventPayload::GovernanceArtifactDeleted {
+                    project_id: location.project_id,
+                    scope: location.scope.to_string(),
+                    artifact_kind: location.artifact_kind.to_string(),
+                    artifact_key: location.artifact_key.clone(),
+                    path: location.path.to_string_lossy().to_string(),
+                    schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+                    projection_version: GOVERNANCE_PROJECTION_VERSION,
+                },
+                corr,
+            ),
+            origin,
+        )
+    }
+
+    fn read_project_document_artifact(
+        &self,
+        project_id: Uuid,
+        document_id: &str,
+        origin: &'static str,
+    ) -> Result<ProjectDocumentArtifact> {
+        let path = self.project_document_path(project_id, document_id);
+        if !path.is_file() {
+            return Err(HivemindError::user(
+                "document_not_found",
+                format!("Project document '{document_id}' not found"),
+                origin,
+            )
+            .with_hint("Use 'hivemind project governance document list <project>' to inspect available documents"));
+        }
+        let artifact = Self::read_governance_json::<ProjectDocumentArtifact>(
+            &path,
+            "project_document",
+            document_id,
+            origin,
+        )?;
+        if artifact.document_id != document_id {
+            return Err(HivemindError::user(
+                "governance_artifact_schema_invalid",
+                format!(
+                    "Document file key mismatch: expected '{document_id}', found '{}'",
+                    artifact.document_id
+                ),
+                origin,
+            )
+            .with_context("path", path.to_string_lossy().to_string()));
+        }
+        if artifact.revisions.is_empty() {
+            return Err(HivemindError::user(
+                "governance_artifact_schema_invalid",
+                format!("Document '{document_id}' has no revision history"),
+                origin,
+            )
+            .with_hint("Repair the document JSON to include at least one revision"));
+        }
+        Ok(artifact)
+    }
+
+    fn governance_attached_document_ids(
+        state: &AppState,
+        project_id: Uuid,
+        task_id: Uuid,
+    ) -> Vec<String> {
+        let mut ids: Vec<String> = state
+            .governance_attachments
+            .values()
+            .filter(|item| {
+                item.project_id == project_id
+                    && item.task_id == task_id
+                    && item.artifact_kind == "document"
+                    && item.attached
+            })
+            .map(|item| item.artifact_key.clone())
+            .collect();
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
+    fn governance_attached_documents_context(
+        &self,
+        state: &AppState,
+        project_id: Uuid,
+        task_id: Uuid,
+        origin: &'static str,
+    ) -> Result<Option<String>> {
+        let doc_ids = Self::governance_attached_document_ids(state, project_id, task_id);
+        if doc_ids.is_empty() {
+            return Ok(None);
+        }
+
+        let mut sections = Vec::new();
+        for doc_id in doc_ids {
+            let artifact = self.read_project_document_artifact(project_id, &doc_id, origin)?;
+            let latest = artifact.revisions.last().ok_or_else(|| {
+                HivemindError::user(
+                    "governance_artifact_schema_invalid",
+                    format!("Document '{doc_id}' has no latest revision"),
+                    origin,
+                )
+            })?;
+
+            let tags = if artifact.tags.is_empty() {
+                "(none)".to_string()
+            } else {
+                artifact.tags.join(", ")
+            };
+            sections.push(format!(
+                "- document_id: {doc_id}\n  title: {}\n  owner: {}\n  tags: {}\n  revision: {}\n  content:\n{}",
+                artifact.title,
+                artifact.owner,
+                tags,
+                latest.revision,
+                latest.content
+            ));
+        }
+
+        Ok(Some(format!(
+            "Execution attachments (explicit includes):\n{}",
+            sections.join("\n\n")
+        )))
+    }
+
+    fn read_global_skill_artifact(
+        &self,
+        skill_id: &str,
+        origin: &'static str,
+    ) -> Result<GlobalSkillArtifact> {
+        let path = self.global_skill_path(skill_id);
+        if !path.is_file() {
+            return Err(HivemindError::user(
+                "skill_not_found",
+                format!("Global skill '{skill_id}' not found"),
+                origin,
+            )
+            .with_hint("Use 'hivemind global skill list' to inspect available skills"));
+        }
+        let artifact = Self::read_governance_json::<GlobalSkillArtifact>(
+            &path,
+            "global_skill",
+            skill_id,
+            origin,
+        )?;
+        if artifact.skill_id != skill_id {
+            return Err(HivemindError::user(
+                "governance_artifact_schema_invalid",
+                format!(
+                    "Skill file key mismatch: expected '{skill_id}', found '{}'",
+                    artifact.skill_id
+                ),
+                origin,
+            )
+            .with_context("path", path.to_string_lossy().to_string()));
+        }
+        Ok(artifact)
+    }
+
+    fn read_global_system_prompt_artifact(
+        &self,
+        prompt_id: &str,
+        origin: &'static str,
+    ) -> Result<GlobalSystemPromptArtifact> {
+        let path = self.global_system_prompt_path(prompt_id);
+        if !path.is_file() {
+            return Err(HivemindError::user(
+                "system_prompt_not_found",
+                format!("Global system prompt '{prompt_id}' not found"),
+                origin,
+            )
+            .with_hint(
+                "Use 'hivemind global system-prompt list' to inspect available system prompts",
+            ));
+        }
+        let artifact = Self::read_governance_json::<GlobalSystemPromptArtifact>(
+            &path,
+            "global_system_prompt",
+            prompt_id,
+            origin,
+        )?;
+        if artifact.prompt_id != prompt_id {
+            return Err(HivemindError::user(
+                "governance_artifact_schema_invalid",
+                format!(
+                    "System prompt file key mismatch: expected '{prompt_id}', found '{}'",
+                    artifact.prompt_id
+                ),
+                origin,
+            )
+            .with_context("path", path.to_string_lossy().to_string()));
+        }
+        Ok(artifact)
+    }
+
+    fn read_global_template_artifact(
+        &self,
+        template_id: &str,
+        origin: &'static str,
+    ) -> Result<GlobalTemplateArtifact> {
+        let path = self.global_template_path(template_id);
+        if !path.is_file() {
+            return Err(HivemindError::user(
+                "template_not_found",
+                format!("Global template '{template_id}' not found"),
+                origin,
+            )
+            .with_hint("Use 'hivemind global template list' to inspect available templates"));
+        }
+        let artifact = Self::read_governance_json::<GlobalTemplateArtifact>(
+            &path,
+            "global_template",
+            template_id,
+            origin,
+        )?;
+        if artifact.template_id != template_id {
+            return Err(HivemindError::user(
+                "governance_artifact_schema_invalid",
+                format!(
+                    "Template file key mismatch: expected '{template_id}', found '{}'",
+                    artifact.template_id
+                ),
+                origin,
+            )
+            .with_context("path", path.to_string_lossy().to_string()));
+        }
+        Ok(artifact)
+    }
+
+    fn governance_json_paths(dir: &Path, origin: &'static str) -> Result<Vec<PathBuf>> {
+        let mut paths = Vec::new();
+        if !dir.is_dir() {
+            return Ok(paths);
+        }
+        for entry in fs::read_dir(dir).map_err(|e| {
+            HivemindError::system("governance_artifact_read_failed", e.to_string(), origin)
+                .with_context("path", dir.to_string_lossy().to_string())
+        })? {
+            let entry = entry.map_err(|e| {
+                HivemindError::system("governance_artifact_read_failed", e.to_string(), origin)
+                    .with_context("path", dir.to_string_lossy().to_string())
+            })?;
+            let path = entry.path();
+            if path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+            {
+                paths.push(path);
+            }
+        }
+        paths.sort();
+        Ok(paths)
+    }
+
+    fn project_document_summary_from_artifact(
+        project_id: Uuid,
+        artifact: &ProjectDocumentArtifact,
+        path: &Path,
+    ) -> ProjectGovernanceDocumentSummary {
+        let revision = artifact.revisions.last().map_or(0, |rev| rev.revision);
+        ProjectGovernanceDocumentSummary {
+            project_id,
+            document_id: artifact.document_id.clone(),
+            title: artifact.title.clone(),
+            owner: artifact.owner.clone(),
+            tags: artifact.tags.clone(),
+            updated_at: artifact.updated_at,
+            revision,
+            path: path.to_string_lossy().to_string(),
+        }
+    }
+
     fn write_baseline_artifact(&self, baseline: &Baseline) -> Result<()> {
         let files_dir = self.baseline_files_dir(baseline.id);
         fs::create_dir_all(&files_dir).map_err(|e| {
@@ -4732,6 +5401,16 @@ impl Registry {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
+        let governance_context = self.governance_attached_documents_context(
+            &state,
+            flow.project_id,
+            task_id,
+            "registry:tick_flow",
+        )?;
+        let execution_context_base = governance_context.map_or_else(
+            || repo_context.clone(),
+            |attached| format!("{repo_context}\n\n{attached}"),
+        );
 
         let (retry_context, prior_attempts) = if next_attempt_number > 1 {
             let (ctx, priors, ids, req, opt, ec, term) = self.build_retry_context(
@@ -4764,15 +5443,15 @@ impl Registry {
             )?;
 
             let context = checkpoint_help.as_ref().map_or_else(
-                || format!("{ctx}\n\n{repo_context}"),
-                |checkpoint_text| format!("{ctx}\n\n{repo_context}\n\n{checkpoint_text}"),
+                || format!("{ctx}\n\n{execution_context_base}"),
+                |checkpoint_text| format!("{ctx}\n\n{execution_context_base}\n\n{checkpoint_text}"),
             );
 
             (Some(context), priors)
         } else {
             let context = match checkpoint_help {
-                Some(text) => format!("{repo_context}\n\n{text}"),
-                None => repo_context,
+                Some(text) => format!("{execution_context_base}\n\n{text}"),
+                None => execution_context_base,
             };
             (Some(context), Vec::new())
         };
@@ -5967,6 +6646,1408 @@ impl Registry {
             artifacts,
             migrations,
             legacy_candidates: legacy_candidates.into_iter().collect(),
+        })
+    }
+
+    /// Creates a project governance document with immutable revision history.
+    pub fn project_governance_document_create(
+        &self,
+        id_or_name: &str,
+        document_id: &str,
+        title: &str,
+        owner: &str,
+        tags: &[String],
+        content: &str,
+    ) -> Result<ProjectGovernanceDocumentWriteResult> {
+        let origin = "registry:project_governance_document_create";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let document_id = Self::validate_governance_identifier(document_id, "document_id", origin)?;
+        if title.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_document_title",
+                "Document title cannot be empty",
+                origin,
+            )
+            .with_hint("Pass --title with a non-empty value"));
+        }
+        if owner.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_document_owner",
+                "Document owner cannot be empty",
+                origin,
+            )
+            .with_hint("Pass --owner with a non-empty value"));
+        }
+        if content.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_document_content",
+                "Document content cannot be empty",
+                origin,
+            )
+            .with_hint("Pass --content with a non-empty value"));
+        }
+
+        self.ensure_governance_layout(project.id, origin)?;
+        let path = self.project_document_path(project.id, &document_id);
+        if path.exists() {
+            return Err(HivemindError::user(
+                "document_exists",
+                format!("Project document '{document_id}' already exists"),
+                origin,
+            )
+            .with_hint(
+                "Use 'hivemind project governance document update' to create a new revision",
+            ));
+        }
+
+        let now = Utc::now();
+        let artifact = ProjectDocumentArtifact {
+            document_id: document_id.clone(),
+            title: title.trim().to_string(),
+            owner: owner.trim().to_string(),
+            tags: Self::normalized_string_list(tags),
+            updated_at: now,
+            revisions: vec![ProjectDocumentRevision {
+                revision: 1,
+                content: content.to_string(),
+                updated_at: now,
+            }],
+        };
+        Self::write_governance_json(&path, &artifact, origin)?;
+
+        let state = self.state()?;
+        let mut pending = HashMap::new();
+        let location = self.governance_document_location(project.id, &document_id);
+        let event_revision = self.append_governance_upsert_for_location(
+            &state,
+            &mut pending,
+            &location,
+            CorrelationIds::for_project(project.id),
+            origin,
+        )?;
+
+        Ok(ProjectGovernanceDocumentWriteResult {
+            project_id: project.id,
+            document_id,
+            revision: event_revision,
+            path: path.to_string_lossy().to_string(),
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+            updated_at: now,
+        })
+    }
+
+    /// Lists project governance documents.
+    pub fn project_governance_document_list(
+        &self,
+        id_or_name: &str,
+    ) -> Result<Vec<ProjectGovernanceDocumentSummary>> {
+        let origin = "registry:project_governance_document_list";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        self.ensure_governance_layout(project.id, origin)?;
+
+        let mut out = Vec::new();
+        for path in Self::governance_json_paths(
+            &self.governance_project_root(project.id).join("documents"),
+            origin,
+        )? {
+            let key = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or("unknown");
+            let artifact = Self::read_governance_json::<ProjectDocumentArtifact>(
+                &path,
+                "project_document",
+                key,
+                origin,
+            )?;
+            out.push(Self::project_document_summary_from_artifact(
+                project.id, &artifact, &path,
+            ));
+        }
+        out.sort_by(|a, b| a.document_id.cmp(&b.document_id));
+        Ok(out)
+    }
+
+    /// Inspects a project governance document with full revision history.
+    pub fn project_governance_document_inspect(
+        &self,
+        id_or_name: &str,
+        document_id: &str,
+    ) -> Result<ProjectGovernanceDocumentInspectResult> {
+        let origin = "registry:project_governance_document_inspect";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let document_id = Self::validate_governance_identifier(document_id, "document_id", origin)?;
+        let path = self.project_document_path(project.id, &document_id);
+        let artifact = self.read_project_document_artifact(project.id, &document_id, origin)?;
+        let summary = Self::project_document_summary_from_artifact(project.id, &artifact, &path);
+        let latest_content = artifact
+            .revisions
+            .last()
+            .map_or_else(String::new, |item| item.content.clone());
+
+        Ok(ProjectGovernanceDocumentInspectResult {
+            summary,
+            revisions: artifact.revisions,
+            latest_content,
+        })
+    }
+
+    /// Updates a project governance document, optionally creating a new immutable revision.
+    pub fn project_governance_document_update(
+        &self,
+        id_or_name: &str,
+        document_id: &str,
+        title: Option<&str>,
+        owner: Option<&str>,
+        tags: Option<&[String]>,
+        content: Option<&str>,
+    ) -> Result<ProjectGovernanceDocumentWriteResult> {
+        let origin = "registry:project_governance_document_update";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let document_id = Self::validate_governance_identifier(document_id, "document_id", origin)?;
+        let mut artifact = self.read_project_document_artifact(project.id, &document_id, origin)?;
+        let path = self.project_document_path(project.id, &document_id);
+
+        let mut changed = false;
+        if let Some(title) = title {
+            if title.trim().is_empty() {
+                return Err(HivemindError::user(
+                    "invalid_document_title",
+                    "Document title cannot be empty",
+                    origin,
+                )
+                .with_hint("Pass --title with a non-empty value"));
+            }
+            if artifact.title != title.trim() {
+                artifact.title = title.trim().to_string();
+                changed = true;
+            }
+        }
+        if let Some(owner) = owner {
+            if owner.trim().is_empty() {
+                return Err(HivemindError::user(
+                    "invalid_document_owner",
+                    "Document owner cannot be empty",
+                    origin,
+                )
+                .with_hint("Pass --owner with a non-empty value"));
+            }
+            if artifact.owner != owner.trim() {
+                artifact.owner = owner.trim().to_string();
+                changed = true;
+            }
+        }
+        if let Some(tags) = tags {
+            let normalized = Self::normalized_string_list(tags);
+            if artifact.tags != normalized {
+                artifact.tags = normalized;
+                changed = true;
+            }
+        }
+
+        let now = Utc::now();
+        if let Some(content) = content {
+            if content.trim().is_empty() {
+                return Err(HivemindError::user(
+                    "invalid_document_content",
+                    "Document content cannot be empty",
+                    origin,
+                )
+                .with_hint("Pass --content with a non-empty value"));
+            }
+            let next_revision = artifact
+                .revisions
+                .last()
+                .map_or(1, |item| item.revision.saturating_add(1));
+            artifact.revisions.push(ProjectDocumentRevision {
+                revision: next_revision,
+                content: content.to_string(),
+                updated_at: now,
+            });
+            changed = true;
+        }
+
+        if !changed {
+            let revision = artifact.revisions.last().map_or(0, |item| item.revision);
+            return Ok(ProjectGovernanceDocumentWriteResult {
+                project_id: project.id,
+                document_id,
+                revision,
+                path: path.to_string_lossy().to_string(),
+                schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+                projection_version: GOVERNANCE_PROJECTION_VERSION,
+                updated_at: artifact.updated_at,
+            });
+        }
+
+        artifact.updated_at = now;
+        Self::write_governance_json(&path, &artifact, origin)?;
+
+        let state = self.state()?;
+        let mut pending = HashMap::new();
+        let location = self.governance_document_location(project.id, &document_id);
+        let event_revision = self.append_governance_upsert_for_location(
+            &state,
+            &mut pending,
+            &location,
+            CorrelationIds::for_project(project.id),
+            origin,
+        )?;
+
+        Ok(ProjectGovernanceDocumentWriteResult {
+            project_id: project.id,
+            document_id,
+            revision: event_revision,
+            path: path.to_string_lossy().to_string(),
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+            updated_at: now,
+        })
+    }
+
+    /// Deletes a project governance document.
+    pub fn project_governance_document_delete(
+        &self,
+        id_or_name: &str,
+        document_id: &str,
+    ) -> Result<GovernanceArtifactDeleteResult> {
+        let origin = "registry:project_governance_document_delete";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let document_id = Self::validate_governance_identifier(document_id, "document_id", origin)?;
+        let path = self.project_document_path(project.id, &document_id);
+        if !path.is_file() {
+            return Err(HivemindError::user(
+                "document_not_found",
+                format!("Project document '{document_id}' not found"),
+                origin,
+            )
+            .with_hint("Use 'hivemind project governance document list <project>' to inspect available documents"));
+        }
+
+        fs::remove_file(&path).map_err(|e| {
+            HivemindError::system("governance_artifact_delete_failed", e.to_string(), origin)
+                .with_context("path", path.to_string_lossy().to_string())
+        })?;
+
+        let location = self.governance_document_location(project.id, &document_id);
+        self.append_governance_delete_for_location(
+            &location,
+            CorrelationIds::for_project(project.id),
+            origin,
+        )?;
+
+        Ok(GovernanceArtifactDeleteResult {
+            project_id: Some(project.id),
+            scope: "project".to_string(),
+            artifact_kind: "document".to_string(),
+            artifact_key: document_id,
+            path: path.to_string_lossy().to_string(),
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Sets attachment state for a project document on a task.
+    pub fn project_governance_attachment_set_document(
+        &self,
+        id_or_name: &str,
+        task_id: &str,
+        document_id: &str,
+        attached: bool,
+    ) -> Result<GovernanceAttachmentUpdateResult> {
+        let origin = "registry:project_governance_attachment_set_document";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let task = self.get_task(task_id).inspect_err(|err| {
+            self.record_error_event(err, CorrelationIds::for_project(project.id));
+        })?;
+        if task.project_id != project.id {
+            return Err(HivemindError::user(
+                "task_project_mismatch",
+                format!(
+                    "Task '{}' does not belong to project '{}'",
+                    task.id, project.id
+                ),
+                origin,
+            )
+            .with_hint("Pass a task ID that belongs to the selected project"));
+        }
+        let document_id = Self::validate_governance_identifier(document_id, "document_id", origin)?;
+        let _ = self.read_project_document_artifact(project.id, &document_id, origin)?;
+
+        self.append_event(
+            Event::new(
+                EventPayload::GovernanceAttachmentLifecycleUpdated {
+                    project_id: project.id,
+                    task_id: task.id,
+                    artifact_kind: "document".to_string(),
+                    artifact_key: document_id.clone(),
+                    attached,
+                    schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+                    projection_version: GOVERNANCE_PROJECTION_VERSION,
+                },
+                CorrelationIds::for_task(project.id, task.id),
+            ),
+            origin,
+        )?;
+
+        Ok(GovernanceAttachmentUpdateResult {
+            project_id: project.id,
+            task_id: task.id,
+            artifact_kind: "document".to_string(),
+            artifact_key: document_id,
+            attached,
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Creates project notepad content (non-executional, non-validating artifact).
+    pub fn project_governance_notepad_create(
+        &self,
+        id_or_name: &str,
+        content: &str,
+    ) -> Result<GovernanceNotepadResult> {
+        let origin = "registry:project_governance_notepad_create";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        self.ensure_governance_layout(project.id, origin)?;
+
+        let location = self.governance_notepad_location(Some(project.id));
+        let existing = fs::read_to_string(&location.path).unwrap_or_default();
+        if !existing.trim().is_empty() {
+            return Err(HivemindError::user(
+                "notepad_exists",
+                "Project notepad already has content",
+                origin,
+            )
+            .with_hint(
+                "Use 'hivemind project governance notepad update <project>' to replace content",
+            ));
+        }
+        if content.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_notepad_content",
+                "Notepad content cannot be empty",
+                origin,
+            ));
+        }
+
+        fs::write(&location.path, content).map_err(|e| {
+            HivemindError::system("governance_artifact_write_failed", e.to_string(), origin)
+        })?;
+
+        let state = self.state()?;
+        let mut pending = HashMap::new();
+        let _ = self.append_governance_upsert_for_location(
+            &state,
+            &mut pending,
+            &location,
+            CorrelationIds::for_project(project.id),
+            origin,
+        )?;
+
+        Ok(GovernanceNotepadResult {
+            scope: "project".to_string(),
+            project_id: Some(project.id),
+            path: location.path.to_string_lossy().to_string(),
+            exists: true,
+            content: Some(content.to_string()),
+            non_executional: true,
+            non_validating: true,
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Shows project notepad content.
+    pub fn project_governance_notepad_show(
+        &self,
+        id_or_name: &str,
+    ) -> Result<GovernanceNotepadResult> {
+        let origin = "registry:project_governance_notepad_show";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        self.ensure_governance_layout(project.id, origin)?;
+        let location = self.governance_notepad_location(Some(project.id));
+        let raw_content = if location.path.is_file() {
+            Some(fs::read_to_string(&location.path).map_err(|e| {
+                HivemindError::system("governance_artifact_read_failed", e.to_string(), origin)
+            })?)
+        } else {
+            None
+        };
+        let (exists, content) = match raw_content {
+            Some(content) if content.trim().is_empty() => (false, None),
+            Some(content) => (true, Some(content)),
+            None => (false, None),
+        };
+        Ok(GovernanceNotepadResult {
+            scope: "project".to_string(),
+            project_id: Some(project.id),
+            path: location.path.to_string_lossy().to_string(),
+            exists,
+            content,
+            non_executional: true,
+            non_validating: true,
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Updates project notepad content.
+    pub fn project_governance_notepad_update(
+        &self,
+        id_or_name: &str,
+        content: &str,
+    ) -> Result<GovernanceNotepadResult> {
+        let origin = "registry:project_governance_notepad_update";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        self.ensure_governance_layout(project.id, origin)?;
+        if content.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_notepad_content",
+                "Notepad content cannot be empty",
+                origin,
+            ));
+        }
+        let location = self.governance_notepad_location(Some(project.id));
+        fs::write(&location.path, content).map_err(|e| {
+            HivemindError::system("governance_artifact_write_failed", e.to_string(), origin)
+        })?;
+
+        let state = self.state()?;
+        let mut pending = HashMap::new();
+        let _ = self.append_governance_upsert_for_location(
+            &state,
+            &mut pending,
+            &location,
+            CorrelationIds::for_project(project.id),
+            origin,
+        )?;
+
+        Ok(GovernanceNotepadResult {
+            scope: "project".to_string(),
+            project_id: Some(project.id),
+            path: location.path.to_string_lossy().to_string(),
+            exists: true,
+            content: Some(content.to_string()),
+            non_executional: true,
+            non_validating: true,
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Deletes project notepad content.
+    pub fn project_governance_notepad_delete(
+        &self,
+        id_or_name: &str,
+    ) -> Result<GovernanceArtifactDeleteResult> {
+        let origin = "registry:project_governance_notepad_delete";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        self.ensure_governance_layout(project.id, origin)?;
+        let location = self.governance_notepad_location(Some(project.id));
+        if location.path.exists() {
+            fs::remove_file(&location.path).map_err(|e| {
+                HivemindError::system("governance_artifact_delete_failed", e.to_string(), origin)
+            })?;
+        }
+        self.append_governance_delete_for_location(
+            &location,
+            CorrelationIds::for_project(project.id),
+            origin,
+        )?;
+
+        Ok(GovernanceArtifactDeleteResult {
+            project_id: Some(project.id),
+            scope: "project".to_string(),
+            artifact_kind: "notepad".to_string(),
+            artifact_key: "notepad.md".to_string(),
+            path: location.path.to_string_lossy().to_string(),
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Creates a global skill artifact.
+    pub fn global_skill_create(
+        &self,
+        skill_id: &str,
+        name: &str,
+        tags: &[String],
+        content: &str,
+    ) -> Result<GlobalSkillSummary> {
+        let origin = "registry:global_skill_create";
+        self.ensure_global_governance_layout(origin)?;
+        let skill_id = Self::validate_governance_identifier(skill_id, "skill_id", origin)?;
+        if name.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_skill_name",
+                "Skill name cannot be empty",
+                origin,
+            ));
+        }
+        if content.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_skill_content",
+                "Skill content cannot be empty",
+                origin,
+            ));
+        }
+
+        let path = self.global_skill_path(&skill_id);
+        if path.exists() {
+            return Err(HivemindError::user(
+                "skill_exists",
+                format!("Global skill '{skill_id}' already exists"),
+                origin,
+            )
+            .with_hint("Use 'hivemind global skill update <skill-id>' to mutate this skill"));
+        }
+
+        let now = Utc::now();
+        let artifact = GlobalSkillArtifact {
+            skill_id: skill_id.clone(),
+            name: name.trim().to_string(),
+            tags: Self::normalized_string_list(tags),
+            content: content.to_string(),
+            updated_at: now,
+        };
+        Self::write_governance_json(&path, &artifact, origin)?;
+
+        let state = self.state()?;
+        let mut pending = HashMap::new();
+        let location = Self::governance_global_location("skill", &skill_id, path.clone());
+        let _ = self.append_governance_upsert_for_location(
+            &state,
+            &mut pending,
+            &location,
+            CorrelationIds::none(),
+            origin,
+        )?;
+
+        Ok(GlobalSkillSummary {
+            skill_id,
+            name: artifact.name,
+            tags: artifact.tags,
+            updated_at: now,
+            path: path.to_string_lossy().to_string(),
+        })
+    }
+
+    /// Lists global skills.
+    pub fn global_skill_list(&self) -> Result<Vec<GlobalSkillSummary>> {
+        let origin = "registry:global_skill_list";
+        self.ensure_global_governance_layout(origin)?;
+        let mut out = Vec::new();
+        for path in
+            Self::governance_json_paths(&self.governance_global_root().join("skills"), origin)?
+        {
+            let key = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or("unknown");
+            let artifact = Self::read_governance_json::<GlobalSkillArtifact>(
+                &path,
+                "global_skill",
+                key,
+                origin,
+            )?;
+            out.push(GlobalSkillSummary {
+                skill_id: artifact.skill_id,
+                name: artifact.name,
+                tags: artifact.tags,
+                updated_at: artifact.updated_at,
+                path: path.to_string_lossy().to_string(),
+            });
+        }
+        out.sort_by(|a, b| a.skill_id.cmp(&b.skill_id));
+        Ok(out)
+    }
+
+    /// Inspects a global skill.
+    pub fn global_skill_inspect(&self, skill_id: &str) -> Result<GlobalSkillInspectResult> {
+        let origin = "registry:global_skill_inspect";
+        let skill_id = Self::validate_governance_identifier(skill_id, "skill_id", origin)?;
+        let path = self.global_skill_path(&skill_id);
+        let artifact = self.read_global_skill_artifact(&skill_id, origin)?;
+        Ok(GlobalSkillInspectResult {
+            summary: GlobalSkillSummary {
+                skill_id,
+                name: artifact.name,
+                tags: artifact.tags,
+                updated_at: artifact.updated_at,
+                path: path.to_string_lossy().to_string(),
+            },
+            content: artifact.content,
+        })
+    }
+
+    /// Updates a global skill.
+    pub fn global_skill_update(
+        &self,
+        skill_id: &str,
+        name: Option<&str>,
+        tags: Option<&[String]>,
+        content: Option<&str>,
+    ) -> Result<GlobalSkillSummary> {
+        let origin = "registry:global_skill_update";
+        let skill_id = Self::validate_governance_identifier(skill_id, "skill_id", origin)?;
+        let path = self.global_skill_path(&skill_id);
+        let mut artifact = self.read_global_skill_artifact(&skill_id, origin)?;
+        let mut changed = false;
+
+        if let Some(name) = name {
+            if name.trim().is_empty() {
+                return Err(HivemindError::user(
+                    "invalid_skill_name",
+                    "Skill name cannot be empty",
+                    origin,
+                ));
+            }
+            if artifact.name != name.trim() {
+                artifact.name = name.trim().to_string();
+                changed = true;
+            }
+        }
+        if let Some(tags) = tags {
+            let normalized = Self::normalized_string_list(tags);
+            if artifact.tags != normalized {
+                artifact.tags = normalized;
+                changed = true;
+            }
+        }
+        if let Some(content) = content {
+            if content.trim().is_empty() {
+                return Err(HivemindError::user(
+                    "invalid_skill_content",
+                    "Skill content cannot be empty",
+                    origin,
+                ));
+            }
+            if artifact.content != content {
+                artifact.content = content.to_string();
+                changed = true;
+            }
+        }
+
+        if changed {
+            artifact.updated_at = Utc::now();
+            Self::write_governance_json(&path, &artifact, origin)?;
+            let state = self.state()?;
+            let mut pending = HashMap::new();
+            let location = Self::governance_global_location("skill", &skill_id, path.clone());
+            let _ = self.append_governance_upsert_for_location(
+                &state,
+                &mut pending,
+                &location,
+                CorrelationIds::none(),
+                origin,
+            )?;
+        }
+
+        Ok(GlobalSkillSummary {
+            skill_id,
+            name: artifact.name,
+            tags: artifact.tags,
+            updated_at: artifact.updated_at,
+            path: path.to_string_lossy().to_string(),
+        })
+    }
+
+    /// Deletes a global skill.
+    pub fn global_skill_delete(&self, skill_id: &str) -> Result<GovernanceArtifactDeleteResult> {
+        let origin = "registry:global_skill_delete";
+        let skill_id = Self::validate_governance_identifier(skill_id, "skill_id", origin)?;
+        let path = self.global_skill_path(&skill_id);
+        if !path.is_file() {
+            return Err(HivemindError::user(
+                "skill_not_found",
+                format!("Global skill '{skill_id}' not found"),
+                origin,
+            ));
+        }
+        fs::remove_file(&path).map_err(|e| {
+            HivemindError::system("governance_artifact_delete_failed", e.to_string(), origin)
+        })?;
+
+        let location = Self::governance_global_location("skill", &skill_id, path.clone());
+        self.append_governance_delete_for_location(&location, CorrelationIds::none(), origin)?;
+
+        Ok(GovernanceArtifactDeleteResult {
+            project_id: None,
+            scope: "global".to_string(),
+            artifact_kind: "skill".to_string(),
+            artifact_key: skill_id,
+            path: path.to_string_lossy().to_string(),
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Creates a global system prompt.
+    pub fn global_system_prompt_create(
+        &self,
+        prompt_id: &str,
+        content: &str,
+    ) -> Result<GlobalSystemPromptSummary> {
+        let origin = "registry:global_system_prompt_create";
+        self.ensure_global_governance_layout(origin)?;
+        let prompt_id = Self::validate_governance_identifier(prompt_id, "prompt_id", origin)?;
+        if content.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_system_prompt_content",
+                "System prompt content cannot be empty",
+                origin,
+            ));
+        }
+
+        let path = self.global_system_prompt_path(&prompt_id);
+        if path.exists() {
+            return Err(HivemindError::user(
+                "system_prompt_exists",
+                format!("Global system prompt '{prompt_id}' already exists"),
+                origin,
+            )
+            .with_hint(
+                "Use 'hivemind global system-prompt update <prompt-id>' to mutate this prompt",
+            ));
+        }
+
+        let now = Utc::now();
+        let artifact = GlobalSystemPromptArtifact {
+            prompt_id: prompt_id.clone(),
+            content: content.to_string(),
+            updated_at: now,
+        };
+        Self::write_governance_json(&path, &artifact, origin)?;
+        let state = self.state()?;
+        let mut pending = HashMap::new();
+        let location = Self::governance_global_location("system_prompt", &prompt_id, path.clone());
+        let _ = self.append_governance_upsert_for_location(
+            &state,
+            &mut pending,
+            &location,
+            CorrelationIds::none(),
+            origin,
+        )?;
+
+        Ok(GlobalSystemPromptSummary {
+            prompt_id,
+            updated_at: now,
+            path: path.to_string_lossy().to_string(),
+        })
+    }
+
+    /// Lists global system prompts.
+    pub fn global_system_prompt_list(&self) -> Result<Vec<GlobalSystemPromptSummary>> {
+        let origin = "registry:global_system_prompt_list";
+        self.ensure_global_governance_layout(origin)?;
+        let mut out = Vec::new();
+        for path in Self::governance_json_paths(
+            &self.governance_global_root().join("system_prompts"),
+            origin,
+        )? {
+            let key = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or("unknown");
+            let artifact = Self::read_governance_json::<GlobalSystemPromptArtifact>(
+                &path,
+                "global_system_prompt",
+                key,
+                origin,
+            )?;
+            out.push(GlobalSystemPromptSummary {
+                prompt_id: artifact.prompt_id,
+                updated_at: artifact.updated_at,
+                path: path.to_string_lossy().to_string(),
+            });
+        }
+        out.sort_by(|a, b| a.prompt_id.cmp(&b.prompt_id));
+        Ok(out)
+    }
+
+    /// Inspects a global system prompt.
+    pub fn global_system_prompt_inspect(
+        &self,
+        prompt_id: &str,
+    ) -> Result<GlobalSystemPromptInspectResult> {
+        let origin = "registry:global_system_prompt_inspect";
+        let prompt_id = Self::validate_governance_identifier(prompt_id, "prompt_id", origin)?;
+        let path = self.global_system_prompt_path(&prompt_id);
+        let artifact = self.read_global_system_prompt_artifact(&prompt_id, origin)?;
+        Ok(GlobalSystemPromptInspectResult {
+            summary: GlobalSystemPromptSummary {
+                prompt_id,
+                updated_at: artifact.updated_at,
+                path: path.to_string_lossy().to_string(),
+            },
+            content: artifact.content,
+        })
+    }
+
+    /// Updates a global system prompt.
+    pub fn global_system_prompt_update(
+        &self,
+        prompt_id: &str,
+        content: &str,
+    ) -> Result<GlobalSystemPromptSummary> {
+        let origin = "registry:global_system_prompt_update";
+        let prompt_id = Self::validate_governance_identifier(prompt_id, "prompt_id", origin)?;
+        if content.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_system_prompt_content",
+                "System prompt content cannot be empty",
+                origin,
+            ));
+        }
+
+        let path = self.global_system_prompt_path(&prompt_id);
+        let mut artifact = self.read_global_system_prompt_artifact(&prompt_id, origin)?;
+        if artifact.content != content {
+            artifact.content = content.to_string();
+            artifact.updated_at = Utc::now();
+            Self::write_governance_json(&path, &artifact, origin)?;
+            let state = self.state()?;
+            let mut pending = HashMap::new();
+            let location =
+                Self::governance_global_location("system_prompt", &prompt_id, path.clone());
+            let _ = self.append_governance_upsert_for_location(
+                &state,
+                &mut pending,
+                &location,
+                CorrelationIds::none(),
+                origin,
+            )?;
+        }
+
+        Ok(GlobalSystemPromptSummary {
+            prompt_id,
+            updated_at: artifact.updated_at,
+            path: path.to_string_lossy().to_string(),
+        })
+    }
+
+    /// Deletes a global system prompt.
+    pub fn global_system_prompt_delete(
+        &self,
+        prompt_id: &str,
+    ) -> Result<GovernanceArtifactDeleteResult> {
+        let origin = "registry:global_system_prompt_delete";
+        let prompt_id = Self::validate_governance_identifier(prompt_id, "prompt_id", origin)?;
+        let path = self.global_system_prompt_path(&prompt_id);
+        if !path.is_file() {
+            return Err(HivemindError::user(
+                "system_prompt_not_found",
+                format!("Global system prompt '{prompt_id}' not found"),
+                origin,
+            ));
+        }
+        fs::remove_file(&path).map_err(|e| {
+            HivemindError::system("governance_artifact_delete_failed", e.to_string(), origin)
+        })?;
+        let location = Self::governance_global_location("system_prompt", &prompt_id, path.clone());
+        self.append_governance_delete_for_location(&location, CorrelationIds::none(), origin)?;
+
+        Ok(GovernanceArtifactDeleteResult {
+            project_id: None,
+            scope: "global".to_string(),
+            artifact_kind: "system_prompt".to_string(),
+            artifact_key: prompt_id,
+            path: path.to_string_lossy().to_string(),
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Creates a global template artifact with strict reference validation.
+    pub fn global_template_create(
+        &self,
+        template_id: &str,
+        system_prompt_id: &str,
+        skill_ids: &[String],
+        document_ids: &[String],
+        description: Option<&str>,
+    ) -> Result<GlobalTemplateSummary> {
+        let origin = "registry:global_template_create";
+        self.ensure_global_governance_layout(origin)?;
+        let template_id = Self::validate_governance_identifier(template_id, "template_id", origin)?;
+        let system_prompt_id =
+            Self::validate_governance_identifier(system_prompt_id, "system_prompt_id", origin)?;
+        let normalized_skill_ids = Self::normalized_string_list(skill_ids)
+            .into_iter()
+            .map(|id| Self::validate_governance_identifier(&id, "skill_id", origin))
+            .collect::<Result<Vec<_>>>()?;
+        let normalized_document_ids = Self::normalized_string_list(document_ids)
+            .into_iter()
+            .map(|id| Self::validate_governance_identifier(&id, "document_id", origin))
+            .collect::<Result<Vec<_>>>()?;
+
+        let _ = self.read_global_system_prompt_artifact(&system_prompt_id, origin).map_err(|err| {
+            err.with_hint(
+                "Create the referenced system prompt first via 'hivemind global system-prompt create'",
+            )
+        })?;
+        for skill_id in &normalized_skill_ids {
+            let _ = self
+                .read_global_skill_artifact(skill_id, origin)
+                .map_err(|err| {
+                    err.with_hint(
+                        "Create the referenced skill first via 'hivemind global skill create'",
+                    )
+                })?;
+        }
+
+        let path = self.global_template_path(&template_id);
+        if path.exists() {
+            return Err(HivemindError::user(
+                "template_exists",
+                format!("Global template '{template_id}' already exists"),
+                origin,
+            )
+            .with_hint(
+                "Use 'hivemind global template update <template-id>' to mutate this template",
+            ));
+        }
+
+        let now = Utc::now();
+        let artifact = GlobalTemplateArtifact {
+            template_id: template_id.clone(),
+            system_prompt_id: system_prompt_id.clone(),
+            skill_ids: normalized_skill_ids.clone(),
+            document_ids: normalized_document_ids,
+            description: description.map(std::string::ToString::to_string),
+            updated_at: now,
+        };
+        Self::write_governance_json(&path, &artifact, origin)?;
+
+        let state = self.state()?;
+        let mut pending = HashMap::new();
+        let location = Self::governance_global_location("template", &template_id, path.clone());
+        let _ = self.append_governance_upsert_for_location(
+            &state,
+            &mut pending,
+            &location,
+            CorrelationIds::none(),
+            origin,
+        )?;
+
+        Ok(GlobalTemplateSummary {
+            template_id,
+            system_prompt_id,
+            skill_ids: normalized_skill_ids,
+            document_ids: artifact.document_ids,
+            updated_at: now,
+            path: path.to_string_lossy().to_string(),
+        })
+    }
+
+    /// Lists global templates.
+    pub fn global_template_list(&self) -> Result<Vec<GlobalTemplateSummary>> {
+        let origin = "registry:global_template_list";
+        self.ensure_global_governance_layout(origin)?;
+        let mut out = Vec::new();
+        for path in
+            Self::governance_json_paths(&self.governance_global_root().join("templates"), origin)?
+        {
+            let key = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or("unknown");
+            let artifact = Self::read_governance_json::<GlobalTemplateArtifact>(
+                &path,
+                "global_template",
+                key,
+                origin,
+            )?;
+            out.push(GlobalTemplateSummary {
+                template_id: artifact.template_id,
+                system_prompt_id: artifact.system_prompt_id,
+                skill_ids: artifact.skill_ids,
+                document_ids: artifact.document_ids,
+                updated_at: artifact.updated_at,
+                path: path.to_string_lossy().to_string(),
+            });
+        }
+        out.sort_by(|a, b| a.template_id.cmp(&b.template_id));
+        Ok(out)
+    }
+
+    /// Inspects a global template.
+    pub fn global_template_inspect(
+        &self,
+        template_id: &str,
+    ) -> Result<GlobalTemplateInspectResult> {
+        let origin = "registry:global_template_inspect";
+        let template_id = Self::validate_governance_identifier(template_id, "template_id", origin)?;
+        let path = self.global_template_path(&template_id);
+        let artifact = self.read_global_template_artifact(&template_id, origin)?;
+
+        Ok(GlobalTemplateInspectResult {
+            summary: GlobalTemplateSummary {
+                template_id,
+                system_prompt_id: artifact.system_prompt_id,
+                skill_ids: artifact.skill_ids,
+                document_ids: artifact.document_ids,
+                updated_at: artifact.updated_at,
+                path: path.to_string_lossy().to_string(),
+            },
+            description: artifact.description,
+        })
+    }
+
+    /// Updates a global template with strict reference validation.
+    pub fn global_template_update(
+        &self,
+        template_id: &str,
+        system_prompt_id: Option<&str>,
+        skill_ids: Option<&[String]>,
+        document_ids: Option<&[String]>,
+        description: Option<&str>,
+    ) -> Result<GlobalTemplateSummary> {
+        let origin = "registry:global_template_update";
+        let template_id = Self::validate_governance_identifier(template_id, "template_id", origin)?;
+        let path = self.global_template_path(&template_id);
+        let mut artifact = self.read_global_template_artifact(&template_id, origin)?;
+        let mut changed = false;
+
+        if let Some(system_prompt_id) = system_prompt_id {
+            let system_prompt_id =
+                Self::validate_governance_identifier(system_prompt_id, "system_prompt_id", origin)?;
+            let _ = self.read_global_system_prompt_artifact(&system_prompt_id, origin).map_err(|err| {
+                err.with_hint(
+                    "Create the referenced system prompt first via 'hivemind global system-prompt create'",
+                )
+            })?;
+            if artifact.system_prompt_id != system_prompt_id {
+                artifact.system_prompt_id = system_prompt_id;
+                changed = true;
+            }
+        }
+
+        if let Some(skill_ids) = skill_ids {
+            let normalized = Self::normalized_string_list(skill_ids)
+                .into_iter()
+                .map(|id| Self::validate_governance_identifier(&id, "skill_id", origin))
+                .collect::<Result<Vec<_>>>()?;
+            for skill_id in &normalized {
+                let _ = self
+                    .read_global_skill_artifact(skill_id, origin)
+                    .map_err(|err| {
+                        err.with_hint(
+                            "Create the referenced skill first via 'hivemind global skill create'",
+                        )
+                    })?;
+            }
+            if artifact.skill_ids != normalized {
+                artifact.skill_ids = normalized;
+                changed = true;
+            }
+        }
+
+        if let Some(document_ids) = document_ids {
+            let normalized = Self::normalized_string_list(document_ids)
+                .into_iter()
+                .map(|id| Self::validate_governance_identifier(&id, "document_id", origin))
+                .collect::<Result<Vec<_>>>()?;
+            if artifact.document_ids != normalized {
+                artifact.document_ids = normalized;
+                changed = true;
+            }
+        }
+
+        if let Some(description) = description {
+            let next = if description.trim().is_empty() {
+                None
+            } else {
+                Some(description.to_string())
+            };
+            if artifact.description != next {
+                artifact.description = next;
+                changed = true;
+            }
+        }
+
+        if changed {
+            artifact.updated_at = Utc::now();
+            Self::write_governance_json(&path, &artifact, origin)?;
+            let state = self.state()?;
+            let mut pending = HashMap::new();
+            let location = Self::governance_global_location("template", &template_id, path.clone());
+            let _ = self.append_governance_upsert_for_location(
+                &state,
+                &mut pending,
+                &location,
+                CorrelationIds::none(),
+                origin,
+            )?;
+        }
+
+        Ok(GlobalTemplateSummary {
+            template_id,
+            system_prompt_id: artifact.system_prompt_id,
+            skill_ids: artifact.skill_ids,
+            document_ids: artifact.document_ids,
+            updated_at: artifact.updated_at,
+            path: path.to_string_lossy().to_string(),
+        })
+    }
+
+    /// Deletes a global template.
+    pub fn global_template_delete(
+        &self,
+        template_id: &str,
+    ) -> Result<GovernanceArtifactDeleteResult> {
+        let origin = "registry:global_template_delete";
+        let template_id = Self::validate_governance_identifier(template_id, "template_id", origin)?;
+        let path = self.global_template_path(&template_id);
+        if !path.is_file() {
+            return Err(HivemindError::user(
+                "template_not_found",
+                format!("Global template '{template_id}' not found"),
+                origin,
+            ));
+        }
+        fs::remove_file(&path).map_err(|e| {
+            HivemindError::system("governance_artifact_delete_failed", e.to_string(), origin)
+        })?;
+        let location = Self::governance_global_location("template", &template_id, path.clone());
+        self.append_governance_delete_for_location(&location, CorrelationIds::none(), origin)?;
+
+        Ok(GovernanceArtifactDeleteResult {
+            project_id: None,
+            scope: "global".to_string(),
+            artifact_kind: "template".to_string(),
+            artifact_key: template_id,
+            path: path.to_string_lossy().to_string(),
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Resolves a global template for a specific project and emits an instantiation event.
+    pub fn global_template_instantiate(
+        &self,
+        id_or_name: &str,
+        template_id: &str,
+    ) -> Result<TemplateInstantiationResult> {
+        let origin = "registry:global_template_instantiate";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let template_id = Self::validate_governance_identifier(template_id, "template_id", origin)?;
+        let artifact = self.read_global_template_artifact(&template_id, origin)?;
+        let _ = self
+            .read_global_system_prompt_artifact(&artifact.system_prompt_id, origin)
+            .map_err(|err| {
+                err.with_hint(
+                    "Fix template.system_prompt_id or recreate the missing system prompt before instantiation",
+                )
+            })?;
+
+        for skill_id in &artifact.skill_ids {
+            let _ = self
+                .read_global_skill_artifact(skill_id, origin)
+                .map_err(|err| {
+                    err.with_hint("Fix template.skill_ids or recreate the missing global skill")
+                })?;
+        }
+        for document_id in &artifact.document_ids {
+            let _ = self
+                .read_project_document_artifact(project.id, document_id, origin)
+                .map_err(|err| {
+                    err.with_hint(
+                        "Fix template.document_ids or create the missing project document before instantiation",
+                    )
+                })?;
+        }
+
+        let now = Utc::now();
+        self.append_event(
+            Event::new(
+                EventPayload::TemplateInstantiated {
+                    project_id: project.id,
+                    template_id: template_id.clone(),
+                    system_prompt_id: artifact.system_prompt_id.clone(),
+                    skill_ids: artifact.skill_ids.clone(),
+                    document_ids: artifact.document_ids.clone(),
+                    schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+                    projection_version: GOVERNANCE_PROJECTION_VERSION,
+                },
+                CorrelationIds::for_project(project.id),
+            ),
+            origin,
+        )?;
+
+        Ok(TemplateInstantiationResult {
+            project_id: project.id,
+            template_id,
+            system_prompt_id: artifact.system_prompt_id,
+            skill_ids: artifact.skill_ids,
+            document_ids: artifact.document_ids,
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+            instantiated_at: now,
+        })
+    }
+
+    /// Creates global notepad content.
+    pub fn global_notepad_create(&self, content: &str) -> Result<GovernanceNotepadResult> {
+        let origin = "registry:global_notepad_create";
+        self.ensure_global_governance_layout(origin)?;
+        if content.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_notepad_content",
+                "Notepad content cannot be empty",
+                origin,
+            ));
+        }
+
+        let location = self.governance_notepad_location(None);
+        let existing = fs::read_to_string(&location.path).unwrap_or_default();
+        if !existing.trim().is_empty() {
+            return Err(HivemindError::user(
+                "notepad_exists",
+                "Global notepad already has content",
+                origin,
+            )
+            .with_hint("Use 'hivemind global notepad update' to replace content"));
+        }
+
+        fs::write(&location.path, content).map_err(|e| {
+            HivemindError::system("governance_artifact_write_failed", e.to_string(), origin)
+        })?;
+        let state = self.state()?;
+        let mut pending = HashMap::new();
+        let _ = self.append_governance_upsert_for_location(
+            &state,
+            &mut pending,
+            &location,
+            CorrelationIds::none(),
+            origin,
+        )?;
+
+        Ok(GovernanceNotepadResult {
+            scope: "global".to_string(),
+            project_id: None,
+            path: location.path.to_string_lossy().to_string(),
+            exists: true,
+            content: Some(content.to_string()),
+            non_executional: true,
+            non_validating: true,
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Shows global notepad content.
+    pub fn global_notepad_show(&self) -> Result<GovernanceNotepadResult> {
+        let origin = "registry:global_notepad_show";
+        self.ensure_global_governance_layout(origin)?;
+        let location = self.governance_notepad_location(None);
+        let raw_content = if location.path.is_file() {
+            Some(fs::read_to_string(&location.path).map_err(|e| {
+                HivemindError::system("governance_artifact_read_failed", e.to_string(), origin)
+            })?)
+        } else {
+            None
+        };
+        let (exists, content) = match raw_content {
+            Some(content) if content.trim().is_empty() => (false, None),
+            Some(content) => (true, Some(content)),
+            None => (false, None),
+        };
+        Ok(GovernanceNotepadResult {
+            scope: "global".to_string(),
+            project_id: None,
+            path: location.path.to_string_lossy().to_string(),
+            exists,
+            content,
+            non_executional: true,
+            non_validating: true,
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Updates global notepad content.
+    pub fn global_notepad_update(&self, content: &str) -> Result<GovernanceNotepadResult> {
+        let origin = "registry:global_notepad_update";
+        self.ensure_global_governance_layout(origin)?;
+        if content.trim().is_empty() {
+            return Err(HivemindError::user(
+                "invalid_notepad_content",
+                "Notepad content cannot be empty",
+                origin,
+            ));
+        }
+        let location = self.governance_notepad_location(None);
+        fs::write(&location.path, content).map_err(|e| {
+            HivemindError::system("governance_artifact_write_failed", e.to_string(), origin)
+        })?;
+        let state = self.state()?;
+        let mut pending = HashMap::new();
+        let _ = self.append_governance_upsert_for_location(
+            &state,
+            &mut pending,
+            &location,
+            CorrelationIds::none(),
+            origin,
+        )?;
+
+        Ok(GovernanceNotepadResult {
+            scope: "global".to_string(),
+            project_id: None,
+            path: location.path.to_string_lossy().to_string(),
+            exists: true,
+            content: Some(content.to_string()),
+            non_executional: true,
+            non_validating: true,
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
+        })
+    }
+
+    /// Deletes global notepad content.
+    pub fn global_notepad_delete(&self) -> Result<GovernanceArtifactDeleteResult> {
+        let origin = "registry:global_notepad_delete";
+        self.ensure_global_governance_layout(origin)?;
+        let location = self.governance_notepad_location(None);
+        if location.path.exists() {
+            fs::remove_file(&location.path).map_err(|e| {
+                HivemindError::system("governance_artifact_delete_failed", e.to_string(), origin)
+            })?;
+        }
+        self.append_governance_delete_for_location(&location, CorrelationIds::none(), origin)?;
+
+        Ok(GovernanceArtifactDeleteResult {
+            project_id: None,
+            scope: "global".to_string(),
+            artifact_kind: "notepad".to_string(),
+            artifact_key: "notepad.md".to_string(),
+            path: location.path.to_string_lossy().to_string(),
+            schema_version: GOVERNANCE_SCHEMA_VERSION.to_string(),
+            projection_version: GOVERNANCE_PROJECTION_VERSION,
         })
     }
 

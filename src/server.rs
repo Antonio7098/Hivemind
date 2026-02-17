@@ -127,6 +127,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
             "GovernanceAttachmentLifecycleUpdated"
         }
         EventPayload::GovernanceStorageMigrated { .. } => "GovernanceStorageMigrated",
+        EventPayload::TemplateInstantiated { .. } => "TemplateInstantiated",
         EventPayload::TaskCreated { .. } => "TaskCreated",
         EventPayload::TaskUpdated { .. } => "TaskUpdated",
         EventPayload::TaskRuntimeConfigured { .. } => "TaskRuntimeConfigured",
@@ -220,7 +221,8 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::GovernanceArtifactUpserted { .. }
         | EventPayload::GovernanceArtifactDeleted { .. }
         | EventPayload::GovernanceAttachmentLifecycleUpdated { .. }
-        | EventPayload::GovernanceStorageMigrated { .. } => "project",
+        | EventPayload::GovernanceStorageMigrated { .. }
+        | EventPayload::TemplateInstantiated { .. } => "project",
 
         EventPayload::TaskCreated { .. }
         | EventPayload::TaskUpdated { .. }

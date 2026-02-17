@@ -252,6 +252,372 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
     );
 }
 
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_sprint35_governance_artifacts_and_template_instantiation() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "governance", "init", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "document",
+            "create",
+            "proj",
+            "doc1",
+            "--title",
+            "Architecture Notes",
+            "--owner",
+            "alice",
+            "--tag",
+            "architecture",
+            "--content",
+            "first revision",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "document",
+            "update",
+            "proj",
+            "doc1",
+            "--owner",
+            "bob",
+            "--content",
+            "second revision",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, inspect_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "document",
+            "inspect",
+            "proj",
+            "doc1",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let inspect_json: serde_json::Value = serde_json::from_str(&inspect_out).expect("inspect json");
+    let inspect_data = inspect_json.get("data").expect("inspect data");
+    assert_eq!(
+        inspect_data
+            .get("latest_content")
+            .and_then(serde_json::Value::as_str),
+        Some("second revision")
+    );
+    assert_eq!(
+        inspect_data
+            .get("revisions")
+            .and_then(serde_json::Value::as_array)
+            .map(std::vec::Vec::len),
+        Some(2)
+    );
+    assert_eq!(
+        inspect_data
+            .get("summary")
+            .and_then(|s| s.get("owner"))
+            .and_then(serde_json::Value::as_str),
+        Some("bob")
+    );
+    assert!(
+        inspect_data
+            .get("summary")
+            .and_then(|s| s.get("tags"))
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|tags| {
+                tags.iter()
+                    .any(|tag| tag.as_str().is_some_and(|value| value == "architecture"))
+            }),
+        "{inspect_out}"
+    );
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let task_id = out
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("ID:")
+                .map(|value| value.trim().to_string())
+        })
+        .expect("task id");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "attachment",
+            "include",
+            "proj",
+            &task_id,
+            "doc1",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let project_notepad_marker = "PROJECT_NOTEPAD_SHOULD_NOT_APPEAR";
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "notepad",
+            "create",
+            "proj",
+            "--content",
+            project_notepad_marker,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--binary-path",
+            "/usr/bin/env",
+            "--arg",
+            "sh",
+            "--arg",
+            "-c",
+            "--arg",
+            "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+            "--timeout-ms",
+            "1000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &task_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("Graph ID:")
+                .map(|value| value.trim().to_string())
+        })
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("Flow ID:")
+                .map(|value| value.trim().to_string())
+        })
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "400",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let events_json: serde_json::Value = serde_json::from_str(&events_out).expect("events json");
+    let runtime_prompt = events_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|events| {
+            events.iter().find_map(|event| {
+                let payload = event.get("payload")?;
+                let typ = payload.get("type")?.as_str()?;
+                if typ != "runtime_started" {
+                    return None;
+                }
+                payload
+                    .get("prompt")
+                    .and_then(serde_json::Value::as_str)
+                    .map(std::string::ToString::to_string)
+            })
+        })
+        .expect("runtime prompt");
+    assert!(
+        runtime_prompt.contains("Execution attachments (explicit includes)"),
+        "{runtime_prompt}"
+    );
+    assert!(
+        runtime_prompt.contains("document_id: doc1"),
+        "{runtime_prompt}"
+    );
+    assert!(
+        runtime_prompt.contains("second revision"),
+        "{runtime_prompt}"
+    );
+    assert!(
+        !runtime_prompt.contains(project_notepad_marker),
+        "project notepad content must not be injected by default: {runtime_prompt}"
+    );
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "skill",
+            "create",
+            "skill-a",
+            "--name",
+            "Skill A",
+            "--content",
+            "Do skill A",
+            "--tag",
+            "alpha",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "system-prompt",
+            "create",
+            "sp-main",
+            "--content",
+            "You are strict.",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "template",
+            "create",
+            "tpl-main",
+            "--system-prompt-id",
+            "sp-main",
+            "--skill-id",
+            "skill-a",
+            "--document-id",
+            "doc1",
+            "--description",
+            "Template body",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["global", "template", "instantiate", "proj", "tpl-main"],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, project_events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "stream",
+            "--project",
+            "proj",
+            "--limit",
+            "500",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        project_events_out.contains("template_instantiated"),
+        "{project_events_out}"
+    );
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["global", "notepad", "create", "--content", "GLOBAL NOTE"],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, global_notepad_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "global", "notepad", "show"]);
+    assert_eq!(code, 0, "{err}");
+    let global_notepad_json: serde_json::Value =
+        serde_json::from_str(&global_notepad_out).expect("global notepad json");
+    let global_notepad_data = global_notepad_json
+        .get("data")
+        .expect("global notepad data");
+    assert_eq!(
+        global_notepad_data
+            .get("content")
+            .and_then(serde_json::Value::as_str),
+        Some("GLOBAL NOTE")
+    );
+    assert_eq!(
+        global_notepad_data
+            .get("non_executional")
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        global_notepad_data
+            .get("non_validating")
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["global", "notepad", "update", "--content", "GLOBAL NOTE V2"],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["global", "notepad", "delete"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, global_notepad_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "global", "notepad", "show"]);
+    assert_eq!(code, 0, "{err}");
+    let global_notepad_json: serde_json::Value =
+        serde_json::from_str(&global_notepad_out).expect("global notepad json");
+    let global_notepad_data = global_notepad_json
+        .get("data")
+        .expect("global notepad data");
+    assert_eq!(
+        global_notepad_data
+            .get("exists")
+            .and_then(serde_json::Value::as_bool),
+        Some(false)
+    );
+}
+
 fn hivemind_bin() -> PathBuf {
     option_env!("CARGO_BIN_EXE_hivemind").map_or_else(
         || {

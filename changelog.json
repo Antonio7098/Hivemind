@@ -4,6 +4,53 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.26",
+      "date": "2026-02-17",
+      "phase": 35,
+      "changes": [
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add project governance document lifecycle commands (`create`, `list`, `inspect`, `update`, `delete`), task-level attachment include/exclude controls, and project notepad CRUD operations"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add global governance registries for skills, system prompts, templates (including `instantiate`), and global notepad CRUD commands"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Implement governance artifact schema validation, immutable document revision history, and strict template reference resolution with actionable failures"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Emit and project `TemplateInstantiated` lifecycle events across CLI labels, state replay handling, and server/UI payload mappings"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Inject explicitly attached project documents into runtime execution context while keeping project/global notepad content non-injectable by default"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Treat empty scaffold notepad files as logically absent in notepad show output (`exists=false`, `content=null`) after delete operations"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 35 integration coverage for governance artifact lifecycle, runtime attachment context inclusion, notepad non-injection, and template instantiation observability"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update CLI semantics, architecture capabilities, event model, roadmap checklist state, and Sprint 35 manual validation artifacts/reporting"
+        }
+      ]
+    },
+    {
       "version": "v0.1.25",
       "date": "2026-02-17",
       "phase": 34,
