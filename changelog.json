@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.28",
+      "date": "2026-02-17",
+      "phase": 37,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Integrate `ucp-api` codegraph extraction (pinned to a specific unified-content-protocol git revision) and materialize `graph_snapshot.json` artifacts with profile metadata, canonical fingerprints, repository provenance, and static structure+blocks projections"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add `hivemind graph snapshot refresh <project>` command and structured output for snapshot lifecycle refresh results"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Emit `GraphSnapshotStarted|Completed|Failed|DiffDetected` events and auto-trigger snapshot refresh on repository attach, checkpoint completion, and merge completion"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Gate constitution init/validate/update on current graph snapshot integrity and staleness checks with actionable recovery hint (`Run: hivemind graph snapshot refresh <project>`)"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 37 regression coverage for manual refresh artifact lifecycle, constitution stale-snapshot rejection, and automatic snapshot triggers from checkpoint/merge flows"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update Sprint 37 roadmap completion, CLI/event documentation, manual test artifacts, and sprint report to reflect UCP graph snapshot integration contracts"
+        }
+      ]
+    },
+    {
       "version": "v0.1.27",
       "date": "2026-02-17",
       "phase": 36,

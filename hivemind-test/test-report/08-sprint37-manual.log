@@ -1,0 +1,97 @@
+# Sprint 37 manual run
+TMP_ROOT=/tmp/hivemind-s37-manual-qS6SYq
+HM_BIN=/home/antonio/.cargo/shared-target/release/hivemind
+Initialized empty Git repository in /tmp/hivemind-s37-manual-qS6SYq/repo-main/.git/
+[main (root-commit) fba8f57] seed repo
+ 1 file changed, 1 insertion(+)
+ create mode 100644 src/lib.rs
+ID:          109d5d7b-b883-4908-898a-5b9bd44af4e5
+Name:        proj37
+Created:     2026-02-17 20:37:16.416889115 UTC
+Updated:     2026-02-17 20:37:16.416889115 UTC
+ID:          109d5d7b-b883-4908-898a-5b9bd44af4e5
+Name:        proj37
+Created:     2026-02-17 20:37:16.416889115 UTC
+Updated:     2026-02-17 20:37:16.420752096 UTC
+Repositories:
+  - repo-main (/tmp/hivemind-s37-manual-qS6SYq/repo-main) [readwrite]
+PROJECT_ID=109d5d7b-b883-4908-898a-5b9bd44af4e5
+Project:              109d5d7b-b883-4908-898a-5b9bd44af4e5
+Snapshot path:        /tmp/hivemind-s37-manual-qS6SYq/home/.hivemind/projects/109d5d7b-b883-4908-898a-5b9bd44af4e5/graph_snapshot.json
+Trigger:              manual_refresh
+Repository count:     1
+UCP profile:          codegraph.v1
+UCP engine:           ucp-codegraph-extractor.v1
+Fingerprint:          48cd3b3c2cd8bdba
+Artifact revision:    2
+{
+  "project_id": "109d5d7b-b883-4908-898a-5b9bd44af4e5",
+  "path": "/tmp/hivemind-s37-manual-qS6SYq/home/.hivemind/projects/109d5d7b-b883-4908-898a-5b9bd44af4e5/constitution.yaml",
+  "revision": 1,
+  "digest": "a88f73619222e59d",
+  "previous_digest": null,
+  "schema_version": "constitution.v1",
+  "constitution_version": 1,
+  "actor": "manual",
+  "mutation_intent": "bootstrap constitution",
+  "confirmed": true,
+  "updated_at": "2026-02-17T20:37:16.474756154Z"
+}
+[main 5a7ee00] change repo after snapshot
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+Error: [user:graph_snapshot_stale] Graph snapshot is stale for repository 'repo-main' (snapshot=fba8f57b432133b36b1e70049ddbff7b43a3274e current=5a7ee005dde19a210b70867728668a6793a3b515)
+Hint: Run: hivemind graph snapshot refresh <project>
+{"success":false,"error":{"category":"user","code":"graph_snapshot_stale","message":"Graph snapshot is stale for repository 'repo-main' (snapshot=fba8f57b432133b36b1e70049ddbff7b43a3274e current=5a7ee005dde19a210b70867728668a6793a3b515)","origin":"registry:constitution_validate","hint":"Run: hivemind graph snapshot refresh <project>"}}
+Project:              109d5d7b-b883-4908-898a-5b9bd44af4e5
+Snapshot path:        /tmp/hivemind-s37-manual-qS6SYq/home/.hivemind/projects/109d5d7b-b883-4908-898a-5b9bd44af4e5/graph_snapshot.json
+Trigger:              manual_refresh
+Repository count:     1
+UCP profile:          codegraph.v1
+UCP engine:           ucp-codegraph-extractor.v1
+Fingerprint:          f9474b37a4ba322e
+Artifact revision:    3
+ID:          109d5d7b-b883-4908-898a-5b9bd44af4e5
+Name:        proj37
+Created:     2026-02-17 20:37:16.416889115 UTC
+Updated:     2026-02-17 20:37:16.514574220 UTC
+Repositories:
+  - repo-main (/tmp/hivemind-s37-manual-qS6SYq/repo-main) [readwrite]
+TASK_ID=baae902f-3d0c-4fc5-979d-e9ae3dc33f79
+GRAPH_ID=8f36cb80-8c51-419d-af17-b9afbf087cbb
+FLOW_ID=b4f195c2-7161-441d-a3b8-badb66b592fb
+Flow ID: b4f195c2-7161-441d-a3b8-badb66b592fb
+Flow ID: b4f195c2-7161-441d-a3b8-badb66b592fb
+bfbb7cc3fb3f529ec1c1ea9aaa74eaf00eb406ac
+Flow:     b4f195c2-7161-441d-a3b8-badb66b592fb
+Status:   Prepared
+Target:   main
+Flow:   b4f195c2-7161-441d-a3b8-badb66b592fb
+Status: Approved
+Flow:   b4f195c2-7161-441d-a3b8-badb66b592fb
+Status: Completed
+Commits:
+  - bfbb7cc3fb3f529ec1c1ea9aaa74eaf00eb406ac
+  - 6a0883c5dd7b2d550ce967c01385f75318377e69
+Initialized empty Git repository in /tmp/hivemind-s37-manual-qS6SYq/repo-noconst/.git/
+[main (root-commit) d906ae6] seed repo2
+ 1 file changed, 1 insertion(+)
+ create mode 100644 src/lib.rs
+ID:          125daad1-bbc9-4ff7-a6dc-2bb75496ed43
+Name:        proj37-noconst
+Created:     2026-02-17 20:37:16.843606211 UTC
+Updated:     2026-02-17 20:37:16.843606211 UTC
+ID:          125daad1-bbc9-4ff7-a6dc-2bb75496ed43
+Name:        proj37-noconst
+Created:     2026-02-17 20:37:16.843606211 UTC
+Updated:     2026-02-17 20:37:16.848001113 UTC
+Repositories:
+  - repo-noconst (/tmp/hivemind-s37-manual-qS6SYq/repo-noconst) [readwrite]
+ID:          125daad1-bbc9-4ff7-a6dc-2bb75496ed43
+Name:        proj37-noconst
+Created:     2026-02-17 20:37:16.843606211 UTC
+Updated:     2026-02-17 20:37:16.857495143 UTC
+Repositories:
+  - repo-noconst (/tmp/hivemind-s37-manual-qS6SYq/repo-noconst) [readwrite]
+Flow ID: a93f03b1-3777-4f62-9d11-ac028f4624ce
+Flow ID: a93f03b1-3777-4f62-9d11-ac028f4624ce
+Sprint 37 manual assertions completed successfully.

@@ -266,6 +266,9 @@ pub struct WorktreeCleanupArgs {
 pub enum GraphCommands {
     /// Create a new task graph from project tasks
     Create(GraphCreateArgs),
+    /// Code graph snapshot lifecycle commands
+    #[command(subcommand)]
+    Snapshot(GraphSnapshotCommands),
     /// Add a dependency edge to a draft graph (fails once graph is locked by a flow)
     AddDependency(GraphAddDependencyArgs),
     /// Add a verification check to a task in a draft graph
@@ -276,6 +279,18 @@ pub enum GraphCommands {
     List(GraphListArgs),
     /// Delete a graph that is not referenced by any flow
     Delete(GraphDeleteArgs),
+}
+
+#[derive(Subcommand)]
+pub enum GraphSnapshotCommands {
+    /// Rebuild the UCP-backed static code graph snapshot for a project
+    Refresh(GraphSnapshotRefreshArgs),
+}
+
+#[derive(Args)]
+pub struct GraphSnapshotRefreshArgs {
+    /// Project ID or name
+    pub project: String,
 }
 
 #[derive(Args)]

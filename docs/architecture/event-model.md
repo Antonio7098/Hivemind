@@ -96,6 +96,10 @@ Examples:
 - `GovernanceArtifactUpserted`
 - `GovernanceArtifactDeleted`
 - `GovernanceAttachmentLifecycleUpdated`
+- `GraphSnapshotStarted`
+- `GraphSnapshotCompleted`
+- `GraphSnapshotFailed`
+- `GraphSnapshotDiffDetected`
 - `ConstitutionInitialized`
 - `ConstitutionUpdated`
 - `ConstitutionValidated`
@@ -104,6 +108,8 @@ Examples:
 Properties:
 - Global and project scopes are explicit in payloads (`scope: global|project`)
 - Attachment lifecycle is task-scoped and auditable
+- Graph snapshot lifecycle emits explicit start/completion/failure and diff telemetry with trigger attribution (`project_attach`, `checkpoint_complete`, `merge_completed`, `manual_refresh`)
+- Snapshot completion payload records snapshot path, governance revision, UCP profile/engine metadata, and canonical fingerprint for replay-safe provenance
 - Constitution lifecycle events include digest, schema/version metadata, confirmation flag, mutation intent, and actor attribution
 - Template instantiation records resolved artifact IDs for replay-safe context provenance
 

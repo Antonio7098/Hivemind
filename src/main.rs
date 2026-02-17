@@ -6,8 +6,8 @@ use clap::Parser;
 use hivemind::cli::commands::{
     AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, ConstitutionCommands,
     EventCommands, FlowCommands, GlobalCommands, GlobalNotepadCommands, GlobalSkillCommands,
-    GlobalSystemPromptCommands, GlobalTemplateCommands, GraphCommands, MergeCommands,
-    MergeExecuteModeArg, ProjectCommands, ProjectGovernanceAttachmentCommands,
+    GlobalSystemPromptCommands, GlobalTemplateCommands, GraphCommands, GraphSnapshotCommands,
+    MergeCommands, MergeExecuteModeArg, ProjectCommands, ProjectGovernanceAttachmentCommands,
     ProjectGovernanceCommands, ProjectGovernanceDocumentCommands, ProjectGovernanceNotepadCommands,
     RunModeArg, RuntimeCommands, RuntimeRoleArg, ServeArgs, TaskAbortArgs, TaskCloseArgs,
     TaskCommands, TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs,
@@ -417,6 +417,28 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
+        GraphCommands::Snapshot(cmd) => match cmd {
+            GraphSnapshotCommands::Refresh(args) => {
+                match registry.graph_snapshot_refresh(&args.project, "manual_refresh") {
+                    Ok(result) => {
+                        if format == OutputFormat::Table {
+                            println!("Project:              {}", result.project_id);
+                            println!("Snapshot path:        {}", result.path);
+                            println!("Trigger:              {}", result.trigger);
+                            println!("Repository count:     {}", result.repository_count);
+                            println!("UCP profile:          {}", result.profile_version);
+                            println!("UCP engine:           {}", result.ucp_engine_version);
+                            println!("Fingerprint:          {}", result.canonical_fingerprint);
+                            println!("Artifact revision:    {}", result.revision);
+                        } else {
+                            print_structured(&result, format, "graph snapshot refresh result");
+                        }
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+        },
         GraphCommands::AddDependency(args) => {
             match registry.add_graph_dependency(&args.graph_id, &args.from_task, &args.to_task) {
                 Ok(graph) => {
@@ -1907,6 +1929,10 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
             "governance_attachment_lifecycle_updated"
         }
         EventPayload::GovernanceStorageMigrated { .. } => "governance_storage_migrated",
+        EventPayload::GraphSnapshotStarted { .. } => "graph_snapshot_started",
+        EventPayload::GraphSnapshotCompleted { .. } => "graph_snapshot_completed",
+        EventPayload::GraphSnapshotFailed { .. } => "graph_snapshot_failed",
+        EventPayload::GraphSnapshotDiffDetected { .. } => "graph_snapshot_diff_detected",
         EventPayload::ConstitutionInitialized { .. } => "constitution_initialized",
         EventPayload::ConstitutionUpdated { .. } => "constitution_updated",
         EventPayload::ConstitutionValidated { .. } => "constitution_validated",
