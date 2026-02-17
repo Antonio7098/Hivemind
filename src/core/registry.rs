@@ -20,7 +20,7 @@ use crate::storage::event_store::{EventFilter, EventStore, IndexedEventStore};
 use chrono::Utc;
 use fs2::FileExt;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
@@ -31,6 +31,11 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use ucp_api::{
+    build_code_graph, canonical_fingerprint, codegraph_prompt_projection,
+    validate_code_graph_profile, CodeGraphBuildInput, PortableDocument,
+    CODEGRAPH_EXTRACTOR_VERSION, CODEGRAPH_PROFILE_MARKER,
+};
 use uuid::Uuid;
 
 use crate::adapters::claude_code::{ClaudeCodeAdapter, ClaudeCodeConfig};
@@ -202,6 +207,73 @@ pub struct WorktreeCleanupResult {
     pub dry_run: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GraphSnapshotRepositoryCommit {
+    repo_name: String,
+    repo_path: String,
+    commit_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GraphSnapshotProvenance {
+    project_id: Uuid,
+    head_commits: Vec<GraphSnapshotRepositoryCommit>,
+    generated_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GraphSnapshotSummary {
+    pub total_nodes: usize,
+    pub repository_nodes: usize,
+    pub directory_nodes: usize,
+    pub file_nodes: usize,
+    pub symbol_nodes: usize,
+    pub total_edges: usize,
+    pub reference_edges: usize,
+    pub export_edges: usize,
+    #[serde(default)]
+    pub languages: BTreeMap<String, usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GraphSnapshotRepositoryArtifact {
+    repo_name: String,
+    repo_path: String,
+    commit_hash: String,
+    profile_version: String,
+    canonical_fingerprint: String,
+    stats: ucp_api::CodeGraphStats,
+    document: PortableDocument,
+    structure_blocks_projection: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GraphSnapshotArtifact {
+    schema_version: String,
+    snapshot_version: u32,
+    provenance: GraphSnapshotProvenance,
+    ucp_engine_version: String,
+    profile_version: String,
+    canonical_fingerprint: String,
+    summary: GraphSnapshotSummary,
+    repositories: Vec<GraphSnapshotRepositoryArtifact>,
+    static_projection: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GraphSnapshotRefreshResult {
+    pub project_id: Uuid,
+    pub path: String,
+    pub trigger: String,
+    pub revision: u64,
+    pub repository_count: usize,
+    pub ucp_engine_version: String,
+    pub profile_version: String,
+    pub canonical_fingerprint: String,
+    pub summary: GraphSnapshotSummary,
+    pub diff_detected: bool,
+}
+
 const GOVERNANCE_SCHEMA_VERSION: &str = "governance.v1";
 const GOVERNANCE_PROJECTION_VERSION: u32 = 1;
 const GOVERNANCE_FROM_LAYOUT: &str = "repo_local_hivemind_v1";
@@ -209,6 +281,8 @@ const GOVERNANCE_TO_LAYOUT: &str = "global_governance_v1";
 const GOVERNANCE_EXPORT_IMPORT_BOUNDARY: &str = "Manual export/import only (not auto-enabled).";
 const CONSTITUTION_SCHEMA_VERSION: &str = "constitution.v1";
 const CONSTITUTION_VERSION: u32 = 1;
+const GRAPH_SNAPSHOT_SCHEMA_VERSION: &str = "graph_snapshot.v1";
+const GRAPH_SNAPSHOT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct GovernanceArtifactInspect {
@@ -3040,7 +3114,7 @@ impl Registry {
 
     fn governance_default_file_contents(location: &GovernanceArtifactLocation) -> &'static [u8] {
         match (location.scope, location.artifact_kind) {
-            ("project", "constitution") => b"version: 1\nschema_version: constitution.v1\ncompatibility:\n  minimum_hivemind_version: 0.1.27\n  governance_schema_version: governance.v1\npartitions: []\nrules: []\n",
+            ("project", "constitution") => b"version: 1\nschema_version: constitution.v1\ncompatibility:\n  minimum_hivemind_version: 0.1.28\n  governance_schema_version: governance.v1\npartitions: []\nrules: []\n",
             ("project", "graph_snapshot") => b"{}\n",
             _ => b"\n",
         }
@@ -3409,6 +3483,168 @@ impl Registry {
             is_dir: false,
             path: self.constitution_path(project_id),
         }
+    }
+
+    fn graph_snapshot_path(&self, project_id: Uuid) -> PathBuf {
+        self.governance_project_root(project_id)
+            .join("graph_snapshot.json")
+    }
+
+    fn governance_graph_snapshot_location(&self, project_id: Uuid) -> GovernanceArtifactLocation {
+        GovernanceArtifactLocation {
+            project_id: Some(project_id),
+            scope: "project",
+            artifact_kind: "graph_snapshot",
+            artifact_key: "graph_snapshot.json".to_string(),
+            is_dir: false,
+            path: self.graph_snapshot_path(project_id),
+        }
+    }
+
+    fn read_graph_snapshot_artifact(
+        &self,
+        project_id: Uuid,
+        origin: &'static str,
+    ) -> Result<Option<GraphSnapshotArtifact>> {
+        let path = self.graph_snapshot_path(project_id);
+        if !path.is_file() {
+            return Ok(None);
+        }
+        // Governance bootstrap may create a placeholder `{}` before the first real snapshot build.
+        // Treat placeholder/empty files as "no snapshot yet" for backward compatibility.
+        let raw = fs::read_to_string(&path).map_err(|e| {
+            HivemindError::system("governance_artifact_read_failed", e.to_string(), origin)
+        })?;
+        let trimmed = raw.trim();
+        if trimmed.is_empty() || trimmed == "{}" {
+            return Ok(None);
+        }
+        let artifact = Self::read_governance_json::<GraphSnapshotArtifact>(
+            &path,
+            "graph_snapshot",
+            "graph_snapshot.json",
+            origin,
+        )?;
+        Ok(Some(artifact))
+    }
+
+    fn resolve_repo_head_commit(repo_path: &Path, origin: &'static str) -> Result<String> {
+        let output = std::process::Command::new("git")
+            .current_dir(repo_path)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .map_err(|e| HivemindError::git("git_rev_parse_failed", e.to_string(), origin))?;
+        if !output.status.success() {
+            return Err(HivemindError::git(
+                "git_rev_parse_failed",
+                String::from_utf8_lossy(&output.stderr).to_string(),
+                origin,
+            ));
+        }
+        let head = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if head.is_empty() {
+            return Err(HivemindError::git(
+                "git_head_missing",
+                "Failed to resolve repository HEAD commit".to_string(),
+                origin,
+            ));
+        }
+        Ok(head)
+    }
+
+    fn aggregate_codegraph_stats(stats: &[ucp_api::CodeGraphStats]) -> GraphSnapshotSummary {
+        let mut summary = GraphSnapshotSummary::default();
+        for item in stats {
+            summary.total_nodes += item.total_nodes;
+            summary.repository_nodes += item.repository_nodes;
+            summary.directory_nodes += item.directory_nodes;
+            summary.file_nodes += item.file_nodes;
+            summary.symbol_nodes += item.symbol_nodes;
+            summary.total_edges += item.total_edges;
+            summary.reference_edges += item.reference_edges;
+            summary.export_edges += item.export_edges;
+            for (lang, count) in &item.languages {
+                *summary.languages.entry(lang.clone()).or_insert(0) += *count;
+            }
+        }
+        summary
+    }
+
+    fn compute_snapshot_fingerprint(repositories: &[GraphSnapshotRepositoryArtifact]) -> String {
+        let mut entries: Vec<String> = repositories
+            .iter()
+            .map(|repo| {
+                format!(
+                    "{}|{}|{}|{}",
+                    repo.repo_name, repo.repo_path, repo.commit_hash, repo.canonical_fingerprint
+                )
+            })
+            .collect();
+        entries.sort();
+        let joined = entries.join("\n");
+        Self::constitution_digest(joined.as_bytes())
+    }
+
+    fn ensure_codegraph_scope_contract(
+        document: &PortableDocument,
+        origin: &'static str,
+    ) -> Result<()> {
+        let allowed_classes = ["repository", "directory", "file", "symbol"];
+        for (block_id, block) in &document.blocks {
+            if block_id == &document.root {
+                continue;
+            }
+            let Some(class) = block
+                .metadata
+                .custom
+                .get("node_class")
+                .and_then(serde_json::Value::as_str)
+            else {
+                return Err(HivemindError::system(
+                    "graph_snapshot_missing_node_class",
+                    "UCP codegraph node is missing required node_class metadata",
+                    origin,
+                ));
+            };
+            if !allowed_classes.contains(&class) {
+                return Err(HivemindError::system(
+                    "graph_snapshot_scope_unsupported",
+                    format!("Unsupported codegraph node class '{class}'"),
+                    origin,
+                )
+                .with_hint(
+                    "Refresh with a UCP CodeGraphProfile v1 extractor that emits repository/directory/file/symbol nodes only",
+                ));
+            }
+            if block
+                .metadata
+                .custom
+                .get("logical_key")
+                .and_then(serde_json::Value::as_str)
+                .is_none_or(str::is_empty)
+            {
+                return Err(HivemindError::system(
+                    "graph_snapshot_logical_key_missing",
+                    "UCP codegraph block is missing required logical_key metadata",
+                    origin,
+                ));
+            }
+
+            for edge in &block.edges {
+                let edge_type = edge.edge_type.as_str();
+                if edge_type != "references" && edge_type != "custom:exports" {
+                    return Err(HivemindError::system(
+                        "graph_snapshot_scope_unsupported",
+                        format!("Unsupported codegraph edge type '{edge_type}'"),
+                        origin,
+                    )
+                    .with_hint(
+                        "Refresh with a UCP CodeGraphProfile v1 extractor that only emits references/exports edges",
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_lines)]
@@ -6803,6 +7039,8 @@ impl Registry {
             HivemindError::system("event_append_failed", e.to_string(), "registry:attach_repo")
         })?;
 
+        self.trigger_graph_snapshot_refresh(project.id, "project_attach", "registry:attach_repo");
+
         self.get_project(&project.id.to_string())
     }
 
@@ -7121,11 +7359,471 @@ impl Registry {
         })
     }
 
+    fn append_graph_snapshot_failed_event(
+        &self,
+        project_id: Uuid,
+        trigger: &str,
+        err: &HivemindError,
+        origin: &'static str,
+    ) {
+        let _ = self.append_event(
+            Event::new(
+                EventPayload::GraphSnapshotFailed {
+                    project_id,
+                    trigger: trigger.to_string(),
+                    reason: err.message.clone(),
+                    hint: err.recovery_hint.clone(),
+                },
+                CorrelationIds::for_project(project_id),
+            ),
+            origin,
+        );
+    }
+
+    fn trigger_graph_snapshot_refresh(
+        &self,
+        project_id: Uuid,
+        trigger: &str,
+        _origin: &'static str,
+    ) {
+        let project_key = project_id.to_string();
+        if let Err(err) = self.graph_snapshot_refresh(&project_key, trigger) {
+            self.record_error_event(&err, CorrelationIds::for_project(project_id));
+        }
+    }
+
+    /// Rebuilds the UCP-backed static codegraph snapshot for a project.
+    ///
+    /// # Errors
+    /// Returns an error when project/repository resolution fails, UCP extraction
+    /// cannot produce a profile-compliant graph, or snapshot persistence fails.
+    #[allow(clippy::too_many_lines)]
+    pub fn graph_snapshot_refresh(
+        &self,
+        id_or_name: &str,
+        trigger: &str,
+    ) -> Result<GraphSnapshotRefreshResult> {
+        let origin = "registry:graph_snapshot_refresh";
+        let trigger = trigger.trim();
+        let trigger = if trigger.is_empty() {
+            "manual_refresh"
+        } else {
+            trigger
+        };
+
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+
+        if project.repositories.is_empty() {
+            let err = HivemindError::user(
+                "project_has_no_repo",
+                "Project has no attached repository to extract a codegraph from",
+                origin,
+            )
+            .with_hint("Attach a repository first via 'hivemind project attach-repo <project> <repo-path>'");
+            self.append_graph_snapshot_failed_event(project.id, trigger, &err, origin);
+            return Err(err);
+        }
+
+        self.ensure_governance_layout(project.id, origin)
+            .inspect_err(|err| {
+                self.append_graph_snapshot_failed_event(project.id, trigger, err, origin);
+            })?;
+        let location = self.governance_graph_snapshot_location(project.id);
+        let previous = self
+            .read_graph_snapshot_artifact(project.id, origin)
+            .inspect_err(|err| {
+                self.append_graph_snapshot_failed_event(project.id, trigger, err, origin);
+            })?;
+        let previous_fingerprint = previous
+            .as_ref()
+            .map(|item| item.canonical_fingerprint.clone());
+
+        self.append_event(
+            Event::new(
+                EventPayload::GraphSnapshotStarted {
+                    project_id: project.id,
+                    trigger: trigger.to_string(),
+                    repository_count: project.repositories.len(),
+                },
+                CorrelationIds::for_project(project.id),
+            ),
+            origin,
+        )?;
+
+        let mut repositories = project.repositories.clone();
+        repositories.sort_by(|a, b| a.name.cmp(&b.name).then(a.path.cmp(&b.path)));
+
+        let mut snapshots: Vec<GraphSnapshotRepositoryArtifact> = Vec::new();
+        let mut graph_stats: Vec<ucp_api::CodeGraphStats> = Vec::new();
+        let mut head_commits: Vec<GraphSnapshotRepositoryCommit> = Vec::new();
+        let mut static_sections = Vec::new();
+
+        for repo in &repositories {
+            let repo_path = PathBuf::from(&repo.path);
+            let commit_hash = match Self::resolve_repo_head_commit(&repo_path, origin) {
+                Ok(head) => head,
+                Err(err) => {
+                    self.append_graph_snapshot_failed_event(project.id, trigger, &err, origin);
+                    return Err(err.with_context("repo", repo.name.clone()));
+                }
+            };
+
+            let build_input = CodeGraphBuildInput {
+                repository_path: repo_path.clone(),
+                commit_hash: commit_hash.clone(),
+                config: ucp_api::CodeGraphExtractorConfig::default(),
+            };
+            let built = match build_code_graph(&build_input) {
+                Ok(result) => result,
+                Err(err) => {
+                    let wrapped = HivemindError::system(
+                        "ucp_codegraph_build_failed",
+                        format!(
+                            "UCP codegraph extraction failed for repository '{}': {err}",
+                            repo.name
+                        ),
+                        origin,
+                    )
+                    .with_hint(
+                        "Fix extraction diagnostics and rerun `hivemind graph snapshot refresh`",
+                    );
+                    self.append_graph_snapshot_failed_event(project.id, trigger, &wrapped, origin);
+                    return Err(wrapped);
+                }
+            };
+
+            if built.profile_version != CODEGRAPH_PROFILE_MARKER {
+                let err = HivemindError::system(
+                    "graph_snapshot_profile_version_invalid",
+                    format!(
+                        "Unexpected UCP profile version '{}' (expected '{CODEGRAPH_PROFILE_MARKER}')",
+                        built.profile_version
+                    ),
+                    origin,
+                )
+                .with_hint("Update UCP integration to a CodeGraphProfile v1-compatible engine");
+                self.append_graph_snapshot_failed_event(project.id, trigger, &err, origin);
+                return Err(err);
+            }
+
+            if built.canonical_fingerprint.trim().is_empty() {
+                let err = HivemindError::system(
+                    "graph_snapshot_fingerprint_missing",
+                    "UCP build result did not include canonical_fingerprint",
+                    origin,
+                )
+                .with_hint(
+                    "Re-run with a UCP codegraph extractor that emits canonical fingerprints",
+                );
+                self.append_graph_snapshot_failed_event(project.id, trigger, &err, origin);
+                return Err(err);
+            }
+
+            let validation = validate_code_graph_profile(&built.document);
+            if !validation.valid {
+                let err = HivemindError::system(
+                    "graph_snapshot_profile_invalid",
+                    format!(
+                        "UCP output failed CodeGraphProfile validation with {} issue(s)",
+                        validation.diagnostics.len()
+                    ),
+                    origin,
+                )
+                .with_context(
+                    "diagnostics",
+                    serde_json::to_string(&validation.diagnostics)
+                        .unwrap_or_else(|_| "[]".to_string()),
+                )
+                .with_hint(
+                    "Fix UCP profile validation errors and rerun `hivemind graph snapshot refresh`",
+                );
+                self.append_graph_snapshot_failed_event(project.id, trigger, &err, origin);
+                return Err(err);
+            }
+
+            let recomputed_fingerprint = canonical_fingerprint(&built.document).map_err(|e| {
+                let err = HivemindError::system(
+                    "graph_snapshot_fingerprint_recompute_failed",
+                    e.to_string(),
+                    origin,
+                );
+                self.append_graph_snapshot_failed_event(project.id, trigger, &err, origin);
+                err
+            })?;
+            if recomputed_fingerprint != built.canonical_fingerprint {
+                let err = HivemindError::system(
+                    "graph_snapshot_fingerprint_mismatch",
+                    "UCP canonical_fingerprint did not match recomputed canonical fingerprint",
+                    origin,
+                )
+                .with_hint("Refresh with a deterministic UCP extractor build");
+                self.append_graph_snapshot_failed_event(project.id, trigger, &err, origin);
+                return Err(err);
+            }
+
+            let portable = PortableDocument::from_document(&built.document);
+            if let Err(err) = Self::ensure_codegraph_scope_contract(&portable, origin) {
+                self.append_graph_snapshot_failed_event(project.id, trigger, &err, origin);
+                return Err(err);
+            }
+
+            let projection = codegraph_prompt_projection(&built.document);
+            static_sections.push(format!("## {}\n{}", repo.name, projection));
+
+            head_commits.push(GraphSnapshotRepositoryCommit {
+                repo_name: repo.name.clone(),
+                repo_path: repo.path.clone(),
+                commit_hash: commit_hash.clone(),
+            });
+            graph_stats.push(built.stats.clone());
+            snapshots.push(GraphSnapshotRepositoryArtifact {
+                repo_name: repo.name.clone(),
+                repo_path: repo.path.clone(),
+                commit_hash,
+                profile_version: built.profile_version,
+                canonical_fingerprint: built.canonical_fingerprint,
+                stats: built.stats,
+                document: portable,
+                structure_blocks_projection: projection,
+            });
+        }
+
+        snapshots.sort_by(|a, b| {
+            a.repo_name
+                .cmp(&b.repo_name)
+                .then(a.repo_path.cmp(&b.repo_path))
+        });
+        head_commits.sort_by(|a, b| {
+            a.repo_name
+                .cmp(&b.repo_name)
+                .then(a.repo_path.cmp(&b.repo_path))
+        });
+
+        let summary = Self::aggregate_codegraph_stats(&graph_stats);
+        let canonical_fingerprint = Self::compute_snapshot_fingerprint(&snapshots);
+        let artifact = GraphSnapshotArtifact {
+            schema_version: GRAPH_SNAPSHOT_SCHEMA_VERSION.to_string(),
+            snapshot_version: GRAPH_SNAPSHOT_VERSION,
+            provenance: GraphSnapshotProvenance {
+                project_id: project.id,
+                head_commits,
+                generated_at: Utc::now(),
+            },
+            ucp_engine_version: CODEGRAPH_EXTRACTOR_VERSION.to_string(),
+            profile_version: CODEGRAPH_PROFILE_MARKER.to_string(),
+            canonical_fingerprint: canonical_fingerprint.clone(),
+            summary: summary.clone(),
+            repositories: snapshots,
+            static_projection: static_sections.join("\n\n"),
+        };
+
+        Self::write_governance_json(&location.path, &artifact, origin).inspect_err(|err| {
+            self.append_graph_snapshot_failed_event(project.id, trigger, err, origin);
+        })?;
+
+        let state = self.state().inspect_err(|err| {
+            self.append_graph_snapshot_failed_event(project.id, trigger, err, origin);
+        })?;
+        let mut pending = HashMap::new();
+        let revision = self
+            .append_governance_upsert_for_location(
+                &state,
+                &mut pending,
+                &location,
+                CorrelationIds::for_project(project.id),
+                origin,
+            )
+            .inspect_err(|err| {
+                self.append_graph_snapshot_failed_event(project.id, trigger, err, origin);
+            })?;
+
+        let diff_detected = previous_fingerprint.as_deref() != Some(canonical_fingerprint.as_str());
+        if diff_detected {
+            self.append_event(
+                Event::new(
+                    EventPayload::GraphSnapshotDiffDetected {
+                        project_id: project.id,
+                        trigger: trigger.to_string(),
+                        previous_fingerprint,
+                        canonical_fingerprint: canonical_fingerprint.clone(),
+                    },
+                    CorrelationIds::for_project(project.id),
+                ),
+                origin,
+            )
+            .inspect_err(|err| {
+                self.append_graph_snapshot_failed_event(project.id, trigger, err, origin);
+            })?;
+        }
+
+        self.append_event(
+            Event::new(
+                EventPayload::GraphSnapshotCompleted {
+                    project_id: project.id,
+                    trigger: trigger.to_string(),
+                    path: location.path.to_string_lossy().to_string(),
+                    revision,
+                    repository_count: project.repositories.len(),
+                    ucp_engine_version: CODEGRAPH_EXTRACTOR_VERSION.to_string(),
+                    profile_version: CODEGRAPH_PROFILE_MARKER.to_string(),
+                    canonical_fingerprint: canonical_fingerprint.clone(),
+                },
+                CorrelationIds::for_project(project.id),
+            ),
+            origin,
+        )
+        .inspect_err(|err| {
+            self.append_graph_snapshot_failed_event(project.id, trigger, err, origin);
+        })?;
+
+        Ok(GraphSnapshotRefreshResult {
+            project_id: project.id,
+            path: location.path.to_string_lossy().to_string(),
+            trigger: trigger.to_string(),
+            revision,
+            repository_count: project.repositories.len(),
+            ucp_engine_version: CODEGRAPH_EXTRACTOR_VERSION.to_string(),
+            profile_version: CODEGRAPH_PROFILE_MARKER.to_string(),
+            canonical_fingerprint,
+            summary,
+            diff_detected,
+        })
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn ensure_graph_snapshot_current_for_constitution(
+        &self,
+        project: &Project,
+        origin: &'static str,
+    ) -> Result<()> {
+        if project.repositories.is_empty() {
+            return Ok(());
+        }
+
+        let artifact = self
+            .read_graph_snapshot_artifact(project.id, origin)?
+            .ok_or_else(|| {
+                HivemindError::user(
+                    "graph_snapshot_missing",
+                    "Graph snapshot is missing for this project",
+                    origin,
+                )
+                .with_hint("Run: hivemind graph snapshot refresh <project>")
+            })?;
+
+        if artifact.profile_version != CODEGRAPH_PROFILE_MARKER {
+            return Err(HivemindError::system(
+                "graph_snapshot_profile_mismatch",
+                format!(
+                    "Snapshot profile version '{}' is not supported; expected '{}'",
+                    artifact.profile_version, CODEGRAPH_PROFILE_MARKER
+                ),
+                origin,
+            )
+            .with_hint("Run: hivemind graph snapshot refresh <project>"));
+        }
+
+        let mut snapshot_repo_keys = HashSet::new();
+        for repo in &artifact.repositories {
+            snapshot_repo_keys.insert((repo.repo_name.clone(), repo.repo_path.clone()));
+            let document = repo.document.to_document().map_err(|e| {
+                HivemindError::system(
+                    "graph_snapshot_schema_invalid",
+                    format!("Stored graph snapshot document is invalid: {e}"),
+                    origin,
+                )
+            })?;
+            let computed = canonical_fingerprint(&document).map_err(|e| {
+                HivemindError::system(
+                    "graph_snapshot_integrity_check_failed",
+                    format!("Failed to verify stored graph snapshot fingerprint: {e}"),
+                    origin,
+                )
+            })?;
+            if computed != repo.canonical_fingerprint {
+                return Err(HivemindError::system(
+                    "graph_snapshot_integrity_invalid",
+                    format!(
+                        "Stored fingerprint mismatch for repository '{}'",
+                        repo.repo_name
+                    ),
+                    origin,
+                )
+                .with_hint("Run: hivemind graph snapshot refresh <project>"));
+            }
+        }
+
+        let aggregate = Self::compute_snapshot_fingerprint(&artifact.repositories);
+        if aggregate != artifact.canonical_fingerprint {
+            return Err(HivemindError::system(
+                "graph_snapshot_integrity_invalid",
+                "Stored aggregate graph snapshot fingerprint does not match repository fingerprints",
+                origin,
+            )
+            .with_hint("Run: hivemind graph snapshot refresh <project>"));
+        }
+
+        let head_by_repo: HashMap<(String, String), String> = artifact
+            .provenance
+            .head_commits
+            .iter()
+            .map(|commit| {
+                (
+                    (commit.repo_name.clone(), commit.repo_path.clone()),
+                    commit.commit_hash.clone(),
+                )
+            })
+            .collect();
+
+        for repo in &project.repositories {
+            let key = (repo.name.clone(), repo.path.clone());
+            if !snapshot_repo_keys.contains(&key) {
+                return Err(HivemindError::user(
+                    "graph_snapshot_stale",
+                    format!(
+                        "Graph snapshot does not include attached repository '{}'",
+                        repo.name
+                    ),
+                    origin,
+                )
+                .with_hint("Run: hivemind graph snapshot refresh <project>"));
+            }
+            let recorded_head = head_by_repo.get(&key).ok_or_else(|| {
+                HivemindError::user(
+                    "graph_snapshot_stale",
+                    format!(
+                        "Graph snapshot missing commit provenance for repository '{}'",
+                        repo.name
+                    ),
+                    origin,
+                )
+                .with_hint("Run: hivemind graph snapshot refresh <project>")
+            })?;
+            let current_head = Self::resolve_repo_head_commit(Path::new(&repo.path), origin)?;
+            if recorded_head != &current_head {
+                return Err(HivemindError::user(
+                    "graph_snapshot_stale",
+                    format!(
+                        "Graph snapshot is stale for repository '{}' (snapshot={} current={})",
+                        repo.name, recorded_head, current_head
+                    ),
+                    origin,
+                )
+                .with_hint("Run: hivemind graph snapshot refresh <project>"));
+            }
+        }
+
+        Ok(())
+    }
+
     /// Initializes and validates a project's constitution artifact.
     ///
     /// # Errors
     /// Returns an error if explicit confirmation is missing, project resolution fails,
     /// constitution schema is invalid, or validation checks fail.
+    #[allow(clippy::too_many_lines)]
     pub fn constitution_init(
         &self,
         id_or_name: &str,
@@ -7146,6 +7844,7 @@ impl Registry {
         let project = self
             .get_project(id_or_name)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        self.ensure_graph_snapshot_current_for_constitution(&project, origin)?;
         self.ensure_governance_layout(project.id, origin)?;
         let location = self.governance_constitution_location(project.id);
 
@@ -7289,6 +7988,7 @@ impl Registry {
         let project = self
             .get_project(id_or_name)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        self.ensure_graph_snapshot_current_for_constitution(&project, origin)?;
         let (artifact, path) = self.read_constitution_artifact(project.id, origin)?;
         let issues = Self::validate_constitution(&artifact);
         let valid = issues.is_empty();
@@ -7367,6 +8067,7 @@ impl Registry {
         let project = self
             .get_project(id_or_name)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        self.ensure_graph_snapshot_current_for_constitution(&project, origin)?;
         self.ensure_governance_layout(project.id, origin)?;
 
         let state = self.state()?;
@@ -10833,6 +11534,12 @@ impl Registry {
             )?;
         }
 
+        self.trigger_graph_snapshot_refresh(
+            flow.project_id,
+            "checkpoint_complete",
+            "registry:checkpoint_complete",
+        );
+
         Ok(CheckpointCompletionResult {
             flow_id: flow.id,
             task_id: attempt.task_id,
@@ -12284,6 +12991,8 @@ impl Registry {
             )
         })?;
 
+        self.trigger_graph_snapshot_refresh(flow.project_id, "merge_completed", origin);
+
         let state = self.state()?;
         state.merge_states.get(&flow.id).cloned().ok_or_else(|| {
             HivemindError::system(
@@ -12583,6 +13292,8 @@ impl Registry {
                 ),
                 origin,
             )?;
+
+            self.trigger_graph_snapshot_refresh(flow.project_id, "merge_completed", origin);
         }
 
         let state = self.state()?;
@@ -12708,6 +13419,38 @@ mod tests {
             .args(["branch", "-M", "main"])
             .current_dir(repo_dir)
             .output();
+    }
+
+    fn git_commit_all(repo_dir: &std::path::Path, message: &str) {
+        let out = Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(repo_dir)
+            .output()
+            .expect("git add");
+        assert!(
+            out.status.success(),
+            "git add: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let out = Command::new("git")
+            .args([
+                "-c",
+                "user.name=Hivemind",
+                "-c",
+                "user.email=hivemind@example.com",
+                "commit",
+                "-m",
+                message,
+            ])
+            .current_dir(repo_dir)
+            .output()
+            .expect("git commit");
+        assert!(
+            out.status.success(),
+            "git commit: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
 
     fn configure_failing_runtime(registry: &Registry) {
@@ -12981,6 +13724,116 @@ mod tests {
             .recovery_hint
             .as_deref()
             .is_some_and(|hint| hint.contains("detach-repo")));
+    }
+
+    #[test]
+    fn graph_snapshot_refresh_emits_lifecycle_and_writes_static_projection() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+        std::fs::create_dir_all(repo_dir.join("src")).unwrap();
+        std::fs::write(
+            repo_dir.join("src/lib.rs"),
+            "pub fn hello() -> &'static str { \"hi\" }\n",
+        )
+        .unwrap();
+        git_commit_all(&repo_dir, "add rust file");
+
+        let registry = test_registry();
+        let project = registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                Some("main"),
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let result = registry
+            .graph_snapshot_refresh("proj", "manual_refresh")
+            .unwrap();
+        assert_eq!(result.project_id, project.id);
+        assert_eq!(result.trigger, "manual_refresh");
+        assert_eq!(result.repository_count, 1);
+        assert_eq!(result.profile_version, CODEGRAPH_PROFILE_MARKER);
+        assert_eq!(result.ucp_engine_version, CODEGRAPH_EXTRACTOR_VERSION);
+        assert!(!result.canonical_fingerprint.is_empty());
+
+        let artifact = registry
+            .read_graph_snapshot_artifact(project.id, "test:graph_snapshot")
+            .unwrap()
+            .expect("snapshot artifact");
+        assert_eq!(artifact.schema_version, GRAPH_SNAPSHOT_SCHEMA_VERSION);
+        assert_eq!(artifact.snapshot_version, GRAPH_SNAPSHOT_VERSION);
+        assert_eq!(artifact.profile_version, CODEGRAPH_PROFILE_MARKER);
+        assert_eq!(artifact.ucp_engine_version, CODEGRAPH_EXTRACTOR_VERSION);
+        assert!(!artifact.repositories.is_empty());
+        assert!(artifact.static_projection.contains("Document structure:"));
+        assert!(artifact.static_projection.contains("Blocks:"));
+
+        let events = registry.store.read_all().unwrap();
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::GraphSnapshotStarted {
+                    project_id,
+                    trigger,
+                    ..
+                } if *project_id == project.id && trigger == "manual_refresh"
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::GraphSnapshotCompleted {
+                    project_id,
+                    trigger,
+                    ..
+                } if *project_id == project.id && trigger == "manual_refresh"
+            )
+        }));
+    }
+
+    #[test]
+    fn constitution_validate_requires_fresh_graph_snapshot() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+        std::fs::create_dir_all(repo_dir.join("src")).unwrap();
+        std::fs::write(repo_dir.join("src/lib.rs"), "pub fn a() -> i32 { 1 }\n").unwrap();
+        git_commit_all(&repo_dir, "seed rust file");
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                Some("main"),
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        registry
+            .constitution_init("proj", None, true, None, None)
+            .unwrap();
+
+        std::fs::write(repo_dir.join("src/lib.rs"), "pub fn a() -> i32 { 2 }\n").unwrap();
+        git_commit_all(&repo_dir, "mutate repo head");
+
+        let err = registry.constitution_validate("proj", None).unwrap_err();
+        assert_eq!(err.code, "graph_snapshot_stale");
+        assert!(err
+            .recovery_hint
+            .as_deref()
+            .is_some_and(|hint| hint.contains("graph snapshot refresh")));
+
+        registry
+            .graph_snapshot_refresh("proj", "manual_refresh")
+            .unwrap();
+        let validated = registry.constitution_validate("proj", None).unwrap();
+        assert!(validated.valid);
     }
 
     #[test]
@@ -13692,6 +14545,17 @@ mod tests {
         registry
             .checkpoint_complete(&attempt_id.to_string(), "checkpoint-1", None)
             .unwrap();
+        let events = registry.store.read_all().unwrap();
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::GraphSnapshotCompleted {
+                    project_id,
+                    trigger,
+                    ..
+                } if *project_id == flow_a.project_id && trigger == "checkpoint_complete"
+            )
+        }));
         registry
             .complete_task_execution(&task_a.id.to_string())
             .unwrap();
@@ -14822,6 +15686,16 @@ mod tests {
                 &e.payload,
                 EventPayload::FlowIntegrationLockAcquired { flow_id, operation }
                     if *flow_id == flow.id && operation == "merge_execute"
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::GraphSnapshotCompleted {
+                    project_id,
+                    trigger,
+                    ..
+                } if *project_id == flow.project_id && trigger == "merge_completed"
             )
         }));
     }
