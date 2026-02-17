@@ -107,11 +107,22 @@ impl ExecutionReport {
 
     /// Creates a failed execution report.
     pub fn failure(exit_code: i32, duration: Duration, error: RuntimeError) -> Self {
+        Self::failure_with_output(exit_code, duration, error, String::new(), String::new())
+    }
+
+    /// Creates a failed execution report preserving runtime output.
+    pub fn failure_with_output(
+        exit_code: i32,
+        duration: Duration,
+        error: RuntimeError,
+        stdout: String,
+        stderr: String,
+    ) -> Self {
         Self {
             exit_code,
             duration,
-            stdout: String::new(),
-            stderr: String::new(),
+            stdout,
+            stderr,
             files_created: Vec::new(),
             files_modified: Vec::new(),
             files_deleted: Vec::new(),

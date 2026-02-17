@@ -759,7 +759,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
                 stderr_content,
             ))
         } else {
-            Ok(ExecutionReport::failure(
+            Ok(ExecutionReport::failure_with_output(
                 exit_code,
                 duration,
                 RuntimeError::new(
@@ -767,6 +767,8 @@ impl RuntimeAdapter for OpenCodeAdapter {
                     format!("Process exited with code {exit_code}"),
                     true,
                 ),
+                stdout_content,
+                stderr_content,
             ))
         }
     }

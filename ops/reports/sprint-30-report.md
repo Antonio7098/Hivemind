@@ -1,86 +1,83 @@
-# Sprint 30: UI Foundation (Optional)
+# Sprint 30: Production Hardening
 
 ## 1. Sprint Metadata
 
 - **Sprint**: 30
-- **Title**: UI Foundation (Optional)
-- **Branch**: `sprint/30-ui-foundation`
-- **Dates**: 2026-02-09 – 2026-02-09
+- **Title**: Production Hardening
+- **Branch**: `sprint/30-production-hardening`
+- **Date**: 2026-02-17
 - **Owner**: Antonio
 
 ## 2. Objectives
 
-- Provide a thin, local HTTP server that exposes hivemind’s CLI/event-sourced state for UI projection.
-- Hook the existing React frontend to that server without violating CLI-first or “UI is a projection” principles.
-- Ensure all validation gates (`make validate`, frontend lint/build) pass.
+- Make runtime failures first-class, observable events.
+- Centralize retry/fallback behavior for transient runtime failures.
+- Handle early runtime termination/checkpoint incompletion safely without losing attempt context.
+- Validate behavior with both simulated and real OpenCode runtime scenarios in `../hivemind-test`.
 
-## 3. Deliverables
+## 3. Delivered Changes
 
-- New `hivemind serve` CLI command that starts a local HTTP server:
-  - `/health`
-  - `/api/version`
-  - `/api/state?events_limit=N` (projects, tasks, graphs, flows, merge_states, events)
-  - `/api/projects`
-  - `/api/tasks`
-  - `/api/graphs`
-  - `/api/flows`
-  - `/api/merges`
-  - `/api/events?limit=N`
-- `src/server.rs` module that builds `UiState` from `Registry::state()` + `list_events`.
-- Frontend store wiring to fetch `/api/state` on an interval and reflect real registry-derived state.
-- Lint-clean theme context refactor (`ThemeContext.tsx` + `themeContext.ts` + `themeTypes.ts` + `useTheme.ts`).
+- Added runtime failure observability events:
+  - `runtime_error_classified`
+  - `runtime_recovery_scheduled`
+- Centralized runtime failure handling in the registry for initialize/prepare/execute/nonzero-exit/checkpoint-gating paths.
+- Added fallback recovery scheduling with backoff and worker runtime adapter switch when applicable.
+- Restricted automatic retries to transient/runtime transport failures (rate limiting/timeouts), preventing broad unintended retries.
+- Preserved stdout/stderr on failed execution reports for downstream classification.
+- Added stderr-aware detection for wrapped-runtime auth/rate-limit failures even when subprocess exit code is `0`.
+- Preserved checkpoint-incomplete attempts as running so operators/agents can still complete checkpoints against the same attempt.
 
-## 4. Exit Criteria Results
+## 4. Automated Validation
 
-From `ops/ROADMAP.md` Sprint 30:
+- `cargo test --lib core::registry::tests::tick_flow_` ✅
+- `cargo test --test integration cli_checkpoint_complete_unblocks_attempt_and_emits_lifecycle_events -- --nocapture` ✅
+- `make validate` ✅ (fmt, clippy `-D warnings`, tests, docs)
 
-- [x] UI reads via CLI/events only (projection over `Registry` + events.jsonl).
-- [x] UI does not modify state directly (HTTP API is read-only; no mutation endpoints).
-- [x] UI reflects CLI state accurately (verified by hitting CLI to create flows/tasks and observing UI update).
-- [x] No UI-only features (all visible state corresponds to CLI-accessible entities).
+## 5. Manual Validation (`../hivemind-test`)
 
-## 5. Metrics
+Executed in `/home/antonio/programming/Hivemind/hivemind-test/sprint30-manual-CcjxGB`.
 
-- **Lines added**: ~70 in `src/server.rs`, small wiring changes in CLI and frontend.
-- **Lines removed**: legacy mock-only landing content file removed, minor changes elsewhere.
-- **Tests**:
-  - `make validate` (fmt-check, clippy, tests, doc) – PASS
-  - `npm run lint` – PASS
-  - `npm run build` – PASS
-- **New tests**:
-  - `server::tests::api_version_ok`
-  - `server::tests::api_state_ok_empty`
-  - `server::tests::api_unknown_endpoint_404`
+### 5.1 Simulated rate-limit failure path
 
-## 6. Principle Compliance
+- Runtime: `/usr/bin/env sh -c "echo 'HTTP 429 Too Many Requests' 1>&2; exit 1"`
+- Observed:
+  - `runtime_output_chunk` captured stderr `HTTP 429 Too Many Requests`.
+  - `runtime_error_classified` with `category=rate_limit`, `rate_limited=true`, `retryable=true`.
+  - `runtime_recovery_scheduled` emitted with fallback strategy.
+  - `task_retry_requested` emitted.
 
-1. **Observability is truth**: UI state is computed from `Registry::state()` + `list_events`; no hidden state.
-2. **Fail fast, fail loud**: HTTP errors wrap `HivemindError` via `CliResponse::<()>::error`.
-3. **Reliability over cleverness**: Server is a small, explicit wrapper around the existing registry; no hidden caches.
-4. **Explicit error taxonomy**: Reuses `HivemindError` codes (`endpoint_not_found`, `server_bind_failed`, etc.).
-5. **Structure scales**: New `server` module is isolated and exported via `lib.rs`.
-6. **SOLID**: HTTP layer delegates all domain logic to existing `Registry` and event store.
-7. **CLI-first**: There is still no “backend” API distinct from CLI/state; this is a projection server only.
-8. **Absolute observability**: `/api/events` returns structured events with correlation ids.
-9. **Automated checks**: `make validate` is mandatory and passes.
-10. **Failures are first-class**: HTTP 4xx/5xx structured via `CliResponse::error`.
-11. **Build incrementally**: Adds only the minimal API needed for current frontend views.
-12. **Maximum modularity**: Frontend base URL is configurable; server is optional (`hivemind serve`).
-13. **Abstraction without loss**: HTTP schema closely matches Rust core types + event payloads.
-14. **Human authority**: No new automation that bypasses human control; UI remains read-only.
-15. **No magic**: Endpoints and transformations are explicit and documented in code.
+### 5.2 Simulated auth failure path
 
-## 7. Challenges
+- Runtime: `/usr/bin/env sh -c "echo '401 Unauthorized: model access denied' 1>&2; exit 1"`
+- Observed:
+  - stderr captured in `runtime_output_chunk`.
+  - `runtime_error_classified` with non-rate-limit category.
+  - no `runtime_recovery_scheduled` (expected for non-transient auth-style failure).
 
-- Aligning a new HTTP surface area with strict CLI-first principles.
-- Getting clippy clean with strict lints for the new module (match arm consolidation, borrow rules).
+### 5.3 Real OpenCode free-model execution
 
-## 8. Learnings
+- Model: `opencode/glm-5-free`
+- Command: `opencode run --model opencode/glm-5-free --print-logs ...`
+- Observed:
+  - runtime launched and completed checkpoint lifecycle events.
+  - checkpoint completion/commit events emitted.
 
-- A registry-centric “projection server” is a good fit for UI needs without introducing a parallel API.
-- Small helper tests around HTTP handlers help keep behavior stable as the registry evolves.
+### 5.4 Real OpenCode auth-error probe
 
-## 9. Next Sprint Readiness
+- Probe command: `OPENAI_API_KEY=invalid_key opencode run --model openai/o1-pro --print-logs ...`
+- Observed stderr contained explicit OpenAI auth failure text:
+  - `Incorrect API key provided: invalid_key`
+  - provider-level error payloads in stderr logs.
 
-- UI can now present graphs/flows/events derived from real event-sourced state.
-- Sets the foundation for future UI improvements (e.g. live event streaming, richer dashboards) while staying read-only.
+### 5.5 Free-model rate-limit exhaustion attempt
+
+- Ran 12 repeated direct free-model probes with `opencode/glm-5-free`.
+- Results:
+  - Attempts 1–11 exited successfully.
+  - Attempt 12 timed out (`exit_code=124`) before completion.
+  - No definitive 429/rate-limit string observed during this run.
+
+## 6. Follow-up Notes
+
+- Real wrapped OpenCode runs can emit long stderr log streams and may not terminate quickly under certain prompt/tooling combinations; hard timeout and stderr classification paths remain important operational guards.
+- Production hardening regression coverage was extended for both transient and auth-related failure parsing.
