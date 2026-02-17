@@ -933,6 +933,8 @@ impl AppState {
             | EventPayload::RuntimeInterrupted { .. }
             | EventPayload::RuntimeExited { .. }
             | EventPayload::RuntimeTerminated { .. }
+            | EventPayload::RuntimeErrorClassified { .. }
+            | EventPayload::RuntimeRecoveryScheduled { .. }
             | EventPayload::RuntimeFilesystemObserved { .. }
             | EventPayload::RuntimeCommandObserved { .. }
             | EventPayload::RuntimeToolCallObserved { .. }

@@ -394,6 +394,37 @@ The adapter:
 
 Runtime failure is treated as an execution failure, not a system failure.
 
+### 13.1 First-Class Runtime Error Events
+
+Runtime failures are emitted as explicit runtime-domain events:
+
+- `runtime_error_classified`
+  - Contains normalized error code/category/recoverability and rate-limit signal.
+- `runtime_recovery_scheduled`
+  - Captures retry strategy (`same_runtime_retry` or `fallback_runtime`) plus backoff.
+
+These events are observational (non-state-mutating) and exist for operator visibility,
+automation, and downstream diagnostics.
+
+### 13.2 Retry and Fallback Policy
+
+Retries are intentionally narrow:
+
+- Retry is scheduled for transient failures (for example: rate limiting or timeouts).
+- Retry may reconfigure the task worker runtime to a backup adapter when available.
+- Non-transient runtime failures are failed without automatic retry.
+
+Checkpoint handling remains explicit:
+
+- `checkpoints_incomplete` does not auto-fail the running attempt.
+- The attempt stays running so checkpoints can still be completed against the same attempt id.
+
+### 13.3 Output-Aware Classification
+
+Adapters preserve stdout/stderr for failed executions. Hivemind uses this output to classify
+rate-limit/auth failures, including wrapped-runtime cases where the subprocess may return
+exit code `0` while still printing fatal auth/rate-limit errors to stderr.
+
 ---
 
 ## 14. Security Considerations

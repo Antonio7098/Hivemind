@@ -260,6 +260,16 @@ impl SelectedRuntimeAdapter {
     }
 }
 
+#[derive(Debug, Clone)]
+struct ClassifiedRuntimeError {
+    code: String,
+    category: String,
+    message: String,
+    recoverable: bool,
+    retryable: bool,
+    rate_limited: bool,
+}
+
 impl Registry {
     fn has_model_flag(args: &[String], short_alias: bool) -> bool {
         args.iter().any(|arg| {
@@ -324,6 +334,334 @@ impl Registry {
             }
             _ => runtime.args.clone(),
         }
+    }
+
+    fn classify_runtime_error(
+        code: &str,
+        message: &str,
+        recoverable: bool,
+        stdout: &str,
+        stderr: &str,
+    ) -> ClassifiedRuntimeError {
+        let combined = format!("{code} {message} {stdout} {stderr}").to_ascii_lowercase();
+        let rate_limited = combined.contains("rate limit")
+            || combined.contains("rate_limit")
+            || combined.contains("too many requests")
+            || combined.contains(" 429")
+            || combined.contains("status 429")
+            || combined.contains("http 429");
+
+        let category = if rate_limited {
+            "rate_limit"
+        } else if code == "timeout" {
+            "timeout"
+        } else if code == "checkpoints_incomplete" {
+            "checkpoint_incomplete"
+        } else if matches!(
+            code,
+            "binary_not_found" | "health_check_failed" | "missing_args" | "worktree_not_found"
+        ) {
+            "configuration"
+        } else if code.contains("initialize") || code.contains("prepare") {
+            "runtime_setup"
+        } else {
+            "runtime_execution"
+        };
+
+        let effective_recoverable = recoverable || rate_limited || code == "checkpoints_incomplete";
+        let retryable = effective_recoverable
+            && !matches!(
+                code,
+                "binary_not_found"
+                    | "health_check_failed"
+                    | "missing_args"
+                    | "worktree_not_found"
+                    | "checkpoints_incomplete"
+            );
+
+        ClassifiedRuntimeError {
+            code: code.to_string(),
+            category: category.to_string(),
+            message: message.to_string(),
+            recoverable: effective_recoverable,
+            retryable,
+            rate_limited,
+        }
+    }
+
+    fn detect_runtime_output_failure(stdout: &str, stderr: &str) -> Option<(String, String, bool)> {
+        let combined = format!("{stdout}\n{stderr}").to_ascii_lowercase();
+
+        if combined.contains("incorrect api key")
+            || combined.contains("invalid api key")
+            || combined.contains("authentication failed")
+            || combined.contains("unauthorized")
+            || combined.contains("forbidden")
+        {
+            return Some((
+                "runtime_auth_failed".to_string(),
+                "Runtime authentication failed; inspect runtime stderr for details".to_string(),
+                false,
+            ));
+        }
+
+        if combined.contains("rate limit")
+            || combined.contains("too many requests")
+            || combined.contains("http 429")
+            || combined.contains("status 429")
+            || combined.contains(" 429")
+        {
+            return Some((
+                "runtime_rate_limited".to_string(),
+                "Runtime reported rate limiting; retry recommended".to_string(),
+                true,
+            ));
+        }
+
+        None
+    }
+
+    fn emit_runtime_error_classified(
+        &self,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        adapter_name: &str,
+        classified: &ClassifiedRuntimeError,
+        origin: &'static str,
+    ) -> Result<()> {
+        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
+            flow.project_id,
+            flow.graph_id,
+            flow.id,
+            task_id,
+            attempt_id,
+        );
+
+        self.append_event(
+            Event::new(
+                EventPayload::RuntimeErrorClassified {
+                    attempt_id,
+                    adapter_name: adapter_name.to_string(),
+                    code: classified.code.clone(),
+                    category: classified.category.clone(),
+                    message: classified.message.clone(),
+                    recoverable: classified.recoverable,
+                    retryable: classified.retryable,
+                    rate_limited: classified.rate_limited,
+                },
+                corr_attempt.clone(),
+            ),
+            origin,
+        )?;
+
+        let mut err = HivemindError::runtime(
+            format!("runtime_{}", classified.code),
+            classified.message.clone(),
+            origin,
+        )
+        .recoverable(classified.recoverable)
+        .with_context("adapter", adapter_name.to_string())
+        .with_context("runtime_error_code", classified.code.clone())
+        .with_context("runtime_error_category", classified.category.clone());
+
+        if classified.rate_limited {
+            err = err.with_hint(
+                "Rate limiting detected. Hivemind will schedule a retry and may switch to a backup runtime if configured.",
+            );
+        }
+
+        self.record_error_event(&err, corr_attempt);
+        Ok(())
+    }
+
+    fn select_runtime_backup(
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        primary: &ProjectRuntimeConfig,
+    ) -> Option<ProjectRuntimeConfig> {
+        if let Ok(candidate) = Self::effective_runtime_for_task(
+            state,
+            flow,
+            task_id,
+            RuntimeRole::Validator,
+            "registry:tick_flow",
+        ) {
+            if candidate != *primary {
+                return Some(candidate);
+            }
+        }
+
+        match primary.adapter_name.as_str() {
+            "opencode" => {
+                let mut fallback = primary.clone();
+                fallback.adapter_name = "kilo".to_string();
+                Some(fallback)
+            }
+            "kilo" => {
+                let mut fallback = primary.clone();
+                fallback.adapter_name = "opencode".to_string();
+                Some(fallback)
+            }
+            _ => None,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn schedule_runtime_recovery(
+        &self,
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        from_runtime: &ProjectRuntimeConfig,
+        classified: &ClassifiedRuntimeError,
+        origin: &'static str,
+    ) -> Result<()> {
+        let backup = Self::select_runtime_backup(state, flow, task_id, from_runtime);
+        let target_runtime = if classified.rate_limited {
+            backup.unwrap_or_else(|| from_runtime.clone())
+        } else {
+            from_runtime.clone()
+        };
+
+        let strategy = if target_runtime.adapter_name == from_runtime.adapter_name {
+            "same_runtime_retry"
+        } else {
+            "fallback_runtime"
+        };
+        let backoff_ms = if classified.rate_limited { 1_000 } else { 250 };
+
+        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
+            flow.project_id,
+            flow.graph_id,
+            flow.id,
+            task_id,
+            attempt_id,
+        );
+        self.append_event(
+            Event::new(
+                EventPayload::RuntimeRecoveryScheduled {
+                    attempt_id,
+                    from_adapter: from_runtime.adapter_name.clone(),
+                    to_adapter: target_runtime.adapter_name.clone(),
+                    strategy: strategy.to_string(),
+                    reason: classified.code.clone(),
+                    backoff_ms,
+                },
+                corr_attempt,
+            ),
+            origin,
+        )?;
+
+        if target_runtime.adapter_name != from_runtime.adapter_name {
+            let corr_task = CorrelationIds::for_graph_flow_task(
+                flow.project_id,
+                flow.graph_id,
+                flow.id,
+                task_id,
+            );
+            self.append_event(
+                Event::new(
+                    EventPayload::TaskRuntimeRoleConfigured {
+                        task_id,
+                        role: RuntimeRole::Worker,
+                        adapter_name: target_runtime.adapter_name,
+                        binary_path: target_runtime.binary_path,
+                        model: target_runtime.model,
+                        args: target_runtime.args,
+                        env: target_runtime.env,
+                        timeout_ms: target_runtime.timeout_ms,
+                    },
+                    corr_task,
+                ),
+                origin,
+            )?;
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn handle_runtime_failure(
+        &self,
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        runtime: &ProjectRuntimeConfig,
+        next_attempt_number: u32,
+        max_attempts: u32,
+        failure_code: &str,
+        failure_message: &str,
+        recoverable: bool,
+        stdout: &str,
+        stderr: &str,
+        origin: &'static str,
+    ) -> Result<()> {
+        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
+            flow.project_id,
+            flow.graph_id,
+            flow.id,
+            task_id,
+            attempt_id,
+        );
+
+        let reason = format!("{failure_code}: {failure_message}");
+        self.append_event(
+            Event::new(
+                EventPayload::RuntimeTerminated { attempt_id, reason },
+                corr_attempt.clone(),
+            ),
+            origin,
+        )?;
+
+        let classified = Self::classify_runtime_error(
+            failure_code,
+            failure_message,
+            recoverable,
+            stdout,
+            stderr,
+        );
+        self.emit_runtime_error_classified(
+            flow,
+            task_id,
+            attempt_id,
+            &runtime.adapter_name,
+            &classified,
+            origin,
+        )?;
+
+        if failure_code == "checkpoints_incomplete" {
+            return Ok(());
+        }
+
+        self.fail_running_attempt(flow, task_id, attempt_id, failure_code, origin)?;
+
+        let should_retry = classified.retryable
+            && next_attempt_number < max_attempts
+            && (classified.rate_limited
+                || matches!(
+                    classified.code.as_str(),
+                    "timeout" | "wait_failed" | "stdin_write_failed"
+                ));
+
+        if should_retry {
+            self.schedule_runtime_recovery(
+                state,
+                flow,
+                task_id,
+                attempt_id,
+                runtime,
+                &classified,
+                origin,
+            )?;
+            if let Err(err) = self.retry_task(&task_id.to_string(), false, RetryMode::Continue) {
+                self.record_error_event(&err, corr_attempt);
+            }
+        }
+
+        Ok(())
     }
 
     fn format_checkpoint_commit_message(spec: &CheckpointCommitSpec<'_>) -> String {
@@ -709,6 +1047,7 @@ impl Registry {
             .attempts
             .values()
             .filter(|a| a.flow_id == flow.id && a.task_id == task_id)
+            .filter(|a| a.attempt_number < attempt_number)
             .cloned()
             .collect();
         attempts.sort_by_key(|a| a.attempt_number);
@@ -732,6 +1071,12 @@ impl Registry {
                 .iter()
                 .filter(|r| !r.required && !r.passed)
                 .map(|r| r.name.clone())
+                .collect();
+            let incomplete_checkpoints: Vec<String> = prior
+                .checkpoints
+                .iter()
+                .filter(|cp| cp.state != AttemptCheckpointState::Completed)
+                .map(|cp| cp.checkpoint_id.clone())
                 .collect();
 
             let mut summary = String::new();
@@ -764,6 +1109,13 @@ impl Registry {
                     optional_failed.join(", ")
                 );
             }
+            if !incomplete_checkpoints.is_empty() {
+                let _ = write!(
+                    summary,
+                    "pending_checkpoints={} ",
+                    incomplete_checkpoints.join(", ")
+                );
+            }
 
             if summary.trim().is_empty() {
                 summary = "no recorded outcomes".to_string();
@@ -778,6 +1130,11 @@ impl Registry {
                 Some(format!(
                     "Optional checks failed: {}",
                     optional_failed.join(", ")
+                ))
+            } else if !incomplete_checkpoints.is_empty() {
+                Some(format!(
+                    "Checkpoints incomplete: {}",
+                    incomplete_checkpoints.join(", ")
                 ))
             } else if let Some(ec) = exit_code {
                 if ec != 0 {
@@ -801,6 +1158,7 @@ impl Registry {
         let latest = attempts.last();
         let mut required_failures: Vec<String> = Vec::new();
         let mut optional_failures: Vec<String> = Vec::new();
+        let mut incomplete_checkpoints: Vec<String> = Vec::new();
         let mut exit_code: Option<i32> = None;
         #[allow(clippy::useless_let_if_seq, clippy::option_if_let_else)]
         let terminated_reason = if let Some(last) = latest {
@@ -815,6 +1173,12 @@ impl Registry {
                 .iter()
                 .filter(|r| !r.required && !r.passed)
                 .map(|r| r.name.clone())
+                .collect();
+            incomplete_checkpoints = last
+                .checkpoints
+                .iter()
+                .filter(|cp| cp.state != AttemptCheckpointState::Completed)
+                .map(|cp| cp.checkpoint_id.clone())
                 .collect();
 
             let (ec, term) = self
@@ -873,6 +1237,13 @@ impl Registry {
             }
             if let Some(ref reason) = terminated_reason {
                 let _ = writeln!(ctx, "Runtime terminated: {reason}");
+            }
+            if !incomplete_checkpoints.is_empty() {
+                let _ = writeln!(
+                    ctx,
+                    "Incomplete checkpoints from prior attempt: {}",
+                    incomplete_checkpoints.join(", ")
+                );
             }
 
             if let Some(diff_id) = last.diff_id {
@@ -4107,49 +4478,39 @@ impl Registry {
 
         let mut adapter = Self::build_runtime_adapter(runtime_for_adapter.clone())?;
         if let Err(e) = adapter.initialize() {
-            let reason = format!("{}: {}", e.code, e.message);
-            self.store
-                .append(Event::new(
-                    EventPayload::RuntimeTerminated { attempt_id, reason },
-                    attempt_corr,
-                ))
-                .map_err(|err| {
-                    HivemindError::system(
-                        "event_append_failed",
-                        err.to_string(),
-                        "registry:tick_flow",
-                    )
-                })?;
-            let _ = self.fail_running_attempt(
+            self.handle_runtime_failure(
+                &state,
                 &flow,
                 task_id,
                 attempt_id,
-                "runtime_initialize_failed",
+                &runtime_for_adapter,
+                next_attempt_number,
+                max_attempts,
+                &e.code,
+                &e.message,
+                e.recoverable,
+                "",
+                "",
                 "registry:tick_flow",
-            );
+            )?;
             return self.get_flow(flow_id);
         }
         if let Err(e) = adapter.prepare(task_id, &worktree_status.path) {
-            let reason = format!("{}: {}", e.code, e.message);
-            self.store
-                .append(Event::new(
-                    EventPayload::RuntimeTerminated { attempt_id, reason },
-                    attempt_corr,
-                ))
-                .map_err(|err| {
-                    HivemindError::system(
-                        "event_append_failed",
-                        err.to_string(),
-                        "registry:tick_flow",
-                    )
-                })?;
-            let _ = self.fail_running_attempt(
+            self.handle_runtime_failure(
+                &state,
                 &flow,
                 task_id,
                 attempt_id,
-                "runtime_prepare_failed",
+                &runtime_for_adapter,
+                next_attempt_number,
+                max_attempts,
+                &e.code,
+                &e.message,
+                e.recoverable,
+                "",
+                "",
                 "registry:tick_flow",
-            );
+            )?;
             return self.get_flow(flow_id);
         }
 
@@ -4204,26 +4565,21 @@ impl Registry {
             match res {
                 Ok(r) => (r.report, r.terminated_reason),
                 Err(e) => {
-                    let reason = format!("{}: {}", e.code, e.message);
-                    self.store
-                        .append(Event::new(
-                            EventPayload::RuntimeTerminated { attempt_id, reason },
-                            attempt_corr,
-                        ))
-                        .map_err(|err| {
-                            HivemindError::system(
-                                "event_append_failed",
-                                err.to_string(),
-                                "registry:tick_flow",
-                            )
-                        })?;
-                    let _ = self.fail_running_attempt(
+                    self.handle_runtime_failure(
+                        &state,
                         &flow,
                         task_id,
                         attempt_id,
-                        "runtime_execution_failed",
+                        &runtime_for_adapter,
+                        next_attempt_number,
+                        max_attempts,
+                        &e.code,
+                        &e.message,
+                        e.recoverable,
+                        "",
+                        "",
                         "registry:tick_flow",
-                    );
+                    )?;
                     return self.get_flow(flow_id);
                 }
             }
@@ -4231,26 +4587,21 @@ impl Registry {
             let report = match adapter.execute(input) {
                 Ok(r) => r,
                 Err(e) => {
-                    let reason = format!("{}: {}", e.code, e.message);
-                    self.store
-                        .append(Event::new(
-                            EventPayload::RuntimeTerminated { attempt_id, reason },
-                            attempt_corr,
-                        ))
-                        .map_err(|err| {
-                            HivemindError::system(
-                                "event_append_failed",
-                                err.to_string(),
-                                "registry:tick_flow",
-                            )
-                        })?;
-                    let _ = self.fail_running_attempt(
+                    self.handle_runtime_failure(
+                        &state,
                         &flow,
                         task_id,
                         attempt_id,
-                        "runtime_execution_failed",
+                        &runtime_for_adapter,
+                        next_attempt_number,
+                        max_attempts,
+                        &e.code,
+                        &e.message,
+                        e.recoverable,
+                        "",
+                        "",
                         "registry:tick_flow",
-                    );
+                    )?;
                     return self.get_flow(flow_id);
                 }
             };
@@ -4382,17 +4733,67 @@ impl Registry {
         })?;
 
         if report.exit_code != 0 {
-            let _ = self.fail_running_attempt(
+            self.handle_runtime_failure(
+                &state,
                 &flow,
                 task_id,
                 attempt_id,
+                &runtime_for_adapter,
+                next_attempt_number,
+                max_attempts,
                 "runtime_nonzero_exit",
+                &format!("Runtime exited with code {}", report.exit_code),
+                true,
+                &report.stdout,
+                &report.stderr,
                 "registry:tick_flow",
-            );
+            )?;
             return self.get_flow(flow_id);
         }
 
-        self.complete_task_execution(&task_id.to_string())?;
+        if let Err(err) = self.complete_task_execution(&task_id.to_string()) {
+            if err.code == "checkpoints_incomplete" {
+                if let Some((failure_code, failure_message, recoverable)) =
+                    Self::detect_runtime_output_failure(&report.stdout, &report.stderr)
+                {
+                    self.handle_runtime_failure(
+                        &state,
+                        &flow,
+                        task_id,
+                        attempt_id,
+                        &runtime_for_adapter,
+                        next_attempt_number,
+                        max_attempts,
+                        &failure_code,
+                        &failure_message,
+                        recoverable,
+                        &report.stdout,
+                        &report.stderr,
+                        "registry:tick_flow",
+                    )?;
+                    return self.get_flow(flow_id);
+                }
+
+                self.handle_runtime_failure(
+                    &state,
+                    &flow,
+                    task_id,
+                    attempt_id,
+                    &runtime_for_adapter,
+                    next_attempt_number,
+                    max_attempts,
+                    "checkpoints_incomplete",
+                    &err.message,
+                    true,
+                    &report.stdout,
+                    &report.stderr,
+                    "registry:tick_flow",
+                )?;
+                return Err(err);
+            }
+            return Err(err);
+        }
+
         self.process_verifying_task(flow_id, task_id)
     }
 
@@ -5586,10 +5987,9 @@ impl Registry {
             .depends_on_flows
             .iter()
             .filter(|dep_id| {
-                state
-                    .flows
-                    .get(dep_id)
-                    .is_none_or(|dep| dep.state != FlowState::Completed)
+                state.flows.get(dep_id).is_none_or(|dep| {
+                    !matches!(dep.state, FlowState::Completed | FlowState::Merged)
+                })
             })
             .copied()
             .collect();
@@ -8919,6 +9319,188 @@ mod tests {
         assert!(events
             .iter()
             .any(|e| matches!(e.payload, EventPayload::RuntimeExited { .. })));
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::RuntimeErrorClassified {
+                    code,
+                    category,
+                    retryable,
+                    ..
+                } if code == "checkpoints_incomplete" && category == "checkpoint_incomplete" && !retryable
+            )
+        }));
+        assert!(!events.iter().any(|e| {
+            matches!(e.payload, EventPayload::RuntimeRecoveryScheduled { .. })
+                && e.metadata.correlation.flow_id == Some(flow.id)
+        }));
+    }
+
+    #[test]
+    fn tick_flow_schedules_rate_limit_recovery_and_retries_task() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry
+            .create_graph("proj", "g-rate-limit", &[task.id])
+            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo 'HTTP 429 Too Many Requests' 1>&2; exit 1".to_string(),
+                ],
+                &[],
+                1000,
+                2,
+            )
+            .unwrap();
+
+        let updated = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap();
+
+        assert_eq!(
+            updated.task_executions.get(&task.id).map(|exec| exec.state),
+            Some(TaskExecState::Pending)
+        );
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::RuntimeErrorClassified {
+                    code,
+                    category,
+                    retryable,
+                    rate_limited,
+                    ..
+                } if code == "runtime_nonzero_exit"
+                    && category == "rate_limit"
+                    && *retryable
+                    && *rate_limited
+            )
+        }));
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::RuntimeRecoveryScheduled {
+                    strategy,
+                    from_adapter,
+                    to_adapter,
+                    ..
+                } if strategy == "fallback_runtime"
+                    && from_adapter == "opencode"
+                    && to_adapter == "kilo"
+            )
+        }));
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::TaskRetryRequested { task_id, .. } if *task_id == task.id
+            )
+        }));
+    }
+
+    #[test]
+    fn tick_flow_classifies_auth_errors_from_stderr_even_with_zero_exit() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo 'Error: Incorrect API key provided: invalid_key' 1>&2; exit 0"
+                        .to_string(),
+                ],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g-auth", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let updated = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap();
+
+        assert_eq!(
+            updated.task_executions.get(&task.id).map(|exec| exec.state),
+            Some(TaskExecState::Failed)
+        );
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::RuntimeOutputChunk {
+                    stream: RuntimeOutputStream::Stderr,
+                    content,
+                    ..
+                } if content.contains("Incorrect API key")
+            )
+        }));
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::RuntimeErrorClassified {
+                    code,
+                    category,
+                    retryable,
+                    rate_limited,
+                    ..
+                } if code == "runtime_auth_failed"
+                    && category == "runtime_execution"
+                    && !retryable
+                    && !rate_limited
+            )
+        }));
+        assert!(!events
+            .iter()
+            .any(|e| { matches!(&e.payload, EventPayload::RuntimeRecoveryScheduled { .. }) }));
     }
 
     #[test]

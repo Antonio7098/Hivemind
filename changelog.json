@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.24",
+      "date": "2026-02-17",
+      "phase": 30,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Centralize runtime failure handling to classify errors, emit RuntimeErrorClassified/RuntimeRecoveryScheduled events, and schedule backup-runtime recovery for transient failures (rate limiting/timeouts)"
+        },
+        {
+          "type": "fixed",
+          "area": "adapters",
+          "description": "Preserve stdout/stderr on nonzero runtime exits so parser-based rate-limit/auth detection has full execution context"
+        },
+        {
+          "type": "fixed",
+          "area": "core",
+          "description": "Detect runtime auth/rate-limit failures from stderr even when wrapped runtimes return exit code 0 and checkpoint completion is otherwise missing"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add registry coverage for rate-limit recovery scheduling and zero-exit stderr auth-failure classification, plus expanded tick_flow regression validation"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Document runtime error first-class observability, recovery scheduling semantics, and Sprint 30 production-hardening validation outcomes"
+        }
+      ]
+    },
+    {
       "version": "v0.1.23",
       "date": "2026-02-16",
       "phase": 33,

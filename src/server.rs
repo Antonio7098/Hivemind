@@ -185,6 +185,8 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::RuntimeInterrupted { .. } => "RuntimeInterrupted",
         EventPayload::RuntimeExited { .. } => "RuntimeExited",
         EventPayload::RuntimeTerminated { .. } => "RuntimeTerminated",
+        EventPayload::RuntimeErrorClassified { .. } => "RuntimeErrorClassified",
+        EventPayload::RuntimeRecoveryScheduled { .. } => "RuntimeRecoveryScheduled",
         EventPayload::RuntimeFilesystemObserved { .. } => "RuntimeFilesystemObserved",
         EventPayload::RuntimeCommandObserved { .. } => "RuntimeCommandObserved",
         EventPayload::RuntimeToolCallObserved { .. } => "RuntimeToolCallObserved",
@@ -277,6 +279,8 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::RuntimeInterrupted { .. }
         | EventPayload::RuntimeExited { .. }
         | EventPayload::RuntimeTerminated { .. }
+        | EventPayload::RuntimeErrorClassified { .. }
+        | EventPayload::RuntimeRecoveryScheduled { .. }
         | EventPayload::RuntimeFilesystemObserved { .. }
         | EventPayload::RuntimeCommandObserved { .. }
         | EventPayload::RuntimeToolCallObserved { .. }

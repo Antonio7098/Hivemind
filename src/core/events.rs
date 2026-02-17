@@ -784,6 +784,24 @@ pub enum EventPayload {
         attempt_id: Uuid,
         reason: String,
     },
+    RuntimeErrorClassified {
+        attempt_id: Uuid,
+        adapter_name: String,
+        code: String,
+        category: String,
+        message: String,
+        recoverable: bool,
+        retryable: bool,
+        rate_limited: bool,
+    },
+    RuntimeRecoveryScheduled {
+        attempt_id: Uuid,
+        from_adapter: String,
+        to_adapter: String,
+        strategy: String,
+        reason: String,
+        backoff_ms: u64,
+    },
     RuntimeFilesystemObserved {
         attempt_id: Uuid,
         #[serde(default)]

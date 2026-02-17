@@ -1294,6 +1294,8 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::RuntimeInterrupted { .. } => "runtime_interrupted",
         EventPayload::RuntimeExited { .. } => "runtime_exited",
         EventPayload::RuntimeTerminated { .. } => "runtime_terminated",
+        EventPayload::RuntimeErrorClassified { .. } => "runtime_error_classified",
+        EventPayload::RuntimeRecoveryScheduled { .. } => "runtime_recovery_scheduled",
         EventPayload::RuntimeFilesystemObserved { .. } => "runtime_filesystem_observed",
         EventPayload::RuntimeCommandObserved { .. } => "runtime_command_observed",
         EventPayload::RuntimeToolCallObserved { .. } => "runtime_tool_call_observed",
