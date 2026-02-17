@@ -643,7 +643,7 @@ fn cli_sprint36_constitution_lifecycle_and_auditability() {
         r"version: 1
 schema_version: constitution.v1
 compatibility:
-  minimum_hivemind_version: 0.1.27
+  minimum_hivemind_version: 0.1.28
   governance_schema_version: governance.v1
 partitions:
   - id: domain
@@ -764,7 +764,7 @@ rules:
         r"version: 1
 schema_version: constitution.v1
 compatibility:
-  minimum_hivemind_version: 0.1.27
+  minimum_hivemind_version: 0.1.28
   governance_schema_version: governance.v1
 partitions:
   - id: domain
@@ -802,7 +802,7 @@ rules:
         r"version: 1
 schema_version: constitution.v1
 compatibility:
-  minimum_hivemind_version: 0.1.27
+  minimum_hivemind_version: 0.1.28
   governance_schema_version: governance.v1
 partitions:
   - id: domain

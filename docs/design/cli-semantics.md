@@ -106,6 +106,7 @@ hivemind project attach-repo <project> <repo-path> [--name <name>] [--access ro|
 **Effects:**
 - Repository reference added to project
 - Access mode recorded (default: rw)
+- Graph snapshot refresh is triggered for the project (`trigger=project_attach`)
 
 **Events:**
 ```
@@ -114,6 +115,16 @@ RepositoryAttachedToProject:
   repo_name: <name>
   repo_path: <repo-path>
   access_mode: <ro|rw>
+
+GraphSnapshotStarted:
+  project_id: <project_id>
+  trigger: project_attach
+  repository_count: <n>
+
+GraphSnapshotCompleted|GraphSnapshotFailed:
+  project_id: <project_id>
+  trigger: project_attach
+  ...
 ```
 
 **Failures:**
@@ -377,6 +388,7 @@ hivemind [-f json|table|yaml] constitution update <project> (--content <yaml> | 
 - Canonical constitution path is `~/.hivemind/projects/<project-id>/constitution.yaml`
 - `init` and `update` require explicit `--confirm`
 - `update` requires constitution to be initialized first
+- Projects with attached repositories must have a current graph snapshot artifact
 
 **Effects:**
 - Defines and validates Constitution Schema v1 (`version`, `schema_version`, `compatibility`, `partitions[]`, `rules[]`)
@@ -432,6 +444,9 @@ ConstitutionValidated:
 - `constitution_not_found`
 - `constitution_input_read_failed`
 - `constitution_content_missing`
+- `graph_snapshot_missing`
+- `graph_snapshot_stale`
+- `graph_snapshot_integrity_invalid`
 
 **Idempotence:**
 - `show`: idempotent
@@ -996,6 +1011,67 @@ hivemind graph validate <graph-id>
 - `GRAPH_NOT_FOUND`
 
 **Idempotence:** Idempotent.
+
+---
+
+### 4.4 graph snapshot refresh
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] graph snapshot refresh <project>
+```
+
+**Preconditions:**
+- Project exists
+- Project has at least one attached repository
+- Attached repositories resolve a valid HEAD commit
+
+**Effects:**
+- Rebuilds static snapshot artifact at `~/.hivemind/projects/<project-id>/graph_snapshot.json`
+- Uses UCP codegraph extraction as authoritative backend (no local duplicate parser)
+- Persists UCP profile/version metadata, canonical fingerprint, repository provenance, and static structure+blocks projection
+- Emits diff telemetry when canonical fingerprint changes
+
+**Events:**
+```
+GraphSnapshotStarted:
+  project_id: <project-id>
+  trigger: manual_refresh
+  repository_count: <n>
+
+GraphSnapshotDiffDetected:
+  project_id: <project-id>
+  trigger: manual_refresh|project_attach|checkpoint_complete|merge_completed
+  previous_fingerprint: <optional>
+  canonical_fingerprint: <digest>
+
+GraphSnapshotCompleted:
+  project_id: <project-id>
+  trigger: manual_refresh|project_attach|checkpoint_complete|merge_completed
+  path: ~/.hivemind/projects/<project-id>/graph_snapshot.json
+  revision: <n>
+  repository_count: <n>
+  ucp_engine_version: <version>
+  profile_version: codegraph.v1
+  canonical_fingerprint: <digest>
+
+GraphSnapshotFailed:
+  project_id: <project-id>
+  trigger: manual_refresh|project_attach|checkpoint_complete|merge_completed
+  reason: <message>
+  hint: <optional>
+```
+
+**Failures:**
+- `project_not_found`
+- `project_has_no_repo`
+- `ucp_codegraph_build_failed`
+- `graph_snapshot_profile_invalid`
+- `graph_snapshot_scope_unsupported`
+- `graph_snapshot_fingerprint_mismatch`
+- `governance_artifact_write_failed`
+
+**Idempotence:** Content-idempotent; revision increments are event-driven and expected.
 
 ---
 

@@ -430,6 +430,39 @@ pub enum EventPayload {
         projection_version: u32,
     },
 
+    GraphSnapshotStarted {
+        project_id: Uuid,
+        trigger: String,
+        repository_count: usize,
+    },
+
+    GraphSnapshotCompleted {
+        project_id: Uuid,
+        trigger: String,
+        path: String,
+        revision: u64,
+        repository_count: usize,
+        ucp_engine_version: String,
+        profile_version: String,
+        canonical_fingerprint: String,
+    },
+
+    GraphSnapshotFailed {
+        project_id: Uuid,
+        trigger: String,
+        reason: String,
+        #[serde(default)]
+        hint: Option<String>,
+    },
+
+    GraphSnapshotDiffDetected {
+        project_id: Uuid,
+        trigger: String,
+        #[serde(default)]
+        previous_fingerprint: Option<String>,
+        canonical_fingerprint: String,
+    },
+
     ConstitutionInitialized {
         project_id: Uuid,
         path: String,

@@ -130,53 +130,53 @@
 > **UCP prerequisites:** `unified-content-protocol/ops/sprint-36-ucm-codegraph-readiness.md` and `unified-content-protocol/ops/sprint-37-codebase-ucm-graph.md` are complete.
 
 ### 37.1 UCP Integration Contract
-- [ ] Consume UCP graph output as the source engine (no duplicate parser/extractor implementation in Hivemind)
-- [ ] Pin and record UCP engine version used for extraction (`ucp_engine_version`)
-- [ ] Require UCP `CodeGraphProfile v1` compliance metadata (`profile_version`) on all accepted snapshots
-- [ ] Require UCP `canonical_fingerprint` and stable `logical_key` semantics for diff/replay reliability
-- [ ] Enforce accepted graph scope from UCP (repository, directory, file, top-level symbol, imports/depends_on) for context-oriented use
+- [x] Consume UCP graph output as the source engine (no duplicate parser/extractor implementation in Hivemind)
+- [x] Pin and record UCP engine version used for extraction (`ucp_engine_version`)
+- [x] Require UCP `CodeGraphProfile v1` compliance metadata (`profile_version`) on all accepted snapshots
+- [x] Require UCP `canonical_fingerprint` and stable `logical_key` semantics for diff/replay reliability
+- [x] Enforce accepted graph scope from UCP (repository, directory, file, top-level symbol, imports/depends_on) for context-oriented use
 
 ### 37.2 Hivemind Snapshot Projection Model
-- [ ] Materialize UCP output under `projects/<project-id>/graph_snapshot.json`
-- [ ] Define Hivemind snapshot envelope fields (schema/version metadata, provenance, UCP profile version, UCP canonical fingerprint, summary stats)
-- [ ] Preserve UCP-style structure+blocks projection for downstream context assembly and inspectability
+- [x] Materialize UCP output under `projects/<project-id>/graph_snapshot.json`
+- [x] Define Hivemind snapshot envelope fields (schema/version metadata, provenance, UCP profile version, UCP canonical fingerprint, summary stats)
+- [x] Preserve UCP-style structure+blocks projection for downstream context assembly and inspectability
 
 ### 37.3 Lifecycle and Observability
-- [ ] Trigger snapshot build/rebuild on project attach, checkpoint completion, merge completion, and explicit refresh command
-- [ ] Add/maintain explicit command: `hivemind graph snapshot refresh`
-- [ ] Emit snapshot lifecycle events (`started`, `completed`, `failed`, `diff_detected`) with correlation IDs
+- [x] Trigger snapshot build/rebuild on project attach, checkpoint completion, merge completion, and explicit refresh command
+- [x] Add/maintain explicit command: `hivemind graph snapshot refresh`
+- [x] Emit snapshot lifecycle events (`started`, `completed`, `failed`, `diff_detected`) with correlation IDs
 
 ### 37.4 Integrity and Staleness Gates
-- [ ] Detect stale snapshots by comparing snapshot commit provenance vs current HEAD before constitution checks
-- [ ] Fail loud with actionable recovery hint when snapshot is stale/missing (`Run: hivemind graph snapshot refresh`)
-- [ ] Verify snapshot integrity using UCP-provided canonical fingerprint contract
-- [ ] Use stable `logical_key` references for semantic diffing across block ID churn
+- [x] Detect stale snapshots by comparing snapshot commit provenance vs current HEAD before constitution checks
+- [x] Fail loud with actionable recovery hint when snapshot is stale/missing (`Run: hivemind graph snapshot refresh`)
+- [x] Verify snapshot integrity using UCP-provided canonical fingerprint contract
+- [x] Use stable `logical_key` references for semantic diffing across block ID churn
 
 ### 37.5 Compatibility and Non-Regression
-- [ ] Existing project/task/graph/flow execution semantics remain unchanged when codegraph integration is enabled
-- [ ] Existing event replay/state reconstruction remains deterministic with graph snapshot integration present
-- [ ] Existing CLI contracts (output formats, error contracts, exit codes) remain stable
-- [ ] Existing runtime adapters and verification/merge flows operate without regression
-- [ ] Projects that do not use constitution checks continue to function without new mandatory graph coupling
+- [x] Existing project/task/graph/flow execution semantics remain unchanged when codegraph integration is enabled
+- [x] Existing event replay/state reconstruction remains deterministic with graph snapshot integration present
+- [x] Existing CLI contracts (output formats, error contracts, exit codes) remain stable
+- [x] Existing runtime adapters and verification/merge flows operate without regression
+- [x] Projects that do not use constitution checks continue to function without new mandatory graph coupling
 
 ### 37.6 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 37 manual integration checklist under `@hivemind-test` (`/home/antonio/programming/Hivemind/hivemind-test`)
-- [ ] Manually validate UCP graph ingestion for:
-  - [ ] project attach trigger
-  - [ ] checkpoint completion trigger
-  - [ ] merge completion trigger
-  - [ ] manual refresh command
-- [ ] Manually validate staleness and recovery paths (`hivemind graph snapshot refresh`) with constitution checks enabled
-- [ ] Manually validate non-constitution projects and existing flow execution to confirm no regressions
-- [ ] Publish manual test report artifact in `@hivemind-test` with observed results and remediation notes
+- [x] Add/update Sprint 37 manual integration checklist under `@hivemind-test` (`/home/antonio/programming/Hivemind/hivemind-test`)
+- [x] Manually validate UCP graph ingestion for:
+  - [x] project attach trigger
+  - [x] checkpoint completion trigger
+  - [x] merge completion trigger
+  - [x] manual refresh command
+- [x] Manually validate staleness and recovery paths (`hivemind graph snapshot refresh`) with constitution checks enabled
+- [x] Manually validate non-constitution projects and existing flow execution to confirm no regressions
+- [x] Publish manual test report artifact in `@hivemind-test` with observed results and remediation notes
 
 ### 37.7 Exit Criteria
-- [ ] Hivemind uses UCP graph engine as authoritative extraction backend
-- [ ] Hivemind accepts only profile-compliant UCP graph artifacts
-- [ ] Snapshot lifecycle triggers and event telemetry are explicit and observable
-- [ ] Constitution engine receives stable, reproducible graph input
-- [ ] Hivemind-owned versioning, eventing, and failure semantics are fully enforced
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Hivemind uses UCP graph engine as authoritative extraction backend
+- [x] Hivemind accepts only profile-compliant UCP graph artifacts
+- [x] Snapshot lifecycle triggers and event telemetry are explicit and observable
+- [x] Constitution engine receives stable, reproducible graph input
+- [x] Hivemind-owned versioning, eventing, and failure semantics are fully enforced
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

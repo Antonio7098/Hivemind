@@ -1,6 +1,6 @@
 [package]
 name = "hivemind-core"
-version = "0.1.27"
+version = "0.1.28"
 edition = "2021"
 authors = ["Antonio"]
 description = "A structured orchestration system for agentic coding workflows"
@@ -33,6 +33,7 @@ tiny_http = "0.12"
 crossterm = "0.29"
 portable-pty = "0.9"
 signal-hook = "0.4"
+ucp-api = { path = "../unified-content-protocol/crates/ucp-api" }
 
 [dev-dependencies]
 tempfile = "3"

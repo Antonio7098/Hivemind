@@ -99,6 +99,7 @@ Capabilities:
 Capabilities:
 - Initialize/migrate/inspect governance storage for a project
 - Initialize/show/validate/update project constitution via `hivemind constitution ...`
+- Rebuild graph snapshot via `hivemind graph snapshot refresh <project>`
 - Manage project documents (`create`, `list`, `inspect`, `update`, `delete`) with immutable revisions
 - Explicitly include/exclude project documents for task execution context
 - Manage project notepad (`create`, `show`, `update`, `delete`) as non-executional context
@@ -106,6 +107,7 @@ Capabilities:
 Constraints:
 - Exactly one constitution is allowed per project (canonical `constitution.yaml`)
 - Constitution mutations require explicit confirmation and actor-attributed audit metadata
+- Constitution lifecycle commands require current graph snapshot provenance when repositories are attached
 - Project document attachment is explicit and task-scoped
 - Project notepad content is never injected into runtime prompts by default
 
@@ -146,6 +148,7 @@ Capabilities:
 - Add dependencies
 - Assign scopes
 - Validate TaskGraph
+- Refresh static codegraph snapshot envelope (`graph snapshot refresh`)
 - Delete TaskGraph
 
 ---
@@ -172,6 +175,7 @@ Capabilities:
 - Override per-tick scheduling width (`flow tick --max-parallel`)
 - Set flow run mode (`flow set-run-mode manual|auto`)
 - Add inter-flow dependencies (`flow add-dependency`)
+- Auto-refresh graph snapshots on checkpoint completion and merge completion
 - Pause TaskFlow
 - Resume TaskFlow
 - Abort TaskFlow

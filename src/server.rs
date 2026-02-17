@@ -129,6 +129,10 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
             "GovernanceAttachmentLifecycleUpdated"
         }
         EventPayload::GovernanceStorageMigrated { .. } => "GovernanceStorageMigrated",
+        EventPayload::GraphSnapshotStarted { .. } => "GraphSnapshotStarted",
+        EventPayload::GraphSnapshotCompleted { .. } => "GraphSnapshotCompleted",
+        EventPayload::GraphSnapshotFailed { .. } => "GraphSnapshotFailed",
+        EventPayload::GraphSnapshotDiffDetected { .. } => "GraphSnapshotDiffDetected",
         EventPayload::ConstitutionInitialized { .. } => "ConstitutionInitialized",
         EventPayload::ConstitutionUpdated { .. } => "ConstitutionUpdated",
         EventPayload::ConstitutionValidated { .. } => "ConstitutionValidated",
@@ -214,6 +218,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn payload_category(payload: &EventPayload) -> &'static str {
     match payload {
         EventPayload::ErrorOccurred { .. } => "error",
@@ -231,6 +236,10 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::GovernanceArtifactDeleted { .. }
         | EventPayload::GovernanceAttachmentLifecycleUpdated { .. }
         | EventPayload::GovernanceStorageMigrated { .. }
+        | EventPayload::GraphSnapshotStarted { .. }
+        | EventPayload::GraphSnapshotCompleted { .. }
+        | EventPayload::GraphSnapshotFailed { .. }
+        | EventPayload::GraphSnapshotDiffDetected { .. }
         | EventPayload::ConstitutionInitialized { .. }
         | EventPayload::ConstitutionUpdated { .. }
         | EventPayload::ConstitutionValidated { .. }
