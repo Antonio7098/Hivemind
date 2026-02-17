@@ -4,13 +4,13 @@
 
 - **Sprint**: 37
 - **Title**: UCP Graph Integration and Snapshot Projection
-- **Branch**: `sprint/37-ucp-graph-snapshot`
+- **Branch**: `sprint/37-ucp-graph-snapshot-ci`
 - **Date**: 2026-02-17
 - **Owner**: Antonio
 
 ## 2. Objectives
 
-- Integrate local UCP codegraph extraction into Hivemind without duplicating parser/extractor logic.
+- Integrate UCP codegraph extraction into Hivemind without duplicating parser/extractor logic.
 - Materialize project graph snapshot artifacts in Hivemind governance storage with explicit schema/provenance/version metadata.
 - Add explicit snapshot refresh command and automatic lifecycle triggers (attach/checkpoint/merge).
 - Enforce graph snapshot integrity/staleness gates before constitution lifecycle operations.
@@ -19,7 +19,7 @@
 ## 3. Delivered Changes
 
 - **UCP integration and snapshot artifact model**
-  - Added local path dependency to `ucp-api`.
+  - Added pinned `ucp-api` dependency to unified-content-protocol git revision `cf745b5efb66711f5fbcd89a41c640533b2fdc84` (CI-compatible).
   - Implemented graph snapshot build pipeline in registry using UCP APIs:
     - `build_code_graph`
     - `validate_code_graph_profile`
@@ -106,6 +106,8 @@ Manual run artifacts:
 - `hivemind-test/test-report/08-sprint37-manual.log`
 - `hivemind-test/test-report/09-sprint37-worktree.log`
 - `hivemind-test/test-report/10-sprint37-execution.log`
+- `hivemind-test/test-report/13-sprint37-ci-worktree.log`
+- `hivemind-test/test-report/14-sprint37-ci-execution.log`
 - `hivemind-test/test-report/sprint-37-manual-checklist.md`
 - `hivemind-test/test-report/sprint-37-manual-report.md`
 
@@ -151,6 +153,9 @@ Updated:
 
 2. **Challenge**: Host disk exhaustion during release/coverage/manual cycles.
    - **Resolution**: Performed `cargo clean` to reclaim target storage, then rebuilt and completed manual evidence runs.
+
+3. **Challenge**: Local path dependency to `../unified-content-protocol` failed on GitHub Actions runners.
+   - **Resolution**: Replaced path dependency with pinned git dependency to UCP revision `cf745b5efb66711f5fbcd89a41c640533b2fdc84`, regenerated lockfile, and revalidated full suite.
 
 ## 10. Next Sprint Readiness
 

@@ -11,7 +11,7 @@ Scope: UCP Graph Integration and Snapshot Projection
 
 ## 37.1 UCP Integration Contract
 
-- [x] Hivemind consumes local UCP graph extraction via `ucp-api` path dependency
+- [x] Hivemind consumes UCP graph extraction via pinned `ucp-api` dependency (UCP git revision)
 - [x] Snapshot output records `ucp_engine_version` and `profile_version`
 - [x] Snapshot output records per-repo `canonical_fingerprint` and `logical_key`-compatible profile content
 - [x] Accepted node/edge scope enforcement observed through successful profile-compliant snapshot creation
@@ -50,7 +50,7 @@ Evidence: `08-sprint37-manual.log`
 - [x] Existing execution/checkpoint flow remains operational
 - [x] Non-constitution project flow executes without new mandatory constitution coupling
 
-Evidence: `09-sprint37-worktree.log`, `10-sprint37-execution.log`, `08-sprint37-manual.log`
+Evidence: `09-sprint37-worktree.log`, `10-sprint37-execution.log`, `13-sprint37-ci-worktree.log`, `14-sprint37-ci-execution.log`, `08-sprint37-manual.log`
 
 ## 37.6 Exit Criteria Mapping
 

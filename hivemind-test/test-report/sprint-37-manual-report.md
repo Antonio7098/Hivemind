@@ -7,7 +7,7 @@ Scope: Phase 3 / Sprint 37 — UCP Graph Integration and Snapshot Projection
 
 Manual validation confirms Sprint 37 behavior is operational and observable:
 
-- graph snapshots are generated from local UCP extraction and persisted under project governance storage
+- graph snapshots are generated from UCP extraction and persisted under project governance storage
 - snapshot lifecycle events are emitted on project attach, manual refresh, checkpoint completion, and merge completion
 - constitution lifecycle commands enforce fresh snapshot provenance and fail loudly on stale snapshots
 - non-constitution project execution flows continue to function without new mandatory coupling
@@ -17,6 +17,8 @@ Manual validation confirms Sprint 37 behavior is operational and observable:
 - `08-sprint37-manual.log`
 - `09-sprint37-worktree.log`
 - `10-sprint37-execution.log`
+- `13-sprint37-ci-worktree.log`
+- `14-sprint37-ci-execution.log`
 - `sprint-37-manual-checklist.md`
 
 ## Validations Performed

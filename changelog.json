@@ -11,7 +11,7 @@
         {
           "type": "added",
           "area": "core",
-          "description": "Integrate local `ucp-api` codegraph extraction and materialize `graph_snapshot.json` artifacts with profile metadata, canonical fingerprints, repository provenance, and static structure+blocks projections"
+          "description": "Integrate `ucp-api` codegraph extraction (pinned to a specific unified-content-protocol git revision) and materialize `graph_snapshot.json` artifacts with profile metadata, canonical fingerprints, repository provenance, and static structure+blocks projections"
         },
         {
           "type": "added",

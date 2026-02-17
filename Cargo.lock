@@ -1246,6 +1246,7 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 [[package]]
 name = "ucl-parser"
 version = "0.1.12"
+source = "git+https://github.com/Antonio7098/unified-content-protocol.git?rev=cf745b5efb66711f5fbcd89a41c640533b2fdc84#cf745b5efb66711f5fbcd89a41c640533b2fdc84"
 dependencies = [
  "logos",
  "serde",
@@ -1258,6 +1259,7 @@ dependencies = [
 [[package]]
 name = "ucm-core"
 version = "0.1.12"
+source = "git+https://github.com/Antonio7098/unified-content-protocol.git?rev=cf745b5efb66711f5fbcd89a41c640533b2fdc84#cf745b5efb66711f5fbcd89a41c640533b2fdc84"
 dependencies = [
  "base64",
  "chrono",
@@ -1272,6 +1274,7 @@ dependencies = [
 [[package]]
 name = "ucm-engine"
 version = "0.1.12"
+source = "git+https://github.com/Antonio7098/unified-content-protocol.git?rev=cf745b5efb66711f5fbcd89a41c640533b2fdc84#cf745b5efb66711f5fbcd89a41c640533b2fdc84"
 dependencies = [
  "chrono",
  "serde",
@@ -1285,6 +1288,7 @@ dependencies = [
 [[package]]
 name = "ucp-api"
 version = "0.1.12"
+source = "git+https://github.com/Antonio7098/unified-content-protocol.git?rev=cf745b5efb66711f5fbcd89a41c640533b2fdc84#cf745b5efb66711f5fbcd89a41c640533b2fdc84"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1310,6 +1314,7 @@ dependencies = [
 [[package]]
 name = "ucp-llm"
 version = "0.1.12"
+source = "git+https://github.com/Antonio7098/unified-content-protocol.git?rev=cf745b5efb66711f5fbcd89a41c640533b2fdc84#cf745b5efb66711f5fbcd89a41c640533b2fdc84"
 dependencies = [
  "chrono",
  "regex",
@@ -1320,6 +1325,7 @@ dependencies = [
 [[package]]
 name = "ucp-observe"
 version = "0.1.12"
+source = "git+https://github.com/Antonio7098/unified-content-protocol.git?rev=cf745b5efb66711f5fbcd89a41c640533b2fdc84#cf745b5efb66711f5fbcd89a41c640533b2fdc84"
 dependencies = [
  "chrono",
  "metrics",
@@ -1332,6 +1338,7 @@ dependencies = [
 [[package]]
 name = "ucp-translator-markdown"
 version = "0.1.12"
+source = "git+https://github.com/Antonio7098/unified-content-protocol.git?rev=cf745b5efb66711f5fbcd89a41c640533b2fdc84#cf745b5efb66711f5fbcd89a41c640533b2fdc84"
 dependencies = [
  "serde",
  "thiserror",

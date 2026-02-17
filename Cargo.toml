@@ -33,7 +33,7 @@ tiny_http = "0.12"
 crossterm = "0.29"
 portable-pty = "0.9"
 signal-hook = "0.4"
-ucp-api = { path = "../unified-content-protocol/crates/ucp-api" }
+ucp-api = { git = "https://github.com/Antonio7098/unified-content-protocol.git", rev = "cf745b5efb66711f5fbcd89a41c640533b2fdc84" }
 
 [dev-dependencies]
 tempfile = "3"
