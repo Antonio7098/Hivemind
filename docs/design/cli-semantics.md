@@ -362,6 +362,85 @@ hivemind [-f json|table|yaml] project governance inspect <project>
 
 ---
 
+### 2.10.1 constitution
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] constitution init <project> [--content <yaml> | --from-file <path>] --confirm [--actor <name>] [--intent <text>]
+hivemind [-f json|table|yaml] constitution show <project>
+hivemind [-f json|table|yaml] constitution validate <project>
+hivemind [-f json|table|yaml] constitution update <project> (--content <yaml> | --from-file <path>) --confirm [--actor <name>] [--intent <text>]
+```
+
+**Preconditions:**
+- Project exists
+- Canonical constitution path is `~/.hivemind/projects/<project-id>/constitution.yaml`
+- `init` and `update` require explicit `--confirm`
+- `update` requires constitution to be initialized first
+
+**Effects:**
+- Defines and validates Constitution Schema v1 (`version`, `schema_version`, `compatibility`, `partitions[]`, `rules[]`)
+- Enforces strict rule semantics:
+  - `forbidden_dependency` / `allowed_dependency` require known partition IDs for `from` + `to`
+  - `coverage_requirement` requires known `target` partition and `threshold` in `0..=100`
+- Maintains per-project constitution digest/version projection fields on project state
+- Preserves mutation audit metadata (`actor`, `mutation_intent`, confirmation flag)
+
+**Events:**
+```
+ConstitutionInitialized:
+  project_id: <project-id>
+  path: <constitution-path>
+  schema_version: constitution.v1
+  constitution_version: 1
+  digest: <content-digest>
+  revision: <n>
+  actor: <actor>
+  mutation_intent: <text>
+  confirmed: true
+
+ConstitutionUpdated:
+  project_id: <project-id>
+  path: <constitution-path>
+  schema_version: constitution.v1
+  constitution_version: 1
+  previous_digest: <digest>
+  digest: <digest>
+  revision: <n>
+  actor: <actor>
+  mutation_intent: <text>
+  confirmed: true
+
+ConstitutionValidated:
+  project_id: <project-id>
+  path: <constitution-path>
+  schema_version: constitution.v1
+  constitution_version: 1
+  digest: <digest>
+  valid: true|false
+  issues: [<code:field:message>...]
+  validated_by: <actor>
+```
+
+`init` and `update` also emit `GovernanceArtifactUpserted` for `artifact_kind: constitution`.
+
+**Failures:**
+- `constitution_confirmation_required`
+- `constitution_schema_invalid`
+- `constitution_validation_failed`
+- `constitution_not_initialized`
+- `constitution_not_found`
+- `constitution_input_read_failed`
+- `constitution_content_missing`
+
+**Idempotence:**
+- `show`: idempotent
+- `validate`: idempotent relative to file content (always emits a validation event)
+- `init`: non-idempotent after initial constitution lifecycle event (must use `update` for subsequent mutations)
+- `update`: idempotent when content digest is unchanged, but still explicit and confirmed
+
+---
+
 ### 2.11 project governance document
 
 **Synopsis:**

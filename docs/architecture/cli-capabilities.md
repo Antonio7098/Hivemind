@@ -98,11 +98,14 @@ Capabilities:
 
 Capabilities:
 - Initialize/migrate/inspect governance storage for a project
+- Initialize/show/validate/update project constitution via `hivemind constitution ...`
 - Manage project documents (`create`, `list`, `inspect`, `update`, `delete`) with immutable revisions
 - Explicitly include/exclude project documents for task execution context
 - Manage project notepad (`create`, `show`, `update`, `delete`) as non-executional context
 
 Constraints:
+- Exactly one constitution is allowed per project (canonical `constitution.yaml`)
+- Constitution mutations require explicit confirmation and actor-attributed audit metadata
 - Project document attachment is explicit and task-scoped
 - Project notepad content is never injected into runtime prompts by default
 

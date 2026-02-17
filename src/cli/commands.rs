@@ -62,6 +62,10 @@ pub enum Commands {
     #[command(subcommand)]
     Global(GlobalCommands),
 
+    /// Project constitution lifecycle and validation commands
+    #[command(subcommand)]
+    Constitution(ConstitutionCommands),
+
     /// Task management commands
     #[command(subcommand)]
     Task(TaskCommands),
@@ -101,6 +105,83 @@ pub enum Commands {
     /// Inspect and manage git worktrees used for task execution
     #[command(subcommand)]
     Worktree(WorktreeCommands),
+}
+
+/// Constitution subcommands.
+#[derive(Subcommand)]
+pub enum ConstitutionCommands {
+    /// Initialize a project constitution (requires explicit confirmation)
+    Init(ConstitutionInitArgs),
+    /// Show the current project constitution
+    Show(ConstitutionShowArgs),
+    /// Validate the current project constitution schema and semantics
+    Validate(ConstitutionValidateArgs),
+    /// Update the current project constitution (requires explicit confirmation)
+    Update(ConstitutionUpdateArgs),
+}
+
+#[derive(Args)]
+pub struct ConstitutionInitArgs {
+    /// Project ID or name
+    pub project: String,
+
+    /// Optional YAML content payload for initialization
+    #[arg(long, conflicts_with = "from_file")]
+    pub content: Option<String>,
+
+    /// Optional path to YAML constitution content
+    #[arg(long = "from-file", conflicts_with = "content")]
+    pub from_file: Option<String>,
+
+    /// Explicit confirmation gate for constitution mutation
+    #[arg(long, default_value_t = false)]
+    pub confirm: bool,
+
+    /// Optional actor attribution override (defaults to OS user)
+    #[arg(long)]
+    pub actor: Option<String>,
+
+    /// Optional mutation intent note for audit trail
+    #[arg(long)]
+    pub intent: Option<String>,
+}
+
+#[derive(Args)]
+pub struct ConstitutionShowArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ConstitutionValidateArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ConstitutionUpdateArgs {
+    /// Project ID or name
+    pub project: String,
+
+    /// Inline YAML constitution content
+    #[arg(long, conflicts_with = "from_file")]
+    pub content: Option<String>,
+
+    /// Path to YAML constitution content
+    #[arg(long = "from-file", conflicts_with = "content")]
+    pub from_file: Option<String>,
+
+    /// Explicit confirmation gate for constitution mutation
+    #[arg(long, default_value_t = false)]
+    pub confirm: bool,
+
+    /// Optional actor attribution override (defaults to OS user)
+    #[arg(long)]
+    pub actor: Option<String>,
+
+    /// Optional mutation intent note for audit trail
+    #[arg(long)]
+    pub intent: Option<String>,
 }
 
 /// Checkpoint subcommands.

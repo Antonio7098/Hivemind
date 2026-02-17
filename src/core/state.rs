@@ -180,6 +180,14 @@ pub struct Project {
     pub runtime: Option<ProjectRuntimeConfig>,
     #[serde(default)]
     pub runtime_defaults: RuntimeRoleDefaults,
+    #[serde(default)]
+    pub constitution_digest: Option<String>,
+    #[serde(default)]
+    pub constitution_schema_version: Option<String>,
+    #[serde(default)]
+    pub constitution_version: Option<u32>,
+    #[serde(default)]
+    pub constitution_updated_at: Option<DateTime<Utc>>,
 }
 
 /// A repository attached to a project.
@@ -292,6 +300,10 @@ impl AppState {
                         repositories: Vec::new(),
                         runtime: None,
                         runtime_defaults: RuntimeRoleDefaults::default(),
+                        constitution_digest: None,
+                        constitution_schema_version: None,
+                        constitution_version: None,
+                        constitution_updated_at: None,
                     },
                 );
             }
@@ -655,7 +667,28 @@ impl AppState {
                     migrated_at: timestamp,
                 });
             }
-
+            EventPayload::ConstitutionInitialized {
+                project_id,
+                schema_version,
+                constitution_version,
+                digest,
+                ..
+            }
+            | EventPayload::ConstitutionUpdated {
+                project_id,
+                schema_version,
+                constitution_version,
+                digest,
+                ..
+            } => {
+                if let Some(project) = self.projects.get_mut(project_id) {
+                    project.constitution_digest = Some(digest.clone());
+                    project.constitution_schema_version = Some(schema_version.clone());
+                    project.constitution_version = Some(*constitution_version);
+                    project.constitution_updated_at = Some(timestamp);
+                    project.updated_at = timestamp;
+                }
+            }
             EventPayload::TaskGraphCreated {
                 graph_id,
                 project_id,
@@ -1078,6 +1111,7 @@ impl AppState {
             }
 
             EventPayload::CheckStarted { .. }
+            | EventPayload::ConstitutionValidated { .. }
             | EventPayload::TemplateInstantiated { .. }
             | EventPayload::ErrorOccurred { .. }
             | EventPayload::TaskExecutionStarted { .. }

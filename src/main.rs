@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 use clap::error::ErrorKind;
 use clap::Parser;
 use hivemind::cli::commands::{
-    AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, EventCommands,
-    FlowCommands, GlobalCommands, GlobalNotepadCommands, GlobalSkillCommands,
+    AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, ConstitutionCommands,
+    EventCommands, FlowCommands, GlobalCommands, GlobalNotepadCommands, GlobalSkillCommands,
     GlobalSystemPromptCommands, GlobalTemplateCommands, GraphCommands, MergeCommands,
     MergeExecuteModeArg, ProjectCommands, ProjectGovernanceAttachmentCommands,
     ProjectGovernanceCommands, ProjectGovernanceDocumentCommands, ProjectGovernanceNotepadCommands,
@@ -25,6 +25,7 @@ use hivemind::core::scope::RepoAccessMode;
 use hivemind::core::scope::Scope;
 use hivemind::core::state::{AttemptState, Project, Task, TaskState};
 use std::ffi::OsString;
+use std::fs;
 use std::process;
 use uuid::Uuid;
 
@@ -651,6 +652,7 @@ fn run(cli: Cli) -> ExitCode {
         Some(Commands::Serve(args)) => handle_serve(args, format),
         Some(Commands::Project(cmd)) => handle_project(cmd, format),
         Some(Commands::Global(cmd)) => handle_global(cmd, format),
+        Some(Commands::Constitution(cmd)) => handle_constitution(cmd, format),
         Some(Commands::Task(cmd)) => handle_task(cmd, format),
         Some(Commands::Graph(cmd)) => handle_graph(cmd, format),
         Some(Commands::Flow(cmd)) => handle_flow(cmd, format),
@@ -1103,6 +1105,113 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                 }
             },
         },
+    }
+}
+
+fn read_constitution_payload(
+    content: Option<&str>,
+    from_file: Option<&str>,
+    origin: &'static str,
+) -> std::result::Result<Option<String>, hivemind::core::error::HivemindError> {
+    if let Some(raw) = content {
+        return Ok(Some(raw.to_string()));
+    }
+    let Some(path) = from_file else {
+        return Ok(None);
+    };
+    let payload = fs::read_to_string(path).map_err(|e| {
+        hivemind::core::error::HivemindError::user(
+            "constitution_input_read_failed",
+            format!("Failed to read constitution file '{path}': {e}"),
+            origin,
+        )
+        .with_hint("Ensure --from-file points to a readable YAML file")
+    })?;
+    Ok(Some(payload))
+}
+
+fn handle_constitution(cmd: ConstitutionCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        ConstitutionCommands::Init(args) => {
+            let payload = match read_constitution_payload(
+                args.content.as_deref(),
+                args.from_file.as_deref(),
+                "cli:constitution:init",
+            ) {
+                Ok(value) => value,
+                Err(err) => return output_error(&err, format),
+            };
+            match registry.constitution_init(
+                &args.project,
+                payload.as_deref(),
+                args.confirm,
+                args.actor.as_deref(),
+                args.intent.as_deref(),
+            ) {
+                Ok(result) => {
+                    print_structured(&result, format, "constitution init result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+        ConstitutionCommands::Show(args) => match registry.constitution_show(&args.project) {
+            Ok(result) => {
+                print_structured(&result, format, "constitution show result");
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
+        ConstitutionCommands::Validate(args) => {
+            match registry.constitution_validate(&args.project, None) {
+                Ok(result) => {
+                    print_structured(&result, format, "constitution validate result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+        ConstitutionCommands::Update(args) => {
+            let payload = match read_constitution_payload(
+                args.content.as_deref(),
+                args.from_file.as_deref(),
+                "cli:constitution:update",
+            ) {
+                Ok(Some(value)) => value,
+                Ok(None) => {
+                    return output_error(
+                        &hivemind::core::error::HivemindError::user(
+                            "constitution_content_missing",
+                            "Constitution update requires --content or --from-file",
+                            "cli:constitution:update",
+                        )
+                        .with_hint(
+                            "Provide a YAML payload via --content '<yaml>' or --from-file <path>",
+                        ),
+                        format,
+                    );
+                }
+                Err(err) => return output_error(&err, format),
+            };
+
+            match registry.constitution_update(
+                &args.project,
+                &payload,
+                args.confirm,
+                args.actor.as_deref(),
+                args.intent.as_deref(),
+            ) {
+                Ok(result) => {
+                    print_structured(&result, format, "constitution update result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
     }
 }
 
@@ -1731,6 +1840,9 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
             "governance_attachment_lifecycle_updated"
         }
         EventPayload::GovernanceStorageMigrated { .. } => "governance_storage_migrated",
+        EventPayload::ConstitutionInitialized { .. } => "constitution_initialized",
+        EventPayload::ConstitutionUpdated { .. } => "constitution_updated",
+        EventPayload::ConstitutionValidated { .. } => "constitution_validated",
         EventPayload::TemplateInstantiated { .. } => "template_instantiated",
         EventPayload::TaskGraphCreated { .. } => "graph_created",
         EventPayload::TaskAddedToGraph { .. } => "graph_task_added",
