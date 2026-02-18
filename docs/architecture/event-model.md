@@ -105,6 +105,10 @@ Examples:
 - `ConstitutionValidated`
 - `ConstitutionViolationDetected`
 - `TemplateInstantiated`
+- `AttemptContextOverridesApplied`
+- `AttemptContextAssembled`
+- `AttemptContextTruncated`
+- `AttemptContextDelivered`
 
 Properties:
 - Global and project scopes are explicit in payloads (`scope: global|project`)
@@ -114,6 +118,7 @@ Properties:
 - Constitution lifecycle events include digest, schema/version metadata, confirmation flag, mutation intent, and actor attribution
 - Constitution enforcement emits `ConstitutionViolationDetected` with gate (`manual_check`, `checkpoint_complete`, `merge_prepare`, `merge_approve`, `merge_execute`), rule ID/type/severity, and structured evidence/remediation hints
 - Template instantiation records resolved artifact IDs for replay-safe context provenance
+- Attempt context assembly emits immutable manifest, input hash, delivery hash, and override/truncation telemetry for replay-safe attempt provenance
 
 ---
 
@@ -184,10 +189,17 @@ Examples:
 - `AttemptStarted`
 - `AttemptCompleted`
 - `AttemptCrashed`
+- `RetryContextAssembled`
+- `AttemptContextOverridesApplied`
+- `AttemptContextAssembled`
+- `AttemptContextTruncated`
+- `AttemptContextDelivered`
 
 Properties:
 - Attempts are append-only
 - Each attempt belongs to a single task
+- Context inputs are explicit and hash-addressed
+- Retry attempts reference prior attempt manifest hashes explicitly
 
 ---
 

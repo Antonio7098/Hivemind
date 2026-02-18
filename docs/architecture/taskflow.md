@@ -38,6 +38,8 @@ A TaskFlow is created from:
 
 Once created, these inputs are **immutable** for the lifetime of the TaskFlow.
 
+At attempt start, worker input is assembled from explicit governance artifacts into a frozen attempt context manifest (constitution, resolved template system prompt/skills/documents, graph summary, and retry links).
+
 ---
 
 ## 3. Core Components
@@ -221,7 +223,7 @@ Retry behavior is defined per task:
 
 Retry transitions are explicit and bounded.
 
-When retrying, agents receive **explicit retry context** (not implicit memory) including prior attempt diffs, check results, and verifier feedback. See `docs/design/retry-context.md` for retry context assembly.
+When retrying, agents receive **explicit retry context** (not implicit memory) including prior attempt diffs, check results, and verifier feedback. Retry context is delivered alongside immutable attempt context manifest hashes so retries can reference prior manifests deterministically. See `docs/design/retry-context.md`.
 
 ---
 

@@ -1945,6 +1945,10 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::ConstitutionValidated { .. } => "constitution_validated",
         EventPayload::ConstitutionViolationDetected { .. } => "constitution_violation_detected",
         EventPayload::TemplateInstantiated { .. } => "template_instantiated",
+        EventPayload::AttemptContextOverridesApplied { .. } => "attempt_context_overrides_applied",
+        EventPayload::AttemptContextAssembled { .. } => "attempt_context_assembled",
+        EventPayload::AttemptContextTruncated { .. } => "attempt_context_truncated",
+        EventPayload::AttemptContextDelivered { .. } => "attempt_context_delivered",
         EventPayload::TaskGraphCreated { .. } => "graph_created",
         EventPayload::TaskAddedToGraph { .. } => "graph_task_added",
         EventPayload::DependencyAdded { .. } => "graph_dependency_added",
@@ -2696,8 +2700,8 @@ fn print_attempt_inspect_attempt(
     } else {
         None
     };
-    let retry_context = if show_context {
-        attempt_retry_context_from_events(registry, attempt.id)
+    let context_value = if show_context {
+        attempt_context_from_events(registry, attempt.id)
     } else {
         None
     };
@@ -2711,7 +2715,7 @@ fn print_attempt_inspect_attempt(
         "baseline_id": attempt.baseline_id,
         "diff_id": attempt.diff_id,
         "diff": diff,
-        "context": retry_context,
+        "context": context_value,
     });
 
     match format {
@@ -2737,8 +2741,10 @@ fn print_attempt_inspect_attempt(
             if let Some(did) = attempt.diff_id {
                 println!("Diff:     {did}");
             }
-            if let Some(ctx) = retry_context {
-                println!("Context:\n{ctx}");
+            if let Some(ctx) = context_value {
+                if let Ok(rendered) = serde_json::to_string_pretty(&ctx) {
+                    println!("Context:\n{rendered}");
+                }
             }
             if let Some(d) = diff {
                 println!("{d}");
@@ -2761,6 +2767,10 @@ struct AttemptInspectCollected {
     files_modified: Vec<std::path::PathBuf>,
     files_deleted: Vec<std::path::PathBuf>,
     retry_context: Option<String>,
+    context_manifest: Option<serde_json::Value>,
+    context_manifest_hash: Option<String>,
+    context_inputs_hash: Option<String>,
+    delivered_context_hash: Option<String>,
 }
 
 fn collect_attempt_runtime_data(
@@ -2780,6 +2790,10 @@ fn collect_attempt_runtime_data(
         files_modified: Vec::new(),
         files_deleted: Vec::new(),
         retry_context: None,
+        context_manifest: None,
+        context_manifest_hash: None,
+        context_inputs_hash: None,
+        delivered_context_hash: None,
     };
 
     for ev in events {
@@ -2832,6 +2846,24 @@ fn collect_attempt_runtime_data(
             }
             EventPayload::RetryContextAssembled { context, .. } => {
                 collected.retry_context = Some(context.clone());
+            }
+            EventPayload::AttemptContextAssembled {
+                manifest_hash,
+                inputs_hash,
+                manifest_json,
+                ..
+            } => {
+                collected.context_manifest_hash = Some(manifest_hash.clone());
+                collected.context_inputs_hash = Some(inputs_hash.clone());
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(manifest_json) {
+                    collected.context_manifest = Some(parsed);
+                } else {
+                    collected.context_manifest =
+                        Some(serde_json::Value::String(manifest_json.clone()));
+                }
+            }
+            EventPayload::AttemptContextDelivered { context_hash, .. } => {
+                collected.delivered_context_hash = Some(context_hash.clone());
             }
             _ => {}
         }
@@ -2925,10 +2957,13 @@ fn build_attempt_inspect_json(
     if args.context {
         info.insert(
             "context".to_string(),
-            collected.retry_context.as_ref().map_or_else(
-                || serde_json::Value::Null,
-                |value| serde_json::Value::String(value.clone()),
-            ),
+            serde_json::json!({
+                "retry": collected.retry_context.clone(),
+                "manifest": collected.context_manifest.clone(),
+                "manifest_hash": collected.context_manifest_hash.clone(),
+                "inputs_hash": collected.context_inputs_hash.clone(),
+                "delivered_context_hash": collected.delivered_context_hash.clone(),
+            }),
         );
     }
 
@@ -2986,25 +3021,81 @@ fn print_attempt_inspect_table(
         println!("Stderr:\n{}", collected.stderr);
     }
     if args.context {
+        println!("Context:");
+        if let Some(hash) = collected.context_manifest_hash.as_ref() {
+            println!("  Manifest hash: {hash}");
+        }
+        if let Some(hash) = collected.context_inputs_hash.as_ref() {
+            println!("  Inputs hash:   {hash}");
+        }
+        if let Some(hash) = collected.delivered_context_hash.as_ref() {
+            println!("  Delivered hash:{hash}");
+        }
         if let Some(ctx) = collected.retry_context.as_ref() {
-            println!("Context:\n{ctx}");
+            println!("  Retry:\n{ctx}");
         } else {
-            println!("Context:  (none)");
+            println!("  Retry: (none)");
+        }
+        if let Some(manifest) = collected.context_manifest.as_ref() {
+            if let Ok(rendered) = serde_json::to_string_pretty(manifest) {
+                println!("  Manifest:\n{rendered}");
+            }
+        } else {
+            println!("  Manifest: (none)");
         }
     }
 }
 
-fn attempt_retry_context_from_events(registry: &Registry, attempt_id: Uuid) -> Option<String> {
+fn attempt_context_from_events(registry: &Registry, attempt_id: Uuid) -> Option<serde_json::Value> {
     use hivemind::core::events::EventPayload;
     use hivemind::storage::event_store::EventFilter;
 
     let mut filter = EventFilter::all();
     filter.attempt_id = Some(attempt_id);
     let events = registry.read_events(&filter).ok()?;
-    events.into_iter().find_map(|event| match event.payload {
-        EventPayload::RetryContextAssembled { context, .. } => Some(context),
-        _ => None,
-    })
+    let mut retry_context: Option<String> = None;
+    let mut manifest: Option<serde_json::Value> = None;
+    let mut manifest_hash: Option<String> = None;
+    let mut inputs_hash: Option<String> = None;
+    let mut delivered_context_hash: Option<String> = None;
+
+    for event in events {
+        match event.payload {
+            EventPayload::RetryContextAssembled { context, .. } => {
+                retry_context = Some(context);
+            }
+            EventPayload::AttemptContextAssembled {
+                manifest_hash: hash,
+                inputs_hash: in_hash,
+                manifest_json,
+                ..
+            } => {
+                manifest_hash = Some(hash);
+                inputs_hash = Some(in_hash);
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&manifest_json) {
+                    manifest = Some(parsed);
+                } else {
+                    manifest = Some(serde_json::Value::String(manifest_json));
+                }
+            }
+            EventPayload::AttemptContextDelivered { context_hash, .. } => {
+                delivered_context_hash = Some(context_hash);
+            }
+            _ => {}
+        }
+    }
+
+    if retry_context.is_none() && manifest.is_none() {
+        None
+    } else {
+        Some(serde_json::json!({
+            "retry": retry_context,
+            "manifest": manifest,
+            "manifest_hash": manifest_hash,
+            "inputs_hash": inputs_hash,
+            "delivered_context_hash": delivered_context_hash,
+        }))
+    }
 }
 
 fn try_print_attempt_from_events(

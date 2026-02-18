@@ -548,7 +548,7 @@ hivemind [-f json|table|yaml] project governance attachment exclude <project> <t
 
 **Effects:**
 - Sets explicit per-task attachment lifecycle for project documents
-- Included documents are injected into runtime execution context
+- Included/excluded sets are consumed at attempt start to resolve per-attempt document context
 
 **Events:**
 ```
@@ -561,6 +561,9 @@ GovernanceAttachmentLifecycleUpdated:
   schema_version: governance.v1
   projection_version: 1
 ```
+
+**Derived execution telemetry (during `flow tick`):**
+- `AttemptContextOverridesApplied` captures template documents, explicit includes/excludes, and final resolved set used by the attempt.
 
 **Failures:**
 - `project_not_found`
@@ -1399,6 +1402,39 @@ RuntimeStarted:
   prompt: <runtime-prompt>
   flags: [<runtime-args-and-flags...>]
 
+AttemptContextAssembled:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  attempt_id: <attempt-id>
+  attempt_number: <n>
+  manifest_hash: <hash>
+  inputs_hash: <hash>
+  context_hash: <hash>
+  context_size_bytes: <bytes>
+  truncated_sections: [<section>...]
+  manifest_json: <manifest-json>
+
+AttemptContextTruncated:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  attempt_id: <attempt-id>
+  budget_bytes: <bytes>
+  original_size_bytes: <bytes>
+  truncated_size_bytes: <bytes>
+  sections: [<section>...]
+  policy: ordered_section_then_total_budget
+
+AttemptContextDelivered:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  attempt_id: <attempt-id>
+  manifest_hash: <hash>
+  inputs_hash: <hash>
+  context_hash: <hash>
+  delivery_target: runtime_execution_input
+  prior_attempt_ids: [<attempt-id>...]
+  prior_manifest_hashes: [<hash>...]
+
 RuntimeOutputChunk:
   attempt_id: <attempt-id>
   stream: stdout|stderr
@@ -1758,7 +1794,12 @@ hivemind attempt inspect <attempt-id> [--context] [--diff] [--output]
 
 **Output:**
 - Attempt metadata
-- With --context: retry context that was provided (if available)
+- With `--context`: assembled context object:
+  - `retry`: retry context text when retry path exists
+  - `manifest`: immutable attempt context manifest (ordered inputs, resolved artifacts, budget/truncation metadata, retry links)
+  - `manifest_hash`: digest of stored manifest
+  - `inputs_hash`: deterministic digest of resolved context inputs
+  - `delivered_context_hash`: digest of runtime-delivered context payload
 - With --diff: changes made
 - With --output: runtime output
 

@@ -197,6 +197,8 @@ Attempts are **ephemeral but recorded**.
 - Start / end timestamps
 - Exit status
 - Structured output summary
+- Context manifest hash lineage (`manifest_hash`, `inputs_hash`, delivered context hash)
+- Retry linkage to prior attempt manifest hashes
 
 ### Properties
 - Append‑only

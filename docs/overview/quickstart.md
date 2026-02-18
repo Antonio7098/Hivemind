@@ -314,6 +314,12 @@ $HM -f json attempt list --flow "$FLOW_ID" --limit 100
 $HM -f json attempt inspect <attempt-id> --context --diff --output
 ```
 
+Context inspection includes deterministic provenance fields:
+- `context.manifest` (resolved immutable context manifest)
+- `context.manifest_hash`
+- `context.inputs_hash`
+- `context.delivered_context_hash`
+
 Checkpoint visibility for a specific attempt:
 
 ```bash

@@ -1564,7 +1564,7 @@ pub struct AttemptInspectArgs {
     /// Attempt ID
     pub attempt_id: String,
 
-    /// Show retry context
+    /// Show assembled attempt context (manifest + retry context when present)
     #[arg(long)]
     pub context: bool,
 

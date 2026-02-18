@@ -104,6 +104,7 @@ Capabilities:
 - Manage project documents (`create`, `list`, `inspect`, `update`, `delete`) with immutable revisions
 - Explicitly include/exclude project documents for task execution context
 - Manage project notepad (`create`, `show`, `update`, `delete`) as non-executional context
+- Instantiate global templates into project-scoped resolved artifact sets
 
 Constraints:
 - Exactly one constitution is allowed per project (canonical `constitution.yaml`)
@@ -113,6 +114,7 @@ Constraints:
 - Advisory and informational constitution violations remain visible via structured command output and event queries
 - Project document attachment is explicit and task-scoped
 - Project notepad content is never injected into runtime prompts by default
+- Attempt context excludes project/global notepads and implicit memory sources by default
 
 ---
 
@@ -204,6 +206,11 @@ Capabilities:
 - List attempts
 - Inspect attempt details
 - View agent output
+- Inspect assembled attempt context (`attempt inspect --context`) including retry context, immutable manifest, and context hashes
+
+Constraints:
+- Manifest inputs are ordered (`constitution`, `system_prompt`, `skills`, `project_documents`, `graph_summary`)
+- Retry attempts link back to prior attempt manifest hashes for replay-safe lineage
 
 ---
 

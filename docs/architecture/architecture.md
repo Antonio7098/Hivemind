@@ -210,7 +210,7 @@ Agents are instantiated per attempt and have **no implicit memory**.
 Agents receive only explicit context:
 
 - Task definition
-- Relevant project documentation
+- Frozen governance context manifest (constitution, system prompt, skills, documents, graph summary)
 - Prior attempt summaries
 - Verifier feedback
 

@@ -1162,6 +1162,10 @@ impl AppState {
             | EventPayload::ConstitutionValidated { .. }
             | EventPayload::ConstitutionViolationDetected { .. }
             | EventPayload::TemplateInstantiated { .. }
+            | EventPayload::AttemptContextOverridesApplied { .. }
+            | EventPayload::AttemptContextAssembled { .. }
+            | EventPayload::AttemptContextTruncated { .. }
+            | EventPayload::AttemptContextDelivered { .. }
             | EventPayload::ErrorOccurred { .. }
             | EventPayload::TaskExecutionStarted { .. }
             | EventPayload::TaskExecutionSucceeded { .. }
