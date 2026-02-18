@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.31",
+      "date": "2026-02-18",
+      "phase": 41,
+      "changes": [
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Extend `events list` and `events stream` with governance-aware payload filters: `--artifact-id`, `--template-id`, and `--rule-id`"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add `project governance diagnose <project>` for operator-facing governance diagnostics with structured health/issues output"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Implement diagnostics checks for missing artifacts, invalid template references, and stale/missing graph snapshots with actionable recovery hints"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 41 unit/integration coverage for governance event filter selectors, diagnostics paths, replay integrity after governance context activity, and concurrent artifact operations under active flows"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update roadmap/architecture/design/quickstart docs, add governance runbooks, and publish Sprint 41 manual + fresh-clone `hivemind-test` report artifacts"
+        }
+      ]
+    },
+    {
       "version": "v0.1.30",
       "date": "2026-02-18",
       "phase": 39,

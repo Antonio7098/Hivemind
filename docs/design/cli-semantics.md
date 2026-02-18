@@ -373,7 +373,36 @@ hivemind [-f json|table|yaml] project governance inspect <project>
 
 ---
 
-### 2.10.1 constitution
+### 2.10.1 project governance diagnose
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance diagnose <project>
+```
+
+**Preconditions:**
+- Project exists
+
+**Effects:** None (read-only)
+
+**Output:**
+- Health summary (`healthy`, `issue_count`, `checked_at`)
+- Structured issue list for:
+  - missing artifacts
+  - invalid template references
+  - stale/missing/invalid graph snapshot diagnostics
+
+**Events:** None
+
+**Failures:**
+- `project_not_found`
+- `governance_artifact_read_failed` (for unreadable governance files)
+
+**Idempotence:** Idempotent.
+
+---
+
+### 2.10.2 constitution
 
 **Synopsis:**
 ```
@@ -2157,7 +2186,7 @@ hivemind runtime defaults-set [--role worker|validator] [--adapter <name>] [--bi
 
 **Synopsis:**
 ```
-hivemind events list [--project <project>] [--graph <graph-id>] [--flow <flow-id>] [--task <task-id>] [--attempt <attempt-id>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
+hivemind events list [--project <project>] [--graph <graph-id>] [--flow <flow-id>] [--task <task-id>] [--attempt <attempt-id>] [--artifact-id <artifact-id>] [--template-id <template-id>] [--rule-id <rule-id>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
 ```
 
 **Preconditions:** None
@@ -2166,12 +2195,15 @@ hivemind events list [--project <project>] [--graph <graph-id>] [--flow <flow-id
 
 **Output:**
 - Historical event records
-- Optional correlation and time-window filtering
+- Optional correlation, governance payload selector, and time-window filtering
 
 **Events:** None (reads events, doesn't create)
 
 **Failures:**
 - `invalid_*_id`: Invalid correlation ID
+- `invalid_artifact_id`
+- `invalid_template_id`
+- `invalid_rule_id`
 - `invalid_timestamp`: Invalid RFC3339 timestamp
 - `invalid_time_range`: `--since` is later than `--until`
 
@@ -2204,7 +2236,7 @@ hivemind events inspect <event-id>
 
 **Synopsis:**
 ```
-hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project>] [--graph <graph-id>] [--attempt <attempt-id>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
+hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project>] [--graph <graph-id>] [--attempt <attempt-id>] [--artifact-id <artifact-id>] [--template-id <template-id>] [--rule-id <rule-id>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
 ```
 
 **Preconditions:** None
@@ -2213,12 +2245,15 @@ hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project
 
 **Output:**
 - Real-time event stream (historical matching events first, then new matching events)
-- Filtered by correlation IDs and/or time window
+- Filtered by correlation IDs, governance payload selectors, and/or time window
 
 **Events:** None (reads events, doesn't create)
 
 **Failures:**
 - `invalid_*_id`: Invalid correlation ID
+- `invalid_artifact_id`
+- `invalid_template_id`
+- `invalid_rule_id`
 - `invalid_timestamp`: Invalid RFC3339 timestamp
 - `invalid_time_range`: `--since` is later than `--until`
 

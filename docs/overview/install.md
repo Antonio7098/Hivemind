@@ -52,4 +52,5 @@ cargo install hivemind-core --force
 
 1. Follow the [Quickstart Guide](./quickstart.md) for an end-to-end run.
 2. Review [Vision](./vision.md) and [Principles](./principles.md) to internalize the operating model.
-3. Keep `hivemind-core` up to date with `cargo install --force` when new releases drop.
+3. Use [Governance Runbooks](./governance-runbooks.md) for migration, recovery, and policy-change operations.
+4. Keep `hivemind-core` up to date with `cargo install --force` when new releases drop.
