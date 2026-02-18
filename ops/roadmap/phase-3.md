@@ -295,30 +295,30 @@
 **Goal:** Ship the governance/context layer with reliability and operational clarity.
 
 ### 41.1 Testing and Reliability
-- [ ] Add unit/integration/e2e coverage for governance lifecycle and enforcement gates
-- [ ] Add regression suites for context manifest determinism and replay integrity
-- [ ] Stress test artifact operations under concurrent flow activity
+- [x] Add unit/integration/e2e coverage for governance lifecycle and enforcement gates
+- [x] Add regression suites for context manifest determinism and replay integrity
+- [x] Stress test artifact operations under concurrent flow activity
 
 ### 41.2 Observability and Operations
-- [ ] Extend event query filters for artifact IDs, template IDs, and constitution rule IDs
-- [ ] Add operator diagnostics for missing artifacts, invalid references, and stale snapshots
-- [ ] Publish runbooks for migration, drift recovery, and constitution policy changes
+- [x] Extend event query filters for artifact IDs, template IDs, and constitution rule IDs
+- [x] Add operator diagnostics for missing artifacts, invalid references, and stale snapshots
+- [x] Publish runbooks for migration, drift recovery, and constitution policy changes
 
 ### 41.3 Documentation and Adoption
-- [ ] Update CLI help and docs for all governance commands and invariants
-- [ ] Publish architecture/design updates reflecting Phase 3 contracts
-- [ ] Add quickstart scenario for constitution + template-driven execution
+- [x] Update CLI help and docs for all governance commands and invariants
+- [x] Publish architecture/design updates reflecting Phase 3 contracts
+- [x] Add quickstart scenario for constitution + template-driven execution
 
 ### 41.4 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 41 manual checklist under `@hivemind-test`
-- [ ] Execute a full manual Phase 3 end-to-end validation run and document outcomes
-- [ ] Publish Sprint 41 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 41 manual checklist under `@hivemind-test`
+- [x] Execute a full manual Phase 3 end-to-end validation run and document outcomes
+- [x] Publish Sprint 41 manual test report artifact in `@hivemind-test`
 
 ### 41.5 Exit Criteria
-- [ ] Governance/context features meet principle checkpoints with no hidden state
-- [ ] Operators can inspect, explain, and recover governance state end-to-end
-- [ ] Phase 3 capabilities are stable for broad project use
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Governance/context features meet principle checkpoints with no hidden state
+- [x] Operators can inspect, explain, and recover governance state end-to-end
+- [x] Phase 3 capabilities are stable for broad project use
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

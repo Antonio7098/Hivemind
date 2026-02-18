@@ -66,6 +66,8 @@ Correlation identifiers allow:
 - UI projection
 - Debugging
 
+For governance workflows, operators also filter by payload-level selectors (`artifact_id`, `template_id`, `rule_id`) without relying on hidden indexes.
+
 ---
 
 ## 4. Event Categories

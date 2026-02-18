@@ -1,0 +1,479 @@
+# Sprint 41 manual run
+tmp_root=/tmp/tmp.VzfnU6hzAC
+home_dir=/tmp/tmp.VzfnU6hzAC/.hm_home
+Initialized empty Git repository in /tmp/tmp.VzfnU6hzAC/repo/.git/
+[main (root-commit) ef216f3] init governance repo
+ 4 files changed, 6 insertions(+)
+ create mode 100644 README.md
+ create mode 100644 src/domain/mod.rs
+ create mode 100644 src/infrastructure.rs
+ create mode 100644 src/lib.rs
+== project + governance setup ==
+ID:          281dfd19-39d3-4f44-b2bb-8f056325f40f
+Name:        proj41
+Created:     2026-02-18 13:17:52.569121131 UTC
+Updated:     2026-02-18 13:17:52.569121131 UTC
+ID:          281dfd19-39d3-4f44-b2bb-8f056325f40f
+Name:        proj41
+Created:     2026-02-18 13:17:52.569121131 UTC
+Updated:     2026-02-18 13:17:52.573388029 UTC
+Repositories:
+  - repo (/tmp/tmp.VzfnU6hzAC/repo) [readwrite]
+Project ID:        281dfd19-39d3-4f44-b2bb-8f056325f40f
+Governance Root:   /tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f
+Schema Version:    governance.v1
+Projection Version:1
+Created Paths:     none (already initialized)
+== governance artifacts + template ==
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "document_id": "doc1",
+  "revision": 1,
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/documents/doc1.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-18T13:17:52.587178394Z"
+}
+{
+  "prompt_id": "sp41",
+  "updated_at": "2026-02-18T13:17:52.591254856Z",
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/global/system_prompts/sp41.json"
+}
+{
+  "skill_id": "skill41",
+  "name": "Skill 41",
+  "tags": [],
+  "updated_at": "2026-02-18T13:17:52.594454485Z",
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/global/skills/skill41.json"
+}
+{
+  "template_id": "tpl41",
+  "system_prompt_id": "sp41",
+  "skill_ids": [
+    "skill41"
+  ],
+  "document_ids": [
+    "doc1"
+  ],
+  "updated_at": "2026-02-18T13:17:52.598513273Z",
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/global/templates/tpl41.json"
+}
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "template_id": "tpl41",
+  "system_prompt_id": "sp41",
+  "skill_ids": [
+    "skill41"
+  ],
+  "document_ids": [
+    "doc1"
+  ],
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "instantiated_at": "2026-02-18T13:17:52.602477404Z"
+}
+== event query filters (artifact/template) ==
+{
+  "success": true,
+  "data": [
+    {
+      "metadata": {
+        "id": "00000000-0000-0012-a96d-73e16aa23c02",
+        "timestamp": "2026-02-18T13:17:52.602482504Z",
+        "correlation": {
+          "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 18
+      },
+      "payload": {
+        "type": "template_instantiated",
+        "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+        "template_id": "tpl41",
+        "system_prompt_id": "sp41",
+        "skill_ids": [
+          "skill41"
+        ],
+        "document_ids": [
+          "doc1"
+        ],
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    }
+  ]
+}
+{
+  "success": true,
+  "data": [
+    {
+      "metadata": {
+        "id": "00000000-0000-000e-b911-f68561278dba",
+        "timestamp": "2026-02-18T13:17:52.587267381Z",
+        "correlation": {
+          "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 14
+      },
+      "payload": {
+        "type": "governance_artifact_upserted",
+        "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+        "scope": "project",
+        "artifact_kind": "document",
+        "artifact_key": "doc1",
+        "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/documents/doc1.json",
+        "revision": 1,
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0012-a96d-73e16aa23c02",
+        "timestamp": "2026-02-18T13:17:52.602482504Z",
+        "correlation": {
+          "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 18
+      },
+      "payload": {
+        "type": "template_instantiated",
+        "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+        "template_id": "tpl41",
+        "system_prompt_id": "sp41",
+        "skill_ids": [
+          "skill41"
+        ],
+        "document_ids": [
+          "doc1"
+        ],
+        "schema_version": "governance.v1",
+        "projection_version": 1
+      }
+    }
+  ]
+}
+== snapshot + constitution + rule filter ==
+Project:              281dfd19-39d3-4f44-b2bb-8f056325f40f
+Snapshot path:        /tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/graph_snapshot.json
+Trigger:              manual_refresh
+Repository count:     1
+UCP profile:          codegraph.v1
+UCP engine:           ucp-codegraph-extractor.v1
+Fingerprint:          0acf018e4791b5be
+Artifact revision:    2
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/constitution.yaml",
+  "revision": 2,
+  "digest": "303c3a90373b66d1",
+  "previous_digest": null,
+  "schema_version": "constitution.v1",
+  "constitution_version": 1,
+  "actor": "antonio",
+  "mutation_intent": "initialize constitution",
+  "confirmed": true,
+  "updated_at": "2026-02-18T13:17:52.626575566Z"
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+    "gate": "manual_check",
+    "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/constitution.yaml",
+    "digest": "303c3a90373b66d1",
+    "schema_version": "constitution.v1",
+    "constitution_version": 1,
+    "flow_id": null,
+    "task_id": null,
+    "attempt_id": null,
+    "skipped": false,
+    "skip_reason": null,
+    "violations": [
+      {
+        "rule_id": "no_domain_to_infra_hard",
+        "rule_type": "forbidden_dependency",
+        "severity": "hard",
+        "message": "Detected 1 forbidden dependency edge(s) from partition 'domain' to 'infrastructure'",
+        "evidence": [
+          "repo/src/domain/mod.rs -> repo/src/infrastructure.rs"
+        ],
+        "remediation_hint": "Remove or invert dependencies from 'domain' to 'infrastructure'",
+        "blocked": true
+      }
+    ],
+    "hard_violations": 1,
+    "advisory_violations": 0,
+    "informational_violations": 0,
+    "blocked": true,
+    "checked_at": "2026-02-18T13:17:52.633310714Z"
+  }
+}
+{
+  "success": true,
+  "data": [
+    {
+      "metadata": {
+        "id": "00000000-0000-0018-b578-b2bc59af42e7",
+        "timestamp": "2026-02-18T13:17:52.632974996Z",
+        "correlation": {
+          "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+          "graph_id": null,
+          "flow_id": null,
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 24
+      },
+      "payload": {
+        "type": "constitution_violation_detected",
+        "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+        "flow_id": null,
+        "task_id": null,
+        "attempt_id": null,
+        "gate": "manual_check",
+        "rule_id": "no_domain_to_infra_hard",
+        "rule_type": "forbidden_dependency",
+        "severity": "hard",
+        "message": "Detected 1 forbidden dependency edge(s) from partition 'domain' to 'infrastructure'",
+        "evidence": [
+          "repo/src/domain/mod.rs -> repo/src/infrastructure.rs"
+        ],
+        "remediation_hint": "Remove or invert dependencies from 'domain' to 'infrastructure'",
+        "blocked": true
+      }
+    }
+  ]
+}
+== operator diagnostics ==
+{
+  "template_id": "tpl41-bad",
+  "system_prompt_id": "sp41",
+  "skill_ids": [
+    "skill41"
+  ],
+  "document_ids": [
+    "doc-missing"
+  ],
+  "updated_at": "2026-02-18T13:17:52.640147803Z",
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/global/templates/tpl41-bad.json"
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+    "checked_at": "2026-02-18T13:17:52.647143439Z",
+    "healthy": false,
+    "issue_count": 1,
+    "issues": [
+      {
+        "code": "template_document_missing",
+        "severity": "error",
+        "message": "Template 'tpl41-bad' references missing project document 'doc-missing'",
+        "hint": "Create the project document or remove it from template.document_ids",
+        "artifact_kind": "document",
+        "artifact_id": "doc-missing",
+        "template_id": "tpl41-bad",
+        "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/global/templates/tpl41-bad.json"
+      }
+    ]
+  }
+}
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "document_id": "doc-missing",
+  "revision": 1,
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/documents/doc-missing.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-18T13:17:52.650343099Z"
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+    "checked_at": "2026-02-18T13:17:52.657019417Z",
+    "healthy": true,
+    "issue_count": 0,
+    "issues": []
+  }
+}
+== stale snapshot diagnosis + recovery ==
+[main af1961e] stale snapshot trigger
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+{
+  "success": true,
+  "data": {
+    "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+    "checked_at": "2026-02-18T13:17:52.672856865Z",
+    "healthy": false,
+    "issue_count": 1,
+    "issues": [
+      {
+        "code": "graph_snapshot_stale",
+        "severity": "error",
+        "message": "Graph snapshot is stale for repository 'repo' (snapshot=ef216f329ed24a036a0a5946484b2ab088d380ca current=af1961edd255d86f7b8a6718d322856836e81917)",
+        "hint": "Run: hivemind graph snapshot refresh <project>",
+        "artifact_kind": "graph_snapshot",
+        "artifact_id": "graph_snapshot.json",
+        "template_id": null,
+        "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/graph_snapshot.json"
+      }
+    ]
+  }
+}
+Project:              281dfd19-39d3-4f44-b2bb-8f056325f40f
+Snapshot path:        /tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/graph_snapshot.json
+Trigger:              manual_refresh
+Repository count:     1
+UCP profile:          codegraph.v1
+UCP engine:           ucp-codegraph-extractor.v1
+Fingerprint:          b26cc682b4d0d92b
+Artifact revision:    3
+{
+  "success": true,
+  "data": {
+    "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+    "checked_at": "2026-02-18T13:17:52.688732735Z",
+    "healthy": true,
+    "issue_count": 0,
+    "issues": []
+  }
+}
+== set permissive constitution for flow replay/concurrency checks ==
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/constitution.yaml",
+  "revision": 3,
+  "digest": "380e2f867eb0d220",
+  "previous_digest": "303c3a90373b66d1",
+  "schema_version": "constitution.v1",
+  "constitution_version": 1,
+  "actor": "antonio",
+  "mutation_intent": "update constitution",
+  "confirmed": true,
+  "updated_at": "2026-02-18T13:17:52.699014502Z"
+}
+== concurrent flow activity + artifact operations stress ==
+ID:          281dfd19-39d3-4f44-b2bb-8f056325f40f
+Name:        proj41
+Created:     2026-02-18 13:17:52.569121131 UTC
+Updated:     2026-02-18 13:17:52.702187542 UTC
+Repositories:
+  - repo (/tmp/tmp.VzfnU6hzAC/repo) [readwrite]
+Flow ID: 4baf83f7-9e77-4535-b5cc-3bf69cc3a131
+Flow ID: 61b1b343-3a34-449e-9729-7c86a4f3e292
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "template_id": "tpl41",
+  "system_prompt_id": "sp41",
+  "skill_ids": [
+    "skill41"
+  ],
+  "document_ids": [
+    "doc1"
+  ],
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "instantiated_at": "2026-02-18T13:17:52.768307028Z"
+}
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "document_id": "doc1",
+  "revision": 2,
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/documents/doc1.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-18T13:17:52.773010843Z"
+}
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "template_id": "tpl41",
+  "system_prompt_id": "sp41",
+  "skill_ids": [
+    "skill41"
+  ],
+  "document_ids": [
+    "doc1"
+  ],
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "instantiated_at": "2026-02-18T13:17:52.777594273Z"
+}
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "document_id": "doc1",
+  "revision": 3,
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/documents/doc1.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-18T13:17:52.782002436Z"
+}
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "template_id": "tpl41",
+  "system_prompt_id": "sp41",
+  "skill_ids": [
+    "skill41"
+  ],
+  "document_ids": [
+    "doc1"
+  ],
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "instantiated_at": "2026-02-18T13:17:52.787034646Z"
+}
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "document_id": "doc1",
+  "revision": 4,
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/documents/doc1.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-18T13:17:52.792016993Z"
+}
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "template_id": "tpl41",
+  "system_prompt_id": "sp41",
+  "skill_ids": [
+    "skill41"
+  ],
+  "document_ids": [
+    "doc1"
+  ],
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "instantiated_at": "2026-02-18T13:17:52.797245360Z"
+}
+{
+  "project_id": "281dfd19-39d3-4f44-b2bb-8f056325f40f",
+  "document_id": "doc1",
+  "revision": 5,
+  "path": "/tmp/tmp.VzfnU6hzAC/.hm_home/.hivemind/projects/281dfd19-39d3-4f44-b2bb-8f056325f40f/documents/doc1.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-18T13:17:52.801723473Z"
+}
+Flow ID: 61b1b343-3a34-449e-9729-7c86a4f3e292
+Flow ID: 4baf83f7-9e77-4535-b5cc-3bf69cc3a131
+== replay integrity after governance/context activity ==
+Verification passed: replayed state matches current state.
+ID:      4baf83f7-9e77-4535-b5cc-3bf69cc3a131
+Graph:   a4b1cef5-35ff-4434-8889-8215affe0d74
+State:   Completed
+Tasks:
+  - Success: 1
+== sprint 41 manual assertions completed ==
+Sprint 41 manual assertions completed successfully.

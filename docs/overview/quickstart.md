@@ -173,6 +173,45 @@ $HM task runtime-set "$TASK_A" \
   --model opencode/kimi-k2.5-free
 ```
 
+### 4.3 Governance quickstart (constitution + template-driven context)
+
+```bash
+# Initialize governance storage and seed a project document
+$HM project governance init "expense-tracker"
+$HM project governance document create "expense-tracker" architecture-notes \
+  --title "Architecture Notes" \
+  --owner "team" \
+  --content "Service boundaries and invariants."
+
+# Register reusable prompt/skill/template and instantiate for this project
+$HM global system-prompt create sprint41-prompt --content "Be explicit. Respect constitution rules."
+$HM global skill create sprint41-skill --name "Deterministic edits" --content "Keep changes minimal and replay-safe."
+$HM global template create sprint41-template \
+  --system-prompt-id sprint41-prompt \
+  --skill-id sprint41-skill \
+  --document-id architecture-notes
+$HM global template instantiate "expense-tracker" sprint41-template
+
+# Refresh graph snapshot and initialize a constitution
+$HM graph snapshot refresh "expense-tracker"
+cat > /tmp/hm-constitution.yaml <<'YAML'
+version: 1
+schema_version: constitution.v1
+compatibility:
+  minimum_hivemind_version: 0.1.0
+  governance_schema_version: governance.v1
+partitions: []
+rules: []
+YAML
+$HM constitution init "expense-tracker" --from-file /tmp/hm-constitution.yaml --confirm
+```
+
+Operator diagnostics:
+
+```bash
+$HM -f json project governance diagnose "expense-tracker"
+```
+
 ---
 
 ## 5) Create tasks
@@ -298,6 +337,9 @@ When the upstream flow completes, Hivemind automatically starts the downstream f
 $HM -f json events stream --flow "$FLOW_ID" --limit 200
 $HM -f json events stream --flow "$FLOW_ID" --since "2026-01-01T00:00:00Z" --limit 200
 $HM -f json events list --flow "$FLOW_ID" --since "2026-01-01T00:00:00Z" --until "2026-12-31T23:59:59Z" --limit 500
+$HM -f json events list --project "expense-tracker" --template-id sprint41-template --limit 200
+$HM -f json events list --project "expense-tracker" --artifact-id architecture-notes --limit 200
+$HM -f json events list --project "expense-tracker" --rule-id no_domain_to_infra_hard --limit 200
 ```
 
 You should see runtime lifecycle events like:
@@ -406,6 +448,7 @@ git -C /path/to/repo config user.email "hivemind@example.com"
 
 - Check `flow status` to see whether tasks are `ready`, `running`, `verifying`, etc.
 - Stream events for the flow and look for `runtime_output_chunk` / `runtime_exited`.
+- Run `project governance diagnose <project>` to surface stale snapshot/missing artifact/reference issues.
 
 ### 10.4 JSON parsing errors in scripts
 

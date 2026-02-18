@@ -538,6 +538,69 @@ fn cli_sprint35_governance_artifacts_and_template_instantiation() {
     );
     assert_eq!(code, 0, "{err}");
 
+    let (code, template_events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--project",
+            "proj",
+            "--template-id",
+            "tpl-main",
+            "--limit",
+            "200",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let template_events_json: serde_json::Value =
+        serde_json::from_str(&template_events_out).expect("template events json");
+    let template_events = template_events_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .expect("template events array");
+    assert!(template_events.iter().any(|event| {
+        event
+            .get("payload")
+            .and_then(|payload| payload.get("type"))
+            .and_then(serde_json::Value::as_str)
+            == Some("template_instantiated")
+    }));
+
+    let (code, artifact_events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--project",
+            "proj",
+            "--artifact-id",
+            "doc1",
+            "--limit",
+            "200",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let artifact_events_json: serde_json::Value =
+        serde_json::from_str(&artifact_events_out).expect("artifact events json");
+    let artifact_events = artifact_events_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .expect("artifact events array");
+    assert!(!artifact_events.is_empty(), "{artifact_events_out}");
+    assert!(artifact_events.iter().any(|event| {
+        event
+            .get("payload")
+            .and_then(|payload| payload.get("type"))
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|typ| {
+                typ == "template_instantiated" || typ == "governance_attachment_lifecycle_updated"
+            })
+    }));
+
     let (code, project_events_out, err) = run_hivemind(
         tmp.path(),
         &[
@@ -556,6 +619,11 @@ fn cli_sprint35_governance_artifacts_and_template_instantiation() {
         project_events_out.contains("template_instantiated"),
         "{project_events_out}"
     );
+
+    let (code, replay_out, err) =
+        run_hivemind(tmp.path(), &["events", "replay", &flow_id, "--verify"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(replay_out.contains("Verification passed"), "{replay_out}");
 
     let (code, _out, err) = run_hivemind(
         tmp.path(),
@@ -1050,6 +1118,421 @@ rules:
         events_out.contains("constitution_violation_detected"),
         "{events_out}"
     );
+
+    let (code, filtered_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--project",
+            "proj",
+            "--rule-id",
+            "no_domain_to_infra_hard",
+            "--limit",
+            "200",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let filtered_json: serde_json::Value =
+        serde_json::from_str(&filtered_out).expect("filtered events json");
+    let filtered_events = filtered_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .expect("filtered events data");
+    assert!(!filtered_events.is_empty(), "{filtered_out}");
+    assert!(filtered_events.iter().all(|event| {
+        event
+            .get("payload")
+            .and_then(|payload| payload.get("type"))
+            .and_then(serde_json::Value::as_str)
+            == Some("constitution_violation_detected")
+    }));
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_project_governance_diagnose_reports_invalid_refs_and_stale_snapshot() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "governance", "init", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "system-prompt",
+            "create",
+            "sp-diagnose",
+            "--content",
+            "diagnose prompt",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "skill",
+            "create",
+            "skill-diagnose",
+            "--name",
+            "Skill Diagnose",
+            "--content",
+            "diagnose skill",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "template",
+            "create",
+            "tpl-diagnose",
+            "--system-prompt-id",
+            "sp-diagnose",
+            "--skill-id",
+            "skill-diagnose",
+            "--document-id",
+            "doc-missing",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, diagnose_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "project", "governance", "diagnose", "proj"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let diagnose_json: serde_json::Value =
+        serde_json::from_str(&diagnose_out).expect("diagnose json");
+    let diagnose_data = diagnose_json.get("data").expect("diagnose data");
+    assert_eq!(
+        diagnose_data
+            .get("healthy")
+            .and_then(serde_json::Value::as_bool),
+        Some(false)
+    );
+    let issue_codes: Vec<String> = diagnose_data
+        .get("issues")
+        .and_then(serde_json::Value::as_array)
+        .expect("issues array")
+        .iter()
+        .filter_map(|issue| issue.get("code").and_then(serde_json::Value::as_str))
+        .map(std::string::ToString::to_string)
+        .collect();
+    assert!(
+        issue_codes
+            .iter()
+            .any(|code| code == "template_document_missing"),
+        "{diagnose_out}"
+    );
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "document",
+            "create",
+            "proj",
+            "doc-missing",
+            "--title",
+            "Doc Missing",
+            "--owner",
+            "owner",
+            "--content",
+            "content",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["graph", "snapshot", "refresh", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, healthy_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "project", "governance", "diagnose", "proj"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let healthy_json: serde_json::Value =
+        serde_json::from_str(&healthy_out).expect("healthy diagnose json");
+    let healthy_data = healthy_json.get("data").expect("healthy diagnose data");
+    assert_eq!(
+        healthy_data
+            .get("healthy")
+            .and_then(serde_json::Value::as_bool),
+        Some(true),
+        "{healthy_out}"
+    );
+    assert_eq!(
+        healthy_data
+            .get("issue_count")
+            .and_then(serde_json::Value::as_u64),
+        Some(0),
+        "{healthy_out}"
+    );
+
+    std::fs::write(repo_dir.join("README.md"), "stale snapshot trigger\n").expect("write readme");
+    let out = Command::new("git")
+        .args(["add", "README.md"])
+        .current_dir(&repo_dir)
+        .output()
+        .expect("git add");
+    assert!(
+        out.status.success(),
+        "git add: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let out = Command::new("git")
+        .args([
+            "-c",
+            "user.name=Hivemind",
+            "-c",
+            "user.email=hivemind@example.com",
+            "commit",
+            "-m",
+            "stale snapshot trigger",
+        ])
+        .current_dir(&repo_dir)
+        .output()
+        .expect("git commit");
+    assert!(
+        out.status.success(),
+        "git commit: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let (code, stale_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "project", "governance", "diagnose", "proj"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let stale_json: serde_json::Value = serde_json::from_str(&stale_out).expect("stale diagnose");
+    let stale_issues = stale_json
+        .get("data")
+        .and_then(|d| d.get("issues"))
+        .and_then(serde_json::Value::as_array)
+        .expect("stale issues");
+    assert!(stale_issues.iter().any(|issue| {
+        issue.get("code").and_then(serde_json::Value::as_str) == Some("graph_snapshot_stale")
+    }));
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_governance_artifact_ops_stable_under_concurrent_flow_activity() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "governance", "init", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "document",
+            "create",
+            "proj",
+            "doc1",
+            "--title",
+            "Doc One",
+            "--owner",
+            "owner",
+            "--content",
+            "revision-0",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "system-prompt",
+            "create",
+            "sp-concurrent",
+            "--content",
+            "concurrent prompt",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "skill",
+            "create",
+            "skill-concurrent",
+            "--name",
+            "Skill Concurrent",
+            "--content",
+            "concurrent skill",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "global",
+            "template",
+            "create",
+            "tpl-concurrent",
+            "--system-prompt-id",
+            "sp-concurrent",
+            "--skill-id",
+            "skill-concurrent",
+            "--document-id",
+            "doc1",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--binary-path",
+            "/usr/bin/env",
+            "--arg",
+            "sh",
+            "--arg",
+            "-c",
+            "--arg",
+            "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+            "--timeout-ms",
+            "2000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let mut flow_ids = Vec::new();
+    for title in ["t1", "t2"] {
+        let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", title]);
+        assert_eq!(code, 0, "{err}");
+        let task_id = out
+            .lines()
+            .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+            .expect("task id");
+        let (code, gout, err) = run_hivemind(
+            tmp.path(),
+            &[
+                "graph",
+                "create",
+                "proj",
+                &format!("g-{title}"),
+                "--from-tasks",
+                &task_id,
+            ],
+        );
+        assert_eq!(code, 0, "{err}");
+        let graph_id = gout
+            .lines()
+            .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+            .expect("graph id");
+        let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+        assert_eq!(code, 0, "{err}");
+        let flow_id = fout
+            .lines()
+            .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+            .expect("flow id");
+        let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+        assert_eq!(code, 0, "{err}");
+        flow_ids.push(flow_id);
+    }
+
+    let home = tmp.path().to_path_buf();
+    let flow1 = flow_ids[0].clone();
+    let home1 = home.clone();
+    let t1 = std::thread::spawn(move || run_hivemind(&home1, &["flow", "tick", &flow1]));
+
+    let flow2 = flow_ids[1].clone();
+    let home2 = home.clone();
+    let t2 = std::thread::spawn(move || run_hivemind(&home2, &["flow", "tick", &flow2]));
+
+    for idx in 1..=6 {
+        let (code, _out, err) = run_hivemind(
+            &home,
+            &[
+                "global",
+                "template",
+                "instantiate",
+                "proj",
+                "tpl-concurrent",
+            ],
+        );
+        assert_eq!(code, 0, "{err}");
+        let revision = format!("revision-{idx}");
+        let (code, _out, err) = run_hivemind(
+            &home,
+            &[
+                "project",
+                "governance",
+                "document",
+                "update",
+                "proj",
+                "doc1",
+                "--content",
+                &revision,
+            ],
+        );
+        assert_eq!(code, 0, "{err}");
+    }
+
+    let (code1, _out1, err1) = t1.join().expect("tick thread 1");
+    assert_eq!(code1, 0, "{err1}");
+    let (code2, _out2, err2) = t2.join().expect("tick thread 2");
+    assert_eq!(code2, 0, "{err2}");
+
+    let (code, out, err) = run_hivemind(
+        &home,
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--project",
+            "proj",
+            "--template-id",
+            "tpl-concurrent",
+            "--limit",
+            "300",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let json: serde_json::Value = serde_json::from_str(&out).expect("events json");
+    let events = json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .expect("events array");
+    assert!(events.iter().any(|event| {
+        event
+            .get("payload")
+            .and_then(|payload| payload.get("type"))
+            .and_then(serde_json::Value::as_str)
+            == Some("template_instantiated")
+    }));
 }
 
 fn hivemind_bin() -> PathBuf {

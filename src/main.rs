@@ -1040,6 +1040,15 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                     Err(e) => output_error(&e, format),
                 }
             }
+            ProjectGovernanceCommands::Diagnose(args) => {
+                match registry.project_governance_diagnose(&args.project) {
+                    Ok(result) => {
+                        print_structured(&result, format, "project governance diagnostics");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
             ProjectGovernanceCommands::Document(cmd) => match cmd {
                 ProjectGovernanceDocumentCommands::Create(args) => match registry
                     .project_governance_document_create(
@@ -2072,6 +2081,23 @@ fn parse_event_time(
         })
 }
 
+fn parse_non_empty_filter(
+    raw: &str,
+    code: &str,
+    flag: &str,
+    origin: &str,
+) -> Result<String, hivemind::core::error::HivemindError> {
+    let normalized = raw.trim();
+    if normalized.is_empty() {
+        return Err(hivemind::core::error::HivemindError::user(
+            code,
+            format!("{flag} cannot be empty"),
+            origin,
+        ));
+    }
+    Ok(normalized.to_string())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_event_filter(
     registry: &Registry,
@@ -2081,6 +2107,9 @@ fn build_event_filter(
     flow: Option<&str>,
     task: Option<&str>,
     attempt: Option<&str>,
+    artifact_id: Option<&str>,
+    template_id: Option<&str>,
+    rule_id: Option<&str>,
     since: Option<&str>,
     until: Option<&str>,
     limit: usize,
@@ -2112,6 +2141,30 @@ fn build_event_filter(
             attempt,
             "invalid_attempt_id",
             "attempt",
+            origin,
+        )?);
+    }
+    if let Some(artifact_id) = artifact_id {
+        filter.artifact_id = Some(parse_non_empty_filter(
+            artifact_id,
+            "invalid_artifact_id",
+            "--artifact-id",
+            origin,
+        )?);
+    }
+    if let Some(template_id) = template_id {
+        filter.template_id = Some(parse_non_empty_filter(
+            template_id,
+            "invalid_template_id",
+            "--template-id",
+            origin,
+        )?);
+    }
+    if let Some(rule_id) = rule_id {
+        filter.rule_id = Some(parse_non_empty_filter(
+            rule_id,
+            "invalid_rule_id",
+            "--rule-id",
             origin,
         )?);
     }
@@ -2153,6 +2206,9 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
                 args.flow.as_deref(),
                 args.task.as_deref(),
                 args.attempt.as_deref(),
+                args.artifact_id.as_deref(),
+                args.template_id.as_deref(),
+                args.rule_id.as_deref(),
                 args.since.as_deref(),
                 args.until.as_deref(),
                 args.limit,
@@ -2220,6 +2276,9 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
                 args.flow.as_deref(),
                 args.task.as_deref(),
                 args.attempt.as_deref(),
+                args.artifact_id.as_deref(),
+                args.template_id.as_deref(),
+                args.rule_id.as_deref(),
                 args.since.as_deref(),
                 args.until.as_deref(),
                 args.limit,

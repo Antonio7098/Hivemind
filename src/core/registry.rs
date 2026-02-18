@@ -346,6 +346,32 @@ pub struct ProjectGovernanceInspectResult {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct GovernanceDiagnosticIssue {
+    pub code: String,
+    pub severity: String,
+    pub message: String,
+    #[serde(default)]
+    pub hint: Option<String>,
+    #[serde(default)]
+    pub artifact_kind: Option<String>,
+    #[serde(default)]
+    pub artifact_id: Option<String>,
+    #[serde(default)]
+    pub template_id: Option<String>,
+    #[serde(default)]
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectGovernanceDiagnosticsResult {
+    pub project_id: Uuid,
+    pub checked_at: chrono::DateTime<Utc>,
+    pub healthy: bool,
+    pub issue_count: usize,
+    pub issues: Vec<GovernanceDiagnosticIssue>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ProjectGovernanceDocumentSummary {
     pub project_id: Uuid,
     pub document_id: String,
@@ -3298,7 +3324,7 @@ impl Registry {
 
     fn governance_default_file_contents(location: &GovernanceArtifactLocation) -> &'static [u8] {
         match (location.scope, location.artifact_kind) {
-            ("project", "constitution") => b"version: 1\nschema_version: constitution.v1\ncompatibility:\n  minimum_hivemind_version: 0.1.29\n  governance_schema_version: governance.v1\npartitions: []\nrules: []\n",
+            ("project", "constitution") => b"version: 1\nschema_version: constitution.v1\ncompatibility:\n  minimum_hivemind_version: 0.1.31\n  governance_schema_version: governance.v1\npartitions: []\nrules: []\n",
             ("project", "graph_snapshot") => b"{}\n",
             _ => b"\n",
         }
@@ -8033,6 +8059,312 @@ impl Registry {
             artifacts,
             migrations,
             legacy_candidates: legacy_candidates.into_iter().collect(),
+        })
+    }
+
+    /// Diagnoses governance artifact health for operators.
+    ///
+    /// # Errors
+    /// Returns an error if the project cannot be resolved or artifact listing fails.
+    #[allow(clippy::too_many_lines)]
+    pub fn project_governance_diagnose(
+        &self,
+        id_or_name: &str,
+    ) -> Result<ProjectGovernanceDiagnosticsResult> {
+        let origin = "registry:project_governance_diagnose";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+
+        let mut issues: Vec<GovernanceDiagnosticIssue> = Vec::new();
+        let mut push_issue = |issue: GovernanceDiagnosticIssue| {
+            issues.push(issue);
+        };
+
+        let constitution_path = self.constitution_path(project.id);
+        match self.read_constitution_artifact(project.id, origin) {
+            Ok((artifact, path)) => {
+                for issue in Self::validate_constitution(&artifact) {
+                    push_issue(GovernanceDiagnosticIssue {
+                        code: issue.code,
+                        severity: "error".to_string(),
+                        message: issue.message,
+                        hint: Some(
+                            "Run 'hivemind constitution validate <project>' and fix the invalid rule or partition".to_string(),
+                        ),
+                        artifact_kind: Some("constitution".to_string()),
+                        artifact_id: Some("constitution.yaml".to_string()),
+                        template_id: None,
+                        path: Some(path.to_string_lossy().to_string()),
+                    });
+                }
+            }
+            Err(err) => {
+                push_issue(GovernanceDiagnosticIssue {
+                    code: err.code,
+                    severity: "error".to_string(),
+                    message: err.message,
+                    hint: err.recovery_hint,
+                    artifact_kind: Some("constitution".to_string()),
+                    artifact_id: Some("constitution.yaml".to_string()),
+                    template_id: None,
+                    path: err
+                        .context
+                        .get("path")
+                        .cloned()
+                        .or_else(|| Some(constitution_path.to_string_lossy().to_string())),
+                });
+            }
+        }
+
+        if !project.repositories.is_empty() {
+            let snapshot_path = self
+                .governance_graph_snapshot_location(project.id)
+                .path
+                .to_string_lossy()
+                .to_string();
+            if let Err(err) = self.ensure_graph_snapshot_current_for_constitution(&project, origin)
+            {
+                push_issue(GovernanceDiagnosticIssue {
+                    code: err.code,
+                    severity: "error".to_string(),
+                    message: err.message,
+                    hint: err.recovery_hint,
+                    artifact_kind: Some("graph_snapshot".to_string()),
+                    artifact_id: Some("graph_snapshot.json".to_string()),
+                    template_id: None,
+                    path: Some(snapshot_path),
+                });
+            }
+        }
+
+        let template_root = self.governance_global_root().join("templates");
+        for path in Self::governance_json_paths(&template_root, origin)? {
+            let template_id = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .map_or_else(|| "unknown".to_string(), std::string::ToString::to_string);
+            let path_rendered = path.to_string_lossy().to_string();
+
+            let artifact = match Self::read_governance_json::<GlobalTemplateArtifact>(
+                &path,
+                "global_template",
+                &template_id,
+                origin,
+            ) {
+                Ok(artifact) => artifact,
+                Err(err) => {
+                    push_issue(GovernanceDiagnosticIssue {
+                        code: err.code,
+                        severity: "error".to_string(),
+                        message: err.message,
+                        hint: err.recovery_hint,
+                        artifact_kind: Some("template".to_string()),
+                        artifact_id: Some(template_id.clone()),
+                        template_id: Some(template_id.clone()),
+                        path: Some(path_rendered),
+                    });
+                    continue;
+                }
+            };
+
+            if artifact.template_id != template_id {
+                push_issue(GovernanceDiagnosticIssue {
+                    code: "template_id_mismatch".to_string(),
+                    severity: "error".to_string(),
+                    message: format!(
+                        "Template file key mismatch: expected '{template_id}', found '{}'",
+                        artifact.template_id
+                    ),
+                    hint: Some("Rename the template file or fix template_id in JSON".to_string()),
+                    artifact_kind: Some("template".to_string()),
+                    artifact_id: Some(template_id.clone()),
+                    template_id: Some(template_id.clone()),
+                    path: Some(path_rendered.clone()),
+                });
+            }
+
+            if self
+                .read_global_system_prompt_artifact(&artifact.system_prompt_id, origin)
+                .is_err()
+            {
+                push_issue(GovernanceDiagnosticIssue {
+                    code: "template_system_prompt_missing".to_string(),
+                    severity: "error".to_string(),
+                    message: format!(
+                        "Template '{template_id}' references missing system prompt '{}'",
+                        artifact.system_prompt_id
+                    ),
+                    hint: Some(
+                        "Create the missing system prompt or update template.system_prompt_id"
+                            .to_string(),
+                    ),
+                    artifact_kind: Some("system_prompt".to_string()),
+                    artifact_id: Some(artifact.system_prompt_id.clone()),
+                    template_id: Some(template_id.clone()),
+                    path: Some(path_rendered.clone()),
+                });
+            }
+
+            for skill_id in &artifact.skill_ids {
+                if self.read_global_skill_artifact(skill_id, origin).is_err() {
+                    push_issue(GovernanceDiagnosticIssue {
+                        code: "template_skill_missing".to_string(),
+                        severity: "error".to_string(),
+                        message: format!(
+                            "Template '{template_id}' references missing global skill '{skill_id}'"
+                        ),
+                        hint: Some(
+                            "Create the missing skill or remove it from template.skill_ids"
+                                .to_string(),
+                        ),
+                        artifact_kind: Some("skill".to_string()),
+                        artifact_id: Some(skill_id.clone()),
+                        template_id: Some(template_id.clone()),
+                        path: Some(path_rendered.clone()),
+                    });
+                }
+            }
+
+            for document_id in &artifact.document_ids {
+                if self
+                    .read_project_document_artifact(project.id, document_id, origin)
+                    .is_err()
+                {
+                    push_issue(GovernanceDiagnosticIssue {
+                        code: "template_document_missing".to_string(),
+                        severity: "error".to_string(),
+                        message: format!(
+                            "Template '{template_id}' references missing project document '{document_id}'"
+                        ),
+                        hint: Some(
+                            "Create the project document or remove it from template.document_ids"
+                                .to_string(),
+                        ),
+                        artifact_kind: Some("document".to_string()),
+                        artifact_id: Some(document_id.clone()),
+                        template_id: Some(template_id.clone()),
+                        path: Some(path_rendered.clone()),
+                    });
+                }
+            }
+        }
+
+        if let Some(snapshot) = self.latest_template_instantiation_snapshot(project.id)? {
+            if self
+                .read_global_template_artifact(&snapshot.template_id, origin)
+                .is_err()
+            {
+                push_issue(GovernanceDiagnosticIssue {
+                    code: "instantiated_template_missing".to_string(),
+                    severity: "error".to_string(),
+                    message: format!(
+                        "Latest instantiated template '{}' no longer exists",
+                        snapshot.template_id
+                    ),
+                    hint: Some(
+                        "Recreate the template or instantiate a new valid template for this project"
+                            .to_string(),
+                    ),
+                    artifact_kind: Some("template".to_string()),
+                    artifact_id: Some(snapshot.template_id.clone()),
+                    template_id: Some(snapshot.template_id.clone()),
+                    path: Some(self.global_template_path(&snapshot.template_id).to_string_lossy().to_string()),
+                });
+            }
+
+            if self
+                .read_global_system_prompt_artifact(&snapshot.system_prompt_id, origin)
+                .is_err()
+            {
+                push_issue(GovernanceDiagnosticIssue {
+                    code: "instantiated_system_prompt_missing".to_string(),
+                    severity: "error".to_string(),
+                    message: format!(
+                        "Latest instantiated template '{}' references missing system prompt '{}'",
+                        snapshot.template_id, snapshot.system_prompt_id
+                    ),
+                    hint: Some(
+                        "Recreate the system prompt and re-instantiate the template".to_string(),
+                    ),
+                    artifact_kind: Some("system_prompt".to_string()),
+                    artifact_id: Some(snapshot.system_prompt_id.clone()),
+                    template_id: Some(snapshot.template_id.clone()),
+                    path: None,
+                });
+            }
+
+            for skill_id in &snapshot.skill_ids {
+                if self.read_global_skill_artifact(skill_id, origin).is_err() {
+                    push_issue(GovernanceDiagnosticIssue {
+                        code: "instantiated_skill_missing".to_string(),
+                        severity: "error".to_string(),
+                        message: format!(
+                            "Latest instantiated template '{}' references missing skill '{}'",
+                            snapshot.template_id, skill_id
+                        ),
+                        hint: Some(
+                            "Recreate the skill and re-instantiate the template".to_string(),
+                        ),
+                        artifact_kind: Some("skill".to_string()),
+                        artifact_id: Some(skill_id.clone()),
+                        template_id: Some(snapshot.template_id.clone()),
+                        path: None,
+                    });
+                }
+            }
+
+            for document_id in &snapshot.document_ids {
+                if self
+                    .read_project_document_artifact(project.id, document_id, origin)
+                    .is_err()
+                {
+                    push_issue(GovernanceDiagnosticIssue {
+                        code: "instantiated_document_missing".to_string(),
+                        severity: "error".to_string(),
+                        message: format!(
+                            "Latest instantiated template '{}' references missing project document '{}'",
+                            snapshot.template_id, document_id
+                        ),
+                        hint: Some(
+                            "Create the document and re-instantiate the template".to_string(),
+                        ),
+                        artifact_kind: Some("document".to_string()),
+                        artifact_id: Some(document_id.clone()),
+                        template_id: Some(snapshot.template_id.clone()),
+                        path: None,
+                    });
+                }
+            }
+        }
+
+        let mut seen = HashSet::new();
+        issues.retain(|issue| {
+            let key = format!(
+                "{}|{}|{}|{}|{}",
+                issue.code,
+                issue.artifact_id.clone().unwrap_or_default(),
+                issue.template_id.clone().unwrap_or_default(),
+                issue.path.clone().unwrap_or_default(),
+                issue.message
+            );
+            seen.insert(key)
+        });
+        issues.sort_by(|a, b| {
+            a.code
+                .cmp(&b.code)
+                .then(a.template_id.cmp(&b.template_id))
+                .then(a.artifact_id.cmp(&b.artifact_id))
+                .then(a.message.cmp(&b.message))
+        });
+
+        let issue_count = issues.len();
+        Ok(ProjectGovernanceDiagnosticsResult {
+            project_id: project.id,
+            checked_at: Utc::now(),
+            healthy: issue_count == 0,
+            issue_count,
+            issues,
         })
     }
 

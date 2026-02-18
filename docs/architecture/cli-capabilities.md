@@ -51,6 +51,7 @@ Purpose:
 Capabilities:
 - Stream events (live)
 - Query historical events by correlation (project / graph / flow / task / attempt)
+- Query historical events by governance payload selectors (`--artifact-id`, `--template-id`, `--rule-id`)
 - Query events by time window (`--since`, `--until`)
 - Inspect full event payload by event ID
 - Replay events into derived state
@@ -97,7 +98,7 @@ Capabilities:
 ### 3.4 Project Governance Artifacts
 
 Capabilities:
-- Initialize/migrate/inspect governance storage for a project
+- Initialize/migrate/inspect/diagnose governance storage for a project
 - Initialize/show/validate/update project constitution via `hivemind constitution ...`
 - Evaluate constitution rules explicitly via `hivemind constitution check --project <project>`
 - Rebuild graph snapshot via `hivemind graph snapshot refresh <project>`
@@ -115,6 +116,7 @@ Constraints:
 - Project document attachment is explicit and task-scoped
 - Project notepad content is never injected into runtime prompts by default
 - Attempt context excludes project/global notepads and implicit memory sources by default
+- Governance diagnostics report missing artifacts, invalid template references, and stale/missing graph snapshots as explicit machine-readable issues
 
 ---
 

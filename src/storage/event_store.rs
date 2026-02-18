@@ -3,7 +3,7 @@
 //! Event stores are the persistence layer for events. All state is derived
 //! from events, so the event store is the single source of truth.
 
-use crate::core::events::{Event, EventId};
+use crate::core::events::{Event, EventId, EventPayload};
 use chrono::Duration as ChronoDuration;
 use chrono::{DateTime, Utc};
 use fs2::FileExt;
@@ -71,6 +71,12 @@ pub struct EventFilter {
     pub flow_id: Option<Uuid>,
     /// Filter by attempt ID.
     pub attempt_id: Option<Uuid>,
+    /// Filter by governance artifact ID/key.
+    pub artifact_id: Option<String>,
+    /// Filter by template ID.
+    pub template_id: Option<String>,
+    /// Filter by constitution rule ID.
+    pub rule_id: Option<String>,
     /// Include events at or after this timestamp.
     pub since: Option<DateTime<Utc>>,
     /// Include events at or before this timestamp.
@@ -131,6 +137,21 @@ impl EventFilter {
                 return false;
             }
         }
+        if let Some(artifact_id) = self.artifact_id.as_deref() {
+            if !Self::matches_artifact_id(&event.payload, artifact_id) {
+                return false;
+            }
+        }
+        if let Some(template_id) = self.template_id.as_deref() {
+            if !Self::matches_template_id(&event.payload, template_id) {
+                return false;
+            }
+        }
+        if let Some(rule_id) = self.rule_id.as_deref() {
+            if !Self::matches_rule_id(&event.payload, rule_id) {
+                return false;
+            }
+        }
         if let Some(since) = self.since {
             if event.metadata.timestamp < since {
                 return false;
@@ -142,6 +163,79 @@ impl EventFilter {
             }
         }
         true
+    }
+
+    fn matches_artifact_id(payload: &EventPayload, artifact_id: &str) -> bool {
+        match payload {
+            EventPayload::GovernanceArtifactUpserted { artifact_key, .. }
+            | EventPayload::GovernanceArtifactDeleted { artifact_key, .. }
+            | EventPayload::GovernanceAttachmentLifecycleUpdated { artifact_key, .. } => {
+                artifact_key == artifact_id
+            }
+            EventPayload::TemplateInstantiated {
+                template_id,
+                system_prompt_id,
+                skill_ids,
+                document_ids,
+                ..
+            } => {
+                template_id == artifact_id
+                    || system_prompt_id == artifact_id
+                    || skill_ids.iter().any(|id| id == artifact_id)
+                    || document_ids.iter().any(|id| id == artifact_id)
+            }
+            EventPayload::AttemptContextOverridesApplied {
+                template_document_ids,
+                included_document_ids,
+                excluded_document_ids,
+                resolved_document_ids,
+                ..
+            } => {
+                template_document_ids.iter().any(|id| id == artifact_id)
+                    || included_document_ids.iter().any(|id| id == artifact_id)
+                    || excluded_document_ids.iter().any(|id| id == artifact_id)
+                    || resolved_document_ids.iter().any(|id| id == artifact_id)
+            }
+            _ => false,
+        }
+    }
+
+    fn matches_template_id(payload: &EventPayload, template_id: &str) -> bool {
+        match payload {
+            EventPayload::TemplateInstantiated {
+                template_id: id, ..
+            } => id == template_id,
+            EventPayload::GovernanceArtifactUpserted {
+                artifact_kind,
+                artifact_key,
+                ..
+            }
+            | EventPayload::GovernanceArtifactDeleted {
+                artifact_kind,
+                artifact_key,
+                ..
+            } => artifact_kind == "template" && artifact_key == template_id,
+            EventPayload::AttemptContextAssembled { manifest_json, .. } => {
+                serde_json::from_str::<serde_json::Value>(manifest_json)
+                    .ok()
+                    .and_then(|manifest| {
+                        manifest
+                            .get("template_id")
+                            .and_then(serde_json::Value::as_str)
+                            .map(std::string::ToString::to_string)
+                    })
+                    .as_deref()
+                    .is_some_and(|id| id == template_id)
+            }
+            _ => false,
+        }
+    }
+
+    fn matches_rule_id(payload: &EventPayload, rule_id: &str) -> bool {
+        matches!(
+            payload,
+            EventPayload::ConstitutionViolationDetected { rule_id: id, .. } if id == rule_id
+        )
     }
 }
 
@@ -791,6 +885,89 @@ mod tests {
         let until_events = store.read(&filter).unwrap();
         assert_eq!(until_events.len(), 1);
         assert_eq!(until_events[0].metadata.timestamp, first_ts);
+    }
+
+    #[test]
+    fn in_memory_store_filters_governance_artifact_template_and_rule_ids() {
+        let store = InMemoryEventStore::new();
+        let project = Uuid::new_v4();
+        let flow = Uuid::new_v4();
+        let task = Uuid::new_v4();
+        let attempt = Uuid::new_v4();
+
+        store
+            .append(Event::new(
+                EventPayload::GovernanceArtifactUpserted {
+                    project_id: Some(project),
+                    scope: "project".to_string(),
+                    artifact_kind: "document".to_string(),
+                    artifact_key: "doc-1".to_string(),
+                    path: "/tmp/doc-1.json".to_string(),
+                    revision: 1,
+                    schema_version: "governance.v1".to_string(),
+                    projection_version: 1,
+                },
+                CorrelationIds::for_project(project),
+            ))
+            .unwrap();
+
+        store
+            .append(Event::new(
+                EventPayload::TemplateInstantiated {
+                    project_id: project,
+                    template_id: "tpl-1".to_string(),
+                    system_prompt_id: "prompt-1".to_string(),
+                    skill_ids: vec!["skill-1".to_string()],
+                    document_ids: vec!["doc-1".to_string()],
+                    schema_version: "governance.v1".to_string(),
+                    projection_version: 1,
+                },
+                CorrelationIds::for_project(project),
+            ))
+            .unwrap();
+
+        store
+            .append(Event::new(
+                EventPayload::ConstitutionViolationDetected {
+                    project_id: project,
+                    flow_id: Some(flow),
+                    task_id: Some(task),
+                    attempt_id: Some(attempt),
+                    gate: "manual_check".to_string(),
+                    rule_id: "rule-hard".to_string(),
+                    rule_type: "forbidden_dependency".to_string(),
+                    severity: "hard".to_string(),
+                    message: "blocked".to_string(),
+                    evidence: vec!["a -> b".to_string()],
+                    remediation_hint: Some("fix dependency".to_string()),
+                    blocked: true,
+                },
+                CorrelationIds::for_flow_task(project, flow, task),
+            ))
+            .unwrap();
+
+        let mut artifact_filter = EventFilter::all();
+        artifact_filter.artifact_id = Some("doc-1".to_string());
+        let artifact_events = store.read(&artifact_filter).unwrap();
+        assert_eq!(artifact_events.len(), 2);
+
+        let mut template_filter = EventFilter::all();
+        template_filter.template_id = Some("tpl-1".to_string());
+        let template_events = store.read(&template_filter).unwrap();
+        assert_eq!(template_events.len(), 1);
+        assert!(matches!(
+            template_events[0].payload,
+            EventPayload::TemplateInstantiated { .. }
+        ));
+
+        let mut rule_filter = EventFilter::all();
+        rule_filter.rule_id = Some("rule-hard".to_string());
+        let rule_events = store.read(&rule_filter).unwrap();
+        assert_eq!(rule_events.len(), 1);
+        assert!(matches!(
+            rule_events[0].payload,
+            EventPayload::ConstitutionViolationDetected { .. }
+        ));
     }
 
     #[test]

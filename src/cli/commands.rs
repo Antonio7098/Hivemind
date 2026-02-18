@@ -605,6 +605,8 @@ pub enum ProjectGovernanceCommands {
     Migrate(ProjectGovernanceMigrateArgs),
     /// Inspect governance storage paths and projection metadata for a project
     Inspect(ProjectGovernanceInspectArgs),
+    /// Diagnose governance artifacts, references, and snapshot freshness
+    Diagnose(ProjectGovernanceDiagnoseArgs),
     /// Project document lifecycle and metadata commands
     #[command(subcommand)]
     Document(ProjectGovernanceDocumentCommands),
@@ -981,6 +983,12 @@ pub struct ProjectGovernanceMigrateArgs {
 
 #[derive(Args)]
 pub struct ProjectGovernanceInspectArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceDiagnoseArgs {
     /// Project ID or name
     pub project: String,
 }
@@ -1362,6 +1370,18 @@ pub struct EventListArgs {
     #[arg(long)]
     pub attempt: Option<String>,
 
+    /// Filter by governance artifact ID/key
+    #[arg(long = "artifact-id")]
+    pub artifact_id: Option<String>,
+
+    /// Filter by template ID
+    #[arg(long = "template-id")]
+    pub template_id: Option<String>,
+
+    /// Filter by constitution rule ID
+    #[arg(long = "rule-id")]
+    pub rule_id: Option<String>,
+
     /// Lower bound timestamp (RFC3339), inclusive
     #[arg(long)]
     pub since: Option<String>,
@@ -1404,6 +1424,18 @@ pub struct EventStreamArgs {
     /// Filter by attempt ID
     #[arg(long)]
     pub attempt: Option<String>,
+
+    /// Filter by governance artifact ID/key
+    #[arg(long = "artifact-id")]
+    pub artifact_id: Option<String>,
+
+    /// Filter by template ID
+    #[arg(long = "template-id")]
+    pub template_id: Option<String>,
+
+    /// Filter by constitution rule ID
+    #[arg(long = "rule-id")]
+    pub rule_id: Option<String>,
 
     /// Lower bound timestamp (RFC3339), inclusive
     #[arg(long)]
