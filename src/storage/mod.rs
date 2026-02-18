@@ -39,6 +39,6 @@
 //!
 //! # Modules
 //!
-//! - [`event_store`] - Event store trait and SQLite implementation
+//! - [`event_store`] - Event store trait and `SQLite` implementation
 
 pub mod event_store;

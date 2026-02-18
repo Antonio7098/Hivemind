@@ -16,7 +16,7 @@
 //! - **Event-sourced architecture**: All state derived from immutable, append-only events
 //! - **Deterministic task graphs**: Static DAGs representing planned intent
 //! - **Scoped execution**: Fine-grained access control for agent operations
-//! - **Runtime adapters**: Pluggable execution backends (OpenCode, Claude Code, Codex, Kilo)
+//! - **Runtime adapters**: Pluggable execution backends (`OpenCode`, Claude Code, Codex, Kilo)
 //! - **Verification**: Automated checks with configurable retry policies
 //! - **Full observability**: Complete diff, commit, and event history
 //! - **Local-first**: Everything runs locally, no cloud dependencies
@@ -26,7 +26,7 @@
 //! The crate is organized into several modules:
 //!
 //! - [`core`] - Domain types: events, state, graphs, flows, errors, and scope enforcement
-//! - [`adapters`] - Runtime adapters for execution backends (OpenCode, Claude Code, etc.)
+//! - [`adapters`] - Runtime adapters for execution backends (`OpenCode`, Claude Code, etc.)
 //! - [`storage`] - Event persistence layer (SQLite-backed event store)
 //! - [`cli`] - Command-line interface commands and output formatting
 //! - [`server`] - HTTP API server for UI integration

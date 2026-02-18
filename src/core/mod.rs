@@ -33,7 +33,7 @@
 //! ## Graphs and Flows
 //!
 //! - [`TaskGraph`](graph::TaskGraph): Static, immutable DAG representing planned intent
-//! - [`TaskFlow`](flow::TaskFlow): Runtime instance of a TaskGraph with execution state
+//! - [`TaskFlow`](flow::TaskFlow): Runtime instance of a `TaskGraph` with execution state
 //!
 //! Multiple flows can exist for the same graph (e.g., retries, parallel attempts).
 //!
@@ -61,8 +61,8 @@
 //!
 //! - [`events`] - Event definitions and types
 //! - [`state`] - Derived state types (Project, Task, Attempt, etc.)
-//! - [`graph`] - TaskGraph: static planning DAG
-//! - [`flow`] - TaskFlow: runtime execution state
+//! - [`graph`] - `TaskGraph`: static planning DAG
+//! - [`flow`] - `TaskFlow`: runtime execution state
 //! - [`error`] - Structured error types
 //! - [`scope`] - Execution scope definitions
 //! - [`enforcement`] - Scope enforcement and verification

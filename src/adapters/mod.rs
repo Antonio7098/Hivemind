@@ -6,7 +6,7 @@
 //!
 //! # Supported Runtimes
 //!
-//! | Adapter | Binary | OpenCode Compatible |
+//! | Adapter | Binary | `OpenCode` Compatible |
 //! |---------|--------|---------------------|
 //! | `opencode` | `opencode` | Yes |
 //! | `codex` | `codex` | No |
@@ -41,7 +41,7 @@
 //! # Modules
 //!
 //! - [`runtime`] - Core adapter trait and types
-//! - [`opencode`] - OpenCode adapter (primary)
+//! - [`opencode`] - `OpenCode` adapter (primary)
 //! - [`claude_code`] - Claude Code adapter
 //! - [`codex`] - Codex CLI adapter
 //! - [`kilo`] - Kilo adapter

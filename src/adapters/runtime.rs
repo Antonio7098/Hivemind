@@ -1,7 +1,7 @@
 //! Runtime adapter interface for execution backends.
 //!
 //! Runtime adapters are the only components that interact directly with
-//! execution runtimes (e.g., Claude Code, OpenCode, Codex CLI). They provide
+//! execution runtimes (e.g., Claude Code, `OpenCode`, Codex CLI). They provide
 //! a uniform interface for task execution regardless of the underlying agent.
 //!
 //! # Core Types
@@ -47,7 +47,7 @@
 //! # Built-in Adapters
 //!
 //! See the adapter implementations:
-//! - [`opencode`](super::opencode) - OpenCode adapter (primary)
+//! - [`opencode`](super::opencode) - `OpenCode` adapter (primary)
 //! - [`claude_code`](super::claude_code) - Claude Code adapter
 //! - [`codex`](super::codex) - Codex CLI adapter
 //! - [`kilo`](super::kilo) - Kilo adapter
