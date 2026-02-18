@@ -103,6 +103,7 @@ Examples:
 - `ConstitutionInitialized`
 - `ConstitutionUpdated`
 - `ConstitutionValidated`
+- `ConstitutionViolationDetected`
 - `TemplateInstantiated`
 
 Properties:
@@ -111,6 +112,7 @@ Properties:
 - Graph snapshot lifecycle emits explicit start/completion/failure and diff telemetry with trigger attribution (`project_attach`, `checkpoint_complete`, `merge_completed`, `manual_refresh`)
 - Snapshot completion payload records snapshot path, governance revision, UCP profile/engine metadata, and canonical fingerprint for replay-safe provenance
 - Constitution lifecycle events include digest, schema/version metadata, confirmation flag, mutation intent, and actor attribution
+- Constitution enforcement emits `ConstitutionViolationDetected` with gate (`manual_check`, `checkpoint_complete`, `merge_prepare`, `merge_approve`, `merge_execute`), rule ID/type/severity, and structured evidence/remediation hints
 - Template instantiation records resolved artifact IDs for replay-safe context provenance
 
 ---

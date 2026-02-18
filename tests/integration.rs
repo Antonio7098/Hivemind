@@ -882,6 +882,179 @@ rules:
     assert!(events_out.contains("constitution_updated"), "{events_out}");
 }
 
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_constitution_check_reports_blocking_violations() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+    std::fs::create_dir_all(repo_dir.join("src/domain")).expect("create domain dir");
+    std::fs::write(
+        repo_dir.join("src/lib.rs"),
+        "pub mod domain;\npub mod infrastructure;\n",
+    )
+    .expect("write lib.rs");
+    std::fs::write(
+        repo_dir.join("src/infrastructure.rs"),
+        "pub fn db() -> &'static str { \"ok\" }\n",
+    )
+    .expect("write infrastructure.rs");
+    std::fs::write(
+        repo_dir.join("src/domain/mod.rs"),
+        "pub mod extra;\nuse crate::infrastructure::db;\npub fn run() -> &'static str { db() }\n",
+    )
+    .expect("write domain/mod.rs");
+    std::fs::write(repo_dir.join("src/domain/extra.rs"), "// no symbols\n")
+        .expect("write domain/extra.rs");
+    let out = Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(&repo_dir)
+        .output()
+        .expect("git add");
+    assert!(
+        out.status.success(),
+        "git add: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let out = Command::new("git")
+        .args([
+            "-c",
+            "user.name=Hivemind",
+            "-c",
+            "user.email=hivemind@example.com",
+            "commit",
+            "-m",
+            "seed domain infrastructure graph",
+        ])
+        .current_dir(&repo_dir)
+        .output()
+        .expect("git commit");
+    assert!(
+        out.status.success(),
+        "git commit: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let constitution_path = tmp.path().join("constitution-check.yaml");
+    std::fs::write(
+        &constitution_path,
+        r"version: 1
+schema_version: constitution.v1
+compatibility:
+  minimum_hivemind_version: 0.1.28
+  governance_schema_version: governance.v1
+partitions:
+  - id: domain
+    path: src/domain
+  - id: infrastructure
+    path: src/infrastructure.rs
+rules:
+  - type: forbidden_dependency
+    id: no_domain_to_infra_hard
+    from: domain
+    to: infrastructure
+    severity: hard
+  - type: forbidden_dependency
+    id: no_domain_to_infra_info
+    from: domain
+    to: infrastructure
+    severity: informational
+  - type: coverage_requirement
+    id: domain_symbol_coverage
+    target: domain
+    threshold: 100
+    severity: advisory
+",
+    )
+    .expect("write constitution");
+    let constitution_path_arg = constitution_path.to_string_lossy().to_string();
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "constitution",
+            "init",
+            "proj",
+            "--from-file",
+            &constitution_path_arg,
+            "--confirm",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, check_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "constitution", "check", "--project", "proj"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let check_json: serde_json::Value = serde_json::from_str(&check_out).expect("check json");
+    let check_data = check_json.get("data").expect("check data");
+    assert_eq!(
+        check_data.get("gate").and_then(serde_json::Value::as_str),
+        Some("manual_check")
+    );
+    assert_eq!(
+        check_data
+            .get("blocked")
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        check_data
+            .get("hard_violations")
+            .and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        check_data
+            .get("advisory_violations")
+            .and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    assert_eq!(
+        check_data
+            .get("informational_violations")
+            .and_then(serde_json::Value::as_u64),
+        Some(1)
+    );
+    let violations = check_data
+        .get("violations")
+        .and_then(serde_json::Value::as_array)
+        .expect("violations array");
+    assert_eq!(violations.len(), 3);
+    assert!(violations.iter().any(|item| {
+        item.get("rule_id")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|id| id == "no_domain_to_infra_hard")
+    }));
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "stream",
+            "--project",
+            "proj",
+            "--limit",
+            "500",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        events_out.contains("constitution_violation_detected"),
+        "{events_out}"
+    );
+}
+
 fn hivemind_bin() -> PathBuf {
     option_env!("CARGO_BIN_EXE_hivemind").map_or_else(
         || {

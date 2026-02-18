@@ -502,6 +502,26 @@ pub enum EventPayload {
         validated_by: String,
     },
 
+    ConstitutionViolationDetected {
+        project_id: Uuid,
+        #[serde(default)]
+        flow_id: Option<Uuid>,
+        #[serde(default)]
+        task_id: Option<Uuid>,
+        #[serde(default)]
+        attempt_id: Option<Uuid>,
+        gate: String,
+        rule_id: String,
+        rule_type: String,
+        severity: String,
+        message: String,
+        #[serde(default)]
+        evidence: Vec<String>,
+        #[serde(default)]
+        remediation_hint: Option<String>,
+        blocked: bool,
+    },
+
     TemplateInstantiated {
         project_id: Uuid,
         template_id: String,

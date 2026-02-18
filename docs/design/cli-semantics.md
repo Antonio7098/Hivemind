@@ -380,6 +380,7 @@ hivemind [-f json|table|yaml] project governance inspect <project>
 hivemind [-f json|table|yaml] constitution init <project> [--content <yaml> | --from-file <path>] --confirm [--actor <name>] [--intent <text>]
 hivemind [-f json|table|yaml] constitution show <project>
 hivemind [-f json|table|yaml] constitution validate <project>
+hivemind [-f json|table|yaml] constitution check --project <project>
 hivemind [-f json|table|yaml] constitution update <project> (--content <yaml> | --from-file <path>) --confirm [--actor <name>] [--intent <text>]
 ```
 
@@ -388,6 +389,7 @@ hivemind [-f json|table|yaml] constitution update <project> (--content <yaml> | 
 - Canonical constitution path is `~/.hivemind/projects/<project-id>/constitution.yaml`
 - `init` and `update` require explicit `--confirm`
 - `update` requires constitution to be initialized first
+- `check` requires constitution to be initialized for explicit/manual validation
 - Projects with attached repositories must have a current graph snapshot artifact
 
 **Effects:**
@@ -395,6 +397,10 @@ hivemind [-f json|table|yaml] constitution update <project> (--content <yaml> | 
 - Enforces strict rule semantics:
   - `forbidden_dependency` / `allowed_dependency` require known partition IDs for `from` + `to`
   - `coverage_requirement` requires known `target` partition and `threshold` in `0..=100`
+- Evaluates `validate(graph_snapshot, constitution)` with deterministic, severity-aware outcomes:
+  - `hard`: blocks checkpoint/merge progression
+  - `advisory`: reported, non-blocking
+  - `informational`: logged, non-blocking
 - Maintains per-project constitution digest/version projection fields on project state
 - Preserves mutation audit metadata (`actor`, `mutation_intent`, confirmation flag)
 
@@ -432,6 +438,20 @@ ConstitutionValidated:
   valid: true|false
   issues: [<code:field:message>...]
   validated_by: <actor>
+
+ConstitutionViolationDetected:
+  project_id: <project-id>
+  flow_id: <flow-id>|null
+  task_id: <task-id>|null
+  attempt_id: <attempt-id>|null
+  gate: manual_check|checkpoint_complete|merge_prepare|merge_approve|merge_execute
+  rule_id: <rule-id>
+  rule_type: forbidden_dependency|allowed_dependency|coverage_requirement
+  severity: hard|advisory|informational
+  message: <human-readable>
+  evidence: [<strings>...]
+  remediation_hint: <hint>|null
+  blocked: true|false
 ```
 
 `init` and `update` also emit `GovernanceArtifactUpserted` for `artifact_kind: constitution`.
@@ -444,6 +464,7 @@ ConstitutionValidated:
 - `constitution_not_found`
 - `constitution_input_read_failed`
 - `constitution_content_missing`
+- `constitution_hard_violation`
 - `graph_snapshot_missing`
 - `graph_snapshot_stale`
 - `graph_snapshot_integrity_invalid`
@@ -451,6 +472,7 @@ ConstitutionValidated:
 **Idempotence:**
 - `show`: idempotent
 - `validate`: idempotent relative to file content (always emits a validation event)
+- `check`: idempotent relative to graph snapshot + constitution state (always emits violation events when present)
 - `init`: non-idempotent after initial constitution lifecycle event (must use `update` for subsequent mutations)
 - `update`: idempotent when content digest is unchanged, but still explicit and confirmed
 
@@ -1927,6 +1949,7 @@ hivemind merge prepare <flow-id> [--target <branch>]
 - Flow exists
 - Flow state is COMPLETED (success)
 - No pending merge preparation
+- Constitution hard-rule gate passes when a project constitution is initialized
 
 **Effects:**
 - Integration commits computed
@@ -1949,6 +1972,7 @@ ErrorOccurred:
 - `FLOW_NOT_FOUND`
 - `FLOW_NOT_COMPLETED`: Flow hasn't completed successfully
 - `MERGE_ALREADY_PREPARED`: Preparation exists
+- `constitution_hard_violation`
 
 **Idempotence:** Idempotent if no conflicts. Re-preparation refreshes.
 
@@ -1965,6 +1989,7 @@ hivemind merge approve <flow-id>
 - Flow exists
 - Merge is prepared
 - No unresolved conflicts
+- Constitution hard-rule gate passes when a project constitution is initialized
 
 **Effects:**
 - Merge marked as approved
@@ -1981,6 +2006,7 @@ MergeApproved:
 - `FLOW_NOT_FOUND`
 - `MERGE_NOT_PREPARED`: No merge preparation
 - `UNRESOLVED_CONFLICTS`: Conflicts exist
+- `constitution_hard_violation`
 
 **Idempotence:** Idempotent. Approving approved merge is no-op.
 
@@ -1996,6 +2022,7 @@ hivemind merge execute <flow-id> [--mode local|pr] [--monitor-ci] [--auto-merge]
 **Preconditions:**
 - Flow exists
 - Merge is approved
+- Constitution hard-rule gate passes when a project constitution is initialized
 
 **Effects:**
 - `--mode local` (default):
@@ -2022,6 +2049,7 @@ MergeCompleted:
 - `FLOW_NOT_FOUND`
 - `MERGE_NOT_APPROVED`: Merge not approved
 - `MERGE_CONFLICT`: Conflict occurred during merge
+- `constitution_hard_violation`
 - `PUSH_FAILED`: Could not push to remote
 - `pr_merge_multi_repo_unsupported`
 - `pr_merge_no_origin`

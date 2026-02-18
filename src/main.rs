@@ -1236,6 +1236,13 @@ fn handle_constitution(cmd: ConstitutionCommands, format: OutputFormat) -> ExitC
                 Err(e) => output_error(&e, format),
             }
         }
+        ConstitutionCommands::Check(args) => match registry.constitution_check(&args.project) {
+            Ok(result) => {
+                print_structured(&result, format, "constitution check result");
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
         ConstitutionCommands::Update(args) => {
             let payload = match read_constitution_payload(
                 args.content.as_deref(),
@@ -1936,6 +1943,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::ConstitutionInitialized { .. } => "constitution_initialized",
         EventPayload::ConstitutionUpdated { .. } => "constitution_updated",
         EventPayload::ConstitutionValidated { .. } => "constitution_validated",
+        EventPayload::ConstitutionViolationDetected { .. } => "constitution_violation_detected",
         EventPayload::TemplateInstantiated { .. } => "template_instantiated",
         EventPayload::TaskGraphCreated { .. } => "graph_created",
         EventPayload::TaskAddedToGraph { .. } => "graph_task_added",

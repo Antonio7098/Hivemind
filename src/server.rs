@@ -136,6 +136,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::ConstitutionInitialized { .. } => "ConstitutionInitialized",
         EventPayload::ConstitutionUpdated { .. } => "ConstitutionUpdated",
         EventPayload::ConstitutionValidated { .. } => "ConstitutionValidated",
+        EventPayload::ConstitutionViolationDetected { .. } => "ConstitutionViolationDetected",
         EventPayload::TemplateInstantiated { .. } => "TemplateInstantiated",
         EventPayload::TaskCreated { .. } => "TaskCreated",
         EventPayload::TaskUpdated { .. } => "TaskUpdated",
@@ -296,6 +297,7 @@ fn payload_category(payload: &EventPayload) -> &'static str {
 
         EventPayload::CheckStarted { .. }
         | EventPayload::CheckCompleted { .. }
+        | EventPayload::ConstitutionViolationDetected { .. }
         | EventPayload::HumanOverride { .. } => "verification",
 
         EventPayload::ScopeValidated { .. } | EventPayload::ScopeViolationDetected { .. } => {

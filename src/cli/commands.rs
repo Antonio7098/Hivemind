@@ -116,6 +116,8 @@ pub enum ConstitutionCommands {
     Show(ConstitutionShowArgs),
     /// Validate the current project constitution schema and semantics
     Validate(ConstitutionValidateArgs),
+    /// Evaluate constitution rules against the current graph snapshot
+    Check(ConstitutionCheckArgs),
     /// Update the current project constitution (requires explicit confirmation)
     Update(ConstitutionUpdateArgs),
 }
@@ -155,6 +157,13 @@ pub struct ConstitutionShowArgs {
 #[derive(Args)]
 pub struct ConstitutionValidateArgs {
     /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ConstitutionCheckArgs {
+    /// Project ID or name
+    #[arg(long)]
     pub project: String,
 }
 

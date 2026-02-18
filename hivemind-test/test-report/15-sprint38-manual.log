@@ -1,0 +1,231 @@
+# Sprint 38 manual run
+TMP_ROOT=/tmp/hivemind-s38-manual-76kcWD
+HOME=/tmp/hivemind-s38-manual-76kcWD/home
+HM_BIN=/home/antonio/.cargo/shared-target/release/hivemind
+== Project A: manual check severities + checkpoint gate ==
+Initialized empty Git repository in /tmp/hivemind-s38-manual-76kcWD/repo-a/.git/
+[main (root-commit) 797437d] seed repo
+ 4 files changed, 7 insertions(+)
+ create mode 100644 src/domain/extra.rs
+ create mode 100644 src/domain/mod.rs
+ create mode 100644 src/infrastructure.rs
+ create mode 100644 src/lib.rs
+ID:          486aa097-76f6-4527-9521-08f80c6ec8f1
+Name:        proj38a
+Created:     2026-02-18 11:23:52.824809665 UTC
+Updated:     2026-02-18 11:23:52.824809665 UTC
+ID:          486aa097-76f6-4527-9521-08f80c6ec8f1
+Name:        proj38a
+Created:     2026-02-18 11:23:52.824809665 UTC
+Updated:     2026-02-18 11:23:52.831231491 UTC
+Repositories:
+  - repo-a (/tmp/hivemind-s38-manual-76kcWD/repo-a) [readwrite]
+{
+  "success": true,
+  "data": {
+    "project_id": "486aa097-76f6-4527-9521-08f80c6ec8f1",
+    "path": "/tmp/hivemind-s38-manual-76kcWD/home/.hivemind/projects/486aa097-76f6-4527-9521-08f80c6ec8f1/graph_snapshot.json",
+    "trigger": "manual_refresh",
+    "revision": 2,
+    "repository_count": 1,
+    "ucp_engine_version": "ucp-codegraph-extractor.v1",
+    "profile_version": "codegraph.v1",
+    "canonical_fingerprint": "546adc6d9d2c8fab",
+    "summary": {
+      "total_nodes": 12,
+      "repository_nodes": 1,
+      "directory_nodes": 2,
+      "file_nodes": 4,
+      "symbol_nodes": 5,
+      "total_edges": 9,
+      "reference_edges": 4,
+      "export_edges": 5,
+      "languages": {
+        "rust": 4
+      }
+    },
+    "diff_detected": false
+  }
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "486aa097-76f6-4527-9521-08f80c6ec8f1",
+    "path": "/tmp/hivemind-s38-manual-76kcWD/home/.hivemind/projects/486aa097-76f6-4527-9521-08f80c6ec8f1/constitution.yaml",
+    "revision": 1,
+    "digest": "e79026a2b9f77575",
+    "previous_digest": null,
+    "schema_version": "constitution.v1",
+    "constitution_version": 1,
+    "actor": "manual",
+    "mutation_intent": "sprint38-manual",
+    "confirmed": true,
+    "updated_at": "2026-02-18T11:23:52.870702180Z"
+  }
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "486aa097-76f6-4527-9521-08f80c6ec8f1",
+    "gate": "manual_check",
+    "path": "/tmp/hivemind-s38-manual-76kcWD/home/.hivemind/projects/486aa097-76f6-4527-9521-08f80c6ec8f1/constitution.yaml",
+    "digest": "e79026a2b9f77575",
+    "schema_version": "constitution.v1",
+    "constitution_version": 1,
+    "flow_id": null,
+    "task_id": null,
+    "attempt_id": null,
+    "skipped": false,
+    "skip_reason": null,
+    "violations": [
+      {
+        "rule_id": "hard_no_domain_to_infra",
+        "rule_type": "forbidden_dependency",
+        "severity": "hard",
+        "message": "Detected 1 forbidden dependency edge(s) from partition 'domain' to 'infrastructure'",
+        "evidence": [
+          "repo-a/src/domain/mod.rs -> repo-a/src/infrastructure.rs"
+        ],
+        "remediation_hint": "Remove or invert dependencies from 'domain' to 'infrastructure'",
+        "blocked": true
+      },
+      {
+        "rule_id": "advisory_domain_coverage",
+        "rule_type": "coverage_requirement",
+        "severity": "advisory",
+        "message": "Partition 'domain' coverage is below threshold (50.00% < 100%)",
+        "evidence": [
+          "coverage=50.00% threshold=100% covered_files=1/2",
+          "files without symbol coverage: repo-a/src/domain/extra.rs"
+        ],
+        "remediation_hint": "Increase codegraph symbol coverage for files under 'domain' or lower the threshold",
+        "blocked": false
+      },
+      {
+        "rule_id": "info_domain_only_to_application",
+        "rule_type": "allowed_dependency",
+        "severity": "informational",
+        "message": "Detected 1 dependency edge(s) from partition 'domain' outside allowed target partition 'application'",
+        "evidence": [
+          "repo-a/src/domain/mod.rs -> repo-a/src/infrastructure.rs (target partitions: infrastructure)"
+        ],
+        "remediation_hint": "Restrict 'domain' dependencies to partition 'application' (and intra-partition references)",
+        "blocked": false
+      }
+    ],
+    "hard_violations": 1,
+    "advisory_violations": 1,
+    "informational_violations": 1,
+    "blocked": true,
+    "checked_at": "2026-02-18T11:23:52.885532964Z"
+  }
+}
+ID:          486aa097-76f6-4527-9521-08f80c6ec8f1
+Name:        proj38a
+Created:     2026-02-18 11:23:52.824809665 UTC
+Updated:     2026-02-18 11:23:52.901566726 UTC
+Repositories:
+  - repo-a (/tmp/hivemind-s38-manual-76kcWD/repo-a) [readwrite]
+Flow ID: f081360b-2471-4722-8129-31899657b925
+Error: [user:checkpoints_incomplete] All checkpoints must be completed before task completion
+Hint: Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 9767a184-f270-4c34-94e2-f57e3948f14f --id <checkpoint-id>` before finishing the task attempt
+{"success":false,"error":{"category":"user","code":"checkpoints_incomplete","message":"All checkpoints must be completed before task completion","origin":"registry:complete_task_execution","hint":"Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 9767a184-f270-4c34-94e2-f57e3948f14f --id <checkpoint-id>` before finishing the task attempt"}}
+ATTEMPT_A=9767a184-f270-4c34-94e2-f57e3948f14f
+Error: [policy:constitution_hard_violation] Constitution hard violations block checkpoint_complete: hard_no_domain_to_infra
+Hint: Run 'hivemind constitution check --project 486aa097-76f6-4527-9521-08f80c6ec8f1' and remediate blocking rules
+{"success":false,"error":{"category":"policy","code":"constitution_hard_violation","message":"Constitution hard violations block checkpoint_complete: hard_no_domain_to_infra","origin":"registry:checkpoint_complete","hint":"Run 'hivemind constitution check --project 486aa097-76f6-4527-9521-08f80c6ec8f1' and remediate blocking rules"}}
+== Project B: merge boundary gates ==
+Initialized empty Git repository in /tmp/hivemind-s38-manual-76kcWD/repo-b/.git/
+[main (root-commit) f784fe6] seed repo
+ 4 files changed, 7 insertions(+)
+ create mode 100644 src/domain/extra.rs
+ create mode 100644 src/domain/mod.rs
+ create mode 100644 src/infrastructure.rs
+ create mode 100644 src/lib.rs
+ID:          b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf
+Name:        proj38b
+Created:     2026-02-18 11:23:55.274704287 UTC
+Updated:     2026-02-18 11:23:55.274704287 UTC
+ID:          b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf
+Name:        proj38b
+Created:     2026-02-18 11:23:55.274704287 UTC
+Updated:     2026-02-18 11:23:55.282705993 UTC
+Repositories:
+  - repo-b (/tmp/hivemind-s38-manual-76kcWD/repo-b) [readwrite]
+ID:          b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf
+Name:        proj38b
+Created:     2026-02-18 11:23:55.274704287 UTC
+Updated:     2026-02-18 11:23:55.303572484 UTC
+Repositories:
+  - repo-b (/tmp/hivemind-s38-manual-76kcWD/repo-b) [readwrite]
+Flow ID: 21e9597e-4fd2-48f4-8d3b-287749f73fdb
+Error: [user:checkpoints_incomplete] All checkpoints must be completed before task completion
+Hint: Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 79a61a84-d3c6-4fa8-a545-4e414db96dfa --id <checkpoint-id>` before finishing the task attempt
+{"success":false,"error":{"category":"user","code":"checkpoints_incomplete","message":"All checkpoints must be completed before task completion","origin":"registry:complete_task_execution","hint":"Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 79a61a84-d3c6-4fa8-a545-4e414db96dfa --id <checkpoint-id>` before finishing the task attempt"}}
+ATTEMPT_B=79a61a84-d3c6-4fa8-a545-4e414db96dfa
+Attempt:    79a61a84-d3c6-4fa8-a545-4e414db96dfa
+Checkpoint: checkpoint-1 (1/1)
+Commit:     9c245ccc3d38976fdc68b03586a75b9ba803b041
+Next:       none
+All done:   true
+Flow ID: 21e9597e-4fd2-48f4-8d3b-287749f73fdb
+Flow ID: 21e9597e-4fd2-48f4-8d3b-287749f73fdb
+9c245ccc3d38976fdc68b03586a75b9ba803b041
+Flow:     21e9597e-4fd2-48f4-8d3b-287749f73fdb
+Status:   Prepared
+Target:   main
+Flow:   21e9597e-4fd2-48f4-8d3b-287749f73fdb
+Status: Approved
+{
+  "success": true,
+  "data": {
+    "project_id": "b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf",
+    "path": "/tmp/hivemind-s38-manual-76kcWD/home/.hivemind/projects/b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf/graph_snapshot.json",
+    "trigger": "manual_refresh",
+    "revision": 3,
+    "repository_count": 1,
+    "ucp_engine_version": "ucp-codegraph-extractor.v1",
+    "profile_version": "codegraph.v1",
+    "canonical_fingerprint": "78d9e29df31eb6c5",
+    "summary": {
+      "total_nodes": 12,
+      "repository_nodes": 1,
+      "directory_nodes": 2,
+      "file_nodes": 4,
+      "symbol_nodes": 5,
+      "total_edges": 9,
+      "reference_edges": 4,
+      "export_edges": 5,
+      "languages": {
+        "rust": 4
+      }
+    },
+    "diff_detected": false
+  }
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf",
+    "path": "/tmp/hivemind-s38-manual-76kcWD/home/.hivemind/projects/b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf/constitution.yaml",
+    "revision": 1,
+    "digest": "e79026a2b9f77575",
+    "previous_digest": null,
+    "schema_version": "constitution.v1",
+    "constitution_version": 1,
+    "actor": "manual",
+    "mutation_intent": "sprint38-merge-gates",
+    "confirmed": true,
+    "updated_at": "2026-02-18T11:23:56.846414105Z"
+  }
+}
+Error: [policy:constitution_hard_violation] Constitution hard violations block merge_prepare: hard_no_domain_to_infra
+Hint: Run 'hivemind constitution check --project b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf' and remediate blocking rules
+{"success":false,"error":{"category":"policy","code":"constitution_hard_violation","message":"Constitution hard violations block merge_prepare: hard_no_domain_to_infra","origin":"registry:merge_prepare","hint":"Run 'hivemind constitution check --project b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf' and remediate blocking rules"}}
+Error: [policy:constitution_hard_violation] Constitution hard violations block merge_approve: hard_no_domain_to_infra
+Hint: Run 'hivemind constitution check --project b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf' and remediate blocking rules
+{"success":false,"error":{"category":"policy","code":"constitution_hard_violation","message":"Constitution hard violations block merge_approve: hard_no_domain_to_infra","origin":"registry:merge_approve","hint":"Run 'hivemind constitution check --project b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf' and remediate blocking rules"}}
+Error: [policy:constitution_hard_violation] Constitution hard violations block merge_execute: hard_no_domain_to_infra
+Hint: Run 'hivemind constitution check --project b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf' and remediate blocking rules
+{"success":false,"error":{"category":"policy","code":"constitution_hard_violation","message":"Constitution hard violations block merge_execute: hard_no_domain_to_infra","origin":"registry:merge_execute","hint":"Run 'hivemind constitution check --project b78bdb1a-9f91-42fd-9ab6-aa1dcfc1c6bf' and remediate blocking rules"}}
+Sprint 38 manual assertions completed successfully.
