@@ -105,3 +105,7 @@ Updated:
 
 - Phase 3.5 storage-engine interlude is complete.
 - Phase 4 roadmap now explicitly depends on this DB migration baseline.
+
+## Tag
+
+- Tagged `sprint-41.5-db-migration` to mark the CLI/state storage upgrade after manual validation and doc sync.
