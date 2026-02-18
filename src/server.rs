@@ -1,3 +1,61 @@
+//! HTTP API server for Hivemind.
+//!
+//! This module provides a lightweight HTTP server for UI integration and
+//! programmatic access to Hivemind's capabilities. The server exposes
+//! a REST API for querying state and triggering actions.
+//!
+//! # Endpoints
+//!
+//! | Method | Path | Description |
+//! |--------|------|-------------|
+//! | GET | `/api/projects` | List all projects |
+//! | GET | `/api/projects/{id}` | Get project details |
+//! | POST | `/api/projects` | Create a new project |
+//! | GET | `/api/tasks` | List all tasks |
+//! | GET | `/api/graphs` | List all task graphs |
+//! | GET | `/api/flows` | List all task flows |
+//! | GET | `/api/events` | Query events |
+//! | GET | `/api/ui-state` | Get full UI state |
+//!
+//! # Configuration
+//!
+//! The server can be configured via [`ServeConfig`]:
+//!
+//! ```no_run
+//! use hivemind::server::ServeConfig;
+//!
+//! let config = ServeConfig {
+//!     host: "127.0.0.1".to_string(),
+//!     port: 8787,
+//!     events_limit: 200,
+//! };
+//! ```
+//!
+//! # Example
+//!
+//! Start the server via CLI:
+//!
+//! ```bash,no_run
+//! hivemind serve --port 8787
+//! ```
+//!
+//! Or programmatically:
+//!
+//! ```no_run
+//! use hivemind::server::{serve, ServeConfig};
+//!
+//! let config = ServeConfig::default();
+//! serve(config)?;
+//! ```
+//!
+//! # Response Format
+//!
+//! All API responses are JSON. The [`ApiResponse`] type provides:
+//! - Status code
+//! - Content type
+//! - Body (JSON or text)
+//! - Optional custom headers
+
 use crate::cli::output::CliResponse;
 use crate::core::error::{HivemindError, Result};
 use crate::core::events::{CorrelationIds, Event, EventPayload, RuntimeRole};
