@@ -607,6 +607,14 @@ pub enum ProjectGovernanceCommands {
     Inspect(ProjectGovernanceInspectArgs),
     /// Diagnose governance artifacts, references, and snapshot freshness
     Diagnose(ProjectGovernanceDiagnoseArgs),
+    /// Replay governance projections from canonical event history
+    Replay(ProjectGovernanceReplayArgs),
+    /// Governance recovery snapshot lifecycle commands
+    #[command(subcommand)]
+    Snapshot(ProjectGovernanceSnapshotCommands),
+    /// Deterministic governance drift detection and repair commands
+    #[command(subcommand)]
+    Repair(ProjectGovernanceRepairCommands),
     /// Project document lifecycle and metadata commands
     #[command(subcommand)]
     Document(ProjectGovernanceDocumentCommands),
@@ -991,6 +999,91 @@ pub struct ProjectGovernanceInspectArgs {
 pub struct ProjectGovernanceDiagnoseArgs {
     /// Project ID or name
     pub project: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceReplayArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Verify replay idempotence and projection parity against current state
+    #[arg(long)]
+    pub verify: bool,
+}
+
+#[derive(Subcommand)]
+pub enum ProjectGovernanceSnapshotCommands {
+    /// Create a governance recovery snapshot
+    Create(ProjectGovernanceSnapshotCreateArgs),
+    /// List governance recovery snapshots
+    List(ProjectGovernanceSnapshotListArgs),
+    /// Restore governance artifacts from a snapshot
+    Restore(ProjectGovernanceSnapshotRestoreArgs),
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceSnapshotCreateArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Optional periodic window; reuse latest snapshot if it is newer than this many minutes
+    #[arg(long = "interval-minutes")]
+    pub interval_minutes: Option<u64>,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceSnapshotListArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Maximum number of snapshots to return
+    #[arg(long, default_value = "20")]
+    pub limit: usize,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceSnapshotRestoreArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Snapshot identifier
+    pub snapshot_id: String,
+    /// Explicit confirmation required for restore
+    #[arg(long)]
+    pub confirm: bool,
+}
+
+#[derive(Subcommand)]
+pub enum ProjectGovernanceRepairCommands {
+    /// Detect governance drift against canonical event history
+    Detect(ProjectGovernanceRepairDetectArgs),
+    /// Preview deterministic governance repair operations
+    Preview(ProjectGovernanceRepairPreviewArgs),
+    /// Apply deterministic governance repair operations
+    Apply(ProjectGovernanceRepairApplyArgs),
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceRepairDetectArgs {
+    /// Project ID or name
+    pub project: String,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceRepairPreviewArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Optional snapshot identifier to source recoverable content from
+    #[arg(long = "snapshot-id")]
+    pub snapshot_id: Option<String>,
+}
+
+#[derive(Args)]
+pub struct ProjectGovernanceRepairApplyArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Optional snapshot identifier to source recoverable content from
+    #[arg(long = "snapshot-id")]
+    pub snapshot_id: Option<String>,
+    /// Explicit confirmation required for repair
+    #[arg(long)]
+    pub confirm: bool,
 }
 
 /// Arguments for project create.

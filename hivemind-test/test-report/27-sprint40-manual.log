@@ -1,0 +1,334 @@
+# Sprint 40 manual replay/recovery validation
+tmp_root=/tmp/tmp.Q5YDicjzig
+ID:          7ed76856-e27e-45d2-bf26-d679f64e73a8
+Name:        proj
+Created:     2026-02-18 14:12:26.652098646 UTC
+Updated:     2026-02-18 14:12:26.652098646 UTC
+{
+  "project_id": "7ed76856-e27e-45d2-bf26-d679f64e73a8",
+  "document_id": "runbook",
+  "revision": 1,
+  "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/documents/runbook.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-18T14:12:26.658623838Z"
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "7ed76856-e27e-45d2-bf26-d679f64e73a8",
+    "replayed_at": "2026-02-18T14:12:26.664735365Z",
+    "projection_count": 1,
+    "idempotent": true,
+    "current_matches_replay": true,
+    "projections": [
+      {
+        "project_id": "7ed76856-e27e-45d2-bf26-d679f64e73a8",
+        "scope": "project",
+        "artifact_kind": "document",
+        "artifact_key": "runbook",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/documents/runbook.json",
+        "revision": 1,
+        "exists_on_disk": true
+      }
+    ]
+  }
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "7ed76856-e27e-45d2-bf26-d679f64e73a8",
+    "reused_existing": false,
+    "interval_minutes": null,
+    "snapshot": {
+      "snapshot_id": "a183a0dd-dc58-4e65-95a0-1faa7b8cdf7d",
+      "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/recovery/snapshots/a183a0dd-dc58-4e65-95a0-1faa7b8cdf7d.json",
+      "created_at": "2026-02-18T14:12:26.671307295Z",
+      "artifact_count": 5,
+      "total_bytes": 439,
+      "source_event_sequence": 1
+    }
+  }
+}
+snapshot_id=a183a0dd-dc58-4e65-95a0-1faa7b8cdf7d
+doc_path=/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/documents/runbook.json
+{
+  "success": true,
+  "data": {
+    "project_id": "7ed76856-e27e-45d2-bf26-d679f64e73a8",
+    "checked_at": "2026-02-18T14:12:26.697758190Z",
+    "healthy": false,
+    "issue_count": 5,
+    "recoverable_issue_count": 4,
+    "unrecoverable_issue_count": 1,
+    "snapshot_id": null,
+    "ready_to_apply": false,
+    "issues": [
+      {
+        "code": "governance_artifact_missing",
+        "severity": "error",
+        "message": "Governance artifact '/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/documents/runbook.json' is missing on disk",
+        "recoverable": false,
+        "artifact_kind": "document",
+        "artifact_id": "runbook",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/documents/runbook.json",
+        "hint": "Create a new governance snapshot to enable deterministic recovery or recreate the artifact manually"
+      },
+      {
+        "code": "governance_projection_missing",
+        "severity": "error",
+        "message": "Governance projection is missing for artifact '/tmp/tmp.Q5YDicjzig/home/.hivemind/global/notepad.md'",
+        "recoverable": true,
+        "artifact_kind": "notepad",
+        "artifact_id": "notepad.md",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/global/notepad.md",
+        "hint": "Run 'hivemind project governance repair apply <project> --confirm' to rebuild projection metadata"
+      },
+      {
+        "code": "governance_projection_missing",
+        "severity": "error",
+        "message": "Governance projection is missing for artifact '/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/constitution.yaml'",
+        "recoverable": true,
+        "artifact_kind": "constitution",
+        "artifact_id": "constitution.yaml",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/constitution.yaml",
+        "hint": "Run 'hivemind project governance repair apply <project> --confirm' to rebuild projection metadata"
+      },
+      {
+        "code": "governance_projection_missing",
+        "severity": "error",
+        "message": "Governance projection is missing for artifact '/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/graph_snapshot.json'",
+        "recoverable": true,
+        "artifact_kind": "graph_snapshot",
+        "artifact_id": "graph_snapshot.json",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/graph_snapshot.json",
+        "hint": "Run 'hivemind project governance repair apply <project> --confirm' to rebuild projection metadata"
+      },
+      {
+        "code": "governance_projection_missing",
+        "severity": "error",
+        "message": "Governance projection is missing for artifact '/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/notepad.md'",
+        "recoverable": true,
+        "artifact_kind": "notepad",
+        "artifact_id": "notepad.md",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/notepad.md",
+        "hint": "Run 'hivemind project governance repair apply <project> --confirm' to rebuild projection metadata"
+      }
+    ],
+    "operations": []
+  }
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "7ed76856-e27e-45d2-bf26-d679f64e73a8",
+    "checked_at": "2026-02-18T14:12:26.706749199Z",
+    "healthy": false,
+    "issue_count": 5,
+    "recoverable_issue_count": 5,
+    "unrecoverable_issue_count": 0,
+    "snapshot_id": "a183a0dd-dc58-4e65-95a0-1faa7b8cdf7d",
+    "ready_to_apply": true,
+    "issues": [
+      {
+        "code": "governance_artifact_missing",
+        "severity": "error",
+        "message": "Governance artifact '/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/documents/runbook.json' is missing on disk",
+        "recoverable": true,
+        "artifact_kind": "document",
+        "artifact_id": "runbook",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/documents/runbook.json",
+        "hint": "Run 'hivemind project governance repair apply <project> --confirm' to restore from snapshot"
+      },
+      {
+        "code": "governance_projection_missing",
+        "severity": "error",
+        "message": "Governance projection is missing for artifact '/tmp/tmp.Q5YDicjzig/home/.hivemind/global/notepad.md'",
+        "recoverable": true,
+        "artifact_kind": "notepad",
+        "artifact_id": "notepad.md",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/global/notepad.md",
+        "hint": "Run 'hivemind project governance repair apply <project> --confirm' to rebuild projection metadata"
+      },
+      {
+        "code": "governance_projection_missing",
+        "severity": "error",
+        "message": "Governance projection is missing for artifact '/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/constitution.yaml'",
+        "recoverable": true,
+        "artifact_kind": "constitution",
+        "artifact_id": "constitution.yaml",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/constitution.yaml",
+        "hint": "Run 'hivemind project governance repair apply <project> --confirm' to rebuild projection metadata"
+      },
+      {
+        "code": "governance_projection_missing",
+        "severity": "error",
+        "message": "Governance projection is missing for artifact '/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/graph_snapshot.json'",
+        "recoverable": true,
+        "artifact_kind": "graph_snapshot",
+        "artifact_id": "graph_snapshot.json",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/graph_snapshot.json",
+        "hint": "Run 'hivemind project governance repair apply <project> --confirm' to rebuild projection metadata"
+      },
+      {
+        "code": "governance_projection_missing",
+        "severity": "error",
+        "message": "Governance projection is missing for artifact '/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/notepad.md'",
+        "recoverable": true,
+        "artifact_kind": "notepad",
+        "artifact_id": "notepad.md",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/notepad.md",
+        "hint": "Run 'hivemind project governance repair apply <project> --confirm' to rebuild projection metadata"
+      }
+    ],
+    "operations": [
+      {
+        "action": "emit_projection_upsert",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/global/notepad.md",
+        "artifact_kind": "notepad",
+        "artifact_id": "notepad.md",
+        "reason": "Artifact exists on disk but lacks governance projection metadata"
+      },
+      {
+        "action": "emit_projection_upsert",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/constitution.yaml",
+        "artifact_kind": "constitution",
+        "artifact_id": "constitution.yaml",
+        "reason": "Artifact exists on disk but lacks governance projection metadata"
+      },
+      {
+        "action": "emit_projection_upsert",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/graph_snapshot.json",
+        "artifact_kind": "graph_snapshot",
+        "artifact_id": "graph_snapshot.json",
+        "reason": "Artifact exists on disk but lacks governance projection metadata"
+      },
+      {
+        "action": "emit_projection_upsert",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/notepad.md",
+        "artifact_kind": "notepad",
+        "artifact_id": "notepad.md",
+        "reason": "Artifact exists on disk but lacks governance projection metadata"
+      },
+      {
+        "action": "restore_from_snapshot",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/documents/runbook.json",
+        "artifact_kind": "document",
+        "artifact_id": "runbook",
+        "reason": "Missing artifact file with matching snapshot revision"
+      }
+    ]
+  }
+}
+{
+  "success": true,
+  "data": {
+    "project_id": "7ed76856-e27e-45d2-bf26-d679f64e73a8",
+    "applied_at": "2026-02-18T14:12:26.722719291Z",
+    "snapshot_id": "a183a0dd-dc58-4e65-95a0-1faa7b8cdf7d",
+    "operation_count": 5,
+    "applied_operations": [
+      {
+        "action": "emit_projection_upsert",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/global/notepad.md",
+        "artifact_kind": "notepad",
+        "artifact_id": "notepad.md",
+        "reason": "Artifact exists on disk but lacks governance projection metadata"
+      },
+      {
+        "action": "emit_projection_upsert",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/constitution.yaml",
+        "artifact_kind": "constitution",
+        "artifact_id": "constitution.yaml",
+        "reason": "Artifact exists on disk but lacks governance projection metadata"
+      },
+      {
+        "action": "emit_projection_upsert",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/graph_snapshot.json",
+        "artifact_kind": "graph_snapshot",
+        "artifact_id": "graph_snapshot.json",
+        "reason": "Artifact exists on disk but lacks governance projection metadata"
+      },
+      {
+        "action": "emit_projection_upsert",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/notepad.md",
+        "artifact_kind": "notepad",
+        "artifact_id": "notepad.md",
+        "reason": "Artifact exists on disk but lacks governance projection metadata"
+      },
+      {
+        "action": "restore_from_snapshot",
+        "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/documents/runbook.json",
+        "artifact_kind": "document",
+        "artifact_id": "runbook",
+        "reason": "Missing artifact file with matching snapshot revision"
+      }
+    ],
+    "remaining_issue_count": 0,
+    "remaining_issues": []
+  }
+}
+{
+  "success": true,
+  "data": {
+    "summary": {
+      "project_id": "7ed76856-e27e-45d2-bf26-d679f64e73a8",
+      "document_id": "runbook",
+      "title": "Runbook",
+      "owner": "ops",
+      "tags": [],
+      "updated_at": "2026-02-18T14:12:26.658623838Z",
+      "revision": 1,
+      "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/documents/runbook.json"
+    },
+    "revisions": [
+      {
+        "revision": 1,
+        "content": "v1-content",
+        "updated_at": "2026-02-18T14:12:26.658623838Z"
+      }
+    ],
+    "latest_content": "v1-content"
+  }
+}
+snapshot_id_2=5623f559-8eb8-4cbc-81d8-2af6a40bc101
+{
+  "project_id": "7ed76856-e27e-45d2-bf26-d679f64e73a8",
+  "snapshot_id": "5623f559-8eb8-4cbc-81d8-2af6a40bc101",
+  "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/recovery/snapshots/5623f559-8eb8-4cbc-81d8-2af6a40bc101.json",
+  "artifact_count": 5,
+  "restored_files": 1,
+  "skipped_files": 4,
+  "stale_files": 0,
+  "repaired_projection_count": 0
+}
+{
+  "success": true,
+  "data": {
+    "summary": {
+      "project_id": "7ed76856-e27e-45d2-bf26-d679f64e73a8",
+      "document_id": "runbook",
+      "title": "Runbook",
+      "owner": "ops",
+      "tags": [],
+      "updated_at": "2026-02-18T14:12:26.658623838Z",
+      "revision": 1,
+      "path": "/tmp/tmp.Q5YDicjzig/home/.hivemind/projects/7ed76856-e27e-45d2-bf26-d679f64e73a8/documents/runbook.json"
+    },
+    "revisions": [
+      {
+        "revision": 1,
+        "content": "v1-content",
+        "updated_at": "2026-02-18T14:12:26.658623838Z"
+      }
+    ],
+    "latest_content": "v1-content"
+  }
+}
+3:governance_snapshot_created
+4:governance_drift_detected
+5:governance_drift_detected
+11:governance_drift_detected
+12:governance_repair_applied
+13:governance_snapshot_created
+14:governance_snapshot_restored

@@ -129,6 +129,10 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
             "GovernanceAttachmentLifecycleUpdated"
         }
         EventPayload::GovernanceStorageMigrated { .. } => "GovernanceStorageMigrated",
+        EventPayload::GovernanceSnapshotCreated { .. } => "GovernanceSnapshotCreated",
+        EventPayload::GovernanceSnapshotRestored { .. } => "GovernanceSnapshotRestored",
+        EventPayload::GovernanceDriftDetected { .. } => "GovernanceDriftDetected",
+        EventPayload::GovernanceRepairApplied { .. } => "GovernanceRepairApplied",
         EventPayload::GraphSnapshotStarted { .. } => "GraphSnapshotStarted",
         EventPayload::GraphSnapshotCompleted { .. } => "GraphSnapshotCompleted",
         EventPayload::GraphSnapshotFailed { .. } => "GraphSnapshotFailed",
@@ -241,6 +245,10 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::GovernanceArtifactDeleted { .. }
         | EventPayload::GovernanceAttachmentLifecycleUpdated { .. }
         | EventPayload::GovernanceStorageMigrated { .. }
+        | EventPayload::GovernanceSnapshotCreated { .. }
+        | EventPayload::GovernanceSnapshotRestored { .. }
+        | EventPayload::GovernanceDriftDetected { .. }
+        | EventPayload::GovernanceRepairApplied { .. }
         | EventPayload::GraphSnapshotStarted { .. }
         | EventPayload::GraphSnapshotCompleted { .. }
         | EventPayload::GraphSnapshotFailed { .. }

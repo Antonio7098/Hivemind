@@ -1155,6 +1155,10 @@ impl AppState {
             }
 
             EventPayload::CheckStarted { .. }
+            | EventPayload::GovernanceSnapshotCreated { .. }
+            | EventPayload::GovernanceSnapshotRestored { .. }
+            | EventPayload::GovernanceDriftDetected { .. }
+            | EventPayload::GovernanceRepairApplied { .. }
             | EventPayload::GraphSnapshotStarted { .. }
             | EventPayload::GraphSnapshotCompleted { .. }
             | EventPayload::GraphSnapshotFailed { .. }

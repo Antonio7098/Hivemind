@@ -33,22 +33,37 @@ Use when a project still has repo-local `.hivemind/` governance files.
 
 Use when governance context fails due stale snapshot, missing references, or missing artifacts.
 
-1. Diagnose current health.
+1. Diagnose current health and replay parity.
    ```bash
    hivemind -f json project governance diagnose <project>
+   hivemind -f json project governance replay <project> --verify
    ```
-2. If diagnostics show `graph_snapshot_stale` or `graph_snapshot_missing`, refresh snapshot.
+2. Capture/inspect recovery snapshots.
+   ```bash
+   hivemind -f json project governance snapshot create <project> --interval-minutes 30
+   hivemind -f json project governance snapshot list <project> --limit 5
+   ```
+3. If diagnostics show `graph_snapshot_stale` or `graph_snapshot_missing`, refresh snapshot.
    ```bash
    hivemind graph snapshot refresh <project>
    ```
-3. If diagnostics show template reference issues (`template_document_missing`, `template_skill_missing`, `template_system_prompt_missing`):
+4. Build deterministic repair plan.
+   ```bash
+   hivemind -f json project governance repair detect <project>
+   hivemind -f json project governance repair preview <project> --snapshot-id <snapshot-id>
+   ```
+5. Apply repair plan explicitly when all remaining issues are recoverable.
+   ```bash
+   hivemind -f json project governance repair apply <project> --snapshot-id <snapshot-id> --confirm
+   ```
+6. If diagnostics still show template reference issues (`template_document_missing`, `template_skill_missing`, `template_system_prompt_missing`):
    - recreate missing artifacts or update the template
    - re-run template instantiation
    ```bash
    hivemind global template instantiate <project> <template-id>
    ```
-4. Re-run diagnostics until `healthy: true`.
-5. Re-run policy validation before merge boundaries:
+7. Re-run diagnostics until `healthy: true`.
+8. Re-run policy validation before merge boundaries:
    ```bash
    hivemind -f json constitution check --project <project>
    ```
@@ -78,5 +93,5 @@ Use when adding/updating constitution rules.
 ## 4) Operational Notes
 
 - Treat diagnostics output as the authoritative operator checklist.
-- Prefer deterministic fixes (artifact recreation/update + explicit re-checks), not manual file edits.
+- Prefer deterministic fixes (`snapshot`, `repair preview`, `repair apply`) before manual file edits.
 - Keep rollback steps explicit in incident notes (what changed, who approved, what was revalidated).

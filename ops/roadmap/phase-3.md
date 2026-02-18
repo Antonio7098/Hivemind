@@ -262,31 +262,31 @@
 > **Principles 1, 9, 10:** Replayability, automated checks, failures preserved.
 
 ### 40.1 Replay Semantics for Governance
-- [ ] Extend replay engine to rebuild constitution/doc/template/skill projections
-- [ ] Add governance replay verification command(s)
-- [ ] Validate idempotence across repeated projection rebuilds
+- [x] Extend replay engine to rebuild constitution/doc/template/skill projections
+- [x] Add governance replay verification command(s)
+- [x] Validate idempotence across repeated projection rebuilds
 
 ### 40.2 Snapshot and Restore
-- [ ] Add optional periodic governance snapshots for faster recovery
-- [ ] Define restore procedure that preserves event authority
-- [ ] Emit explicit events for snapshot created/restored operations
+- [x] Add optional periodic governance snapshots for faster recovery
+- [x] Define restore procedure that preserves event authority
+- [x] Emit explicit events for snapshot created/restored operations
 
 ### 40.3 Corruption and Drift Handling
-- [ ] Detect projection/file drift relative to canonical event history
-- [ ] Provide deterministic repair workflow (`detect`, `preview`, `repair`)
-- [ ] Classify and surface failures with structured, actionable errors
+- [x] Detect projection/file drift relative to canonical event history
+- [x] Provide deterministic repair workflow (`detect`, `preview`, `repair`)
+- [x] Classify and surface failures with structured, actionable errors
 
 ### 40.4 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 40 manual checklist under `@hivemind-test`
-- [ ] Manually validate replay-based recovery after projection/file loss scenarios
-- [ ] Manually validate drift detection/preview/repair workflow end-to-end
-- [ ] Publish Sprint 40 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 40 manual checklist under `@hivemind-test`
+- [x] Manually validate replay-based recovery after projection/file loss scenarios
+- [x] Manually validate drift detection/preview/repair workflow end-to-end
+- [x] Publish Sprint 40 manual test report artifact in `@hivemind-test`
 
 ### 40.5 Exit Criteria
-- [ ] Governance state can be recovered from events after projection loss
-- [ ] Replay and restore paths are tested for determinism and idempotence
-- [ ] Drift detection and repair are CLI-driven and auditable
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Governance state can be recovered from events after projection loss
+- [x] Replay and restore paths are tested for determinism and idempotence
+- [x] Drift detection and repair are CLI-driven and auditable
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

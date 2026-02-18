@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.32",
+      "date": "2026-02-18",
+      "phase": 40,
+      "changes": [
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add governance replay and recovery command families: `project governance replay`, `project governance snapshot create|list|restore`, and `project governance repair detect|preview|apply`"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Introduce bounded governance recovery snapshots persisted under project governance storage with optional periodic reuse windows and explicit confirmation-gated restore flow"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Implement deterministic governance drift classification and repair planning/application against canonical event history, including recoverable/unrecoverable issue accounting"
+        },
+        {
+          "type": "added",
+          "area": "events",
+          "description": "Emit governance recovery telemetry events: `GovernanceSnapshotCreated`, `GovernanceSnapshotRestored`, `GovernanceDriftDetected`, and `GovernanceRepairApplied`"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 40 unit/integration coverage for governance snapshot restore, replay verification, and deterministic repair workflows"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update Phase 3 roadmap and architecture/design/quickstart/runbook docs for governance replay/recovery contracts and operator procedures"
+        }
+      ]
+    },
+    {
       "version": "v0.1.31",
       "date": "2026-02-18",
       "phase": 41,

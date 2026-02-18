@@ -198,7 +198,7 @@ cat > /tmp/hm-constitution.yaml <<'YAML'
 version: 1
 schema_version: constitution.v1
 compatibility:
-  minimum_hivemind_version: 0.1.0
+  minimum_hivemind_version: 0.1.32
   governance_schema_version: governance.v1
 partitions: []
 rules: []
@@ -210,6 +210,24 @@ Operator diagnostics:
 
 ```bash
 $HM -f json project governance diagnose "expense-tracker"
+```
+
+Governance replay, bounded snapshots, and deterministic repair:
+
+```bash
+# Replay projection deterministically and verify parity/idempotence
+$HM -f json project governance replay "expense-tracker" --verify
+
+# Create a governance recovery snapshot (reuse if last snapshot is recent)
+$HM -f json project governance snapshot create "expense-tracker" --interval-minutes 30
+$HM -f json project governance snapshot list "expense-tracker" --limit 5
+
+# Detect and preview deterministic repair operations
+$HM -f json project governance repair detect "expense-tracker"
+$HM -f json project governance repair preview "expense-tracker" --snapshot-id <snapshot-id>
+
+# Apply repair operations explicitly
+$HM -f json project governance repair apply "expense-tracker" --snapshot-id <snapshot-id> --confirm
 ```
 
 ---
