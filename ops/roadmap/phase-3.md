@@ -187,31 +187,31 @@
 > **Principles 2, 4, 10:** Fail fast, explicit error taxonomy, failures are first-class.
 
 ### 38.1 Enforcement Engine
-- [ ] Implement `validate(graph_snapshot, constitution)` evaluation engine
-- [ ] Support severity-aware outcomes: block (`hard`), report (`advisory`), log (`informational`)
-- [ ] Emit `ConstitutionViolationDetected`-style events with rule IDs and evidence
+- [x] Implement `validate(graph_snapshot, constitution)` evaluation engine
+- [x] Support severity-aware outcomes: block (`hard`), report (`advisory`), log (`informational`)
+- [x] Emit `ConstitutionViolationDetected`-style events with rule IDs and evidence
 
 ### 38.2 Enforcement Gates
-- [ ] Run constitution checks after checkpoint completion
-- [ ] Run constitution checks before merge prepare/approve/execute gates
-- [ ] Add explicit `hivemind constitution check --project <id>` command
+- [x] Run constitution checks after checkpoint completion
+- [x] Run constitution checks before merge prepare/approve/execute gates
+- [x] Add explicit `hivemind constitution check --project <id>` command
 
 ### 38.3 UX and Explainability
-- [ ] Provide structured violation outputs with exact rule mapping and remediation hints
-- [ ] Preserve violation history per flow/task for retry and review loops
-- [ ] Ensure no hidden retries or automatic rule downgrades
+- [x] Provide structured violation outputs with exact rule mapping and remediation hints
+- [x] Preserve violation history per flow/task for retry and review loops
+- [x] Ensure no hidden retries or automatic rule downgrades
 
 ### 38.4 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 38 manual checklist under `@hivemind-test`
-- [ ] Manually validate hard/advisory/informational constitution outcomes and gate behavior
-- [ ] Manually validate checkpoint and merge-boundary enforcement flows
-- [ ] Publish Sprint 38 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 38 manual checklist under `@hivemind-test`
+- [x] Manually validate hard/advisory/informational constitution outcomes and gate behavior
+- [x] Manually validate checkpoint and merge-boundary enforcement flows
+- [x] Publish Sprint 38 manual test report artifact in `@hivemind-test`
 
 ### 38.5 Exit Criteria
-- [ ] Hard violations block progression deterministically
-- [ ] Advisory/informational violations remain visible and queryable
-- [ ] Enforcement behavior is deterministic under replay
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Hard violations block progression deterministically
+- [x] Advisory/informational violations remain visible and queryable
+- [x] Enforcement behavior is deterministic under replay
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

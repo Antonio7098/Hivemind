@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.29",
+      "date": "2026-02-18",
+      "phase": 38,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Implement constitution enforcement engine that evaluates graph snapshot evidence against `forbidden_dependency`, `allowed_dependency`, and `coverage_requirement` rules with severity-aware outcomes (`hard`, `advisory`, `informational`)"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Enforce constitution hard-rule gates at checkpoint completion and merge boundaries (`prepare`, `approve`, `execute`, including PR-mode execution path)"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add explicit `hivemind constitution check --project <project>` command for manual severity-aware policy validation"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Emit `ConstitutionViolationDetected` events with correlation IDs, gate context, rule identifiers, severity, evidence, remediation hints, and blocked status"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 38 unit/integration coverage for constitution severity reporting, checkpoint hard-gate blocking, merge gate blocking, and CLI check output semantics"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update Sprint 38 roadmap/report, architecture/design/quickstart docs, and manual `hivemind-test` artifacts for constitution enforcement behavior and observability contracts"
+        }
+      ]
+    },
+    {
       "version": "v0.1.28",
       "date": "2026-02-17",
       "phase": 37,

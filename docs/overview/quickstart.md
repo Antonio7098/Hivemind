@@ -334,6 +334,13 @@ $HM -f json worktree cleanup "$FLOW_ID" --force
 ## 9) Merge workflow (explicit, gated)
 
 When a flow is `completed`, merge is a separate, explicit protocol.
+If a project constitution is initialized, hard-rule violations must be resolved before merge boundaries can proceed.
+
+Optional preflight:
+
+```bash
+$HM -f json constitution check --project "$PROJECT_ID"
+```
 
 1) Prepare
 
@@ -369,6 +376,7 @@ Preconditions for `merge execute`:
 
 - Repo must be clean (Hivemind ignores `.hivemind/` changes).
 - Merge must be prepared and approved.
+- Constitution hard-rule gate must pass (if constitution is initialized for the project).
 
 ---
 

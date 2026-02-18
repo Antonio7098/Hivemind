@@ -427,6 +427,16 @@ pub enum ConstitutionSeverity {
     Informational,
 }
 
+impl ConstitutionSeverity {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Hard => "hard",
+            Self::Advisory => "advisory",
+            Self::Informational => "informational",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ConstitutionRule {
@@ -519,6 +529,60 @@ pub struct ProjectConstitutionValidationResult {
     pub issues: Vec<ConstitutionValidationIssue>,
     pub validated_by: String,
     pub validated_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConstitutionRuleViolation {
+    pub rule_id: String,
+    pub rule_type: String,
+    pub severity: ConstitutionSeverity,
+    pub message: String,
+    #[serde(default)]
+    pub evidence: Vec<String>,
+    #[serde(default)]
+    pub remediation_hint: Option<String>,
+    pub blocked: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectConstitutionCheckResult {
+    pub project_id: Uuid,
+    pub gate: String,
+    pub path: String,
+    pub digest: String,
+    pub schema_version: String,
+    pub constitution_version: u32,
+    #[serde(default)]
+    pub flow_id: Option<Uuid>,
+    #[serde(default)]
+    pub task_id: Option<Uuid>,
+    #[serde(default)]
+    pub attempt_id: Option<Uuid>,
+    #[serde(default)]
+    pub skipped: bool,
+    #[serde(default)]
+    pub skip_reason: Option<String>,
+    #[serde(default)]
+    pub violations: Vec<ConstitutionRuleViolation>,
+    pub hard_violations: usize,
+    pub advisory_violations: usize,
+    pub informational_violations: usize,
+    pub blocked: bool,
+    pub checked_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+struct GraphFileFact {
+    display_path: String,
+    path: String,
+    symbol_key: String,
+    references: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct GraphConstitutionFacts {
+    files: HashMap<String, GraphFileFact>,
+    symbol_file_keys: HashSet<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -3114,7 +3178,7 @@ impl Registry {
 
     fn governance_default_file_contents(location: &GovernanceArtifactLocation) -> &'static [u8] {
         match (location.scope, location.artifact_kind) {
-            ("project", "constitution") => b"version: 1\nschema_version: constitution.v1\ncompatibility:\n  minimum_hivemind_version: 0.1.28\n  governance_schema_version: governance.v1\npartitions: []\nrules: []\n",
+            ("project", "constitution") => b"version: 1\nschema_version: constitution.v1\ncompatibility:\n  minimum_hivemind_version: 0.1.29\n  governance_schema_version: governance.v1\npartitions: []\nrules: []\n",
             ("project", "graph_snapshot") => b"{}\n",
             _ => b"\n",
         }
@@ -7818,6 +7882,516 @@ impl Registry {
         Ok(())
     }
 
+    fn normalize_graph_path(path: &str) -> String {
+        path.trim()
+            .replace('\\', "/")
+            .trim_start_matches("./")
+            .trim_start_matches('/')
+            .to_string()
+    }
+
+    fn path_in_partition(path: &str, partition_path: &str) -> bool {
+        let normalized_path = Self::normalize_graph_path(path);
+        let normalized_partition = Self::normalize_graph_path(partition_path);
+        if normalized_partition.is_empty() {
+            return false;
+        }
+        normalized_path == normalized_partition
+            || normalized_path.starts_with(&format!("{normalized_partition}/"))
+    }
+
+    fn graph_facts_from_snapshot(
+        snapshot: &GraphSnapshotArtifact,
+        origin: &'static str,
+    ) -> Result<GraphConstitutionFacts> {
+        let mut facts = GraphConstitutionFacts::default();
+
+        for repo in &snapshot.repositories {
+            let document = repo.document.to_document().map_err(|e| {
+                HivemindError::system(
+                    "graph_snapshot_schema_invalid",
+                    format!("Failed to load graph snapshot document: {e}"),
+                    origin,
+                )
+            })?;
+
+            let mut file_key_by_block_id: HashMap<String, String> = HashMap::new();
+
+            for (block_id, block) in &document.blocks {
+                let Some(class_name) = block
+                    .metadata
+                    .custom
+                    .get("node_class")
+                    .and_then(serde_json::Value::as_str)
+                else {
+                    continue;
+                };
+
+                if class_name == "file" {
+                    let logical_key = block
+                        .metadata
+                        .custom
+                        .get("logical_key")
+                        .and_then(serde_json::Value::as_str)
+                        .ok_or_else(|| {
+                            HivemindError::system(
+                                "graph_snapshot_schema_invalid",
+                                "File node missing logical_key metadata",
+                                origin,
+                            )
+                        })?;
+                    let path = block
+                        .metadata
+                        .custom
+                        .get("path")
+                        .and_then(serde_json::Value::as_str)
+                        .ok_or_else(|| {
+                            HivemindError::system(
+                                "graph_snapshot_schema_invalid",
+                                "File node missing path metadata",
+                                origin,
+                            )
+                        })?;
+                    let normalized_path = Self::normalize_graph_path(path);
+                    let graph_key = format!("{}::{logical_key}", repo.repo_name);
+                    file_key_by_block_id.insert(block_id.to_string(), graph_key.clone());
+                    facts.files.insert(
+                        graph_key,
+                        GraphFileFact {
+                            display_path: format!("{}/{}", repo.repo_name, normalized_path),
+                            path: normalized_path.clone(),
+                            symbol_key: format!("{}::{normalized_path}", repo.repo_name),
+                            references: Vec::new(),
+                        },
+                    );
+                } else if class_name == "symbol" {
+                    if let Some(path) = block
+                        .metadata
+                        .custom
+                        .get("path")
+                        .and_then(serde_json::Value::as_str)
+                    {
+                        let normalized_path = Self::normalize_graph_path(path);
+                        facts
+                            .symbol_file_keys
+                            .insert(format!("{}::{normalized_path}", repo.repo_name));
+                    }
+                }
+            }
+
+            for (block_id, block) in &document.blocks {
+                let Some(source_key) = file_key_by_block_id.get(&block_id.to_string()).cloned()
+                else {
+                    continue;
+                };
+                let Some(source) = facts.files.get_mut(&source_key) else {
+                    continue;
+                };
+                for edge in &block.edges {
+                    if edge.edge_type.as_str() != "references" {
+                        continue;
+                    }
+                    let target_id = edge.target.to_string();
+                    if let Some(target_key) = file_key_by_block_id.get(&target_id) {
+                        source.references.push(target_key.clone());
+                    }
+                }
+                source.references.sort();
+                source.references.dedup();
+            }
+        }
+
+        Ok(facts)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn evaluate_constitution_rules(
+        artifact: &ConstitutionArtifact,
+        snapshot: &GraphSnapshotArtifact,
+        origin: &'static str,
+    ) -> Result<Vec<ConstitutionRuleViolation>> {
+        let facts = Self::graph_facts_from_snapshot(snapshot, origin)?;
+        let mut partition_files: HashMap<String, HashSet<String>> = HashMap::new();
+        for partition in &artifact.partitions {
+            let mut members = HashSet::new();
+            for (graph_key, file) in &facts.files {
+                if Self::path_in_partition(&file.path, &partition.path) {
+                    members.insert(graph_key.clone());
+                }
+            }
+            partition_files.insert(partition.id.clone(), members);
+        }
+
+        let mut violations = Vec::new();
+        for rule in &artifact.rules {
+            match rule {
+                ConstitutionRule::ForbiddenDependency {
+                    id,
+                    from,
+                    to,
+                    severity,
+                } => {
+                    let from_files = partition_files.get(from).cloned().unwrap_or_default();
+                    let to_files = partition_files.get(to).cloned().unwrap_or_default();
+                    let mut evidence = Vec::new();
+                    for source_key in &from_files {
+                        let Some(source) = facts.files.get(source_key) else {
+                            continue;
+                        };
+                        for target_key in &source.references {
+                            if !to_files.contains(target_key) {
+                                continue;
+                            }
+                            let target = facts
+                                .files
+                                .get(target_key)
+                                .map_or(target_key.as_str(), |item| item.display_path.as_str());
+                            evidence.push(format!("{} -> {target}", source.display_path));
+                        }
+                    }
+
+                    if !evidence.is_empty() {
+                        violations.push(ConstitutionRuleViolation {
+                            rule_id: id.clone(),
+                            rule_type: "forbidden_dependency".to_string(),
+                            severity: severity.clone(),
+                            message: format!(
+                                "Detected {} forbidden dependency edge(s) from partition '{from}' to '{to}'",
+                                evidence.len()
+                            ),
+                            evidence: evidence.into_iter().take(20).collect(),
+                            remediation_hint: Some(format!(
+                                "Remove or invert dependencies from '{from}' to '{to}'"
+                            )),
+                            blocked: matches!(severity, ConstitutionSeverity::Hard),
+                        });
+                    }
+                }
+                ConstitutionRule::AllowedDependency {
+                    id,
+                    from,
+                    to,
+                    severity,
+                } => {
+                    let from_files = partition_files.get(from).cloned().unwrap_or_default();
+                    let to_files = partition_files.get(to).cloned().unwrap_or_default();
+                    let mut evidence = Vec::new();
+
+                    for source_key in &from_files {
+                        let Some(source) = facts.files.get(source_key) else {
+                            continue;
+                        };
+                        for target_key in &source.references {
+                            if from_files.contains(target_key) || to_files.contains(target_key) {
+                                continue;
+                            }
+                            let violating_partitions: Vec<&str> = partition_files
+                                .iter()
+                                .filter_map(|(partition_id, members)| {
+                                    members
+                                        .contains(target_key)
+                                        .then_some(partition_id.as_str())
+                                })
+                                .collect();
+                            if violating_partitions.is_empty() {
+                                continue;
+                            }
+                            let target = facts
+                                .files
+                                .get(target_key)
+                                .map_or(target_key.as_str(), |item| item.display_path.as_str());
+                            evidence.push(format!(
+                                "{} -> {target} (target partitions: {})",
+                                source.display_path,
+                                violating_partitions.join(", ")
+                            ));
+                        }
+                    }
+
+                    if !evidence.is_empty() {
+                        violations.push(ConstitutionRuleViolation {
+                            rule_id: id.clone(),
+                            rule_type: "allowed_dependency".to_string(),
+                            severity: severity.clone(),
+                            message: format!(
+                                "Detected {} dependency edge(s) from partition '{from}' outside allowed target partition '{to}'",
+                                evidence.len()
+                            ),
+                            evidence: evidence.into_iter().take(20).collect(),
+                            remediation_hint: Some(format!(
+                                "Restrict '{from}' dependencies to partition '{to}' (and intra-partition references)"
+                            )),
+                            blocked: matches!(severity, ConstitutionSeverity::Hard),
+                        });
+                    }
+                }
+                ConstitutionRule::CoverageRequirement {
+                    id,
+                    target,
+                    threshold,
+                    severity,
+                } => {
+                    let target_files = partition_files.get(target).cloned().unwrap_or_default();
+                    let total = target_files.len();
+                    let covered = target_files
+                        .iter()
+                        .filter(|file_key| {
+                            facts.files.get(*file_key).is_some_and(|file| {
+                                facts.symbol_file_keys.contains(&file.symbol_key)
+                            })
+                        })
+                        .count();
+                    let coverage_bps: u128 = if total == 0 {
+                        0
+                    } else {
+                        (covered as u128 * 10_000) / total as u128
+                    };
+                    let coverage_whole = coverage_bps / 100;
+                    let coverage_frac = coverage_bps % 100;
+                    let meets_threshold =
+                        (covered as u128 * 100) >= (u128::from(*threshold) * total as u128);
+                    if !meets_threshold {
+                        let missing_files: Vec<String> = target_files
+                            .iter()
+                            .filter_map(|file_key| {
+                                facts.files.get(file_key).and_then(|file| {
+                                    (!facts.symbol_file_keys.contains(&file.symbol_key))
+                                        .then(|| file.display_path.clone())
+                                })
+                            })
+                            .take(10)
+                            .collect();
+                        let mut evidence = vec![format!(
+                            "coverage={coverage_whole}.{coverage_frac:02}% threshold={threshold}% covered_files={covered}/{total}"
+                        )];
+                        if !missing_files.is_empty() {
+                            evidence.push(format!(
+                                "files without symbol coverage: {}",
+                                missing_files.join(", ")
+                            ));
+                        }
+                        violations.push(ConstitutionRuleViolation {
+                            rule_id: id.clone(),
+                            rule_type: "coverage_requirement".to_string(),
+                            severity: severity.clone(),
+                            message: format!(
+                                "Partition '{target}' coverage is below threshold ({coverage_whole}.{coverage_frac:02}% < {threshold}%)"
+                            ),
+                            evidence,
+                            remediation_hint: Some(format!(
+                                "Increase codegraph symbol coverage for files under '{target}' or lower the threshold"
+                            )),
+                            blocked: matches!(severity, ConstitutionSeverity::Hard),
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(violations)
+    }
+
+    fn append_constitution_violation_events(
+        &self,
+        project_id: Uuid,
+        gate: &str,
+        correlation: &CorrelationIds,
+        violations: &[ConstitutionRuleViolation],
+        origin: &'static str,
+    ) -> Result<()> {
+        for violation in violations {
+            self.append_event(
+                Event::new(
+                    EventPayload::ConstitutionViolationDetected {
+                        project_id,
+                        flow_id: correlation.flow_id,
+                        task_id: correlation.task_id,
+                        attempt_id: correlation.attempt_id,
+                        gate: gate.to_string(),
+                        rule_id: violation.rule_id.clone(),
+                        rule_type: violation.rule_type.clone(),
+                        severity: violation.severity.as_str().to_string(),
+                        message: violation.message.clone(),
+                        evidence: violation.evidence.clone(),
+                        remediation_hint: violation.remediation_hint.clone(),
+                        blocked: violation.blocked,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn run_constitution_check(
+        &self,
+        project: &Project,
+        gate: &str,
+        correlation: &CorrelationIds,
+        require_initialized: bool,
+        origin: &'static str,
+    ) -> Result<ProjectConstitutionCheckResult> {
+        let state = self.state()?;
+        let initialized = state
+            .projects
+            .get(&project.id)
+            .and_then(|item| item.constitution_digest.as_ref())
+            .is_some();
+        if !initialized {
+            if require_initialized {
+                return Err(HivemindError::user(
+                    "constitution_not_initialized",
+                    "Constitution is not initialized for this project",
+                    origin,
+                )
+                .with_hint("Run 'hivemind constitution init <project> --confirm' first"));
+            }
+            return Ok(ProjectConstitutionCheckResult {
+                project_id: project.id,
+                gate: gate.to_string(),
+                path: self
+                    .constitution_path(project.id)
+                    .to_string_lossy()
+                    .to_string(),
+                digest: String::new(),
+                schema_version: CONSTITUTION_SCHEMA_VERSION.to_string(),
+                constitution_version: CONSTITUTION_VERSION,
+                flow_id: correlation.flow_id,
+                task_id: correlation.task_id,
+                attempt_id: correlation.attempt_id,
+                skipped: true,
+                skip_reason: Some(
+                    "Project constitution is not initialized; enforcement gate skipped".to_string(),
+                ),
+                violations: Vec::new(),
+                hard_violations: 0,
+                advisory_violations: 0,
+                informational_violations: 0,
+                blocked: false,
+                checked_at: Utc::now(),
+            });
+        }
+
+        self.ensure_graph_snapshot_current_for_constitution(project, origin)?;
+        let (artifact, path) = self.read_constitution_artifact(project.id, origin)?;
+        let raw = fs::read(&path).map_err(|e| {
+            HivemindError::system("governance_artifact_read_failed", e.to_string(), origin)
+                .with_context("path", path.to_string_lossy().to_string())
+        })?;
+        let digest = Self::constitution_digest(raw.as_slice());
+
+        let snapshot = self
+            .read_graph_snapshot_artifact(project.id, origin)?
+            .ok_or_else(|| {
+                HivemindError::user(
+                    "graph_snapshot_missing",
+                    "Graph snapshot is missing for constitution enforcement",
+                    origin,
+                )
+                .with_hint("Run: hivemind graph snapshot refresh <project>")
+            })?;
+        let violations = Self::evaluate_constitution_rules(&artifact, &snapshot, origin)?;
+        if !violations.is_empty() {
+            self.append_constitution_violation_events(
+                project.id,
+                gate,
+                correlation,
+                &violations,
+                origin,
+            )?;
+        }
+
+        let hard_violations = violations
+            .iter()
+            .filter(|item| matches!(item.severity, ConstitutionSeverity::Hard))
+            .count();
+        let advisory_violations = violations
+            .iter()
+            .filter(|item| matches!(item.severity, ConstitutionSeverity::Advisory))
+            .count();
+        let informational_violations = violations
+            .iter()
+            .filter(|item| matches!(item.severity, ConstitutionSeverity::Informational))
+            .count();
+
+        Ok(ProjectConstitutionCheckResult {
+            project_id: project.id,
+            gate: gate.to_string(),
+            path: path.to_string_lossy().to_string(),
+            digest,
+            schema_version: artifact.schema_version,
+            constitution_version: artifact.version,
+            flow_id: correlation.flow_id,
+            task_id: correlation.task_id,
+            attempt_id: correlation.attempt_id,
+            skipped: false,
+            skip_reason: None,
+            violations,
+            hard_violations,
+            advisory_violations,
+            informational_violations,
+            blocked: hard_violations > 0,
+            checked_at: Utc::now(),
+        })
+    }
+
+    fn enforce_constitution_gate(
+        &self,
+        project_id: Uuid,
+        gate: &'static str,
+        correlation: CorrelationIds,
+        origin: &'static str,
+    ) -> Result<Option<ProjectConstitutionCheckResult>> {
+        let project = self
+            .get_project(&project_id.to_string())
+            .inspect_err(|err| self.record_error_event(err, correlation.clone()))?;
+        let result = self.run_constitution_check(&project, gate, &correlation, false, origin)?;
+        if result.skipped {
+            return Ok(None);
+        }
+        if result.blocked {
+            let hard_rule_ids = result
+                .violations
+                .iter()
+                .filter(|item| matches!(item.severity, ConstitutionSeverity::Hard))
+                .map(|item| item.rule_id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let err = HivemindError::policy(
+                "constitution_hard_violation",
+                format!("Constitution hard violations block {gate}: {hard_rule_ids}"),
+                origin,
+            )
+            .with_context("project_id", project_id.to_string())
+            .with_context("gate", gate.to_string())
+            .with_context(
+                "violations",
+                serde_json::to_string(&result.violations).unwrap_or_else(|_| "[]".to_string()),
+            )
+            .with_hint(format!(
+                "Run 'hivemind constitution check --project {project_id}' and remediate blocking rules"
+            ));
+            self.record_error_event(&err, correlation);
+            return Err(err);
+        }
+        Ok(Some(result))
+    }
+
+    pub fn constitution_check(&self, id_or_name: &str) -> Result<ProjectConstitutionCheckResult> {
+        let origin = "registry:constitution_check";
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        self.run_constitution_check(
+            &project,
+            "manual_check",
+            &CorrelationIds::for_project(project.id),
+            true,
+            origin,
+        )
+    }
+
     /// Initializes and validates a project's constitution artifact.
     ///
     /// # Errors
@@ -11516,7 +12090,7 @@ impl Registry {
                         checkpoint_id: next_id.clone(),
                         order: next_order,
                     },
-                    corr_attempt,
+                    corr_attempt.clone(),
                 ),
                 origin,
             )?;
@@ -11528,7 +12102,7 @@ impl Registry {
                         task_id: attempt.task_id,
                         attempt_id: attempt.id,
                     },
-                    corr_attempt,
+                    corr_attempt.clone(),
                 ),
                 origin,
             )?;
@@ -11539,6 +12113,13 @@ impl Registry {
             "checkpoint_complete",
             "registry:checkpoint_complete",
         );
+
+        let _ = self.enforce_constitution_gate(
+            flow.project_id,
+            "checkpoint_complete",
+            corr_attempt,
+            origin,
+        )?;
 
         Ok(CheckpointCompletionResult {
             flow_id: flow.id,
@@ -11884,6 +12465,13 @@ impl Registry {
             );
             return Err(err);
         }
+
+        let _ = self.enforce_constitution_gate(
+            flow.project_id,
+            "merge_prepare",
+            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            origin,
+        )?;
 
         let mut state = self.state()?;
         if let Some(ms) = state.merge_states.get(&flow.id) {
@@ -12642,13 +13230,21 @@ impl Registry {
 
     pub fn merge_approve(&self, flow_id: &str) -> Result<crate::core::state::MergeState> {
         let flow = self.get_flow(flow_id)?;
+        let origin = "registry:merge_approve";
+
+        let _ = self.enforce_constitution_gate(
+            flow.project_id,
+            "merge_approve",
+            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            origin,
+        )?;
 
         let state = self.state()?;
         let ms = state.merge_states.get(&flow.id).ok_or_else(|| {
             HivemindError::user(
                 "merge_not_prepared",
                 "No merge preparation exists for this flow",
-                "registry:merge_approve",
+                origin,
             )
         })?;
 
@@ -12660,7 +13256,7 @@ impl Registry {
             return Err(HivemindError::user(
                 "unresolved_conflicts",
                 "Merge has unresolved conflicts",
-                "registry:merge_approve",
+                origin,
             ));
         }
 
@@ -12677,20 +13273,16 @@ impl Registry {
             CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
         );
 
-        self.store.append(event).map_err(|e| {
-            HivemindError::system(
-                "event_append_failed",
-                e.to_string(),
-                "registry:merge_approve",
-            )
-        })?;
+        self.store
+            .append(event)
+            .map_err(|e| HivemindError::system("event_append_failed", e.to_string(), origin))?;
 
         let state = self.state()?;
         state.merge_states.get(&flow.id).cloned().ok_or_else(|| {
             HivemindError::system(
                 "merge_state_not_found",
                 "Merge state not found after approve",
-                "registry:merge_approve",
+                origin,
             )
         })
     }
@@ -12699,6 +13291,13 @@ impl Registry {
     pub fn merge_execute(&self, flow_id: &str) -> Result<crate::core::state::MergeState> {
         let origin = "registry:merge_execute";
         let flow = self.get_flow(flow_id)?;
+
+        let _ = self.enforce_constitution_gate(
+            flow.project_id,
+            "merge_execute",
+            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            origin,
+        )?;
 
         let state = self.state()?;
         let ms = state.merge_states.get(&flow.id).ok_or_else(|| {
@@ -13022,6 +13621,13 @@ impl Registry {
     ) -> Result<crate::core::state::MergeState> {
         let origin = "registry:merge_execute_via_pr";
         let flow = self.get_flow(flow_id)?;
+
+        let _ = self.enforce_constitution_gate(
+            flow.project_id,
+            "merge_execute",
+            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            origin,
+        )?;
 
         let state = self.state()?;
         let ms = state.merge_states.get(&flow.id).ok_or_else(|| {
@@ -13453,6 +14059,58 @@ mod tests {
         );
     }
 
+    fn seed_domain_infrastructure_repo(repo_dir: &std::path::Path) {
+        std::fs::create_dir_all(repo_dir.join("src/domain")).expect("create domain dir");
+        std::fs::write(
+            repo_dir.join("src/lib.rs"),
+            "pub mod domain;\npub mod infrastructure;\n",
+        )
+        .expect("write lib.rs");
+        std::fs::write(
+            repo_dir.join("src/infrastructure.rs"),
+            "pub fn db() -> &'static str { \"ok\" }\n",
+        )
+        .expect("write infrastructure.rs");
+        std::fs::write(
+            repo_dir.join("src/domain/mod.rs"),
+            "pub mod extra;\nuse crate::infrastructure::db;\npub fn run() -> &'static str { db() }\n",
+        )
+        .expect("write domain/mod.rs");
+        std::fs::write(repo_dir.join("src/domain/extra.rs"), "// no symbols here\n")
+            .expect("write domain/extra.rs");
+        git_commit_all(repo_dir, "seed domain infrastructure graph");
+    }
+
+    fn constitution_enforcement_yaml() -> &'static str {
+        r"version: 1
+schema_version: constitution.v1
+compatibility:
+  minimum_hivemind_version: 0.1.29
+  governance_schema_version: governance.v1
+partitions:
+  - id: domain
+    path: src/domain
+  - id: infrastructure
+    path: src/infrastructure.rs
+rules:
+  - type: forbidden_dependency
+    id: no_domain_to_infra_hard
+    from: domain
+    to: infrastructure
+    severity: hard
+  - type: forbidden_dependency
+    id: no_domain_to_infra_info
+    from: domain
+    to: infrastructure
+    severity: informational
+  - type: coverage_requirement
+    id: domain_symbol_coverage
+    target: domain
+    threshold: 100
+    severity: advisory
+"
+    }
+
     fn configure_failing_runtime(registry: &Registry) {
         registry
             .project_runtime_set(
@@ -13834,6 +14492,284 @@ mod tests {
             .unwrap();
         let validated = registry.constitution_validate("proj", None).unwrap();
         assert!(validated.valid);
+    }
+
+    #[test]
+    fn constitution_check_reports_hard_advisory_and_informational_violations() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+        seed_domain_infrastructure_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                Some("main"),
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        registry
+            .constitution_init(
+                "proj",
+                Some(constitution_enforcement_yaml()),
+                true,
+                Some("tester"),
+                Some("seed enforcement rules"),
+            )
+            .unwrap();
+
+        let result = registry.constitution_check("proj").unwrap();
+        assert!(!result.skipped);
+        assert_eq!(result.gate, "manual_check");
+        assert_eq!(result.hard_violations, 1);
+        assert_eq!(result.advisory_violations, 1);
+        assert_eq!(result.informational_violations, 1);
+        assert!(result.blocked);
+        assert_eq!(result.violations.len(), 3);
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        let violation_events: Vec<_> = events
+            .iter()
+            .filter_map(|event| match &event.payload {
+                EventPayload::ConstitutionViolationDetected {
+                    gate,
+                    rule_id,
+                    severity,
+                    ..
+                } => Some((gate.clone(), rule_id.clone(), severity.clone())),
+                _ => None,
+            })
+            .collect();
+        assert!(!violation_events.is_empty());
+        assert!(violation_events
+            .iter()
+            .any(|(gate, rule_id, severity)| gate == "manual_check"
+                && rule_id == "no_domain_to_infra_hard"
+                && severity == "hard"));
+        assert!(violation_events
+            .iter()
+            .any(|(gate, rule_id, severity)| gate == "manual_check"
+                && rule_id == "no_domain_to_infra_info"
+                && severity == "informational"));
+        assert!(violation_events
+            .iter()
+            .any(|(gate, rule_id, severity)| gate == "manual_check"
+                && rule_id == "domain_symbol_coverage"
+                && severity == "advisory"));
+    }
+
+    #[test]
+    fn checkpoint_complete_blocks_on_hard_constitution_violation() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+        seed_domain_infrastructure_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                Some("main"),
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+        registry
+            .constitution_init(
+                "proj",
+                Some(constitution_enforcement_yaml()),
+                true,
+                None,
+                None,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo runtime_ok".to_string(),
+                ],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let err = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap_err();
+        assert_eq!(err.code, "checkpoints_incomplete");
+
+        let state = registry.state().unwrap();
+        let attempt_id = state
+            .attempts
+            .values()
+            .find(|attempt| attempt.flow_id == flow.id && attempt.task_id == task.id)
+            .map(|attempt| attempt.id.to_string())
+            .expect("attempt id");
+
+        let err = registry
+            .checkpoint_complete(&attempt_id, "checkpoint-1", Some("checkpoint done"))
+            .unwrap_err();
+        assert_eq!(err.code, "constitution_hard_violation");
+        assert!(err
+            .recovery_hint
+            .as_deref()
+            .is_some_and(|hint| hint.contains("constitution check")));
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::ConstitutionViolationDetected {
+                    gate,
+                    blocked,
+                    flow_id: Some(gate_flow),
+                    task_id: Some(gate_task),
+                    ..
+                } if gate == "checkpoint_complete" && *blocked && *gate_flow == flow.id && *gate_task == task.id
+            )
+        }));
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn merge_prepare_approve_and_execute_enforce_constitution_hard_gates() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+        seed_domain_infrastructure_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                Some("main"),
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo runtime_ok".to_string(),
+                ],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let err = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap_err();
+        assert_eq!(err.code, "checkpoints_incomplete");
+
+        let state = registry.state().unwrap();
+        let attempt_id = state
+            .attempts
+            .values()
+            .find(|attempt| attempt.flow_id == flow.id && attempt.task_id == task.id)
+            .map(|attempt| attempt.id.to_string())
+            .expect("attempt id");
+        registry
+            .checkpoint_complete(&attempt_id, "checkpoint-1", Some("checkpoint done"))
+            .unwrap();
+        registry
+            .complete_task_execution(&task.id.to_string())
+            .unwrap();
+        let completed_flow = registry
+            .verify_override(&task.id.to_string(), "pass", "manual verification")
+            .unwrap();
+        assert_eq!(completed_flow.state, FlowState::Completed);
+
+        registry
+            .merge_prepare(&flow.id.to_string(), Some("main"))
+            .unwrap();
+        registry.merge_approve(&flow.id.to_string()).unwrap();
+
+        registry
+            .constitution_init(
+                "proj",
+                Some(constitution_enforcement_yaml()),
+                true,
+                None,
+                None,
+            )
+            .unwrap();
+
+        let err = registry
+            .merge_prepare(&flow.id.to_string(), Some("main"))
+            .unwrap_err();
+        assert_eq!(err.code, "constitution_hard_violation");
+        let err = registry.merge_approve(&flow.id.to_string()).unwrap_err();
+        assert_eq!(err.code, "constitution_hard_violation");
+        let err = registry.merge_execute(&flow.id.to_string()).unwrap_err();
+        assert_eq!(err.code, "constitution_hard_violation");
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::ConstitutionViolationDetected {
+                    gate,
+                    blocked,
+                    flow_id: Some(gate_flow),
+                    ..
+                } if gate == "merge_prepare" && *blocked && *gate_flow == flow.id
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::ConstitutionViolationDetected {
+                    gate,
+                    blocked,
+                    flow_id: Some(gate_flow),
+                    ..
+                } if gate == "merge_approve" && *blocked && *gate_flow == flow.id
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::ConstitutionViolationDetected {
+                    gate,
+                    blocked,
+                    flow_id: Some(gate_flow),
+                    ..
+                } if gate == "merge_execute" && *blocked && *gate_flow == flow.id
+            )
+        }));
     }
 
     #[test]

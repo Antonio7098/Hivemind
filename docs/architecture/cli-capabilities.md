@@ -99,6 +99,7 @@ Capabilities:
 Capabilities:
 - Initialize/migrate/inspect governance storage for a project
 - Initialize/show/validate/update project constitution via `hivemind constitution ...`
+- Evaluate constitution rules explicitly via `hivemind constitution check --project <project>`
 - Rebuild graph snapshot via `hivemind graph snapshot refresh <project>`
 - Manage project documents (`create`, `list`, `inspect`, `update`, `delete`) with immutable revisions
 - Explicitly include/exclude project documents for task execution context
@@ -108,6 +109,8 @@ Constraints:
 - Exactly one constitution is allowed per project (canonical `constitution.yaml`)
 - Constitution mutations require explicit confirmation and actor-attributed audit metadata
 - Constitution lifecycle commands require current graph snapshot provenance when repositories are attached
+- Constitution hard-rule violations block checkpoint completion and merge prepare/approve/execute boundaries
+- Advisory and informational constitution violations remain visible via structured command output and event queries
 - Project document attachment is explicit and task-scoped
 - Project notepad content is never injected into runtime prompts by default
 
