@@ -80,8 +80,6 @@
 //!
 //! MIT
 
-#![warn(missing_docs)]
-
 pub mod adapters;
 pub mod cli;
 pub mod core;
