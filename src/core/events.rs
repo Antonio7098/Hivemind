@@ -430,6 +430,41 @@ pub enum EventPayload {
         projection_version: u32,
     },
 
+    GovernanceSnapshotCreated {
+        project_id: Uuid,
+        snapshot_id: String,
+        path: String,
+        artifact_count: usize,
+        total_bytes: u64,
+        #[serde(default)]
+        source_event_sequence: Option<u64>,
+    },
+
+    GovernanceSnapshotRestored {
+        project_id: Uuid,
+        snapshot_id: String,
+        path: String,
+        artifact_count: usize,
+        restored_files: usize,
+        skipped_files: usize,
+    },
+
+    GovernanceDriftDetected {
+        project_id: Uuid,
+        issue_count: usize,
+        recoverable_count: usize,
+        unrecoverable_count: usize,
+    },
+
+    GovernanceRepairApplied {
+        project_id: Uuid,
+        operation_count: usize,
+        repaired_count: usize,
+        remaining_issue_count: usize,
+        #[serde(default)]
+        snapshot_id: Option<String>,
+    },
+
     GraphSnapshotStarted {
         project_id: Uuid,
         trigger: String,

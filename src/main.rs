@@ -9,9 +9,10 @@ use hivemind::cli::commands::{
     GlobalSystemPromptCommands, GlobalTemplateCommands, GraphCommands, GraphSnapshotCommands,
     MergeCommands, MergeExecuteModeArg, ProjectCommands, ProjectGovernanceAttachmentCommands,
     ProjectGovernanceCommands, ProjectGovernanceDocumentCommands, ProjectGovernanceNotepadCommands,
-    RunModeArg, RuntimeCommands, RuntimeRoleArg, ServeArgs, TaskAbortArgs, TaskCloseArgs,
-    TaskCommands, TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs,
-    TaskStartArgs, TaskUpdateArgs, VerifyCommands, WorktreeCommands,
+    ProjectGovernanceRepairCommands, ProjectGovernanceSnapshotCommands, RunModeArg,
+    RuntimeCommands, RuntimeRoleArg, ServeArgs, TaskAbortArgs, TaskCloseArgs, TaskCommands,
+    TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs, TaskStartArgs,
+    TaskUpdateArgs, VerifyCommands, WorktreeCommands,
 };
 use hivemind::cli::output::{output, output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
@@ -1049,6 +1050,81 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                     Err(e) => output_error(&e, format),
                 }
             }
+            ProjectGovernanceCommands::Replay(args) => {
+                match registry.project_governance_replay(&args.project, args.verify) {
+                    Ok(result) => {
+                        print_structured(&result, format, "project governance replay result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            ProjectGovernanceCommands::Snapshot(cmd) => match cmd {
+                ProjectGovernanceSnapshotCommands::Create(args) => {
+                    match registry
+                        .project_governance_snapshot_create(&args.project, args.interval_minutes)
+                    {
+                        Ok(result) => {
+                            print_structured(&result, format, "governance snapshot create result");
+                            ExitCode::Success
+                        }
+                        Err(e) => output_error(&e, format),
+                    }
+                }
+                ProjectGovernanceSnapshotCommands::List(args) => {
+                    match registry.project_governance_snapshot_list(&args.project, args.limit) {
+                        Ok(result) => {
+                            print_structured(&result, format, "governance snapshot list result");
+                            ExitCode::Success
+                        }
+                        Err(e) => output_error(&e, format),
+                    }
+                }
+                ProjectGovernanceSnapshotCommands::Restore(args) => match registry
+                    .project_governance_snapshot_restore(
+                        &args.project,
+                        &args.snapshot_id,
+                        args.confirm,
+                    ) {
+                    Ok(result) => {
+                        print_structured(&result, format, "governance snapshot restore result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                },
+            },
+            ProjectGovernanceCommands::Repair(cmd) => match cmd {
+                ProjectGovernanceRepairCommands::Detect(args) => {
+                    match registry.project_governance_repair_detect(&args.project) {
+                        Ok(result) => {
+                            print_structured(&result, format, "governance repair detect result");
+                            ExitCode::Success
+                        }
+                        Err(e) => output_error(&e, format),
+                    }
+                }
+                ProjectGovernanceRepairCommands::Preview(args) => match registry
+                    .project_governance_repair_preview(&args.project, args.snapshot_id.as_deref())
+                {
+                    Ok(result) => {
+                        print_structured(&result, format, "governance repair preview result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                },
+                ProjectGovernanceRepairCommands::Apply(args) => match registry
+                    .project_governance_repair_apply(
+                        &args.project,
+                        args.snapshot_id.as_deref(),
+                        args.confirm,
+                    ) {
+                    Ok(result) => {
+                        print_structured(&result, format, "governance repair apply result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                },
+            },
             ProjectGovernanceCommands::Document(cmd) => match cmd {
                 ProjectGovernanceDocumentCommands::Create(args) => match registry
                     .project_governance_document_create(
@@ -1945,6 +2021,10 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
             "governance_attachment_lifecycle_updated"
         }
         EventPayload::GovernanceStorageMigrated { .. } => "governance_storage_migrated",
+        EventPayload::GovernanceSnapshotCreated { .. } => "governance_snapshot_created",
+        EventPayload::GovernanceSnapshotRestored { .. } => "governance_snapshot_restored",
+        EventPayload::GovernanceDriftDetected { .. } => "governance_drift_detected",
+        EventPayload::GovernanceRepairApplied { .. } => "governance_repair_applied",
         EventPayload::GraphSnapshotStarted { .. } => "graph_snapshot_started",
         EventPayload::GraphSnapshotCompleted { .. } => "graph_snapshot_completed",
         EventPayload::GraphSnapshotFailed { .. } => "graph_snapshot_failed",

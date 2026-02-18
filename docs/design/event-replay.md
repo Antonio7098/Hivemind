@@ -33,6 +33,10 @@ Events cannot:
 - Re-execute runtime behavior
 - Restore external system state
 
+Exception for governance artifacts:
+- Governance files can be restored when a bounded governance recovery snapshot exists.
+- The snapshot is still subordinate to event authority (restore only applies revision-compatible entries).
+
 ---
 
 ## 2. Two Classes of State
@@ -193,6 +197,10 @@ Preserved by: Git reflog, explicit branch retention policy
 - Output logs
 
 Preserved by: Artifact storage (filesystem or object store)
+
+**Governance Artifacts (bounded):**
+- Constitution/documents/templates/skills/prompts/notepads/graph snapshot files
+- Preserved by: governance recovery snapshots under `~/.hivemind/projects/<project-id>/recovery/snapshots/`
 
 ### 5.2 Artifact Lifecycle
 

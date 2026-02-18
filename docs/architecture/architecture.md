@@ -283,6 +283,7 @@ Hivemind is **event-native**.
 - Execution history is replayable and auditable
 - Operators can query governance-specific event slices by artifact/template/rule identifiers
 - Governance diagnostics are explicit CLI outputs (missing artifacts, invalid references, stale snapshots)
+- Governance replay/snapshot/repair workflows are CLI-first with explicit confirmation boundaries and recovery telemetry
 
 The event log is the **single source of truth**.
 

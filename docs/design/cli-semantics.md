@@ -402,7 +402,143 @@ hivemind [-f json|table|yaml] project governance diagnose <project>
 
 ---
 
-### 2.10.2 constitution
+### 2.10.2 project governance replay
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance replay <project> [--verify]
+```
+
+**Preconditions:**
+- Project exists
+
+**Effects:**
+- Replays canonical event history into governance projection state for the selected project scope (project artifacts + global governance artifacts)
+- Reports projection entries (`scope`, `artifact_kind`, `artifact_key`, `path`, `revision`, `exists_on_disk`)
+- Optionally verifies:
+  - replay idempotence across repeated rebuilds
+  - parity between replayed governance projection and current state
+
+**Events:** None
+
+**Failures:**
+- `project_not_found`
+- `event_read_failed`
+- `governance_replay_verification_failed` (only with `--verify`)
+
+**Idempotence:** Idempotent.
+
+---
+
+### 2.10.3 project governance snapshot
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance snapshot create <project> [--interval-minutes <n>]
+hivemind [-f json|table|yaml] project governance snapshot list <project> [--limit <n>]
+hivemind [-f json|table|yaml] project governance snapshot restore <project> <snapshot-id> --confirm
+```
+
+**Preconditions:**
+- Project exists
+- `restore` requires explicit `--confirm`
+- `restore` is blocked while project has active flows
+
+**Effects:**
+- `create` captures bounded governance artifact content under:
+  - `~/.hivemind/projects/<project-id>/recovery/snapshots/<snapshot-id>.json`
+- `create --interval-minutes` optionally reuses most recent snapshot if it is inside the configured window
+- `restore` rewrites eligible artifact files only when snapshot revision matches current projection revision (preserves event authority; stale entries are skipped)
+
+**Events:**
+```
+GovernanceSnapshotCreated:
+  project_id: <project-id>
+  snapshot_id: <snapshot-id>
+  path: <snapshot-path>
+  artifact_count: <n>
+  total_bytes: <n>
+  source_event_sequence: <optional-sequence>
+
+GovernanceSnapshotRestored:
+  project_id: <project-id>
+  snapshot_id: <snapshot-id>
+  path: <snapshot-path>
+  artifact_count: <n>
+  restored_files: <n>
+  skipped_files: <n>
+```
+
+**Failures:**
+- `project_not_found`
+- `governance_snapshot_read_failed`
+- `governance_snapshot_write_failed`
+- `governance_snapshot_schema_invalid`
+- `governance_snapshot_not_found`
+- `governance_snapshot_schema_unsupported`
+- `restore_confirmation_required`
+- `governance_restore_blocked_active_flow`
+
+**Idempotence:**
+- `create`: idempotent when periodic reuse is enabled and within window; otherwise appends a new snapshot artifact
+- `list`: idempotent
+- `restore`: idempotent when no file content differs from snapshot
+
+---
+
+### 2.10.4 project governance repair
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] project governance repair detect <project>
+hivemind [-f json|table|yaml] project governance repair preview <project> [--snapshot-id <id>]
+hivemind [-f json|table|yaml] project governance repair apply <project> [--snapshot-id <id>] --confirm
+```
+
+**Preconditions:**
+- Project exists
+- `apply` requires explicit `--confirm`
+- `apply` is blocked while project has active flows
+
+**Effects:**
+- `detect` classifies governance drift versus canonical event history:
+  - missing artifact files referenced by projection
+  - projection entries missing for on-disk governed artifacts
+  - malformed governed JSON artifacts
+  - stale/missing graph snapshot and governance reference issues surfaced by diagnostics
+- `preview` returns deterministic ordered operations (`emit_projection_upsert`, `restore_from_snapshot`, `refresh_graph_snapshot`) without side effects
+- `apply` executes preview operations deterministically and re-checks remaining issues
+
+**Events:**
+```
+GovernanceDriftDetected:
+  project_id: <project-id>
+  issue_count: <n>
+  recoverable_count: <n>
+  unrecoverable_count: <n>
+
+GovernanceRepairApplied:
+  project_id: <project-id>
+  operation_count: <n>
+  repaired_count: <n>
+  remaining_issue_count: <n>
+  snapshot_id: <optional-id>
+```
+
+**Failures:**
+- `project_not_found`
+- `repair_confirmation_required`
+- `governance_repair_blocked_active_flow`
+- `governance_repair_unrecoverable`
+- `governance_artifact_read_failed`
+
+**Idempotence:**
+- `detect`/`preview`: idempotent
+- `apply`: idempotent once no remaining repair operations exist
+
+---
+
+### 2.10.5 constitution
 
 **Synopsis:**
 ```

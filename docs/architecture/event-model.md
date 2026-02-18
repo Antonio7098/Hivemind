@@ -98,6 +98,10 @@ Examples:
 - `GovernanceArtifactUpserted`
 - `GovernanceArtifactDeleted`
 - `GovernanceAttachmentLifecycleUpdated`
+- `GovernanceSnapshotCreated`
+- `GovernanceSnapshotRestored`
+- `GovernanceDriftDetected`
+- `GovernanceRepairApplied`
 - `GraphSnapshotStarted`
 - `GraphSnapshotCompleted`
 - `GraphSnapshotFailed`
@@ -117,6 +121,8 @@ Properties:
 - Attachment lifecycle is task-scoped and auditable
 - Graph snapshot lifecycle emits explicit start/completion/failure and diff telemetry with trigger attribution (`project_attach`, `checkpoint_complete`, `merge_completed`, `manual_refresh`)
 - Snapshot completion payload records snapshot path, governance revision, UCP profile/engine metadata, and canonical fingerprint for replay-safe provenance
+- Governance recovery snapshot events record snapshot identity, coverage size, and source event sequence used for bounded restore
+- Drift/repair events expose recoverable vs unrecoverable issue counts and applied operation totals for operator audit trails
 - Constitution lifecycle events include digest, schema/version metadata, confirmation flag, mutation intent, and actor attribution
 - Constitution enforcement emits `ConstitutionViolationDetected` with gate (`manual_check`, `checkpoint_complete`, `merge_prepare`, `merge_approve`, `merge_execute`), rule ID/type/severity, and structured evidence/remediation hints
 - Template instantiation records resolved artifact IDs for replay-safe context provenance
@@ -341,7 +347,7 @@ Hivemind guarantees that:
 - Replaying does not re-trigger side effects
 - Execution is idempotent with respect to events
 
-**Important:** Event replay reconstructs *logical state*, not *execution artifacts*. Files, commits, and diffs are referenced by events but not contained in them. These artifacts must be preserved separately.
+**Important:** Event replay reconstructs *logical state*, not *execution artifacts*. Files, commits, and diffs are referenced by events but not contained in them. These artifacts must be preserved separately. Governance files are recoverable only when bounded governance snapshots are available and revision-compatible with current event authority.
 
 This enables:
 - Crash recovery

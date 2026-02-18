@@ -3878,3 +3878,310 @@ fn cli_dependency_chain_only_root_task_starts_ready() {
     assert_eq!(t2_state, Some("pending"));
     assert_eq!(t3_state, Some("pending"));
 }
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_governance_snapshot_restore_and_repair_flow() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, doc_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "document",
+            "create",
+            "proj",
+            "arch-doc",
+            "--title",
+            "Architecture",
+            "--owner",
+            "ops",
+            "--content",
+            "baseline-v1",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let doc_json: serde_json::Value = serde_json::from_str(&doc_out).expect("document json");
+    let document_path = doc_json
+        .get("data")
+        .and_then(|d| d.get("path"))
+        .and_then(serde_json::Value::as_str)
+        .expect("document path")
+        .to_string();
+    assert!(std::path::Path::new(&document_path).is_file());
+
+    let (code, snap_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "snapshot",
+            "create",
+            "proj",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let snap_json: serde_json::Value = serde_json::from_str(&snap_out).expect("snapshot json");
+    let snapshot_id = snap_json
+        .get("data")
+        .and_then(|d| d.get("snapshot"))
+        .and_then(|d| d.get("snapshot_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("snapshot id")
+        .to_string();
+
+    std::fs::remove_file(&document_path).expect("remove governance document");
+
+    let (code, detect_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "repair",
+            "detect",
+            "proj",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let detect_json: serde_json::Value = serde_json::from_str(&detect_out).expect("detect json");
+    assert!(
+        detect_json
+            .get("data")
+            .and_then(|d| d.get("issue_count"))
+            .and_then(serde_json::Value::as_u64)
+            .is_some_and(|count| count >= 1),
+        "expected at least one drift issue: {detect_out}"
+    );
+
+    let (code, preview_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "repair",
+            "preview",
+            "proj",
+            "--snapshot-id",
+            &snapshot_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let preview_json: serde_json::Value = serde_json::from_str(&preview_out).expect("preview json");
+    let has_restore_operation = preview_json
+        .get("data")
+        .and_then(|d| d.get("operations"))
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|ops| {
+            ops.iter().any(|item| {
+                item.get("action").and_then(serde_json::Value::as_str)
+                    == Some("restore_from_snapshot")
+            })
+        });
+    assert!(
+        has_restore_operation,
+        "expected restore operation in preview: {preview_out}"
+    );
+
+    let (code, apply_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "repair",
+            "apply",
+            "proj",
+            "--snapshot-id",
+            &snapshot_id,
+            "--confirm",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let apply_json: serde_json::Value = serde_json::from_str(&apply_out).expect("apply json");
+    assert_eq!(
+        apply_json
+            .get("data")
+            .and_then(|d| d.get("remaining_issue_count"))
+            .and_then(serde_json::Value::as_u64),
+        Some(0),
+        "expected repair to clear drift issues: {apply_out}"
+    );
+
+    let (code, inspect_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "document",
+            "inspect",
+            "proj",
+            "arch-doc",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let inspect_json: serde_json::Value = serde_json::from_str(&inspect_out).expect("inspect json");
+    assert_eq!(
+        inspect_json
+            .get("data")
+            .and_then(|d| d.get("latest_content"))
+            .and_then(serde_json::Value::as_str),
+        Some("baseline-v1")
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_governance_replay_and_snapshot_restore_verification() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "document",
+            "create",
+            "proj",
+            "runbook",
+            "--title",
+            "Runbook",
+            "--owner",
+            "ops",
+            "--content",
+            "v1-content",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, replay_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "replay",
+            "proj",
+            "--verify",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let replay_json: serde_json::Value = serde_json::from_str(&replay_out).expect("replay json");
+    assert_eq!(
+        replay_json
+            .get("data")
+            .and_then(|d| d.get("idempotent"))
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    assert_eq!(
+        replay_json
+            .get("data")
+            .and_then(|d| d.get("current_matches_replay"))
+            .and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+
+    let (code, create_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "snapshot",
+            "create",
+            "proj",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let create_json: serde_json::Value =
+        serde_json::from_str(&create_out).expect("snapshot create");
+    let snapshot_id = create_json
+        .get("data")
+        .and_then(|d| d.get("snapshot"))
+        .and_then(|d| d.get("snapshot_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("snapshot id")
+        .to_string();
+
+    let (code, inspect_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "document",
+            "inspect",
+            "proj",
+            "runbook",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let inspect_json: serde_json::Value = serde_json::from_str(&inspect_out).expect("inspect");
+    let document_path = inspect_json
+        .get("data")
+        .and_then(|d| d.get("summary"))
+        .and_then(|d| d.get("path"))
+        .and_then(serde_json::Value::as_str)
+        .expect("document path")
+        .to_string();
+
+    std::fs::write(&document_path, "{broken json").expect("corrupt document file");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "governance",
+            "snapshot",
+            "restore",
+            "proj",
+            &snapshot_id,
+            "--confirm",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, post_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "document",
+            "inspect",
+            "proj",
+            "runbook",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let post_json: serde_json::Value = serde_json::from_str(&post_out).expect("post inspect");
+    assert_eq!(
+        post_json
+            .get("data")
+            .and_then(|d| d.get("latest_content"))
+            .and_then(serde_json::Value::as_str),
+        Some("v1-content")
+    );
+}

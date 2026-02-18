@@ -98,10 +98,12 @@ Capabilities:
 ### 3.4 Project Governance Artifacts
 
 Capabilities:
-- Initialize/migrate/inspect/diagnose governance storage for a project
+- Initialize/migrate/inspect/diagnose/replay governance storage projections for a project
 - Initialize/show/validate/update project constitution via `hivemind constitution ...`
 - Evaluate constitution rules explicitly via `hivemind constitution check --project <project>`
 - Rebuild graph snapshot via `hivemind graph snapshot refresh <project>`
+- Create/list/restore bounded governance recovery snapshots (`project governance snapshot ...`)
+- Detect/preview/apply deterministic governance repair plans (`project governance repair ...`)
 - Manage project documents (`create`, `list`, `inspect`, `update`, `delete`) with immutable revisions
 - Explicitly include/exclude project documents for task execution context
 - Manage project notepad (`create`, `show`, `update`, `delete`) as non-executional context
@@ -117,6 +119,7 @@ Constraints:
 - Project notepad content is never injected into runtime prompts by default
 - Attempt context excludes project/global notepads and implicit memory sources by default
 - Governance diagnostics report missing artifacts, invalid template references, and stale/missing graph snapshots as explicit machine-readable issues
+- Snapshot restore and repair apply require explicit confirmation and reject execution while project flows are active
 
 ---
 
