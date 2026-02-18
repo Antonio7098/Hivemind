@@ -1,0 +1,82 @@
+=== Starting big pickle manual run ===
+ID:          ab8284b4-d752-468d-8274-d0f5dc691f71
+Name:        bigpickle-test
+Description: Big Pickle runtime verification
+Created:     2026-02-18 16:57:04.445408167 UTC
+Updated:     2026-02-18 16:57:04.445408167 UTC
+ID:          ab8284b4-d752-468d-8274-d0f5dc691f71
+Name:        bigpickle-test
+Description: Big Pickle runtime verification
+Created:     2026-02-18 16:57:04.445408167 UTC
+Updated:     2026-02-18 16:57:04.470324169 UTC
+Repositories:
+  - main (/tmp/hivemind-test-bigpickle/test) [readwrite]
+ID:          ab8284b4-d752-468d-8274-d0f5dc691f71
+Name:        bigpickle-test
+Description: Big Pickle runtime verification
+Created:     2026-02-18 16:57:04.445408167 UTC
+Updated:     2026-02-18 16:57:04.547769219 UTC
+Repositories:
+  - main (/tmp/hivemind-test-bigpickle/test) [readwrite]
+ID:          daa11bed-5c1e-46ba-91be-6e526621bf8f
+Project:     ab8284b4-d752-468d-8274-d0f5dc691f71
+Title:       Run big pickle
+Description: Verify opencode big pickle model
+State:       Open
+RunMode:     Auto
+Created:     2026-02-18 16:57:04.573189045 UTC
+Graph ID: e3e204bd-718e-4815-bd70-48758ffe35e7
+Flow ID: 39ae4b6b-99bc-4518-95c9-7837f09b03b5
+Flow ID: 39ae4b6b-99bc-4518-95c9-7837f09b03b5
+Error: [user:checkpoints_incomplete] All checkpoints must be completed before task completion
+Hint: Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 32a81022-dc51-40a6-a644-b51cd25e531f --id <checkpoint-id>` before finishing the task attempt
+{"success":false,"error":{"category":"user","code":"checkpoints_incomplete","message":"All checkpoints must be completed before task completion","origin":"registry:complete_task_execution","hint":"Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 32a81022-dc51-40a6-a644-b51cd25e531f --id <checkpoint-id>` before finishing the task attempt"}}
+Attempt:    32a81022-dc51-40a6-a644-b51cd25e531f
+Checkpoint: checkpoint-1 (1/1)
+Commit:     d5c702038624f55b23c48a3aeeb1ce1a36b271c0
+Next:       none
+All done:   true
+Flow ID: 39ae4b6b-99bc-4518-95c9-7837f09b03b5
+SEQ     TYPE                      TIMESTAMP               PROJECT
+------------------------------------------------------------------------------------------
+12      flow_created              2026-02-18T16:57:04.670479335+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+13      flow_started              2026-02-18T16:57:04.711716953+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+14      task_ready                2026-02-18T16:57:04.721127078+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+15      task_execution_state_changed  2026-02-18T16:57:04.841141612+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+16      attempt_started           2026-02-18T16:57:04.851345023+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+17      checkpoint_declared       2026-02-18T16:57:04.861116845+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+18      checkpoint_activated      2026-02-18T16:57:04.871933164+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+19      task_execution_started    2026-02-18T16:57:04.881819461+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+20      baseline_captured         2026-02-18T16:57:04.891445460+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+21      attempt_context_assembled  2026-02-18T16:57:04.906188578+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+22      attempt_context_delivered  2026-02-18T16:57:04.918617229+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+23      runtime_started           2026-02-18T16:57:04.928063702+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+24      runtime_filesystem_observed  2026-02-18T16:57:09.634953793+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+25      runtime_output_chunk      2026-02-18T16:57:09.645614401+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+26      runtime_output_chunk      2026-02-18T16:57:09.656445708+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+27      runtime_output_chunk      2026-02-18T16:57:09.667425023+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+28      runtime_output_chunk      2026-02-18T16:57:09.676857710+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+29      runtime_output_chunk      2026-02-18T16:57:09.686743606+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+30      runtime_output_chunk      2026-02-18T16:57:09.695528348+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+31      runtime_output_chunk      2026-02-18T16:57:09.706611077+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+32      runtime_output_chunk      2026-02-18T16:57:09.717837886+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+33      runtime_output_chunk      2026-02-18T16:57:09.728691656+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+34      runtime_output_chunk      2026-02-18T16:57:09.738289652+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+35      runtime_output_chunk      2026-02-18T16:57:09.747111965+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+36      runtime_output_chunk      2026-02-18T16:57:09.757165255+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+37      runtime_output_chunk      2026-02-18T16:57:09.767913477+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+38      runtime_output_chunk      2026-02-18T16:57:09.778302566+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+39      runtime_output_chunk      2026-02-18T16:57:09.788628717+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+40      runtime_output_chunk      2026-02-18T16:57:09.798683449+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+41      runtime_output_chunk      2026-02-18T16:57:09.807018138+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+42      runtime_output_chunk      2026-02-18T16:57:09.818518931+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+43      runtime_output_chunk      2026-02-18T16:57:09.827702230+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+44      runtime_output_chunk      2026-02-18T16:57:09.836892212+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+45      runtime_exited            2026-02-18T16:57:09.847440419+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+46      error_occurred            2026-02-18T16:57:09.861652372+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+47      runtime_terminated        2026-02-18T16:57:09.870206182+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+48      runtime_error_classified  2026-02-18T16:57:09.880746764+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+49      error_occurred            2026-02-18T16:57:09.890647238+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+50      checkpoint_completed      2026-02-18T16:57:09.944380192+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+51      checkpoint_commit_created  2026-02-18T16:57:09.955785155+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71
+52      all_checkpoints_completed  2026-02-18T16:57:09.964084097+00:00  ab8284b4-d752-468d-8274-d0f5dc691f71

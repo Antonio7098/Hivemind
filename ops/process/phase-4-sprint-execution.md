@@ -274,22 +274,29 @@ set -euo pipefail
 The test scripts set `HOME` to a sandbox temp directory. Inspect its event store:
 
 ```bash
-test -f /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl
+test -f /tmp/hivemind-test/.hm_home/.hivemind/db.sqlite
 
-# High-signal checks (note: `rg` exits non-zero when there are no matches)
-rg '"type":"runtime_' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
-rg '"type":"task_execution_state_changed"' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
-rg '"type":"merge_' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
+# High-signal checks from canonical DB
+sqlite3 -json /tmp/hivemind-test/.hm_home/.hivemind/db.sqlite \
+  "SELECT sequence, event_json FROM events ORDER BY sequence DESC LIMIT 200;" \
+  | rg '"type":"runtime_|"type":"task_execution_state_changed"|"type":"merge_' || true
+
+# Optional compatibility-mirror checks (if mirror file is present)
+if test -f /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl; then
+  rg '"type":"runtime_' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
+fi
 ```
 
 5) Inspect worktrees and filesystem changes
 
 ```bash
 # Confirm the runtime observed filesystem changes
-rg '"type":"runtime_filesystem_observed"' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
+sqlite3 -json /tmp/hivemind-test/.hm_home/.hivemind/db.sqlite \
+  "SELECT event_json FROM events ORDER BY sequence DESC LIMIT 300;" \
+  | rg '"type":"runtime_filesystem_observed"' || true
 
 # Optionally, inspect the diff artifact for the attempt
-# (find the attempt id from events.jsonl, then run: hivemind attempt inspect <attempt-id> --diff --output)
+# (find the attempt id from DB events, then run: hivemind attempt inspect <attempt-id> --diff --output)
 ```
 
 6) If anything looks wrong, stop and debug before merging
@@ -298,7 +305,7 @@ Minimum debugging artifacts to include in the PR discussion:
 
 - `/tmp/hivemind-test_worktree.log`
 - `/tmp/hivemind-test_execution.log`
-- the relevant excerpt from `hivemind-test/.hm_home/.hivemind/events.jsonl`
+- the relevant excerpt from `hivemind-test/.hm_home/.hivemind/db.sqlite` query output (or `events.jsonl` mirror)
 
 ---
 

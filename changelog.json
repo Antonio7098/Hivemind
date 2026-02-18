@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.33",
+      "date": "2026-02-18",
+      "phase": 41.5,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "storage",
+          "description": "Migrate canonical event persistence to `~/.hivemind/db.sqlite` using transactional SQLite operations, while preserving deterministic sequence/EventId semantics"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Switch `Registry::open_with_config` to the new `SqliteEventStore` backend and retain existing replay/filter/stream behavior"
+        },
+        {
+          "type": "added",
+          "area": "storage",
+          "description": "Keep `events.jsonl` as an append-only compatibility mirror for operator inspection and legacy tooling"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add SQLite storage tests for append/reload and JSONL mirror emission; validate full test suite under DB backend"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Add Phase 3.5 DB migration roadmap, update sprint execution runbooks, quickstart, principles, and CLI semantics storage contract documentation"
+        }
+      ]
+    },
+    {
       "version": "v0.1.32",
       "date": "2026-02-18",
       "phase": 40,

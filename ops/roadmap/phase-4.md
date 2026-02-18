@@ -2,6 +2,8 @@
 
 **Goal:** Introduce a native runtime foundation without changing current TaskFlow semantics or breaking existing external adapters.
 
+**Prerequisite:** Complete `ops/roadmap/phase-3.5-interlude-db-migration.md` so Phase 4 event/query growth lands on a DB-backed storage engine.
+
 > **Principles 1, 3, 11, 12:** Observability is truth, reliability over cleverness, incremental foundations, modularity and replaceability.
 
 ### 42.1 Runtime Contract Layer
