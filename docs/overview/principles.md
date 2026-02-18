@@ -19,6 +19,7 @@ If it is not observable, it is treated as if it did not happen.
 
 * All meaningful behavior emits events
 * All state is derived from events
+* Canonical event/state persistence is transactional (`~/.hivemind/db.sqlite`), not ad hoc files
 * All execution is inspectable and replayable
 * There is no hidden system state
 

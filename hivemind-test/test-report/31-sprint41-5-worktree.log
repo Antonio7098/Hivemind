@@ -1,0 +1,85 @@
+=== Creating fresh test ===
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint: 
+hint: 	git config --global init.defaultBranch <name>
+hint: 
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint: 
+hint: 	git branch -m <name>
+Initialized empty Git repository in /tmp/hivemind-test/test-fresh/.git/
+[master (root-commit) db9849e] Initial commit
+ 1 file changed, 1 insertion(+)
+ create mode 100644 README.md
+=== Creating project ===
+ID:          96557a4e-8d96-4dee-b23d-0795e6f27ae1
+Name:        test-fresh
+Description: Test project
+Created:     2026-02-18 16:53:04.882761090 UTC
+Updated:     2026-02-18 16:53:04.882761090 UTC
+=== Attaching repository ===
+ID:          96557a4e-8d96-4dee-b23d-0795e6f27ae1
+Name:        test-fresh
+Description: Test project
+Created:     2026-02-18 16:53:04.882761090 UTC
+Updated:     2026-02-18 16:53:04.905641869 UTC
+Repositories:
+  - main (/tmp/hivemind-test/test-fresh) [readwrite]
+=== Creating task ===
+ID:          429f7781-b468-4040-9e51-785b028d6bf2
+Project:     96557a4e-8d96-4dee-b23d-0795e6f27ae1
+Title:       Test task
+Description: A test task
+State:       Open
+RunMode:     Auto
+Created:     2026-02-18 16:53:04.979839253 UTC
+Task ID: 429f7781-b468-4040-9e51-785b028d6bf2
+=== Creating graph ===
+Graph ID: f2b2b99f-77ce-4655-8126-76049566c778
+Graph ID: f2b2b99f-77ce-4655-8126-76049566c778
+=== Creating flow ===
+Flow ID: 51f58f0d-b67c-4f1a-be51-3db67e76d5d1
+Flow ID: 51f58f0d-b67c-4f1a-be51-3db67e76d5d1
+=== Checking worktrees before start ===
+[
+  {
+    "flow_id": "51f58f0d-b67c-4f1a-be51-3db67e76d5d1",
+    "task_id": "429f7781-b468-4040-9e51-785b028d6bf2",
+    "path": "/tmp/hivemind-test/.hm_home/hivemind/worktrees/51f58f0d-b67c-4f1a-be51-3db67e76d5d1/429f7781-b468-4040-9e51-785b028d6bf2",
+    "is_worktree": false,
+    "head_commit": null,
+    "branch": null
+  }
+]
+=== Starting flow ===
+Flow ID: 51f58f0d-b67c-4f1a-be51-3db67e76d5d1
+=== Starting task (creates worktree) ===
+Attempt ID: 219707d9-1129-4aae-8938-61dfb15aafe6
+=== Checking worktrees after task start ===
+[
+  {
+    "flow_id": "51f58f0d-b67c-4f1a-be51-3db67e76d5d1",
+    "task_id": "429f7781-b468-4040-9e51-785b028d6bf2",
+    "path": "/tmp/hivemind-test/.hm_home/hivemind/worktrees/51f58f0d-b67c-4f1a-be51-3db67e76d5d1/429f7781-b468-4040-9e51-785b028d6bf2",
+    "is_worktree": true,
+    "head_commit": "db9849e43e3a048dc222035a09d727541d5a3697",
+    "branch": "exec/51f58f0d-b67c-4f1a-be51-3db67e76d5d1/429f7781-b468-4040-9e51-785b028d6bf2"
+  }
+]
+=== Inspecting worktree ===
+{
+  "flow_id": "51f58f0d-b67c-4f1a-be51-3db67e76d5d1",
+  "task_id": "429f7781-b468-4040-9e51-785b028d6bf2",
+  "path": "/tmp/hivemind-test/.hm_home/hivemind/worktrees/51f58f0d-b67c-4f1a-be51-3db67e76d5d1/429f7781-b468-4040-9e51-785b028d6bf2",
+  "is_worktree": true,
+  "head_commit": "db9849e43e3a048dc222035a09d727541d5a3697",
+  "branch": "exec/51f58f0d-b67c-4f1a-be51-3db67e76d5d1/429f7781-b468-4040-9e51-785b028d6bf2"
+}
+=== Listing worktree directory ===
+total 12
+drwxrwxr-x 3 antonio antonio 4096 Feb 18 16:53 .
+drwxrwxr-x 3 antonio antonio 4096 Feb 18 16:53 ..
+drwxrwxr-x 3 antonio antonio 4096 Feb 18 16:53 51f58f0d-b67c-4f1a-be51-3db67e76d5d1
+=== Test complete ===

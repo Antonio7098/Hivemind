@@ -10,7 +10,8 @@ This is a copy/paste guide for running Hivemind end-to-end on a real repository 
 
 Hivemind is **local-first** and **event-sourced**:
 
-- All orchestration state lives in `events.jsonl` under `HIVEMIND_DATA_DIR` (default: `~/.hivemind`).
+- Canonical orchestration state lives in `db.sqlite` under `HIVEMIND_DATA_DIR` (default: `~/.hivemind`).
+- `events.jsonl` is an append-only compatibility mirror for manual inspection/tools.
 - All derived state is reconstructed from events.
 - Code changes happen in **git worktrees/branches** owned by the flow engine.
 
@@ -74,7 +75,8 @@ mkdir -p "$HIVEMIND_DATA_DIR"
 
 **What goes in `HIVEMIND_DATA_DIR`:**
 
-- `events.jsonl` (append-only event log)
+- `db.sqlite` (canonical event/state database)
+- `events.jsonl` (append-only event mirror)
 - artifacts (baselines, diffs)
 
 ---
@@ -495,7 +497,7 @@ Without `--start`, Hivemind creates the replacement flow in `created` state.
 If you are an LLM operating Hivemind:
 
 - Always use `-f json` for machine-readability.
-- Treat the event log (`events.jsonl`) as the source of truth.
+- Treat the event stream as the source of truth (`db.sqlite` canonical; `events.jsonl` mirror).
 - Never assume dependency direction; follow the rule:
   - `add-dependency(from, to)` means **from depends on to**.
 - Do not mutate execution branches manually while a flow is running.

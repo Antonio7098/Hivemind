@@ -322,6 +322,15 @@
 
 ---
 
+## Phase 3.5 Interlude: DB Migration
+
+- [x] Complete storage-engine interlude sprint before Phase 4 scale-up:
+  - [x] See `ops/roadmap/phase-3.5-interlude-db-migration.md`
+  - [x] Canonical event/state persistence is DB-backed
+  - [x] CLI semantics remain stable with compatibility observability mirrors
+
+---
+
 ## Summary: Phase 3 Capability Coverage
 
 | Capability | Target Sprint |
@@ -334,6 +343,7 @@
 | Deterministic context manifests | 39 |
 | Governance replay and recovery | 40 |
 | Hardening, docs, and operability | 41 |
+| DB migration interlude (storage engine upgrade) | 41.5 |
 
 ---
 

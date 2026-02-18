@@ -16,7 +16,7 @@ use crate::core::state::{
     ProjectRuntimeConfig, RuntimeRoleDefaults, Task, TaskRuntimeConfig, TaskState,
 };
 use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
-use crate::storage::event_store::{EventFilter, EventStore, IndexedEventStore};
+use crate::storage::event_store::{EventFilter, EventStore, SqliteEventStore};
 use chrono::Utc;
 use fs2::FileExt;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -96,10 +96,16 @@ impl RegistryConfig {
         Self { data_dir }
     }
 
-    /// Returns the path to the global events file.
+    /// Returns the path to the legacy events JSONL mirror file.
     #[must_use]
     pub fn events_path(&self) -> PathBuf {
         self.data_dir.join("events.jsonl")
+    }
+
+    /// Returns the path to the canonical `SQLite` database file.
+    #[must_use]
+    pub fn db_path(&self) -> PathBuf {
+        self.data_dir.join("db.sqlite")
     }
 }
 
@@ -5589,7 +5595,7 @@ impl Registry {
     /// # Errors
     /// Returns an error if the event store cannot be opened.
     pub fn open_with_config(config: RegistryConfig) -> Result<Self> {
-        let store = IndexedEventStore::open(&config.data_dir).map_err(|e| {
+        let store = SqliteEventStore::open(&config.data_dir).map_err(|e| {
             HivemindError::system("store_open_failed", e.to_string(), "registry:open")
         })?;
 

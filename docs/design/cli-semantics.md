@@ -36,6 +36,13 @@ Each command is specified with:
 |         # alternatives
 ```
 
+### 1.3 Storage Backend Contract
+
+- Canonical event/state storage is `~/.hivemind/db.sqlite` (or `$HIVEMIND_DATA_DIR/db.sqlite`)
+- `events.jsonl` remains an append-only compatibility mirror for operators and scripts
+- Governance/document bodies remain filesystem artifacts under `~/.hivemind/projects/...` and `~/.hivemind/global/...`
+- CLI semantics are defined by event/state contracts, not by direct file mutation assumptions
+
 ---
 
 ## 2. Project Commands
