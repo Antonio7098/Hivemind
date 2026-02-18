@@ -534,6 +534,60 @@ pub enum EventPayload {
         projection_version: u32,
     },
 
+    AttemptContextOverridesApplied {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        #[serde(default)]
+        template_document_ids: Vec<String>,
+        #[serde(default)]
+        included_document_ids: Vec<String>,
+        #[serde(default)]
+        excluded_document_ids: Vec<String>,
+        #[serde(default)]
+        resolved_document_ids: Vec<String>,
+    },
+
+    AttemptContextAssembled {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        attempt_number: u32,
+        manifest_hash: String,
+        inputs_hash: String,
+        context_hash: String,
+        context_size_bytes: usize,
+        #[serde(default)]
+        truncated_sections: Vec<String>,
+        manifest_json: String,
+    },
+
+    AttemptContextTruncated {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        budget_bytes: usize,
+        original_size_bytes: usize,
+        truncated_size_bytes: usize,
+        #[serde(default)]
+        sections: Vec<String>,
+        policy: String,
+    },
+
+    AttemptContextDelivered {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        manifest_hash: String,
+        inputs_hash: String,
+        context_hash: String,
+        delivery_target: String,
+        #[serde(default)]
+        prior_attempt_ids: Vec<Uuid>,
+        #[serde(default)]
+        prior_manifest_hashes: Vec<String>,
+    },
+
     TaskGraphCreated {
         graph_id: Uuid,
         project_id: Uuid,

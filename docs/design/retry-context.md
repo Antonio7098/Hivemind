@@ -11,6 +11,8 @@ order: 5
 
 This document specifies how **retry context** is assembled and delivered to worker agents. When a task retries, the new attempt must receive explicit, structured information about what happened before.
 
+Sprint 39 extends this model with an immutable **attempt context manifest** that freezes governance inputs for every attempt. Retry context remains explicit, but now lives alongside a deterministic manifest/hash trail.
+
 There is no implicit memory. There is no hidden state. Retry context is the mechanism by which agents learn from prior attempts.
 
 ---
@@ -316,17 +318,47 @@ RetryContextAssembled:
   prior_attempts_count: int
   context_size_bytes: int
   feedback_sources: [string]  # e.g., ["check:pytest", "verifier"]
+
+AttemptContextAssembled:
+  flow_id: string
+  task_id: string
+  attempt_id: string
+  manifest_hash: string
+  inputs_hash: string
+  context_hash: string
+  manifest_json: string
 ```
 
 ### 7.2 Context Delivery Event
 
 ```
-AttemptStarted:
+AttemptContextDelivered:
+  flow_id: string
   task_id: string
   attempt_id: string
-  attempt_number: int
-  has_retry_context: boolean
-  retry_context_hash: string  # For verification
+  manifest_hash: string
+  inputs_hash: string
+  context_hash: string  # delivered runtime context hash
+  prior_manifest_hashes: [string]
+```
+
+### 7.3 Override and Truncation Telemetry
+
+```
+AttemptContextOverridesApplied:
+  attempt_id: string
+  template_document_ids: [string]
+  included_document_ids: [string]
+  excluded_document_ids: [string]
+  resolved_document_ids: [string]
+
+AttemptContextTruncated:
+  attempt_id: string
+  budget_bytes: int
+  original_size_bytes: int
+  truncated_size_bytes: int
+  sections: [string]
+  policy: ordered_section_then_total_budget
 ```
 
 ---
@@ -339,6 +371,7 @@ Retry context is fully inspectable:
 - Stored as part of attempt record
 - Viewable via CLI: `hivemind attempt inspect <attempt_id> --context`
 - Included in attempt events
+- Bundled with immutable manifest + hash metadata (`manifest_hash`, `inputs_hash`, `delivered_context_hash`)
 
 ### 8.2 Debugging Retries
 
@@ -421,6 +454,7 @@ The retry context model guarantees:
 - Retry context is explicitly assembled from events and artifacts
 - Retry context is delivered as visible input, not hidden state
 - Retry context is observable and auditable
+- Retry lineage is explicit via prior attempt manifest hashes
 - Mechanical feedback is always included
 - Advisory feedback is clearly labeled as advisory
 

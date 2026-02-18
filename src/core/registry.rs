@@ -283,6 +283,11 @@ const CONSTITUTION_SCHEMA_VERSION: &str = "constitution.v1";
 const CONSTITUTION_VERSION: u32 = 1;
 const GRAPH_SNAPSHOT_SCHEMA_VERSION: &str = "graph_snapshot.v1";
 const GRAPH_SNAPSHOT_VERSION: u32 = 1;
+const ATTEMPT_CONTEXT_SCHEMA_VERSION: &str = "attempt_context.v1";
+const ATTEMPT_CONTEXT_VERSION: u32 = 1;
+const ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES: usize = 6_000;
+const ATTEMPT_CONTEXT_TOTAL_BUDGET_BYTES: usize = 24_000;
+const ATTEMPT_CONTEXT_TRUNCATION_POLICY: &str = "ordered_section_then_total_budget";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct GovernanceArtifactInspect {
@@ -688,6 +693,121 @@ struct GlobalTemplateArtifact {
     #[serde(default)]
     pub description: Option<String>,
     pub updated_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateInstantiationSnapshot {
+    event_id: String,
+    template_id: String,
+    system_prompt_id: String,
+    skill_ids: Vec<String>,
+    document_ids: Vec<String>,
+    schema_version: String,
+    projection_version: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AttemptContextDocumentManifest {
+    document_id: String,
+    source: String,
+    revision: u64,
+    content_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AttemptContextSkillManifest {
+    skill_id: String,
+    content_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AttemptContextSystemPromptManifest {
+    prompt_id: String,
+    content_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AttemptContextConstitutionManifest {
+    path: String,
+    #[serde(default)]
+    revision: Option<u64>,
+    #[serde(default)]
+    digest: Option<String>,
+    #[serde(default)]
+    content_hash: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AttemptContextGraphManifest {
+    present: bool,
+    #[serde(default)]
+    canonical_fingerprint: Option<String>,
+    repository_count: usize,
+    total_nodes: usize,
+    total_edges: usize,
+    #[serde(default)]
+    languages: BTreeMap<String, usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AttemptContextRetryLink {
+    attempt_id: Uuid,
+    #[serde(default)]
+    manifest_hash: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AttemptContextBudgetManifest {
+    total_budget_bytes: usize,
+    section_budget_bytes: usize,
+    original_size_bytes: usize,
+    context_size_bytes: usize,
+    #[serde(default)]
+    truncated_sections: Vec<String>,
+    policy: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AttemptContextManifest {
+    schema_version: String,
+    manifest_version: u32,
+    ordered_inputs: Vec<String>,
+    excluded_sources: Vec<String>,
+    constitution: AttemptContextConstitutionManifest,
+    #[serde(default)]
+    template_id: Option<String>,
+    #[serde(default)]
+    template_event_id: Option<String>,
+    #[serde(default)]
+    template_schema_version: Option<String>,
+    #[serde(default)]
+    template_projection_version: Option<u32>,
+    #[serde(default)]
+    system_prompt: Option<AttemptContextSystemPromptManifest>,
+    #[serde(default)]
+    skills: Vec<AttemptContextSkillManifest>,
+    #[serde(default)]
+    documents: Vec<AttemptContextDocumentManifest>,
+    graph_summary: AttemptContextGraphManifest,
+    #[serde(default)]
+    retry_links: Vec<AttemptContextRetryLink>,
+    budget: AttemptContextBudgetManifest,
+}
+
+struct AttemptContextBuildResult {
+    manifest_json: String,
+    manifest_hash: String,
+    inputs_hash: String,
+    context: String,
+    context_hash: String,
+    original_size_bytes: usize,
+    context_size_bytes: usize,
+    truncated_sections: Vec<String>,
+    prior_manifest_hashes: Vec<String>,
+    template_document_ids: Vec<String>,
+    included_document_ids: Vec<String>,
+    excluded_document_ids: Vec<String>,
+    resolved_document_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -4119,69 +4239,482 @@ impl Registry {
         Ok(artifact)
     }
 
-    fn governance_attached_document_ids(
+    fn governance_document_attachment_states(
         state: &AppState,
         project_id: Uuid,
         task_id: Uuid,
-    ) -> Vec<String> {
-        let mut ids: Vec<String> = state
-            .governance_attachments
-            .values()
-            .filter(|item| {
-                item.project_id == project_id
-                    && item.task_id == task_id
-                    && item.artifact_kind == "document"
-                    && item.attached
-            })
-            .map(|item| item.artifact_key.clone())
-            .collect();
-        ids.sort();
-        ids.dedup();
-        ids
+    ) -> (Vec<String>, Vec<String>) {
+        let mut included = Vec::new();
+        let mut excluded = Vec::new();
+        for item in state.governance_attachments.values().filter(|item| {
+            item.project_id == project_id
+                && item.task_id == task_id
+                && item.artifact_kind == "document"
+        }) {
+            if item.attached {
+                included.push(item.artifact_key.clone());
+            } else {
+                excluded.push(item.artifact_key.clone());
+            }
+        }
+        included.sort();
+        included.dedup();
+        excluded.sort();
+        excluded.dedup();
+        (included, excluded)
     }
 
-    fn governance_attached_documents_context(
-        &self,
+    fn governance_artifact_revision(
         state: &AppState,
+        project_id: Option<Uuid>,
+        scope: &str,
+        artifact_kind: &str,
+        artifact_key: &str,
+    ) -> Option<u64> {
+        state
+            .governance_artifacts
+            .values()
+            .find(|item| {
+                item.project_id == project_id
+                    && item.scope == scope
+                    && item.artifact_kind == artifact_kind
+                    && item.artifact_key == artifact_key
+            })
+            .map(|item| item.revision)
+    }
+
+    fn latest_template_instantiation_snapshot(
+        &self,
         project_id: Uuid,
-        task_id: Uuid,
-        origin: &'static str,
-    ) -> Result<Option<String>> {
-        let doc_ids = Self::governance_attached_document_ids(state, project_id, task_id);
-        if doc_ids.is_empty() {
-            return Ok(None);
+    ) -> Result<Option<TemplateInstantiationSnapshot>> {
+        let events = self.read_events(&EventFilter::for_project(project_id))?;
+        let mut snapshot: Option<TemplateInstantiationSnapshot> = None;
+        for event in events {
+            let event_id = event.id().as_uuid().to_string();
+            if let EventPayload::TemplateInstantiated {
+                project_id: event_project_id,
+                template_id,
+                system_prompt_id,
+                skill_ids,
+                document_ids,
+                schema_version,
+                projection_version,
+            } = event.payload
+            {
+                if event_project_id != project_id {
+                    continue;
+                }
+                snapshot = Some(TemplateInstantiationSnapshot {
+                    event_id,
+                    template_id,
+                    system_prompt_id,
+                    skill_ids,
+                    document_ids,
+                    schema_version,
+                    projection_version,
+                });
+            }
+        }
+        Ok(snapshot)
+    }
+
+    fn attempt_manifest_hash_for_attempt(&self, attempt_id: Uuid) -> Result<Option<String>> {
+        let filter = EventFilter {
+            attempt_id: Some(attempt_id),
+            ..EventFilter::default()
+        };
+        let events = self.read_events(&filter)?;
+        let mut manifest_hash = None;
+        for event in events {
+            if let EventPayload::AttemptContextAssembled {
+                manifest_hash: hash,
+                ..
+            } = event.payload
+            {
+                manifest_hash = Some(hash);
+            }
+        }
+        Ok(manifest_hash)
+    }
+
+    fn truncate_to_budget(content: &str, max_bytes: usize) -> String {
+        if content.len() <= max_bytes {
+            return content.to_string();
+        }
+        if max_bytes == 0 {
+            return String::new();
         }
 
-        let mut sections = Vec::new();
-        for doc_id in doc_ids {
-            let artifact = self.read_project_document_artifact(project_id, &doc_id, origin)?;
+        let mut end = 0usize;
+        for (idx, ch) in content.char_indices() {
+            let next = idx + ch.len_utf8();
+            if next > max_bytes {
+                break;
+            }
+            end = next;
+        }
+        content[..end].to_string()
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn assemble_attempt_context(
+        &self,
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        prior_attempt_ids: &[Uuid],
+        origin: &'static str,
+    ) -> Result<AttemptContextBuildResult> {
+        let constitution_location = self.governance_constitution_location(flow.project_id);
+        let constitution_raw = fs::read_to_string(&constitution_location.path).unwrap_or_default();
+        let constitution_revision = Self::governance_artifact_revision(
+            state,
+            Some(flow.project_id),
+            "project",
+            "constitution",
+            "constitution.yaml",
+        );
+        let constitution_digest = state
+            .projects
+            .get(&flow.project_id)
+            .and_then(|project| project.constitution_digest.clone())
+            .or_else(|| {
+                if constitution_raw.trim().is_empty() {
+                    None
+                } else {
+                    Some(Self::constitution_digest(constitution_raw.as_bytes()))
+                }
+            });
+        let constitution_content_hash = if constitution_raw.trim().is_empty() {
+            None
+        } else {
+            Some(Self::constitution_digest(constitution_raw.as_bytes()))
+        };
+
+        let template_snapshot = self.latest_template_instantiation_snapshot(flow.project_id)?;
+        let template_document_ids = template_snapshot
+            .as_ref()
+            .map_or_else(Vec::new, |item| item.document_ids.clone());
+
+        let (attachment_included, attachment_excluded) =
+            Self::governance_document_attachment_states(state, flow.project_id, task_id);
+        let template_set: HashSet<&str> =
+            template_document_ids.iter().map(String::as_str).collect();
+
+        let mut included_document_ids: Vec<String> = attachment_included
+            .iter()
+            .filter(|id| !template_set.contains(id.as_str()))
+            .cloned()
+            .collect();
+        included_document_ids.sort();
+        included_document_ids.dedup();
+
+        let mut excluded_document_ids = attachment_excluded;
+        excluded_document_ids.sort();
+        excluded_document_ids.dedup();
+
+        let mut resolved_document_ids = template_document_ids.clone();
+        for doc_id in &included_document_ids {
+            if !resolved_document_ids.iter().any(|item| item == doc_id) {
+                resolved_document_ids.push(doc_id.clone());
+            }
+        }
+        resolved_document_ids
+            .retain(|id| !excluded_document_ids.iter().any(|excluded| excluded == id));
+        resolved_document_ids.sort();
+        resolved_document_ids.dedup();
+
+        let mut document_manifest = Vec::new();
+        let mut document_sections = Vec::new();
+        for document_id in &resolved_document_ids {
+            let artifact =
+                self.read_project_document_artifact(flow.project_id, document_id, origin)?;
             let latest = artifact.revisions.last().ok_or_else(|| {
                 HivemindError::user(
                     "governance_artifact_schema_invalid",
-                    format!("Document '{doc_id}' has no latest revision"),
+                    format!("Document '{document_id}' has no latest revision"),
                     origin,
                 )
             })?;
-
-            let tags = if artifact.tags.is_empty() {
-                "(none)".to_string()
+            let source = if template_set.contains(document_id.as_str()) {
+                "template"
             } else {
-                artifact.tags.join(", ")
+                "attachment_include"
             };
-            sections.push(format!(
-                "- document_id: {doc_id}\n  title: {}\n  owner: {}\n  tags: {}\n  revision: {}\n  content:\n{}",
+            document_manifest.push(AttemptContextDocumentManifest {
+                document_id: document_id.clone(),
+                source: source.to_string(),
+                revision: latest.revision,
+                content_hash: Self::constitution_digest(latest.content.as_bytes()),
+            });
+            document_sections.push(format!(
+                "- document_id: {document_id}\n  source: {source}\n  revision: {}\n  title: {}\n  owner: {}\n  content:\n{}",
+                latest.revision,
                 artifact.title,
                 artifact.owner,
-                tags,
-                latest.revision,
                 latest.content
             ));
         }
 
-        Ok(Some(format!(
-            "Execution attachments (explicit includes):\n{}",
-            sections.join("\n\n")
-        )))
+        let mut skill_manifest = Vec::new();
+        let mut skill_sections = Vec::new();
+        let mut system_prompt_manifest = None;
+        let mut system_prompt_section = "System Prompt:\n- none selected".to_string();
+        if let Some(template) = template_snapshot.as_ref() {
+            let prompt =
+                self.read_global_system_prompt_artifact(&template.system_prompt_id, origin)?;
+            system_prompt_manifest = Some(AttemptContextSystemPromptManifest {
+                prompt_id: prompt.prompt_id.clone(),
+                content_hash: Self::constitution_digest(prompt.content.as_bytes()),
+            });
+            system_prompt_section = format!(
+                "System Prompt:\n- prompt_id: {}\n- content:\n{}",
+                prompt.prompt_id, prompt.content
+            );
+
+            for skill_id in &template.skill_ids {
+                let skill = self.read_global_skill_artifact(skill_id, origin)?;
+                skill_manifest.push(AttemptContextSkillManifest {
+                    skill_id: skill.skill_id.clone(),
+                    content_hash: Self::constitution_digest(skill.content.as_bytes()),
+                });
+                skill_sections.push(format!(
+                    "- skill_id: {}\n  name: {}\n  content:\n{}",
+                    skill.skill_id, skill.name, skill.content
+                ));
+            }
+        }
+
+        let graph_artifact = self.read_graph_snapshot_artifact(flow.project_id, origin)?;
+        let graph_summary = graph_artifact.as_ref().map_or_else(
+            || AttemptContextGraphManifest {
+                present: false,
+                canonical_fingerprint: None,
+                repository_count: 0,
+                total_nodes: 0,
+                total_edges: 0,
+                languages: BTreeMap::new(),
+            },
+            |item| AttemptContextGraphManifest {
+                present: true,
+                canonical_fingerprint: Some(item.canonical_fingerprint.clone()),
+                repository_count: item.repositories.len(),
+                total_nodes: item.summary.total_nodes,
+                total_edges: item.summary.total_edges,
+                languages: item.summary.languages.clone(),
+            },
+        );
+
+        let graph_section = if graph_summary.present {
+            let fingerprint = graph_summary
+                .canonical_fingerprint
+                .clone()
+                .unwrap_or_default();
+            let languages = if graph_summary.languages.is_empty() {
+                "(none)".to_string()
+            } else {
+                graph_summary
+                    .languages
+                    .iter()
+                    .map(|(lang, count)| format!("{lang}:{count}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            format!(
+                "Graph Summary:\n- canonical_fingerprint: {fingerprint}\n- repositories: {}\n- total_nodes: {}\n- total_edges: {}\n- languages: {languages}",
+                graph_summary.repository_count, graph_summary.total_nodes, graph_summary.total_edges
+            )
+        } else {
+            "Graph Summary:\n- status: unavailable".to_string()
+        };
+
+        let constitution_section = if constitution_raw.trim().is_empty() {
+            "Constitution:\n- status: missing".to_string()
+        } else {
+            format!(
+                "Constitution:\n- path: {}\n- digest: {}\n- content:\n{}",
+                constitution_location.path.to_string_lossy(),
+                constitution_digest.clone().unwrap_or_default(),
+                constitution_raw
+            )
+        };
+
+        let skills_section = if skill_sections.is_empty() {
+            "Skills:\n- none selected".to_string()
+        } else {
+            format!("Skills:\n{}", skill_sections.join("\n\n"))
+        };
+        let documents_section = if document_sections.is_empty() {
+            "Documents:\n- none selected".to_string()
+        } else {
+            format!("Documents:\n{}", document_sections.join("\n\n"))
+        };
+
+        let mut retry_links = Vec::new();
+        let mut prior_manifest_hashes = Vec::new();
+        for prior_id in prior_attempt_ids {
+            let manifest_hash = self.attempt_manifest_hash_for_attempt(*prior_id)?;
+            if let Some(hash) = manifest_hash.as_ref() {
+                prior_manifest_hashes.push(hash.clone());
+            }
+            retry_links.push(AttemptContextRetryLink {
+                attempt_id: *prior_id,
+                manifest_hash,
+            });
+        }
+
+        let ordered_inputs = vec![
+            "constitution".to_string(),
+            "system_prompt".to_string(),
+            "skills".to_string(),
+            "project_documents".to_string(),
+            "graph_summary".to_string(),
+        ];
+        let excluded_sources = vec![
+            "project_notepad".to_string(),
+            "global_notepad".to_string(),
+            "implicit_memory".to_string(),
+        ];
+
+        let mut sections = vec![
+            ("constitution".to_string(), constitution_section),
+            ("system_prompt".to_string(), system_prompt_section),
+            ("skills".to_string(), skills_section),
+            ("project_documents".to_string(), documents_section),
+            ("graph_summary".to_string(), graph_section),
+        ];
+
+        let mut original_size_bytes = 0usize;
+        for (_, content) in &sections {
+            original_size_bytes = original_size_bytes.saturating_add(content.len());
+        }
+
+        let mut truncated_sections = Vec::new();
+        for (name, content) in &mut sections {
+            if content.len() > ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES {
+                *content = Self::truncate_to_budget(content, ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES);
+                if !truncated_sections.iter().any(|existing| existing == name) {
+                    truncated_sections.push(name.clone());
+                }
+            }
+        }
+
+        let mut rendered_sections = Vec::new();
+        let mut remaining = ATTEMPT_CONTEXT_TOTAL_BUDGET_BYTES;
+        for (idx, (name, content)) in sections.iter().enumerate() {
+            if remaining == 0 {
+                if !truncated_sections.iter().any(|existing| existing == name) {
+                    truncated_sections.push(name.clone());
+                }
+                continue;
+            }
+
+            if content.len() <= remaining {
+                rendered_sections.push(content.clone());
+                remaining = remaining.saturating_sub(content.len());
+                continue;
+            }
+
+            let truncated = Self::truncate_to_budget(content, remaining);
+            if !truncated.is_empty() {
+                rendered_sections.push(truncated);
+            }
+            if !truncated_sections.iter().any(|existing| existing == name) {
+                truncated_sections.push(name.clone());
+            }
+            for (later_name, _) in sections.iter().skip(idx.saturating_add(1)) {
+                if !truncated_sections
+                    .iter()
+                    .any(|existing| existing == later_name)
+                {
+                    truncated_sections.push(later_name.clone());
+                }
+            }
+            remaining = 0;
+        }
+
+        let context = rendered_sections.join("\n\n");
+        let context_size_bytes = context.len();
+
+        let manifest = AttemptContextManifest {
+            schema_version: ATTEMPT_CONTEXT_SCHEMA_VERSION.to_string(),
+            manifest_version: ATTEMPT_CONTEXT_VERSION,
+            ordered_inputs: ordered_inputs.clone(),
+            excluded_sources,
+            constitution: AttemptContextConstitutionManifest {
+                path: constitution_location.path.to_string_lossy().to_string(),
+                revision: constitution_revision,
+                digest: constitution_digest,
+                content_hash: constitution_content_hash,
+            },
+            template_id: template_snapshot
+                .as_ref()
+                .map(|item| item.template_id.clone()),
+            template_event_id: template_snapshot.as_ref().map(|item| item.event_id.clone()),
+            template_schema_version: template_snapshot
+                .as_ref()
+                .map(|item| item.schema_version.clone()),
+            template_projection_version: template_snapshot
+                .as_ref()
+                .map(|item| item.projection_version),
+            system_prompt: system_prompt_manifest,
+            skills: skill_manifest,
+            documents: document_manifest,
+            graph_summary,
+            retry_links,
+            budget: AttemptContextBudgetManifest {
+                total_budget_bytes: ATTEMPT_CONTEXT_TOTAL_BUDGET_BYTES,
+                section_budget_bytes: ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES,
+                original_size_bytes,
+                context_size_bytes,
+                truncated_sections: truncated_sections.clone(),
+                policy: ATTEMPT_CONTEXT_TRUNCATION_POLICY.to_string(),
+            },
+        };
+
+        let manifest_json = serde_json::to_string_pretty(&manifest).map_err(|e| {
+            HivemindError::system("context_manifest_serialize_failed", e.to_string(), origin)
+        })?;
+        let manifest_hash = Self::constitution_digest(manifest_json.as_bytes());
+        let inputs_fingerprint_payload = serde_json::json!({
+            "ordered_inputs": ordered_inputs,
+            "constitution": manifest.constitution,
+            "template_id": manifest.template_id,
+            "template_schema_version": manifest.template_schema_version,
+            "template_projection_version": manifest.template_projection_version,
+            "system_prompt": manifest.system_prompt,
+            "skills": manifest.skills,
+            "documents": manifest.documents,
+            "graph_summary": manifest.graph_summary,
+            "retry_manifest_hashes": prior_manifest_hashes,
+            "budget": {
+                "total_budget_bytes": ATTEMPT_CONTEXT_TOTAL_BUDGET_BYTES,
+                "section_budget_bytes": ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES,
+                "truncated_sections": manifest.budget.truncated_sections,
+                "policy": ATTEMPT_CONTEXT_TRUNCATION_POLICY
+            }
+        });
+        let inputs_bytes = serde_json::to_vec(&inputs_fingerprint_payload).map_err(|e| {
+            HivemindError::system("context_inputs_serialize_failed", e.to_string(), origin)
+        })?;
+        let inputs_hash = Self::constitution_digest(&inputs_bytes);
+        let context_hash = Self::constitution_digest(context.as_bytes());
+
+        Ok(AttemptContextBuildResult {
+            manifest_json,
+            manifest_hash,
+            inputs_hash,
+            context,
+            context_hash,
+            original_size_bytes,
+            context_size_bytes,
+            truncated_sections,
+            prior_manifest_hashes,
+            template_document_ids,
+            included_document_ids,
+            excluded_document_ids,
+            resolved_document_ids,
+        })
     }
 
     fn read_global_skill_artifact(
@@ -6173,18 +6706,9 @@ impl Registry {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
-        let governance_context = self.governance_attached_documents_context(
-            &state,
-            flow.project_id,
-            task_id,
-            "registry:tick_flow",
-        )?;
-        let execution_context_base = governance_context.map_or_else(
-            || repo_context.clone(),
-            |attached| format!("{repo_context}\n\n{attached}"),
-        );
 
-        let (retry_context, prior_attempts) = if next_attempt_number > 1 {
+        let mut retry_prior_attempt_ids: Vec<Uuid> = Vec::new();
+        let (retry_context_text, prior_attempts) = if next_attempt_number > 1 {
             let (ctx, priors, ids, req, opt, ec, term) = self.build_retry_context(
                 &state,
                 &flow,
@@ -6193,6 +6717,7 @@ impl Registry {
                 max_attempts,
                 "registry:tick_flow",
             )?;
+            retry_prior_attempt_ids.clone_from(&ids);
 
             self.append_event(
                 Event::new(
@@ -6214,19 +6739,107 @@ impl Registry {
                 "registry:tick_flow",
             )?;
 
-            let context = checkpoint_help.as_ref().map_or_else(
-                || format!("{ctx}\n\n{execution_context_base}"),
-                |checkpoint_text| format!("{ctx}\n\n{execution_context_base}\n\n{checkpoint_text}"),
-            );
-
-            (Some(context), priors)
+            (Some(ctx), priors)
         } else {
-            let context = match checkpoint_help {
-                Some(text) => format!("{execution_context_base}\n\n{text}"),
-                None => execution_context_base,
-            };
-            (Some(context), Vec::new())
+            (None, Vec::new())
         };
+
+        let context_build = self.assemble_attempt_context(
+            &state,
+            &flow,
+            task_id,
+            &retry_prior_attempt_ids,
+            "registry:tick_flow",
+        )?;
+
+        if !context_build.included_document_ids.is_empty()
+            || !context_build.excluded_document_ids.is_empty()
+        {
+            self.append_event(
+                Event::new(
+                    EventPayload::AttemptContextOverridesApplied {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id,
+                        template_document_ids: context_build.template_document_ids.clone(),
+                        included_document_ids: context_build.included_document_ids.clone(),
+                        excluded_document_ids: context_build.excluded_document_ids.clone(),
+                        resolved_document_ids: context_build.resolved_document_ids.clone(),
+                    },
+                    attempt_corr.clone(),
+                ),
+                "registry:tick_flow",
+            )?;
+        }
+
+        self.append_event(
+            Event::new(
+                EventPayload::AttemptContextAssembled {
+                    flow_id: flow.id,
+                    task_id,
+                    attempt_id,
+                    attempt_number: next_attempt_number,
+                    manifest_hash: context_build.manifest_hash.clone(),
+                    inputs_hash: context_build.inputs_hash.clone(),
+                    context_hash: context_build.context_hash.clone(),
+                    context_size_bytes: context_build.context_size_bytes,
+                    truncated_sections: context_build.truncated_sections.clone(),
+                    manifest_json: context_build.manifest_json.clone(),
+                },
+                attempt_corr.clone(),
+            ),
+            "registry:tick_flow",
+        )?;
+
+        if !context_build.truncated_sections.is_empty() {
+            self.append_event(
+                Event::new(
+                    EventPayload::AttemptContextTruncated {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id,
+                        budget_bytes: ATTEMPT_CONTEXT_TOTAL_BUDGET_BYTES,
+                        original_size_bytes: context_build.original_size_bytes,
+                        truncated_size_bytes: context_build.context_size_bytes,
+                        sections: context_build.truncated_sections.clone(),
+                        policy: ATTEMPT_CONTEXT_TRUNCATION_POLICY.to_string(),
+                    },
+                    attempt_corr.clone(),
+                ),
+                "registry:tick_flow",
+            )?;
+        }
+
+        let execution_context_base = format!("{repo_context}\n\n{}", context_build.context);
+        let runtime_context = match (&retry_context_text, &checkpoint_help) {
+            (Some(retry), Some(checkpoint_text)) => {
+                format!("{retry}\n\n{execution_context_base}\n\n{checkpoint_text}")
+            }
+            (Some(retry), None) => format!("{retry}\n\n{execution_context_base}"),
+            (None, Some(checkpoint_text)) => {
+                format!("{execution_context_base}\n\n{checkpoint_text}")
+            }
+            (None, None) => execution_context_base,
+        };
+        let runtime_context_hash = Self::constitution_digest(runtime_context.as_bytes());
+
+        self.append_event(
+            Event::new(
+                EventPayload::AttemptContextDelivered {
+                    flow_id: flow.id,
+                    task_id,
+                    attempt_id,
+                    manifest_hash: context_build.manifest_hash,
+                    inputs_hash: context_build.inputs_hash,
+                    context_hash: runtime_context_hash,
+                    delivery_target: "runtime_execution_input".to_string(),
+                    prior_attempt_ids: retry_prior_attempt_ids,
+                    prior_manifest_hashes: context_build.prior_manifest_hashes,
+                },
+                attempt_corr.clone(),
+            ),
+            "registry:tick_flow",
+        )?;
 
         let input = ExecutionInput {
             task_description: task
@@ -6234,7 +6847,7 @@ impl Registry {
                 .clone()
                 .unwrap_or_else(|| task.title.clone()),
             success_criteria: task.criteria.description.clone(),
-            context: retry_context,
+            context: Some(runtime_context),
             prior_attempts,
             verifier_feedback: None,
         };

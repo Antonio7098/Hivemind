@@ -1,0 +1,273 @@
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint: 
+hint: 	git config --global init.defaultBranch <name>
+hint: 
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint: 
+hint: 	git branch -m <name>
+Initialized empty Git repository in /tmp/tmp.XQROkM8wnw/repo/.git/
+[master (root-commit) f0e18a6] init
+ 1 file changed, 1 insertion(+)
+ create mode 100644 README.md
+== project create ==
+ID:          2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3
+Name:        proj39
+Created:     2026-02-18 12:35:43.622458475 UTC
+Updated:     2026-02-18 12:35:43.622458475 UTC
+== attach repo ==
+ID:          2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3
+Name:        proj39
+Created:     2026-02-18 12:35:43.622458475 UTC
+Updated:     2026-02-18 12:35:43.630266012 UTC
+Repositories:
+  - repo (/tmp/tmp.XQROkM8wnw/repo) [readwrite]
+== governance + constitution ==
+Project ID:        2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3
+Governance Root:   /tmp/tmp.XQROkM8wnw/.hm_home/.hivemind/projects/2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3
+Schema Version:    governance.v1
+Projection Version:1
+Created Paths:     none (already initialized)
+{
+  "project_id": "2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3",
+  "path": "/tmp/tmp.XQROkM8wnw/.hm_home/.hivemind/projects/2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3/constitution.yaml",
+  "revision": 2,
+  "digest": "380e2f867eb0d220",
+  "previous_digest": null,
+  "schema_version": "constitution.v1",
+  "constitution_version": 1,
+  "actor": "antonio",
+  "mutation_intent": "initialize constitution",
+  "confirmed": true,
+  "updated_at": "2026-02-18T12:35:43.661262202Z"
+}
+== docs/skills/prompts/templates ==
+{
+  "project_id": "2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3",
+  "document_id": "doc1",
+  "revision": 1,
+  "path": "/tmp/tmp.XQROkM8wnw/.hm_home/.hivemind/projects/2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3/documents/doc1.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-18T12:35:43.669023212Z"
+}
+{
+  "project_id": "2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3",
+  "document_id": "doc2",
+  "revision": 1,
+  "path": "/tmp/tmp.XQROkM8wnw/.hm_home/.hivemind/projects/2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3/documents/doc2.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-18T12:35:43.677221982Z"
+}
+{
+  "prompt_id": "sp1",
+  "updated_at": "2026-02-18T12:35:43.684952755Z",
+  "path": "/tmp/tmp.XQROkM8wnw/.hm_home/.hivemind/global/system_prompts/sp1.json"
+}
+{
+  "skill_id": "skill1",
+  "name": "Skill One",
+  "tags": [],
+  "updated_at": "2026-02-18T12:35:43.692347890Z",
+  "path": "/tmp/tmp.XQROkM8wnw/.hm_home/.hivemind/global/skills/skill1.json"
+}
+{
+  "template_id": "tpl1",
+  "system_prompt_id": "sp1",
+  "skill_ids": [
+    "skill1"
+  ],
+  "document_ids": [
+    "doc1"
+  ],
+  "updated_at": "2026-02-18T12:35:43.700070398Z",
+  "path": "/tmp/tmp.XQROkM8wnw/.hm_home/.hivemind/global/templates/tpl1.json"
+}
+{
+  "project_id": "2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3",
+  "template_id": "tpl1",
+  "system_prompt_id": "sp1",
+  "skill_ids": [
+    "skill1"
+  ],
+  "document_ids": [
+    "doc1"
+  ],
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "instantiated_at": "2026-02-18T12:35:43.707805570Z"
+}
+== runtime ==
+ID:          2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3
+Name:        proj39
+Created:     2026-02-18 12:35:43.622458475 UTC
+Updated:     2026-02-18 12:35:43.715760613 UTC
+Repositories:
+  - repo (/tmp/tmp.XQROkM8wnw/repo) [readwrite]
+== create tasks ==
+ID:          af2dfbfd-cff1-4d35-ac85-5838c67d2c4a
+Project:     2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3
+Title:       t1
+State:       Open
+RunMode:     Auto
+Created:     2026-02-18 12:35:43.724308826 UTC
+ID:          85ab2aaf-8a97-4e76-b560-4b8b6141cb55
+Project:     2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3
+Title:       t2
+State:       Open
+RunMode:     Auto
+Created:     2026-02-18 12:35:43.739703788 UTC
+== apply per-attempt include/exclude overrides ==
+{
+  "project_id": "2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3",
+  "task_id": "af2dfbfd-cff1-4d35-ac85-5838c67d2c4a",
+  "artifact_kind": "document",
+  "artifact_key": "doc2",
+  "attached": true,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+{
+  "project_id": "2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3",
+  "task_id": "af2dfbfd-cff1-4d35-ac85-5838c67d2c4a",
+  "artifact_kind": "document",
+  "artifact_key": "doc1",
+  "attached": false,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+{
+  "project_id": "2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3",
+  "task_id": "85ab2aaf-8a97-4e76-b560-4b8b6141cb55",
+  "artifact_kind": "document",
+  "artifact_key": "doc2",
+  "attached": true,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+{
+  "project_id": "2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3",
+  "task_id": "85ab2aaf-8a97-4e76-b560-4b8b6141cb55",
+  "artifact_kind": "document",
+  "artifact_key": "doc1",
+  "attached": false,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+== flow1 first attempt ==
+Graph ID: 1a596758-d303-48de-907d-c7485453ff1d
+Graph ID: 1a596758-d303-48de-907d-c7485453ff1d
+Flow ID: c9098c66-4ea5-4e40-b300-65fbe7bd8d78
+Flow ID: c9098c66-4ea5-4e40-b300-65fbe7bd8d78
+Error: [verification:required_checks_failed] Required checks failed: fail_check
+Hint: View check outputs via `hivemind verify results 6196cbf4-e4ee-469e-bd4a-b48285501a5e`. Worktree preserved at /tmp/tmp.XQROkM8wnw/.hm_home/hivemind/worktrees/c9098c66-4ea5-4e40-b300-65fbe7bd8d78/af2dfbfd-cff1-4d35-ac85-5838c67d2c4a
+{"success":false,"error":{"category":"verification","code":"required_checks_failed","message":"Required checks failed: fail_check","origin":"registry:tick_flow","hint":"View check outputs via `hivemind verify results 6196cbf4-e4ee-469e-bd4a-b48285501a5e`. Worktree preserved at /tmp/tmp.XQROkM8wnw/.hm_home/hivemind/worktrees/c9098c66-4ea5-4e40-b300-65fbe7bd8d78/af2dfbfd-cff1-4d35-ac85-5838c67d2c4a"}}
+== flow2 first attempt (determinism check) ==
+Graph ID: 67faf661-b4ba-4469-b269-04c38682bdef
+Graph ID: 67faf661-b4ba-4469-b269-04c38682bdef
+Flow ID: da902919-7d2c-4795-9fe0-93dfb9384ef3
+Flow ID: da902919-7d2c-4795-9fe0-93dfb9384ef3
+Error: [verification:required_checks_failed] Required checks failed: fail_check
+Hint: View check outputs via `hivemind verify results 547a526d-698f-4262-bf15-5abf2a145fb6`. Worktree preserved at /tmp/tmp.XQROkM8wnw/.hm_home/hivemind/worktrees/da902919-7d2c-4795-9fe0-93dfb9384ef3/85ab2aaf-8a97-4e76-b560-4b8b6141cb55
+{"success":false,"error":{"category":"verification","code":"required_checks_failed","message":"Required checks failed: fail_check","origin":"registry:tick_flow","hint":"View check outputs via `hivemind verify results 547a526d-698f-4262-bf15-5abf2a145fb6`. Worktree preserved at /tmp/tmp.XQROkM8wnw/.hm_home/hivemind/worktrees/da902919-7d2c-4795-9fe0-93dfb9384ef3/85ab2aaf-8a97-4e76-b560-4b8b6141cb55"}}
+== collect first-attempt context hashes ==
+flow1_inputs_hash=9448ad9e0801e254
+flow2_inputs_hash=9448ad9e0801e254
+== retry flow1 and inspect context linkage ==
+Flow ID: c9098c66-4ea5-4e40-b300-65fbe7bd8d78
+Error: [verification:required_checks_failed] Required checks failed: fail_check
+Hint: View check outputs via `hivemind verify results f41d1d5d-b096-4c06-abe1-b9b2799765c4`. Worktree preserved at /tmp/tmp.XQROkM8wnw/.hm_home/hivemind/worktrees/c9098c66-4ea5-4e40-b300-65fbe7bd8d78/af2dfbfd-cff1-4d35-ac85-5838c67d2c4a
+{"success":false,"error":{"category":"verification","code":"required_checks_failed","message":"Required checks failed: fail_check","origin":"registry:tick_flow","hint":"View check outputs via `hivemind verify results f41d1d5d-b096-4c06-abe1-b9b2799765c4`. Worktree preserved at /tmp/tmp.XQROkM8wnw/.hm_home/hivemind/worktrees/c9098c66-4ea5-4e40-b300-65fbe7bd8d78/af2dfbfd-cff1-4d35-ac85-5838c67d2c4a"}}
+{
+  "adapter_name": "opencode",
+  "attempt_id": "f41d1d5d-b096-4c06-abe1-b9b2799765c4",
+  "context": {
+    "delivered_context_hash": "c93ab108fdfb310d",
+    "inputs_hash": "9bc3c3f5932ff7e5",
+    "manifest": {
+      "budget": {
+        "context_size_bytes": 727,
+        "original_size_bytes": 719,
+        "policy": "ordered_section_then_total_budget",
+        "section_budget_bytes": 6000,
+        "total_budget_bytes": 24000,
+        "truncated_sections": []
+      },
+      "constitution": {
+        "content_hash": "380e2f867eb0d220",
+        "digest": "380e2f867eb0d220",
+        "path": "/tmp/tmp.XQROkM8wnw/.hm_home/.hivemind/projects/2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3/constitution.yaml",
+        "revision": 2
+      },
+      "documents": [
+        {
+          "content_hash": "aacd6f2e18ed6b6b",
+          "document_id": "doc2",
+          "revision": 1,
+          "source": "attachment_include"
+        }
+      ],
+      "excluded_sources": [
+        "project_notepad",
+        "global_notepad",
+        "implicit_memory"
+      ],
+      "graph_summary": {
+        "canonical_fingerprint": "8f3833374038c98c",
+        "languages": {},
+        "present": true,
+        "repository_count": 1,
+        "total_edges": 0,
+        "total_nodes": 1
+      },
+      "manifest_version": 1,
+      "ordered_inputs": [
+        "constitution",
+        "system_prompt",
+        "skills",
+        "project_documents",
+        "graph_summary"
+      ],
+      "retry_links": [
+        {
+          "attempt_id": "6196cbf4-e4ee-469e-bd4a-b48285501a5e",
+          "manifest_hash": "e09522865637196d"
+        }
+      ],
+      "schema_version": "attempt_context.v1",
+      "skills": [
+        {
+          "content_hash": "93822e6c238b813c",
+          "skill_id": "skill1"
+        }
+      ],
+      "system_prompt": {
+        "content_hash": "f58fe9ea136c21fa",
+        "prompt_id": "sp1"
+      },
+      "template_event_id": "00000000-0000-0015-b23c-375b685672a3",
+      "template_id": "tpl1",
+      "template_projection_version": 1,
+      "template_schema_version": "governance.v1"
+    },
+    "manifest_hash": "51b7a054e706500a",
+    "retry": "Retry attempt 2/4 for task af2dfbfd-cff1-4d35-ac85-5838c67d2c4a\nPrevious attempt: 6196cbf4-e4ee-469e-bd4a-b48285501a5e\nRequired check failures (must fix): fail_check\n--- Check: fail_check\nexit_code=1\noutput:\n\n\nRuntime exit code: 0\nFilesystem changes observed (from diff): change_count=0 created=0 modified=0 deleted=0\n"
+  },
+  "duration_ms": 71,
+  "exit_code": 0,
+  "flow_id": "c9098c66-4ea5-4e40-b300-65fbe7bd8d78",
+  "graph_id": "1a596758-d303-48de-907d-c7485453ff1d",
+  "project_id": "2a2abbfc-a51e-43a7-a6d2-6b10c17ffdd3",
+  "task_id": "af2dfbfd-cff1-4d35-ac85-5838c67d2c4a"
+}
+== context events ==
+        "type": "attempt_context_overrides_applied",
+        "type": "attempt_context_assembled",
+        "type": "attempt_context_delivered",
+        "type": "retry_context_assembled",
+        "type": "attempt_context_overrides_applied",
+        "type": "attempt_context_assembled",
+        "type": "attempt_context_delivered",

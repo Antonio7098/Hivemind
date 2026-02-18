@@ -222,36 +222,36 @@
 > **User Story 13:** Every attempt can be reproduced from a context manifest and event trail.
 
 ### 39.1 Context Assembly Contract
-- [ ] Define ordered assembly inputs:
-  - [ ] Constitution (always)
-  - [ ] Selected system prompt
-  - [ ] Attached skills
-  - [ ] Attached project documents
-  - [ ] High-level graph summary
-- [ ] Exclude notepads and implicit memory sources by default
-- [ ] Add size budget and truncation policy with explicit eventing
+- [x] Define ordered assembly inputs:
+  - [x] Constitution (always)
+  - [x] Selected system prompt
+  - [x] Attached skills
+  - [x] Attached project documents
+  - [x] High-level graph summary
+- [x] Exclude notepads and implicit memory sources by default
+- [x] Add size budget and truncation policy with explicit eventing
 
 ### 39.2 Attempt Context Manifest
-- [ ] Persist immutable context manifest per attempt (resolved IDs, revisions, hashes)
-- [ ] Emit context assembly and delivery events with correlation IDs
-- [ ] Add `attempt inspect --context` style visibility for debugging
+- [x] Persist immutable context manifest per attempt (resolved IDs, revisions, hashes)
+- [x] Emit context assembly and delivery events with correlation IDs
+- [x] Add `attempt inspect --context` style visibility for debugging
 
 ### 39.3 Template Resolution Semantics
-- [ ] Resolve template references at attempt start and freeze the resolved set
-- [ ] Permit explicit per-attempt include/exclude overrides with audit events
-- [ ] Guarantee retry behavior references prior attempt manifests explicitly
+- [x] Resolve template references at attempt start and freeze the resolved set
+- [x] Permit explicit per-attempt include/exclude overrides with audit events
+- [x] Guarantee retry behavior references prior attempt manifests explicitly
 
 ### 39.4 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 39 manual checklist under `@hivemind-test`
-- [ ] Manually validate deterministic context-manifest generation across repeated runs
-- [ ] Manually validate retry context-manifest linkage and `attempt inspect --context` behavior
-- [ ] Publish Sprint 39 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 39 manual checklist under `@hivemind-test`
+- [x] Manually validate deterministic context-manifest generation across repeated runs
+- [x] Manually validate retry context-manifest linkage and `attempt inspect --context` behavior
+- [x] Publish Sprint 39 manual test report artifact in `@hivemind-test`
 
 ### 39.5 Exit Criteria
-- [ ] Attempt context assembly is deterministic and fully inspectable
-- [ ] Context replay reproduces identical manifests for identical inputs
-- [ ] Runtime initialization does not rely on hidden state
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Attempt context assembly is deterministic and fully inspectable
+- [x] Context replay reproduces identical manifests for identical inputs
+- [x] Runtime initialization does not rely on hidden state
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

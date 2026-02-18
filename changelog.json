@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.30",
+      "date": "2026-02-18",
+      "phase": 39,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add deterministic attempt context assembly pipeline that freezes ordered governance inputs (constitution, system prompt, skills, project documents, graph summary) and records explicit excluded sources (`project_notepad`, `global_notepad`, `implicit_memory`)"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Emit Sprint 39 context observability events (`AttemptContextOverridesApplied`, `AttemptContextAssembled`, `AttemptContextTruncated`, `AttemptContextDelivered`) with manifest/input/delivery hashes and retry-manifest linkage metadata"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Resolve latest template instantiation at attempt start, apply explicit per-task document include/exclude overrides, and persist immutable manifest payloads with budget/truncation telemetry"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Extend `hivemind attempt inspect --context` to return structured context provenance (`retry`, `manifest`, `manifest_hash`, `inputs_hash`, `delivered_context_hash`)"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 39 integration coverage for deterministic context input hashing across equivalent runs, template+override document resolution semantics, and retry manifest linkage visibility"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update Phase 3 roadmap, architecture/design/quickstart docs, Sprint 39 manual test artifacts, and sprint report for deterministic attempt context contracts"
+        }
+      ]
+    },
+    {
       "version": "v0.1.29",
       "date": "2026-02-18",
       "phase": 38,
