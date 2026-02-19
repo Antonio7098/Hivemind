@@ -6035,7 +6035,7 @@ impl Registry {
         Ok(sql)
     }
 
-    /// Verifies canonical SQLite and mirror event-store integrity/parity.
+    /// Verifies canonical `SQLite` and mirror event-store integrity/parity.
     ///
     /// # Errors
     /// Returns an error if either event source cannot be read.
@@ -6067,10 +6067,11 @@ impl Registry {
         })
     }
 
-    /// Rebuilds canonical SQLite state from the append-only mirror.
+    /// Rebuilds canonical `SQLite` state from the append-only mirror.
     ///
     /// # Errors
     /// Returns an error if confirmation is missing, mirror input is invalid, or rebuild fails.
+    #[allow(clippy::too_many_lines)]
     pub fn events_recover_from_mirror(&self, confirm: bool) -> Result<EventsRecoverResult> {
         let origin = "registry:events_recover_from_mirror";
         if !confirm {
@@ -14358,6 +14359,7 @@ impl Registry {
         self.get_flow(flow_id)
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn retry_task(
         &self,
         task_id: &str,
@@ -14514,7 +14516,7 @@ impl Registry {
         if flow.state != FlowState::Running {
             let err =
                 HivemindError::user("flow_not_running", "Flow is not in running state", origin);
-            self.record_error_event(&err, corr_task.clone());
+            self.record_error_event(&err, corr_task);
             return Err(err);
         }
 
@@ -14523,7 +14525,7 @@ impl Registry {
         })?;
         if exec.state != TaskExecState::Ready && exec.state != TaskExecState::Retry {
             let err = HivemindError::user("task_not_ready", "Task is not ready to start", origin);
-            self.record_error_event(&err, corr_task.clone());
+            self.record_error_event(&err, corr_task);
             return Err(err);
         }
 

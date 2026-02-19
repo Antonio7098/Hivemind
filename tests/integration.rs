@@ -4411,6 +4411,7 @@ fn cli_governance_replay_and_snapshot_restore_verification() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn cli_governance_replay_verify_and_diagnose_detect_missing_artifact_files() {
     let tmp = tempfile::tempdir().expect("tempdir");
 

@@ -1990,10 +1990,7 @@ fn resolve_task_id_with_legacy_project(
         if task.project_id != project.id {
             return Err(hivemind::core::error::HivemindError::user(
                 "task_project_mismatch",
-                format!(
-                    "Task '{task_id}' does not belong to project '{}'",
-                    project_or_task
-                ),
+                format!("Task '{task_id}' does not belong to project '{project_or_task}'"),
                 origin,
             )
             .with_hint("Pass the matching project/task pair or use `hivemind task <op> <task-id>`")

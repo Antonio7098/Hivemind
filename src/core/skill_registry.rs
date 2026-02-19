@@ -1,12 +1,13 @@
 //! External skill registry integration.
 //!
 //! This module provides clients for discovering and pulling skills from external
-//! registries like agentskills.io, SkillsMP, and GitHub repositories.
+//! registries like agentskills.io, `SkillsMP`, and GitHub repositories.
 
 use crate::core::error::{HivemindError, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -76,10 +77,10 @@ pub fn list_registries() -> Vec<SkillRegistryInfo> {
 }
 
 pub fn search_skills(registry: Option<&str>, query: Option<&str>) -> Result<Vec<RemoteSkill>> {
-    let registries = match registry {
-        Some(r) => vec![r],
-        None => vec![REGISTRY_AGILLSKILLS, REGISTRY_SKILLSMP, REGISTRY_GITHUB],
-    };
+    let registries = registry.map_or_else(
+        || vec![REGISTRY_AGILLSKILLS, REGISTRY_SKILLSMP, REGISTRY_GITHUB],
+        |r| vec![r],
+    );
 
     let mut results = Vec::new();
 
@@ -107,9 +108,9 @@ pub fn search_skills(registry: Option<&str>, query: Option<&str>) -> Result<Vec<
 
 fn search_registry(registry: &str, query: Option<&str>) -> Result<Vec<RemoteSkill>> {
     match registry {
-        REGISTRY_AGILLSKILLS => search_agentskills(query),
-        REGISTRY_SKILLSMP => search_skillsmp(query),
-        REGISTRY_GITHUB => search_github_skills(query),
+        REGISTRY_AGILLSKILLS => Ok(search_agentskills(query)),
+        REGISTRY_SKILLSMP => Ok(search_skillsmp(query)),
+        REGISTRY_GITHUB => Ok(search_github_skills(query)),
         _ => Err(HivemindError::user(
             "unknown_registry",
             format!("Unknown registry: {registry}"),
@@ -118,7 +119,7 @@ fn search_registry(registry: &str, query: Option<&str>) -> Result<Vec<RemoteSkil
     }
 }
 
-fn search_agentskills(query: Option<&str>) -> Result<Vec<RemoteSkill>> {
+fn search_agentskills(query: Option<&str>) -> Vec<RemoteSkill> {
     let mut skills = Vec::new();
 
     skills.push(RemoteSkill {
@@ -180,10 +181,10 @@ fn search_agentskills(query: Option<&str>) -> Result<Vec<RemoteSkill>> {
         });
     }
 
-    Ok(skills)
+    skills
 }
 
-fn search_skillsmp(query: Option<&str>) -> Result<Vec<RemoteSkill>> {
+fn search_skillsmp(query: Option<&str>) -> Vec<RemoteSkill> {
     let mut skills = Vec::new();
 
     skills.push(RemoteSkill {
@@ -229,10 +230,10 @@ fn search_skillsmp(query: Option<&str>) -> Result<Vec<RemoteSkill>> {
         });
     }
 
-    Ok(skills)
+    skills
 }
 
-fn search_github_skills(query: Option<&str>) -> Result<Vec<RemoteSkill>> {
+fn search_github_skills(query: Option<&str>) -> Vec<RemoteSkill> {
     let mut skills = Vec::new();
 
     let known_repos = [
@@ -253,7 +254,7 @@ fn search_github_skills(query: Option<&str>) -> Result<Vec<RemoteSkill>> {
         });
     }
 
-    Ok(skills)
+    skills
 }
 
 fn get_github_repo_skills(repo: &str) -> Vec<RemoteSkill> {
@@ -370,35 +371,35 @@ pub fn inspect_remote_skill(registry: &str, skill_name: &str) -> Result<RemoteSk
 
 fn generate_skill_content(skill: &RemoteSkill) -> String {
     let mut content = format!(
-        r#"---
+        r"---
 name: {}
 description: {}
-"#,
+",
         skill.name, skill.description
     );
 
     if let Some(ref license) = skill.license {
-        content.push_str(&format!("license: {license}\n"));
+        let _ = writeln!(content, "license: {license}");
     }
 
     if let Some(ref compat) = skill.compatibility {
-        content.push_str(&format!("compatibility: {compat}\n"));
+        let _ = writeln!(content, "compatibility: {compat}");
     }
 
     content.push_str("---\n\n");
 
-    content.push_str(&format!("# {}\n\n{}\n", skill.name, skill.description));
+    let _ = write!(content, "# {}\n\n{}\n", skill.name, skill.description);
 
     if let Some(ref author) = skill.author {
-        content.push_str(&format!("\n**Author:** {author}\n"));
+        let _ = write!(content, "\n**Author:** {author}\n");
     }
 
     if let Some(ref version) = skill.version {
-        content.push_str(&format!("**Version:** {version}\n"));
+        let _ = writeln!(content, "**Version:** {version}");
     }
 
     if !skill.tags.is_empty() {
-        content.push_str(&format!("\n**Tags:** {}\n", skill.tags.join(", ")));
+        let _ = write!(content, "\n**Tags:** {}\n", skill.tags.join(", "));
     }
 
     content
@@ -485,7 +486,7 @@ pub fn pull_from_github(
     let skills_base = temp_dir.path().join("skills");
 
     if skills_base.exists() {
-        if let Some(entries) = fs::read_dir(&skills_base).ok() {
+        if let Ok(entries) = fs::read_dir(&skills_base) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_dir() {
@@ -507,7 +508,7 @@ pub fn pull_from_github(
     if results.is_empty() {
         let root_skill = temp_dir.path().join("SKILL.md");
         if root_skill.exists() {
-            if let Some(content) = fs::read_to_string(&root_skill).ok() {
+            if let Ok(content) = fs::read_to_string(&root_skill) {
                 if content.contains("name:") {
                     let default_name = repo.replace('/', "-");
                     let name = skill_name.unwrap_or(&default_name);

@@ -839,7 +839,7 @@ pub struct GlobalSkillRegistryPullArgs {
     pub registry: String,
     /// Skill name to pull
     pub skill_name: String,
-    /// Optional skill_id override (defaults to skill_name)
+    /// Optional `skill_id` override (defaults to `skill_name`)
     #[arg(long)]
     pub skill_id: Option<String>,
 }
@@ -1514,10 +1514,10 @@ pub enum EventCommands {
     /// Replay events to reconstruct state
     Replay(EventReplayArgs),
 
-    /// Verify canonical SQLite and mirror event-store integrity/parity
+    /// Verify canonical `SQLite` and mirror event-store integrity/parity
     Verify(EventVerifyArgs),
 
-    /// Recover canonical SQLite event-store state from the append-only mirror
+    /// Recover canonical `SQLite` event-store state from the append-only mirror
     Recover(EventRecoverArgs),
 }
 
