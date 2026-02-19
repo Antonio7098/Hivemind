@@ -39,6 +39,7 @@ Each command is specified with:
 ### 1.3 Storage Backend Contract
 
 - Canonical event/state storage is `~/.hivemind/db.sqlite` (or `$HIVEMIND_DATA_DIR/db.sqlite`)
+- The SQLite `events` table is append-only at DB level (UPDATE/DELETE are rejected via triggers)
 - `events.jsonl` remains an append-only compatibility mirror for operators and scripts
 - Governance/document bodies remain filesystem artifacts under `~/.hivemind/projects/...` and `~/.hivemind/global/...`
 - CLI semantics are defined by event/state contracts, not by direct file mutation assumptions
@@ -280,6 +281,7 @@ RepositoryDetached:
 **Synopsis:**
 ```
 hivemind [-f json|table|yaml] project governance init <project>
+hivemind [-f json|table|yaml] project governance init --project <project>
 ```
 
 **Preconditions:**
@@ -474,6 +476,8 @@ GovernanceSnapshotRestored:
   artifact_count: <n>
   restored_files: <n>
   skipped_files: <n>
+  stale_files: <n>
+  repaired_projection_count: <n>
 ```
 
 **Failures:**
@@ -844,6 +848,7 @@ hivemind [-f json|table|yaml] global template instantiate <project> <template-id
 **Effects:**
 - Stores template references in `~/.hivemind/global/templates/`
 - Validates referenced system prompt and skill IDs
+- Project document IDs are resolved/validated during `instantiate <project> <template-id>` (project context), not during global template create/update
 - `instantiate` resolves all references against project/global registries and emits immutable resolution event
 
 **Events:**
@@ -1763,6 +1768,7 @@ TaskFlowRuntimeCleared:
 **Synopsis:**
 ```
 hivemind task start <task-id>
+hivemind task start <project> <task-id>  # legacy compatibility form
 ```
 
 **Preconditions:**
@@ -1812,6 +1818,7 @@ BaselineCaptured:
 **Synopsis:**
 ```
 hivemind task complete <task-id>
+hivemind task complete <project> <task-id> [--success false] [--message <text>]  # legacy compatibility form
 ```
 
 **Preconditions:**
@@ -1865,7 +1872,8 @@ CheckpointCommitCreated:
 
 **Synopsis:**
 ```
-hivemind task retry <task-id> [--reset-count]
+hivemind task retry <task-id> [--reset-count] [--mode clean|continue]
+hivemind task retry <project> <task-id> [--reset-count] [--mode clean|continue]  # legacy compatibility form
 ```
 
 **Preconditions:**
@@ -1877,19 +1885,22 @@ hivemind task retry <task-id> [--reset-count]
 - Task state changes to PENDING (if dependencies met) or appropriate state
 - New attempt will be scheduled
 - With --reset-count: retry counter reset to 0
+- `--mode clean` resets worktree state to baseline branch before re-attempting
+- `--mode continue` reuses current worktree state for the re-attempt
 
 **Events:**
 ```
-TaskRetryRequested:
+TaskRetried:
   task_id: <task-id>
   reset_count: <boolean>
+  retry_mode: clean|continue
 ```
 
 **Failures:**
-- `TASK_NOT_FOUND`
-- `TASK_NOT_IN_FLOW`: Task is not part of any TaskFlow
-- `TASK_NOT_RETRIABLE`: Task is not in retriable state
-- `RETRY_LIMIT_EXCEEDED`: And --reset-count not specified
+- `invalid_task_id`
+- `task_not_in_flow`: Task is not part of any TaskFlow
+- `task_not_retriable`: Task is not in retriable state
+- `retry_limit_exceeded`: And `--reset-count` not specified
 
 **Idempotence:** Not idempotent. Each call queues a retry.
 
@@ -2329,7 +2340,7 @@ hivemind runtime defaults-set [--role worker|validator] [--adapter <name>] [--bi
 
 **Synopsis:**
 ```
-hivemind events list [--project <project>] [--graph <graph-id>] [--flow <flow-id>] [--task <task-id>] [--attempt <attempt-id>] [--artifact-id <artifact-id>] [--template-id <template-id>] [--rule-id <rule-id>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
+hivemind events list [--project <project>] [--graph <graph-id>] [--flow <flow-id>] [--task <task-id>] [--attempt <attempt-id>] [--artifact-id <artifact-id>] [--template-id <template-id>] [--rule-id <rule-id>] [--error-type <category>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
 ```
 
 **Preconditions:** None
@@ -2339,6 +2350,8 @@ hivemind events list [--project <project>] [--graph <graph-id>] [--flow <flow-id
 **Output:**
 - Historical event records
 - Optional correlation, governance payload selector, and time-window filtering
+- JSON/YAML responses use the standard envelope: `{"success": true, "data": [...]}`
+- Defaults to `--limit 200` when not explicitly provided
 
 **Events:** None (reads events, doesn't create)
 
@@ -2347,6 +2360,7 @@ hivemind events list [--project <project>] [--graph <graph-id>] [--flow <flow-id
 - `invalid_artifact_id`
 - `invalid_template_id`
 - `invalid_rule_id`
+- `invalid_error_type`
 - `invalid_timestamp`: Invalid RFC3339 timestamp
 - `invalid_time_range`: `--since` is later than `--until`
 
@@ -2379,7 +2393,7 @@ hivemind events inspect <event-id>
 
 **Synopsis:**
 ```
-hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project>] [--graph <graph-id>] [--attempt <attempt-id>] [--artifact-id <artifact-id>] [--template-id <template-id>] [--rule-id <rule-id>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
+hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project>] [--graph <graph-id>] [--attempt <attempt-id>] [--artifact-id <artifact-id>] [--template-id <template-id>] [--rule-id <rule-id>] [--error-type <category>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
 ```
 
 **Preconditions:** None
@@ -2397,6 +2411,7 @@ hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project
 - `invalid_artifact_id`
 - `invalid_template_id`
 - `invalid_rule_id`
+- `invalid_error_type`
 - `invalid_timestamp`: Invalid RFC3339 timestamp
 - `invalid_time_range`: `--since` is later than `--until`
 
@@ -2430,6 +2445,71 @@ hivemind events replay <flow-id> [--verify]
 - `STATE_MISMATCH`: Replayed state differs (with --verify)
 
 **Idempotence:** Idempotent.
+
+---
+
+### 9.5 events verify
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] events verify
+```
+
+**Preconditions:** None
+
+**Effects:** None (read-only)
+
+**Output:**
+- Canonical/mirror parity status (`parity_ok`)
+- Event-count and sequence-integrity summaries for both SQLite and mirror logs
+- First mismatch index/event IDs when parity fails
+
+**Events:** None
+
+**Failures:**
+- `event_read_failed`
+- `events_mirror_read_failed`
+- `events_mirror_parse_failed`
+
+**Idempotence:** Idempotent.
+
+---
+
+### 9.6 events recover
+
+**Synopsis:**
+```
+hivemind [-f json|table|yaml] events recover --from-mirror --confirm
+```
+
+**Preconditions:**
+- `events.jsonl` exists and contains valid ordered event history
+- Explicit `--confirm` is provided
+
+**Effects:**
+- Rebuilds canonical `db.sqlite` from mirror events
+- Backs up prior `db.sqlite` into `~/.hivemind/recovery/`
+- Runs parity verification after replacement
+
+**Output:**
+- Recovery metadata (paths, recovered count, backup path)
+- Embedded verification result
+
+**Events:** None (operational storage repair command)
+
+**Failures:**
+- `events_recover_source_required`
+- `events_recover_confirmation_required`
+- `events_recover_mirror_empty`
+- `events_recover_missing_sequence`
+- `events_recover_sequence_mismatch`
+- `events_recover_duplicate_event_id`
+- `events_recover_prepare_failed`
+- `events_recover_backup_failed`
+- `events_recover_replace_failed`
+- `events_recover_verification_failed`
+
+**Idempotence:** Conditionally idempotent when source mirror is unchanged.
 
 ---
 

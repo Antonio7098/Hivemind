@@ -83,6 +83,7 @@ pub mod registry;
 pub mod runtime_event_projection;
 pub mod scheduler;
 pub mod scope;
+pub mod skill_registry;
 pub mod state;
 pub mod verification;
 pub mod worktree;

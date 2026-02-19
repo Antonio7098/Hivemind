@@ -6,9 +6,10 @@ use clap::Parser;
 use hivemind::cli::commands::{
     AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, ConstitutionCommands,
     EventCommands, FlowCommands, GlobalCommands, GlobalNotepadCommands, GlobalSkillCommands,
-    GlobalSystemPromptCommands, GlobalTemplateCommands, GraphCommands, GraphSnapshotCommands,
-    MergeCommands, MergeExecuteModeArg, ProjectCommands, ProjectGovernanceAttachmentCommands,
-    ProjectGovernanceCommands, ProjectGovernanceDocumentCommands, ProjectGovernanceNotepadCommands,
+    GlobalSkillRegistryCommands, GlobalSystemPromptCommands, GlobalTemplateCommands, GraphCommands,
+    GraphSnapshotCommands, MergeCommands, MergeExecuteModeArg, ProjectCommands,
+    ProjectGovernanceAttachmentCommands, ProjectGovernanceCommands,
+    ProjectGovernanceDocumentCommands, ProjectGovernanceNotepadCommands,
     ProjectGovernanceRepairCommands, ProjectGovernanceSnapshotCommands, RunModeArg,
     RuntimeCommands, RuntimeRoleArg, ServeArgs, TaskAbortArgs, TaskCloseArgs, TaskCommands,
     TaskCompleteArgs, TaskCreateArgs, TaskInspectArgs, TaskListArgs, TaskRetryArgs, TaskStartArgs,
@@ -24,6 +25,7 @@ use hivemind::core::registry::{
 };
 use hivemind::core::scope::RepoAccessMode;
 use hivemind::core::scope::Scope;
+use hivemind::core::skill_registry;
 use hivemind::core::state::{AttemptState, Project, Task, TaskState};
 use std::ffi::OsString;
 use std::fs;
@@ -911,6 +913,33 @@ fn print_project_governance_inspect(result: &ProjectGovernanceInspectResult, for
     }
 }
 
+fn resolve_required_selector(
+    positional: Option<&str>,
+    flag_value: Option<&str>,
+    flag_name: &str,
+    noun: &str,
+    origin: &str,
+) -> Result<String, hivemind::core::error::HivemindError> {
+    let pos = positional.map(str::trim).filter(|s| !s.is_empty());
+    let flag = flag_value.map(str::trim).filter(|s| !s.is_empty());
+    match (pos, flag) {
+        (Some(a), Some(b)) if a != b => Err(hivemind::core::error::HivemindError::user(
+            "selector_conflict",
+            format!("Conflicting {noun} values provided via positional argument and {flag_name}"),
+            origin,
+        )
+        .with_context("positional", a)
+        .with_context("flag", b)),
+        (Some(a), _) => Ok(a.to_string()),
+        (None, Some(b)) => Ok(b.to_string()),
+        (None, None) => Err(hivemind::core::error::HivemindError::user(
+            "missing_required_selector",
+            format!("Provide {noun} as a positional argument or via {flag_name}"),
+            origin,
+        )),
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
@@ -1015,7 +1044,17 @@ fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
         },
         ProjectCommands::Governance(cmd) => match cmd {
             ProjectGovernanceCommands::Init(args) => {
-                match registry.project_governance_init(&args.project) {
+                let project = match resolve_required_selector(
+                    args.project.as_deref(),
+                    args.project_flag.as_deref(),
+                    "--project",
+                    "project",
+                    "cli:project:governance:init",
+                ) {
+                    Ok(project) => project,
+                    Err(e) => return output_error(&e, format),
+                };
+                match registry.project_governance_init(&project) {
                     Ok(result) => {
                         print_project_governance_init(&result, format);
                         ExitCode::Success
@@ -1426,6 +1465,7 @@ fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 }
                 Err(e) => output_error(&e, format),
             },
+            GlobalSkillCommands::Registry(cmd) => handle_skill_registry(cmd, &registry, format),
         },
         GlobalCommands::SystemPrompt(cmd) => match cmd {
             GlobalSystemPromptCommands::Create(args) => {
@@ -1568,6 +1608,129 @@ fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             },
         },
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn handle_skill_registry(
+    cmd: GlobalSkillRegistryCommands,
+    registry: &Registry,
+    format: OutputFormat,
+) -> ExitCode {
+    match cmd {
+        GlobalSkillRegistryCommands::RegistryList => {
+            let registries = skill_registry::list_registries();
+            match format {
+                OutputFormat::Table => {
+                    println!("{:<15}  {:<12}  DESCRIPTION", "NAME", "TYPE");
+                    println!("{}", "-".repeat(80));
+                    for r in &registries {
+                        println!("{:<15}  {:<12}  {}", r.name, r.registry_type, r.description);
+                    }
+                }
+                _ => {
+                    if let Err(err) = output(&registries, format) {
+                        eprintln!("Failed to render registries: {err}");
+                    }
+                }
+            }
+            ExitCode::Success
+        }
+        GlobalSkillRegistryCommands::Search(args) => {
+            match skill_registry::search_skills(args.registry.as_deref(), args.query.as_deref()) {
+                Ok(skills) => match format {
+                    OutputFormat::Table => {
+                        if skills.is_empty() {
+                            println!("No skills found.");
+                        } else {
+                            println!("{:<25}  {:<12}  DESCRIPTION", "NAME", "REGISTRY");
+                            println!("{}", "-".repeat(90));
+                            for s in &skills {
+                                let desc = if s.description.len() > 50 {
+                                    format!("{}...", &s.description[..47])
+                                } else {
+                                    s.description.clone()
+                                };
+                                println!("{:<25}  {:<12}  {}", s.name, s.registry, desc);
+                            }
+                        }
+                    }
+                    _ => {
+                        if let Err(err) = output(&skills, format) {
+                            eprintln!("Failed to render skills: {err}");
+                        }
+                    }
+                },
+                Err(e) => return output_error(&e, format),
+            }
+            ExitCode::Success
+        }
+        GlobalSkillRegistryCommands::RegistryInspect(args) => {
+            match skill_registry::inspect_remote_skill(&args.registry, &args.skill_name) {
+                Ok(detail) => {
+                    print_structured(&detail, format, "remote skill inspect result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+        GlobalSkillRegistryCommands::Pull(args) => {
+            let skill_id = args.skill_id.as_deref().unwrap_or(&args.skill_name);
+            let detail =
+                match skill_registry::inspect_remote_skill(&args.registry, &args.skill_name) {
+                    Ok(d) => d,
+                    Err(e) => return output_error(&e, format),
+                };
+
+            match registry.global_skill_create(
+                skill_id,
+                &detail.skill.name,
+                &detail.skill.tags,
+                &detail.content,
+            ) {
+                Ok(result) => {
+                    match format {
+                        OutputFormat::Table => {
+                            println!(
+                                "Pulled skill '{}' from {} and saved as '{}'",
+                                detail.skill.name, args.registry, skill_id
+                            );
+                        }
+                        _ => {
+                            print_structured(&result, format, "skill pull result");
+                        }
+                    }
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+        GlobalSkillRegistryCommands::PullGithub(args) => {
+            let global_root = registry.governance_global_root();
+            let skills_dir = global_root.join("skills");
+
+            match skill_registry::pull_from_github(&args.repo, args.skill.as_deref(), &skills_dir) {
+                Ok(results) => {
+                    match format {
+                        OutputFormat::Table => {
+                            if results.is_empty() {
+                                println!("No skills found in repository.");
+                            } else {
+                                println!("Pulled {} skill(s) from {}:", results.len(), args.repo);
+                                for r in &results {
+                                    println!("  - {} -> {}", r.name, r.path);
+                                }
+                            }
+                        }
+                        _ => {
+                            print_structured(&results, format, "github pull result");
+                        }
+                    }
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
     }
 }
 
@@ -1815,8 +1978,42 @@ fn handle_task_close(registry: &Registry, args: &TaskCloseArgs, format: OutputFo
     }
 }
 
+fn resolve_task_id_with_legacy_project(
+    registry: &Registry,
+    project_or_task: &str,
+    legacy_task_id: Option<&str>,
+    origin: &str,
+) -> Result<String, hivemind::core::error::HivemindError> {
+    if let Some(task_id) = legacy_task_id {
+        let project = registry.get_project(project_or_task)?;
+        let task = registry.get_task(task_id)?;
+        if task.project_id != project.id {
+            return Err(hivemind::core::error::HivemindError::user(
+                "task_project_mismatch",
+                format!("Task '{task_id}' does not belong to project '{project_or_task}'"),
+                origin,
+            )
+            .with_hint("Pass the matching project/task pair or use `hivemind task <op> <task-id>`")
+            .with_context("project", project_or_task)
+            .with_context("task_id", task_id));
+        }
+        return Ok(task_id.to_string());
+    }
+    Ok(project_or_task.to_string())
+}
+
 fn handle_task_start(registry: &Registry, args: &TaskStartArgs, format: OutputFormat) -> ExitCode {
-    match registry.start_task_execution(&args.task_id) {
+    let task_id = match resolve_task_id_with_legacy_project(
+        registry,
+        &args.task_id,
+        args.legacy_task_id.as_deref(),
+        "cli:task:start",
+    ) {
+        Ok(task_id) => task_id,
+        Err(e) => return output_error(&e, format),
+    };
+
+    match registry.start_task_execution(&task_id) {
         Ok(attempt_id) => {
             print_attempt_id(attempt_id, format);
             ExitCode::Success
@@ -1830,7 +2027,27 @@ fn handle_task_complete(
     args: &TaskCompleteArgs,
     format: OutputFormat,
 ) -> ExitCode {
-    match registry.complete_task_execution(&args.task_id) {
+    let task_id = match resolve_task_id_with_legacy_project(
+        registry,
+        &args.task_id,
+        args.legacy_task_id.as_deref(),
+        "cli:task:complete",
+    ) {
+        Ok(task_id) => task_id,
+        Err(e) => return output_error(&e, format),
+    };
+
+    if matches!(args.success, Some(false)) {
+        return match registry.close_task(&task_id, args.message.as_deref()) {
+            Ok(task) => {
+                print_task(&task, format);
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        };
+    }
+
+    match registry.complete_task_execution(&task_id) {
         Ok(flow) => {
             print_flow_id(flow.id, format);
             ExitCode::Success
@@ -1840,12 +2057,22 @@ fn handle_task_complete(
 }
 
 fn handle_task_retry(registry: &Registry, args: &TaskRetryArgs, format: OutputFormat) -> ExitCode {
+    let task_id = match resolve_task_id_with_legacy_project(
+        registry,
+        &args.task_id,
+        args.legacy_task_id.as_deref(),
+        "cli:task:retry",
+    ) {
+        Ok(task_id) => task_id,
+        Err(e) => return output_error(&e, format),
+    };
+
     let mode = match args.mode {
         hivemind::cli::commands::TaskRetryMode::Clean => RetryMode::Clean,
         hivemind::cli::commands::TaskRetryMode::Continue => RetryMode::Continue,
     };
 
-    match registry.retry_task(&args.task_id, args.reset_count, mode) {
+    match registry.retry_task(&task_id, args.reset_count, mode) {
         Ok(flow) => {
             print_flow_id(flow.id, format);
             ExitCode::Success
@@ -2081,7 +2308,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::ScopeValidated { .. } => "scope_validated",
         EventPayload::ScopeViolationDetected { .. } => "scope_violation_detected",
         EventPayload::RetryContextAssembled { .. } => "retry_context_assembled",
-        EventPayload::TaskRetryRequested { .. } => "task_retry_requested",
+        EventPayload::TaskRetryRequested { .. } => "task_retried",
         EventPayload::TaskAborted { .. } => "task_aborted",
         EventPayload::HumanOverride { .. } => "human_override",
         EventPayload::MergePrepared { .. } => "merge_prepared",
@@ -2190,6 +2417,7 @@ fn build_event_filter(
     artifact_id: Option<&str>,
     template_id: Option<&str>,
     rule_id: Option<&str>,
+    error_type: Option<&str>,
     since: Option<&str>,
     until: Option<&str>,
     limit: usize,
@@ -2248,6 +2476,14 @@ fn build_event_filter(
             origin,
         )?);
     }
+    if let Some(error_type) = error_type {
+        filter.error_type = Some(parse_non_empty_filter(
+            error_type,
+            "invalid_error_type",
+            "--error-type",
+            origin,
+        )?);
+    }
     if let Some(since) = since {
         filter.since = Some(parse_event_time(since, "--since", origin)?);
     }
@@ -2289,6 +2525,7 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
                 args.artifact_id.as_deref(),
                 args.template_id.as_deref(),
                 args.rule_id.as_deref(),
+                args.error_type.as_deref(),
                 args.since.as_deref(),
                 args.until.as_deref(),
                 args.limit,
@@ -2359,6 +2596,7 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
                 args.artifact_id.as_deref(),
                 args.template_id.as_deref(),
                 args.rule_id.as_deref(),
+                args.error_type.as_deref(),
                 args.since.as_deref(),
                 args.until.as_deref(),
                 args.limit,
@@ -2457,6 +2695,34 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
             }
 
             ExitCode::Success
+        }
+        EventCommands::Verify(_args) => match registry.events_verify() {
+            Ok(result) => {
+                print_structured(&result, format, "events verify result");
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
+        EventCommands::Recover(args) => {
+            if !args.from_mirror {
+                return output_error(
+                    &hivemind::core::error::HivemindError::user(
+                        "events_recover_source_required",
+                        "Specify an explicit source for recovery",
+                        "cli:events:recover",
+                    )
+                    .with_hint("Use `hivemind events recover --from-mirror --confirm`"),
+                    format,
+                );
+            }
+
+            match registry.events_recover_from_mirror(args.confirm) {
+                Ok(result) => {
+                    print_structured(&result, format, "events recover result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
         }
     }
 }

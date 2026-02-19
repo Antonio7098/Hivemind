@@ -1,0 +1,179 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      releases: ${{ steps.plan.outputs.releases }}
+      has-releases: ${{ steps.plan.outputs.has-releases }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Install cargo-dist
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-dist
+      - name: Plan release
+        id: plan
+        run: cargo dist plan --output-format=json > dist-manifest.json
+      - name: Upload manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-manifest
+          path: dist-manifest.json
+
+  build-local-artifacts:
+    needs: plan
+    if: ${{ needs.plan.outputs.has-releases == 'true' }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+          - runner: macos-14
+            target: x86_64-apple-darwin
+          - runner: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Install cargo-dist
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-dist
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install cross-compilation tools
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Build
+        run: cargo dist build --target=${{ matrix.target }} --artifacts=local --output-format=json > dist-manifest.json
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.target }}
+          path: target/distrib/*
+
+  build-global-artifacts:
+    needs: plan
+    if: ${{ needs.plan.outputs.has-releases == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Install cargo-dist
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-dist
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo dist build --artifacts=global --output-format=json > dist-manifest.json
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-global
+          path: target/distrib/*
+
+  host:
+    needs: [plan, build-local-artifacts, build-global-artifacts]
+    if: ${{ needs.plan.outputs.has-releases == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      releases: ${{ steps.host.outputs.releases }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: target/distrib
+      - name: Install cargo-dist
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-dist
+      - name: Create GitHub Release
+        run: cargo dist host --steps=upload --output-format=json > dist-manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-manifest-hosted
+          path: dist-manifest.json
+
+  publish-npm:
+    needs: host
+    if: ${{ needs.host.outputs.releases != '' && fromJson(needs.host.outputs.releases)[0].npm != null }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: artifacts-global
+          path: target/distrib
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for pkg in target/distrib/*.tgz; do
+            npm publish "$pkg" --access public
+          done
+
+  announce:
+    needs: host
+    if: ${{ needs.host.outputs.has-releases == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Download manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-manifest-hosted
+          path: .
+      - name: Announce release
+        run: |
+          echo "Release published!"
+          cat dist-manifest.json | jq -r '.releases[] | "  \(.app_name) \(.app_version)"'

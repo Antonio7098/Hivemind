@@ -93,6 +93,8 @@ pub struct EventFilter {
     pub template_id: Option<String>,
     /// Filter by constitution rule ID.
     pub rule_id: Option<String>,
+    /// Filter `error_occurred` events by error category.
+    pub error_type: Option<String>,
     /// Include events at or after this timestamp.
     pub since: Option<DateTime<Utc>>,
     /// Include events at or before this timestamp.
@@ -165,6 +167,11 @@ impl EventFilter {
         }
         if let Some(rule_id) = self.rule_id.as_deref() {
             if !Self::matches_rule_id(&event.payload, rule_id) {
+                return false;
+            }
+        }
+        if let Some(error_type) = self.error_type.as_deref() {
+            if !Self::matches_error_type(&event.payload, error_type) {
                 return false;
             }
         }
@@ -251,6 +258,13 @@ impl EventFilter {
         matches!(
             payload,
             EventPayload::ConstitutionViolationDetected { rule_id: id, .. } if id == rule_id
+        )
+    }
+
+    fn matches_error_type(payload: &EventPayload, error_type: &str) -> bool {
+        matches!(
+            payload,
+            EventPayload::ErrorOccurred { error } if error.category.to_string() == error_type
         )
     }
 }
@@ -411,6 +425,18 @@ impl SqliteEventStore {
             CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id);
             CREATE INDEX IF NOT EXISTS idx_events_attempt_id ON events(attempt_id);
             CREATE INDEX IF NOT EXISTS idx_events_timestamp_nanos ON events(timestamp_nanos);
+
+            CREATE TRIGGER IF NOT EXISTS trg_events_append_only_update
+            BEFORE UPDATE ON events
+            BEGIN
+                SELECT RAISE(ABORT, 'events_append_only_violation');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_events_append_only_delete
+            BEFORE DELETE ON events
+            BEGIN
+                SELECT RAISE(ABORT, 'events_append_only_violation');
+            END;
             ",
         )?;
 
@@ -1149,6 +1175,7 @@ pub type SharedEventStore = Arc<dyn EventStore>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::error::HivemindError;
     use crate::core::events::{CorrelationIds, EventPayload};
 
     #[test]
@@ -1371,6 +1398,46 @@ mod tests {
     }
 
     #[test]
+    fn in_memory_store_filters_error_events_by_error_type() {
+        let store = InMemoryEventStore::new();
+        let project = Uuid::new_v4();
+
+        store
+            .append(Event::new(
+                EventPayload::ErrorOccurred {
+                    error: HivemindError::user(
+                        "task_not_in_flow",
+                        "Task is not part of any flow",
+                        "registry:start_task_execution",
+                    ),
+                },
+                CorrelationIds::for_project(project),
+            ))
+            .unwrap();
+
+        store
+            .append(Event::new(
+                EventPayload::ProjectCreated {
+                    id: project,
+                    name: "proj".to_string(),
+                    description: None,
+                },
+                CorrelationIds::for_project(project),
+            ))
+            .unwrap();
+
+        let mut filter = EventFilter::all();
+        filter.error_type = Some("user".to_string());
+        let events = store.read(&filter).unwrap();
+
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0].payload,
+            EventPayload::ErrorOccurred { .. }
+        ));
+    }
+
+    #[test]
     fn file_store_persist_and_reload() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("events.jsonl");
@@ -1478,5 +1545,53 @@ mod tests {
         let mirror_path = dir.path().join("events.jsonl");
         let mirror = std::fs::read_to_string(mirror_path).unwrap();
         assert!(mirror.contains("\"type\":\"project_created\""));
+    }
+
+    #[test]
+    fn sqlite_store_enforces_append_only_triggers() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SqliteEventStore::open(dir.path()).unwrap();
+        let project_id = Uuid::new_v4();
+
+        store
+            .append(Event::new(
+                EventPayload::ProjectCreated {
+                    id: project_id,
+                    name: "append-only-project".to_string(),
+                    description: None,
+                },
+                CorrelationIds::for_project(project_id),
+            ))
+            .unwrap();
+
+        let db_path = dir.path().join("db.sqlite");
+        let update_err = SqliteEventStore::run_sql_batch_on_path(
+            &db_path,
+            "UPDATE events SET event_json = '{\"mutated\":true}' WHERE sequence = 0;",
+        )
+        .unwrap_err();
+        let update_msg = update_err.to_string();
+        assert!(
+            update_msg.contains("events_append_only_violation"),
+            "{update_msg}"
+        );
+
+        let delete_err = SqliteEventStore::run_sql_batch_on_path(
+            &db_path,
+            "DELETE FROM events WHERE sequence = 0;",
+        )
+        .unwrap_err();
+        let delete_msg = delete_err.to_string();
+        assert!(
+            delete_msg.contains("events_append_only_violation"),
+            "{delete_msg}"
+        );
+
+        let events = store.read_all().unwrap();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0].payload,
+            EventPayload::ProjectCreated { .. }
+        ));
     }
 }

@@ -144,6 +144,142 @@ fn cli_project_governance_lifecycle_is_observable() {
 }
 
 #[test]
+fn cli_project_governance_init_accepts_project_flag() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "init",
+            "--project",
+            "proj",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let json: serde_json::Value = serde_json::from_str(&out).expect("init json");
+    assert_eq!(
+        json.get("success").and_then(serde_json::Value::as_bool),
+        Some(true),
+        "{out}"
+    );
+}
+
+#[test]
+fn cli_task_commands_accept_legacy_project_task_arity() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "legacy-task"]);
+    assert_eq!(code, 0, "{err}");
+    let task_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["task", "start", "proj", &task_id]);
+    assert_ne!(
+        code, 0,
+        "legacy task start should fail because task is not in flow"
+    );
+    assert!(
+        err.contains("task_not_in_flow"),
+        "expected runtime validation error, got: {err}"
+    );
+    assert!(
+        !err.contains("unexpected argument"),
+        "legacy arity should parse without clap failure: {err}"
+    );
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "task",
+            "complete",
+            "proj",
+            &task_id,
+            "--success",
+            "false",
+            "--message",
+            "legacy failure",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, inspect_out, err) = run_hivemind(tmp.path(), &["task", "inspect", &task_id]);
+    assert_eq!(code, 0, "{err}");
+    assert!(inspect_out.contains("State:       Closed"), "{inspect_out}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["task", "retry", "proj", &task_id, "--mode", "clean"],
+    );
+    assert_ne!(code, 0, "legacy task retry should be rejected");
+    assert!(
+        !err.contains("unexpected argument"),
+        "legacy arity should parse without clap failure: {err}"
+    );
+}
+
+#[test]
+fn cli_events_list_supports_error_type_filter() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "err-task"]);
+    assert_eq!(code, 0, "{err}");
+    let task_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, _out, _err) = run_hivemind(tmp.path(), &["task", "start", &task_id]);
+    assert_ne!(
+        code, 0,
+        "starting a task outside a flow should fail and emit user error event"
+    );
+
+    let (code, out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--project",
+            "proj",
+            "--error-type",
+            "user",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let json: serde_json::Value = serde_json::from_str(&out).expect("events list json");
+    let events = json
+        .get("data")
+        .and_then(|v| v.as_array())
+        .expect("events data array");
+    assert!(!events.is_empty(), "expected at least one user error event");
+    assert!(events.iter().all(|event| {
+        event
+            .get("payload")
+            .and_then(|v| v.get("type"))
+            .and_then(serde_json::Value::as_str)
+            == Some("error_occurred")
+    }));
+}
+
+#[test]
 fn cli_scope_violation_is_fatal_and_preserves_worktree() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
@@ -2425,6 +2561,94 @@ fn cli_events_replay_and_verify() {
 }
 
 #[test]
+fn cli_events_verify_and_recover_from_mirror_restores_canonical_db() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+
+    let db_path = tmp.path().join(".hivemind").join("db.sqlite");
+    if db_path.exists() {
+        std::fs::remove_file(&db_path).expect("remove sqlite db");
+    }
+    for suffix in ["-wal", "-shm"] {
+        let sidecar = PathBuf::from(format!("{}{}", db_path.to_string_lossy(), suffix));
+        if sidecar.exists() {
+            std::fs::remove_file(sidecar).expect("remove sqlite sidecar");
+        }
+    }
+
+    let (code, verify_out, err) = run_hivemind(tmp.path(), &["-f", "json", "events", "verify"]);
+    assert_eq!(code, 0, "{err}");
+    let verify_json: serde_json::Value = serde_json::from_str(&verify_out).expect("verify json");
+    assert_eq!(
+        verify_json
+            .get("data")
+            .and_then(|d| d.get("parity_ok"))
+            .and_then(serde_json::Value::as_bool),
+        Some(false),
+        "{verify_out}"
+    );
+    assert_eq!(
+        verify_json
+            .get("data")
+            .and_then(|d| d.get("sqlite"))
+            .and_then(|d| d.get("event_count"))
+            .and_then(serde_json::Value::as_u64),
+        Some(0),
+        "{verify_out}"
+    );
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "events", "recover", "--from-mirror"],
+    );
+    assert_ne!(
+        code, 0,
+        "recover should require explicit confirmation: {err}"
+    );
+
+    let (code, recover_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "recover",
+            "--from-mirror",
+            "--confirm",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let recover_json: serde_json::Value = serde_json::from_str(&recover_out).expect("recover json");
+    assert_eq!(
+        recover_json
+            .get("data")
+            .and_then(|d| d.get("verification"))
+            .and_then(|d| d.get("parity_ok"))
+            .and_then(serde_json::Value::as_bool),
+        Some(true),
+        "{recover_out}"
+    );
+
+    let (code, list_out, err) = run_hivemind(tmp.path(), &["-f", "json", "project", "list"]);
+    assert_eq!(code, 0, "{err}");
+    let list_json: serde_json::Value = serde_json::from_str(&list_out).expect("project list json");
+    let projects = list_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .expect("project list array");
+    assert!(
+        projects.iter().any(|project| {
+            project.get("name").and_then(serde_json::Value::as_str) == Some("proj")
+        }),
+        "{list_out}"
+    );
+}
+
+#[test]
 fn cli_yaml_output_format() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
@@ -4183,5 +4407,119 @@ fn cli_governance_replay_and_snapshot_restore_verification() {
             .and_then(|d| d.get("latest_content"))
             .and_then(serde_json::Value::as_str),
         Some("v1-content")
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_governance_replay_verify_and_diagnose_detect_missing_artifact_files() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "governance", "init", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "document",
+            "create",
+            "proj",
+            "doc-missing",
+            "--title",
+            "Doc Missing",
+            "--owner",
+            "ops",
+            "--content",
+            "hello",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, inspect_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "document",
+            "inspect",
+            "proj",
+            "doc-missing",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let inspect_json: serde_json::Value = serde_json::from_str(&inspect_out).expect("inspect");
+    let document_path = inspect_json
+        .get("data")
+        .and_then(|d| d.get("summary"))
+        .and_then(|d| d.get("path"))
+        .and_then(serde_json::Value::as_str)
+        .expect("document path")
+        .to_string();
+    std::fs::remove_file(&document_path).expect("remove governance document");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "project",
+            "governance",
+            "replay",
+            "proj",
+            "--verify",
+        ],
+    );
+    assert_ne!(
+        code, 0,
+        "replay --verify should fail when projection files are missing"
+    );
+    let replay_err_json: serde_json::Value =
+        serde_json::from_str(err.trim()).expect("replay verify error json");
+    assert_eq!(
+        replay_err_json
+            .get("error")
+            .and_then(|e| e.get("code"))
+            .and_then(serde_json::Value::as_str),
+        Some("governance_replay_verification_failed"),
+        "{err}"
+    );
+
+    let (code, diagnose_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "project", "governance", "diagnose", "proj"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let diagnose_json: serde_json::Value =
+        serde_json::from_str(&diagnose_out).expect("diagnose json");
+    let diagnose_data = diagnose_json.get("data").expect("diagnose data");
+    assert_eq!(
+        diagnose_data
+            .get("healthy")
+            .and_then(serde_json::Value::as_bool),
+        Some(false),
+        "{diagnose_out}"
+    );
+    let issue_codes: Vec<String> = diagnose_data
+        .get("issues")
+        .and_then(serde_json::Value::as_array)
+        .expect("issues array")
+        .iter()
+        .filter_map(|issue| issue.get("code").and_then(serde_json::Value::as_str))
+        .map(std::string::ToString::to_string)
+        .collect();
+    assert!(
+        issue_codes
+            .iter()
+            .any(|code| code == "governance_artifact_missing"),
+        "{diagnose_out}"
     );
 }

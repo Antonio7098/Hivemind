@@ -3,3 +3,5 @@
 hivemind-test/.hm_home/
 hivemind-test/.hm_home_verify/
 lcov.info
+
+target-local/

@@ -447,6 +447,10 @@ pub enum EventPayload {
         artifact_count: usize,
         restored_files: usize,
         skipped_files: usize,
+        #[serde(default)]
+        stale_files: usize,
+        #[serde(default)]
+        repaired_projection_count: usize,
     },
 
     GovernanceDriftDetected {
@@ -974,6 +978,7 @@ pub enum EventPayload {
         context: String,
     },
 
+    #[serde(rename = "task_retried", alias = "task_retry_requested")]
     TaskRetryRequested {
         task_id: Uuid,
         reset_count: bool,
@@ -1145,6 +1150,7 @@ impl Event {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::flow::RetryMode;
 
     #[test]
     fn event_id_is_unique() {
@@ -1176,5 +1182,38 @@ mod tests {
         let corr = CorrelationIds::for_project(project_id);
         assert_eq!(corr.project_id, Some(project_id));
         assert!(corr.task_id.is_none());
+    }
+
+    #[test]
+    fn task_retry_payload_uses_task_retried_type_and_accepts_legacy_alias() {
+        let payload = EventPayload::TaskRetryRequested {
+            task_id: Uuid::new_v4(),
+            reset_count: false,
+            retry_mode: RetryMode::Continue,
+        };
+
+        let json = serde_json::to_value(&payload).expect("serialize retry payload");
+        assert_eq!(
+            json.get("type").and_then(serde_json::Value::as_str),
+            Some("task_retried")
+        );
+
+        let task_id = Uuid::new_v4();
+        let legacy_json = serde_json::json!({
+            "type": "task_retry_requested",
+            "task_id": task_id,
+            "reset_count": true,
+            "retry_mode": "clean"
+        });
+        let restored: EventPayload =
+            serde_json::from_value(legacy_json).expect("deserialize legacy alias");
+        assert!(matches!(
+            restored,
+            EventPayload::TaskRetryRequested {
+                task_id: id,
+                reset_count: true,
+                retry_mode: RetryMode::Clean
+            } if id == task_id
+        ));
     }
 }
