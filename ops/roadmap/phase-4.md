@@ -7,34 +7,34 @@
 > **Principles 1, 3, 11, 12:** Observability is truth, reliability over cleverness, incremental foundations, modularity and replaceability.
 
 ### 42.1 Runtime Contract Layer
-- [ ] Define native runtime contracts under `src/native/` (or equivalent):
-  - [ ] `ModelClient` trait for provider-agnostic inference
-  - [ ] `AgentLoop` finite state machine (`init -> think -> act -> done`)
-  - [ ] `NativeRuntimeConfig` (turn limits, timeout budgets, token budgets)
-  - [ ] Structured `NativeRuntimeError` taxonomy aligned with existing `HivemindError`
-- [ ] Keep external adapters (`opencode`, `codex`, `claude-code`, `kilo`) as first-class, unchanged fallback paths
+- [x] Define native runtime contracts under `src/native/` (or equivalent):
+  - [x] `ModelClient` trait for provider-agnostic inference
+  - [x] `AgentLoop` finite state machine (`init -> think -> act -> done`)
+  - [x] `NativeRuntimeConfig` (turn limits, timeout budgets, token budgets)
+  - [x] Structured `NativeRuntimeError` taxonomy aligned with existing `HivemindError`
+- [x] Keep external adapters (`opencode`, `codex`, `claude-code`, `kilo`) as first-class, unchanged fallback paths
 
 ### 42.2 Runtime Selection Integration
-- [ ] Extend runtime selection to accept a `native` adapter mode while preserving precedence:
-  - [ ] task override -> flow default -> project default -> global default
-- [ ] Add explicit capability reporting to `hivemind runtime list` and `hivemind runtime health`
-- [ ] Emit explicit runtime capability events for adapter/runtime selection decisions
+- [x] Extend runtime selection to accept a `native` adapter mode while preserving precedence:
+  - [x] task override -> flow default -> project default -> global default
+- [x] Add explicit capability reporting to `hivemind runtime list` and `hivemind runtime health`
+- [x] Emit explicit runtime capability events for adapter/runtime selection decisions
 
 ### 42.3 Null Model Determinism Harness
-- [ ] Implement a `MockModelClient` with scripted deterministic turn outputs
-- [ ] Add unit tests for every `AgentLoop` state transition and invalid transition path
-- [ ] Add malformed-model-output tests that fail loud with structured recovery hints
+- [x] Implement a `MockModelClient` with scripted deterministic turn outputs
+- [x] Add unit tests for every `AgentLoop` state transition and invalid transition path
+- [x] Add malformed-model-output tests that fail loud with structured recovery hints
 
 ### 42.4 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 42 manual checklist under `@hivemind-test` (`/home/antonio/programming/Hivemind/hivemind-test`)
-- [ ] Validate runtime selection (`native` vs existing adapters) and unchanged flow semantics
-- [ ] Publish Sprint 42 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 42 manual checklist under `@hivemind-test` (`/home/antonio/programming/Hivemind/hivemind-test`)
+- [x] Validate runtime selection (`native` vs existing adapters) and unchanged flow semantics
+- [x] Publish Sprint 42 manual test report artifact in `@hivemind-test`
 
 ### 42.5 Exit Criteria
-- [ ] Native contracts compile and are test-covered
-- [ ] Existing adapter-based execution remains non-regressed
-- [ ] Runtime selection behavior is explicit and observable
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Native contracts compile and are test-covered
+- [x] Existing adapter-based execution remains non-regressed
+- [x] Runtime selection behavior is explicit and observable
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

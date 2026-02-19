@@ -27,6 +27,7 @@
 //!
 //! - [`core`] - Domain types: events, state, graphs, flows, errors, and scope enforcement
 //! - [`adapters`] - Runtime adapters for execution backends (`OpenCode`, Claude Code, etc.)
+//! - [`native`] - Native runtime contracts and deterministic harness
 //! - [`storage`] - Event persistence layer (SQLite-backed event store)
 //! - [`cli`] - Command-line interface commands and output formatting
 //! - [`server`] - HTTP API server for UI integration
@@ -83,5 +84,6 @@
 pub mod adapters;
 pub mod cli;
 pub mod core;
+pub mod native;
 pub mod server;
 pub mod storage;

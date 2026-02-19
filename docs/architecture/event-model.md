@@ -229,13 +229,15 @@ Agent events capture *interaction*, not internal reasoning.
 These events describe interactions with execution runtimes.
 
 Examples:
+- `RuntimeCapabilitiesEvaluated`
 - `RuntimeStarted`
 - `RuntimeOutputChunk`
 - `RuntimeInputProvided`
 - `RuntimeInterrupted`
 - `RuntimeFilesystemObserved`
 - `RuntimeExited`
-- `RuntimeError`
+- `RuntimeErrorClassified`
+- `RuntimeRecoveryScheduled`
 
 Runtime events are intentionally coarse-grained.
 

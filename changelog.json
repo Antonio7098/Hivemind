@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.38",
+      "date": "2026-02-19",
+      "phase": 42,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Introduce native runtime contracts under `src/native` (`ModelClient`, `AgentLoop`, `NativeRuntimeConfig`, `NativeRuntimeError`) with deterministic harnessing via `MockModelClient`"
+        },
+        {
+          "type": "added",
+          "area": "events",
+          "description": "Add runtime selection observability primitives: `RuntimeSelectionSource` and `RuntimeCapabilitiesEvaluated` event payload"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Extend `runtime list` and `runtime health` to report adapter capabilities and runtime selection source, including native adapter support"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Integrate `native` adapter into runtime resolution precedence (task -> flow -> project -> global) while keeping existing external adapters unchanged"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add native loop unit tests and runtime selection/capability event coverage; harden flaky scope-violation integration path for deterministic CI behavior"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update Phase 4 roadmap and architecture/design docs for native runtime foundations, capability reporting, and runtime capability event semantics"
+        }
+      ]
+    },
+    {
       "version": "v0.1.37",
       "date": "2026-02-19",
       "phase": 42,

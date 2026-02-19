@@ -1178,6 +1178,7 @@ impl AppState {
             | EventPayload::MergeCheckStarted { .. }
             | EventPayload::MergeCheckCompleted { .. }
             | EventPayload::RuntimeStarted { .. }
+            | EventPayload::RuntimeCapabilitiesEvaluated { .. }
             | EventPayload::RuntimeOutputChunk { .. }
             | EventPayload::RuntimeInputProvided { .. }
             | EventPayload::RuntimeInterrupted { .. }

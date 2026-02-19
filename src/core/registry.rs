@@ -6,7 +6,9 @@
 use crate::core::diff::{unified_diff, Baseline, ChangeType, Diff, FileChange};
 use crate::core::enforcement::{ScopeEnforcer, VerificationResult};
 use crate::core::error::{ErrorCategory, HivemindError, Result};
-use crate::core::events::{CorrelationIds, Event, EventPayload, RuntimeOutputStream, RuntimeRole};
+use crate::core::events::{
+    CorrelationIds, Event, EventPayload, RuntimeOutputStream, RuntimeRole, RuntimeSelectionSource,
+};
 use crate::core::flow::{FlowState, RetryMode, RunMode, TaskExecState, TaskFlow};
 use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, TaskGraph};
 use crate::core::runtime_event_projection::{ProjectedRuntimeObservation, RuntimeEventProjector};
@@ -47,6 +49,8 @@ use crate::adapters::runtime::{
     InteractiveExecutionResult, RuntimeAdapter, RuntimeError,
 };
 use crate::adapters::{runtime_descriptors, SUPPORTED_ADAPTERS};
+use crate::native::adapter::{NativeAdapterConfig, NativeRuntimeAdapter};
+use crate::native::NativeRuntimeConfig;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -121,6 +125,7 @@ pub struct RuntimeListEntry {
     pub default_binary: String,
     pub available: bool,
     pub opencode_compatible: bool,
+    pub capabilities: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +133,10 @@ pub struct RuntimeHealthStatus {
     pub adapter_name: String,
     pub binary_path: String,
     pub healthy: bool,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+    #[serde(default)]
+    pub selection_source: Option<RuntimeSelectionSource>,
     #[serde(default)]
     pub target: Option<String>,
     #[serde(default)]
@@ -1066,6 +1075,7 @@ enum SelectedRuntimeAdapter {
     Codex(CodexAdapter),
     ClaudeCode(ClaudeCodeAdapter),
     Kilo(KiloAdapter),
+    Native(NativeRuntimeAdapter),
 }
 
 impl SelectedRuntimeAdapter {
@@ -1075,6 +1085,7 @@ impl SelectedRuntimeAdapter {
             Self::Codex(a) => a.initialize(),
             Self::ClaudeCode(a) => a.initialize(),
             Self::Kilo(a) => a.initialize(),
+            Self::Native(a) => a.initialize(),
         }
     }
 
@@ -1088,6 +1099,7 @@ impl SelectedRuntimeAdapter {
             Self::Codex(a) => a.prepare(task_id, worktree),
             Self::ClaudeCode(a) => a.prepare(task_id, worktree),
             Self::Kilo(a) => a.prepare(task_id, worktree),
+            Self::Native(a) => a.prepare(task_id, worktree),
         }
     }
 
@@ -1100,6 +1112,7 @@ impl SelectedRuntimeAdapter {
             Self::Codex(a) => a.execute(input),
             Self::ClaudeCode(a) => a.execute(input),
             Self::Kilo(a) => a.execute(input),
+            Self::Native(a) => a.execute(input),
         }
     }
 
@@ -1116,6 +1129,7 @@ impl SelectedRuntimeAdapter {
             Self::Codex(a) => a.execute_interactive(input, on_event),
             Self::ClaudeCode(a) => a.execute_interactive(input, on_event),
             Self::Kilo(a) => a.execute_interactive(input, on_event),
+            Self::Native(a) => a.execute_interactive(input, on_event),
         }
     }
 }
@@ -1192,8 +1206,37 @@ impl Registry {
                     flags
                 }
             }
+            "native" => {
+                let mut flags = vec![
+                    format!("--max-turns={}", NativeRuntimeConfig::default().max_turns),
+                    format!(
+                        "--token-budget={}",
+                        NativeRuntimeConfig::default().token_budget
+                    ),
+                ];
+                flags.extend(runtime.args.clone());
+                flags
+            }
             _ => runtime.args.clone(),
         }
+    }
+
+    fn runtime_descriptor_for_adapter(adapter: &str) -> Option<crate::adapters::RuntimeDescriptor> {
+        runtime_descriptors()
+            .into_iter()
+            .find(|descriptor| descriptor.adapter_name == adapter)
+    }
+
+    fn runtime_capabilities_for_adapter(adapter: &str) -> Vec<String> {
+        Self::runtime_descriptor_for_adapter(adapter)
+            .map(|descriptor| {
+                descriptor
+                    .capabilities
+                    .iter()
+                    .map(|capability| (*capability).to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
     }
 
     fn classify_runtime_error(
@@ -6549,13 +6592,30 @@ impl Registry {
         project: &Project,
         role: RuntimeRole,
     ) -> Option<ProjectRuntimeConfig> {
+        Self::project_runtime_for_role_with_source(project, role).map(|(runtime, _)| runtime)
+    }
+
+    fn project_runtime_for_role_with_source(
+        project: &Project,
+        role: RuntimeRole,
+    ) -> Option<(ProjectRuntimeConfig, RuntimeSelectionSource)> {
         match role {
             RuntimeRole::Worker => project
                 .runtime_defaults
                 .worker
                 .clone()
-                .or_else(|| project.runtime.clone()),
-            RuntimeRole::Validator => project.runtime_defaults.validator.clone(),
+                .map(|runtime| (runtime, RuntimeSelectionSource::ProjectDefault))
+                .or_else(|| {
+                    project
+                        .runtime
+                        .clone()
+                        .map(|runtime| (runtime, RuntimeSelectionSource::ProjectDefault))
+                }),
+            RuntimeRole::Validator => project
+                .runtime_defaults
+                .validator
+                .clone()
+                .map(|runtime| (runtime, RuntimeSelectionSource::ProjectDefault)),
         }
     }
 
@@ -6596,6 +6656,17 @@ impl Registry {
         role: RuntimeRole,
         origin: &'static str,
     ) -> Result<ProjectRuntimeConfig> {
+        Self::effective_runtime_for_task_with_source(state, flow, task_id, role, origin)
+            .map(|(runtime, _)| runtime)
+    }
+
+    fn effective_runtime_for_task_with_source(
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        role: RuntimeRole,
+        origin: &'static str,
+    ) -> Result<(ProjectRuntimeConfig, RuntimeSelectionSource)> {
         let task = state.tasks.get(&task_id).ok_or_else(|| {
             HivemindError::system(
                 "task_not_found",
@@ -6635,22 +6706,27 @@ impl Registry {
         };
 
         if let Some(task_rt) = Self::task_runtime_override_for_role(task, role) {
-            return Ok(Self::task_runtime_to_project_runtime(task_rt, max_parallel));
+            return Ok((
+                Self::task_runtime_to_project_runtime(task_rt, max_parallel),
+                RuntimeSelectionSource::TaskOverride,
+            ));
         }
         if let Some(flow_rt) = match role {
             RuntimeRole::Worker => flow_defaults.worker,
             RuntimeRole::Validator => flow_defaults.validator,
         } {
-            return Ok(flow_rt);
+            return Ok((flow_rt, RuntimeSelectionSource::FlowDefault));
         }
-        if let Some(project_rt) = Self::project_runtime_for_role(project, role) {
-            return Ok(project_rt);
+        if let Some((project_rt, source)) =
+            Self::project_runtime_for_role_with_source(project, role)
+        {
+            return Ok((project_rt, source));
         }
         if let Some(global_rt) = match role {
             RuntimeRole::Worker => global_defaults.worker,
             RuntimeRole::Validator => global_defaults.validator,
         } {
-            return Ok(global_rt);
+            return Ok((global_rt, RuntimeSelectionSource::GlobalDefault));
         }
 
         Err(HivemindError::new(
@@ -6807,8 +6883,17 @@ impl Registry {
             .map(|d| RuntimeListEntry {
                 adapter_name: d.adapter_name.to_string(),
                 default_binary: d.default_binary.to_string(),
-                available: Self::binary_available(d.default_binary),
+                available: if d.requires_binary {
+                    Self::binary_available(d.default_binary)
+                } else {
+                    true
+                },
                 opencode_compatible: d.opencode_compatible,
+                capabilities: d
+                    .capabilities
+                    .iter()
+                    .map(|capability| (*capability).to_string())
+                    .collect(),
             })
             .collect()
     }
@@ -6841,15 +6926,22 @@ impl Registry {
                 RuntimeRole::Worker => flow_defaults.worker,
                 RuntimeRole::Validator => flow_defaults.validator,
             }
+            .map(|runtime| (runtime, RuntimeSelectionSource::FlowDefault))
             .or_else(|| {
                 state
                     .projects
                     .get(&flow.project_id)
-                    .and_then(|project| Self::project_runtime_for_role(project, role))
+                    .and_then(|project| Self::project_runtime_for_role_with_source(project, role))
             })
-            .or(match role {
-                RuntimeRole::Worker => state.global_runtime_defaults.worker,
-                RuntimeRole::Validator => state.global_runtime_defaults.validator,
+            .or_else(|| match role {
+                RuntimeRole::Worker => state
+                    .global_runtime_defaults
+                    .worker
+                    .map(|runtime| (runtime, RuntimeSelectionSource::GlobalDefault)),
+                RuntimeRole::Validator => state
+                    .global_runtime_defaults
+                    .validator
+                    .map(|runtime| (runtime, RuntimeSelectionSource::GlobalDefault)),
             })
             .ok_or_else(|| {
                 HivemindError::new(
@@ -6860,8 +6952,9 @@ impl Registry {
                 )
             })?;
             return Ok(Self::health_for_runtime(
-                &runtime,
+                &runtime.0,
                 Some(format!("flow:{flow_id}:{role:?}")),
+                Some(runtime.1),
             ));
         }
 
@@ -6887,7 +6980,7 @@ impl Registry {
                         "registry:runtime_health",
                     )
                 })?;
-            let runtime = Self::effective_runtime_for_task(
+            let runtime = Self::effective_runtime_for_task_with_source(
                 &state,
                 &flow,
                 task_uuid,
@@ -6896,24 +6989,27 @@ impl Registry {
             )?;
 
             return Ok(Self::health_for_runtime(
-                &runtime,
+                &runtime.0,
                 Some(format!("task:{task_id}:{role:?}")),
+                Some(runtime.1),
             ));
         }
 
         if let Some(project_id_or_name) = project {
             let project = self.get_project(project_id_or_name)?;
-            let runtime = Self::project_runtime_for_role(&project, role).ok_or_else(|| {
-                HivemindError::new(
-                    ErrorCategory::Runtime,
-                    "runtime_not_configured",
-                    "Project has no runtime configured",
-                    "registry:runtime_health",
-                )
-            })?;
+            let runtime =
+                Self::project_runtime_for_role_with_source(&project, role).ok_or_else(|| {
+                    HivemindError::new(
+                        ErrorCategory::Runtime,
+                        "runtime_not_configured",
+                        "Project has no runtime configured",
+                        "registry:runtime_health",
+                    )
+                })?;
             return Ok(Self::health_for_runtime(
-                &runtime,
+                &runtime.0,
                 Some(format!("project:{project_id_or_name}:{role:?}")),
+                Some(runtime.1),
             ));
         }
 
@@ -6921,6 +7017,8 @@ impl Registry {
             adapter_name: "all".to_string(),
             binary_path: "builtin-defaults".to_string(),
             healthy: self.runtime_list().iter().all(|r| r.available),
+            capabilities: vec!["catalog".to_string()],
+            selection_source: None,
             target: None,
             details: Some(
                 self.runtime_list()
@@ -7259,6 +7357,7 @@ impl Registry {
     fn health_for_runtime(
         runtime: &ProjectRuntimeConfig,
         target: Option<String>,
+        selection_source: Option<RuntimeSelectionSource>,
     ) -> RuntimeHealthStatus {
         match Self::build_runtime_adapter(runtime.clone()) {
             Ok(mut adapter) => match adapter.initialize() {
@@ -7266,6 +7365,8 @@ impl Registry {
                     adapter_name: runtime.adapter_name.clone(),
                     binary_path: runtime.binary_path.clone(),
                     healthy: true,
+                    capabilities: Self::runtime_capabilities_for_adapter(&runtime.adapter_name),
+                    selection_source,
                     target,
                     details: None,
                 },
@@ -7273,6 +7374,8 @@ impl Registry {
                     adapter_name: runtime.adapter_name.clone(),
                     binary_path: runtime.binary_path.clone(),
                     healthy: false,
+                    capabilities: Self::runtime_capabilities_for_adapter(&runtime.adapter_name),
+                    selection_source,
                     target,
                     details: Some(format!("{}: {}", e.code, e.message)),
                 },
@@ -7281,6 +7384,8 @@ impl Registry {
                 adapter_name: runtime.adapter_name.clone(),
                 binary_path: runtime.binary_path.clone(),
                 healthy: false,
+                capabilities: Self::runtime_capabilities_for_adapter(&runtime.adapter_name),
+                selection_source,
                 target,
                 details: Some(format!("{}: {}", e.code, e.message)),
             },
@@ -7333,6 +7438,21 @@ impl Registry {
                 cfg.base.env = runtime.env;
                 cfg.base.timeout = timeout;
                 Ok(SelectedRuntimeAdapter::Kilo(KiloAdapter::new(cfg)))
+            }
+            "native" => {
+                let mut cfg = NativeAdapterConfig::new();
+                cfg.base.binary_path = PathBuf::from(runtime.binary_path);
+                cfg.base.timeout = timeout;
+                cfg.base.env = runtime.env;
+                cfg.base.args = runtime.args;
+                cfg.scripted_directives = if cfg.base.args.is_empty() {
+                    cfg.scripted_directives.clone()
+                } else {
+                    cfg.base.args.clone()
+                };
+                Ok(SelectedRuntimeAdapter::Native(NativeRuntimeAdapter::new(
+                    cfg,
+                )))
             }
             _ => Err(HivemindError::user(
                 "unsupported_runtime",
@@ -7506,7 +7626,7 @@ impl Registry {
             return Ok(flow);
         };
 
-        let runtime = Self::effective_runtime_for_task(
+        let (runtime, runtime_selection_source) = Self::effective_runtime_for_task_with_source(
             &state,
             &flow,
             task_id,
@@ -7787,6 +7907,19 @@ impl Registry {
             "registry:tick_flow",
         )?;
 
+        self.append_event(
+            Event::new(
+                EventPayload::RuntimeCapabilitiesEvaluated {
+                    adapter_name: runtime.adapter_name.clone(),
+                    role: RuntimeRole::Worker,
+                    selection_source: runtime_selection_source,
+                    capabilities: Self::runtime_capabilities_for_adapter(&runtime.adapter_name),
+                },
+                attempt_corr.clone(),
+            ),
+            "registry:tick_flow",
+        )?;
+
         let input = ExecutionInput {
             task_description: task
                 .description
@@ -7804,6 +7937,7 @@ impl Registry {
             .append(Event::new(
                 EventPayload::RuntimeStarted {
                     adapter_name: runtime.adapter_name.clone(),
+                    role: RuntimeRole::Worker,
                     task_id,
                     attempt_id,
                     prompt: runtime_prompt,
@@ -17697,6 +17831,20 @@ rules:
         assert_eq!(err.code, "checkpoints_incomplete");
 
         let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|e| {
+            matches!(
+                &e.payload,
+                EventPayload::RuntimeCapabilitiesEvaluated {
+                    adapter_name,
+                    role,
+                    selection_source,
+                    capabilities,
+                } if adapter_name == "opencode"
+                    && *role == RuntimeRole::Worker
+                    && *selection_source == RuntimeSelectionSource::ProjectDefault
+                    && capabilities.iter().any(|cap| cap == "external_cli")
+            )
+        }));
         assert!(events
             .iter()
             .any(|e| matches!(e.payload, EventPayload::RuntimeStarted { .. })));
@@ -17907,7 +18055,7 @@ rules:
     }
 
     #[test]
-    fn runtime_list_includes_sprint_28_adapters() {
+    fn runtime_list_includes_native_adapter_and_capabilities() {
         let registry = test_registry();
         let list = registry.runtime_list();
         let names = list
@@ -17918,6 +18066,18 @@ rules:
         assert!(names.contains("codex"));
         assert!(names.contains("claude-code"));
         assert!(names.contains("kilo"));
+        assert!(names.contains("native"));
+
+        let native = list
+            .iter()
+            .find(|entry| entry.adapter_name == "native")
+            .expect("native runtime descriptor should exist");
+        assert!(native.available);
+        assert!(native.capabilities.iter().any(|c| c == "native_loop"));
+        assert!(native
+            .capabilities
+            .iter()
+            .any(|c| c == "deterministic_harness"));
     }
 
     #[test]
@@ -18247,6 +18407,10 @@ rules:
             .runtime_health_with_role(None, Some(&task.id.to_string()), None, RuntimeRole::Worker)
             .unwrap();
         assert_eq!(task_level.adapter_name, "claude-code");
+        assert_eq!(
+            task_level.selection_source,
+            Some(RuntimeSelectionSource::TaskOverride)
+        );
 
         registry
             .task_runtime_clear_role(&task.id.to_string(), RuntimeRole::Worker)
@@ -18255,6 +18419,35 @@ rules:
             .runtime_health_with_role(None, Some(&task.id.to_string()), None, RuntimeRole::Worker)
             .unwrap();
         assert_eq!(flow_level.adapter_name, "kilo");
+        assert_eq!(
+            flow_level.selection_source,
+            Some(RuntimeSelectionSource::FlowDefault)
+        );
+
+        registry
+            .flow_runtime_clear(&flow.id.to_string(), RuntimeRole::Worker)
+            .unwrap();
+        let project_level = registry
+            .runtime_health_with_role(None, Some(&task.id.to_string()), None, RuntimeRole::Worker)
+            .unwrap();
+        assert_eq!(project_level.adapter_name, "opencode");
+        assert_eq!(
+            project_level.selection_source,
+            Some(RuntimeSelectionSource::ProjectDefault)
+        );
+
+        registry.create_project("proj2", None).unwrap();
+        let task2 = registry.create_task("proj2", "Task 2", None, None).unwrap();
+        let graph2 = registry.create_graph("proj2", "g2", &[task2.id]).unwrap();
+        let _flow2 = registry.create_flow(&graph2.id.to_string(), None).unwrap();
+        let global_level = registry
+            .runtime_health_with_role(None, Some(&task2.id.to_string()), None, RuntimeRole::Worker)
+            .unwrap();
+        assert_eq!(global_level.adapter_name, "codex");
+        assert_eq!(
+            global_level.selection_source,
+            Some(RuntimeSelectionSource::GlobalDefault)
+        );
     }
 
     #[test]
