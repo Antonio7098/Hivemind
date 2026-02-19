@@ -32,6 +32,28 @@ pub enum RuntimeRole {
     Validator,
 }
 
+/// Source used to resolve an effective runtime configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeSelectionSource {
+    TaskOverride,
+    FlowDefault,
+    ProjectDefault,
+    GlobalDefault,
+}
+
+impl RuntimeSelectionSource {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::TaskOverride => "task_override",
+            Self::FlowDefault => "flow_default",
+            Self::ProjectDefault => "project_default",
+            Self::GlobalDefault => "global_default",
+        }
+    }
+}
+
 /// Unique identifier for an event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct EventId(Uuid);
@@ -1025,12 +1047,22 @@ pub enum EventPayload {
     },
     RuntimeStarted {
         adapter_name: String,
+        #[serde(default = "default_runtime_role_worker")]
+        role: RuntimeRole,
         task_id: Uuid,
         attempt_id: Uuid,
         #[serde(default)]
         prompt: String,
         #[serde(default)]
         flags: Vec<String>,
+    },
+    RuntimeCapabilitiesEvaluated {
+        adapter_name: String,
+        #[serde(default = "default_runtime_role_worker")]
+        role: RuntimeRole,
+        selection_source: RuntimeSelectionSource,
+        #[serde(default)]
+        capabilities: Vec<String>,
     },
     RuntimeOutputChunk {
         attempt_id: Uuid,

@@ -8,7 +8,7 @@ order: 6
 
 > **Core principle:** Runtimes are replaceable, non-deterministic executors. Hivemind owns orchestration, state, and truth.
 
-This document defines the **runtime adapter layer** in Hivemind: the contract between Hivemind and external execution runtimes (e.g. Claude Code, OpenCode, Codex CLI). It explains what Hivemind expects, what it explicitly refuses to depend on, and how the system evolves from wrapper-based runtimes to a native runtime without architectural breakage.
+This document defines the **runtime adapter layer** in Hivemind: the contract between Hivemind and execution runtimes (e.g. Claude Code, OpenCode, Codex CLI, and native runtime mode). It explains what Hivemind expects, what it explicitly refuses to depend on, and how the system evolves from wrapper-based runtimes to native runtime foundations without architectural breakage.
 
 This is a **contract and strategy document**, not an SDK specification.
 
@@ -200,32 +200,31 @@ In Sprint 1, scope violations are detected post-hoc via diffs. In Sprint 2+, vio
 
 ---
 
-## 8. Native Runtime (Sprint 3 — Optional)
+## 8. Native Runtime Foundation (Sprint 42 / Phase 4)
 
 ### 8.1 What “Native” Means
 
-A native runtime would:
+A native runtime foundation includes:
 - Be embedded in Hivemind
-- Expose structured edit APIs
-- Produce patch objects directly
-- Enable AST-aware verification
+- Use provider-agnostic model contracts (`ModelClient`)
+- Run an explicit finite-state loop (`init -> think -> act -> done`)
+- Enforce deterministic budgets (turn/time/token) with structured error taxonomy
+- Support deterministic harnessing for tests (`MockModelClient`)
 
 ---
 
 ### 8.2 Why Native Is Deferred
 
-Building a native runtime requires:
-- Model client abstraction
-- Tool execution engine
-- Memory strategy
-- Editor backend
+Sprint 42 introduces a first native runtime adapter mode (`native`) while preserving existing
+external adapters as first-class execution backends.
 
-This is a **large, long-term investment**.
+Current native mode is intentionally minimal:
+- deterministic loop contracts and error semantics
+- explicit capability reporting via `runtime list` / `runtime health`
+- explicit `RuntimeCapabilitiesEvaluated` event emission before `RuntimeStarted`
 
-Hivemind intentionally avoids this until:
-- TaskFlow semantics are proven
-- Verification patterns stabilize
-- Users demand deeper control
+Richer native execution internals (tool engine, payload capture, replayable turn-level model/tool
+events) continue in follow-on Phase 4 sprints.
 
 ---
 

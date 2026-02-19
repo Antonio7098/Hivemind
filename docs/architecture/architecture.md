@@ -241,7 +241,7 @@ The full lifecycle is defined in `commit-branch-model.md`.
 
 ### 8.1 Runtime Definition
 
-A **Runtime** is an execution backend (e.g. Claude Code, Codex CLI, OpenCode).
+A **Runtime** is an execution backend (e.g. Claude Code, Codex CLI, OpenCode, native runtime mode).
 
 Runtimes are treated as:
 

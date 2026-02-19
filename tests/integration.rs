@@ -307,7 +307,7 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
             "--arg",
             "-c",
             "--arg",
-            "printf data > hm_scope_violation.txt; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+            "tmp=\"/tmp/hm_scope_${HIVEMIND_ATTEMPT_ID}.txt\"; printf data > hm_scope_violation.txt; printf data > \"$tmp\"; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
             "--timeout-ms",
             "1000",
         ],

@@ -12,6 +12,7 @@
 //! | `codex` | `codex` | No |
 //! | `claude-code` | `claude` | No |
 //! | `kilo` | `kilo` | Yes |
+//! | `native` | `builtin-native` | No |
 //!
 //! # Architecture
 //!
@@ -53,7 +54,7 @@ pub mod opencode;
 pub mod runtime;
 
 /// Supported runtime adapter names.
-pub const SUPPORTED_ADAPTERS: [&str; 4] = ["opencode", "codex", "claude-code", "kilo"];
+pub const SUPPORTED_ADAPTERS: [&str; 5] = ["opencode", "codex", "claude-code", "kilo", "native"];
 
 /// Built-in runtime descriptor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,31 +62,52 @@ pub struct RuntimeDescriptor {
     pub adapter_name: &'static str,
     pub default_binary: &'static str,
     pub opencode_compatible: bool,
+    pub requires_binary: bool,
+    pub capabilities: &'static [&'static str],
 }
 
 /// Returns descriptors for built-in runtime adapters.
 #[must_use]
-pub fn runtime_descriptors() -> [RuntimeDescriptor; 4] {
+pub fn runtime_descriptors() -> [RuntimeDescriptor; 5] {
     [
         RuntimeDescriptor {
             adapter_name: "opencode",
             default_binary: "opencode",
             opencode_compatible: true,
+            requires_binary: true,
+            capabilities: &["external_cli", "opencode_family", "interactive_transport"],
         },
         RuntimeDescriptor {
             adapter_name: "codex",
             default_binary: "codex",
             opencode_compatible: false,
+            requires_binary: true,
+            capabilities: &["external_cli", "tool_events", "interactive_transport"],
         },
         RuntimeDescriptor {
             adapter_name: "claude-code",
             default_binary: "claude",
             opencode_compatible: false,
+            requires_binary: true,
+            capabilities: &["external_cli", "tool_events", "interactive_transport"],
         },
         RuntimeDescriptor {
             adapter_name: "kilo",
             default_binary: "kilo",
             opencode_compatible: true,
+            requires_binary: true,
+            capabilities: &["external_cli", "opencode_family", "interactive_transport"],
+        },
+        RuntimeDescriptor {
+            adapter_name: "native",
+            default_binary: "builtin-native",
+            opencode_compatible: false,
+            requires_binary: false,
+            capabilities: &[
+                "native_loop",
+                "deterministic_harness",
+                "provider_agnostic_contracts",
+            ],
         },
     ]
 }

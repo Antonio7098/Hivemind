@@ -330,6 +330,8 @@ Capabilities:
 - Override runtime per task
 - Override runtime per task and role (`task runtime-set --role`)
 - Inspect runtime status with role-aware resolution (`runtime health --role --project/--flow/--task`)
+- Inspect adapter capability surfaces (`runtime list`, `runtime health`)
+- Select built-in native runtime mode (`--adapter native`) without requiring an external runtime binary
 
 ---
 

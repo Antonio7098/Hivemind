@@ -2140,17 +2140,18 @@ fn handle_runtime(cmd: RuntimeCommands, format: OutputFormat) -> ExitCode {
                         println!("No runtimes available.");
                     } else {
                         println!(
-                            "{:<14}  {:<20}  {:<10}  OCODE_FAMILY",
-                            "ADAPTER", "BINARY", "AVAILABLE"
+                            "{:<14}  {:<20}  {:<10}  {:<12}  CAPABILITIES",
+                            "ADAPTER", "BINARY", "AVAILABLE", "OCODE_FAMILY"
                         );
-                        println!("{}", "-".repeat(72));
+                        println!("{}", "-".repeat(120));
                         for row in rows {
                             println!(
-                                "{:<14}  {:<20}  {:<10}  {}",
+                                "{:<14}  {:<20}  {:<10}  {:<12}  {}",
                                 row.adapter_name,
                                 row.default_binary,
                                 if row.available { "yes" } else { "no" },
-                                if row.opencode_compatible { "yes" } else { "no" }
+                                if row.opencode_compatible { "yes" } else { "no" },
+                                row.capabilities.join(",")
                             );
                         }
                     }
@@ -2174,6 +2175,12 @@ fn handle_runtime(cmd: RuntimeCommands, format: OutputFormat) -> ExitCode {
                             println!("Adapter: {}", status.adapter_name);
                             println!("Binary: {}", status.binary_path);
                             println!("Healthy: {}", if status.healthy { "yes" } else { "no" });
+                            if !status.capabilities.is_empty() {
+                                println!("Capabilities: {}", status.capabilities.join(", "));
+                            }
+                            if let Some(selection_source) = status.selection_source {
+                                println!("Selection Source: {}", selection_source.as_str());
+                            }
                             if let Some(ref target) = status.target {
                                 println!("Target: {target}");
                             }
@@ -2320,6 +2327,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::MergeApproved { .. } => "merge_approved",
         EventPayload::MergeCompleted { .. } => "merge_completed",
         EventPayload::WorktreeCleanupPerformed { .. } => "worktree_cleanup_performed",
+        EventPayload::RuntimeCapabilitiesEvaluated { .. } => "runtime_capabilities_evaluated",
         EventPayload::RuntimeStarted { .. } => "runtime_started",
         EventPayload::RuntimeOutputChunk { .. } => "runtime_output_chunk",
         EventPayload::RuntimeInputProvided { .. } => "runtime_input_provided",

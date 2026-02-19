@@ -268,6 +268,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::MergeApproved { .. } => "MergeApproved",
         EventPayload::MergeCompleted { .. } => "MergeCompleted",
         EventPayload::WorktreeCleanupPerformed { .. } => "WorktreeCleanupPerformed",
+        EventPayload::RuntimeCapabilitiesEvaluated { .. } => "RuntimeCapabilitiesEvaluated",
         EventPayload::RuntimeStarted { .. } => "RuntimeStarted",
         EventPayload::RuntimeOutputChunk { .. } => "RuntimeOutputChunk",
         EventPayload::RuntimeInputProvided { .. } => "RuntimeInputProvided",
@@ -389,7 +390,8 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::MergeApproved { .. }
         | EventPayload::MergeCompleted { .. } => "merge",
 
-        EventPayload::RuntimeStarted { .. }
+        EventPayload::RuntimeCapabilitiesEvaluated { .. }
+        | EventPayload::RuntimeStarted { .. }
         | EventPayload::RuntimeOutputChunk { .. }
         | EventPayload::RuntimeInputProvided { .. }
         | EventPayload::RuntimeInterrupted { .. }

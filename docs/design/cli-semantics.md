@@ -1588,8 +1588,15 @@ RuntimeStarted:
   attempt_id: <attempt-id>
   task_id: <task-id>
   adapter_name: <adapter-name>
+  role: worker|validator
   prompt: <runtime-prompt>
   flags: [<runtime-args-and-flags...>]
+
+RuntimeCapabilitiesEvaluated:
+  adapter_name: <adapter-name>
+  role: worker|validator
+  selection_source: task_override|flow_default|project_default|global_default
+  capabilities: [<capability>...]
 
 AttemptContextAssembled:
   flow_id: <flow-id>
@@ -2306,7 +2313,7 @@ hivemind runtime list
 ```
 
 **Effects:**
-- Lists built-in runtime adapters and local binary availability
+- Lists built-in runtime adapters, local availability, and capability descriptors
 
 **Failures:** None (read-only)
 
@@ -2321,6 +2328,7 @@ hivemind runtime health [--project <project>] [--flow <flow-id>] [--task <task-i
 - Runs adapter health check for the selected runtime target
 - If no target is provided, reports aggregate default-binary availability
 - Reports the effective runtime target selected by role-aware precedence
+- Reports adapter capability descriptors and runtime `selection_source` where target resolution applies
 
 ### runtime defaults-set
 
