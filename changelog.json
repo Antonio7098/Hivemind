@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.40",
+      "date": "2026-02-19",
+      "phase": 44,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add native typed tool engine (`src/native/tool_engine.rs`) with explicit `ToolContract` metadata (`name`, `version`, input/output schemas, scope/permission envelope, timeout/cancellable policy) and deterministic registry dispatch"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Implement Sprint 44 built-in native tools: `read_file`, `list_files`, `write_file` (scope-gated), `run_command` (policy-gated deny-by-default), `git_status`, and `git_diff`"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Integrate typed native tool execution into the native adapter/registry flow, including `HIVEMIND_TASK_SCOPE_JSON` propagation and deterministic non-retryable policy/scope failure classification"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add unit/property/performance baseline coverage for schema validation, policy/scope gates, deterministic replay behavior, and tool dispatch/validation latency"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Sprint 44 roadmap items complete and update architecture/design docs plus `hivemind-test` manual artifacts for native typed tool contracts and policy enforcement behavior"
+        }
+      ]
+    },
+    {
       "version": "v0.1.39",
       "date": "2026-02-19",
       "phase": 43,

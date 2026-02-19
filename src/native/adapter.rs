@@ -6,7 +6,12 @@ use crate::adapters::runtime::{
     NativePayloadCaptureMode, NativeToolCallFailure, NativeToolCallTrace, NativeTurnTrace,
     RuntimeAdapter, RuntimeError,
 };
+use crate::core::scope::Scope;
+use crate::native::tool_engine::{
+    NativeCommandPolicy, NativeToolAction, NativeToolEngine, ToolExecutionContext,
+};
 use crate::native::{AgentLoop, MockModelClient, ModelDirective, NativeRuntimeConfig};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -30,7 +35,7 @@ impl NativeAdapterConfig {
                 .with_timeout(Duration::from_secs(300)),
             native: NativeRuntimeConfig::default(),
             scripted_directives: vec![
-                "ACT:emit deterministic runtime marker".to_string(),
+                "ACT:tool:list_files:{\"path\":\".\",\"recursive\":false}".to_string(),
                 "DONE:native runtime completed deterministically".to_string(),
             ],
             provider_name: "mock".to_string(),
@@ -49,6 +54,7 @@ impl Default for NativeAdapterConfig {
 pub struct NativeRuntimeAdapter {
     config: NativeAdapterConfig,
     prepared: bool,
+    worktree: Option<PathBuf>,
 }
 
 impl NativeRuntimeAdapter {
@@ -57,6 +63,7 @@ impl NativeRuntimeAdapter {
         Self {
             config,
             prepared: false,
+            worktree: None,
         }
     }
 
@@ -114,8 +121,10 @@ impl NativeRuntimeAdapter {
         invocation_id: &str,
         config: &NativeAdapterConfig,
         result: &crate::native::AgentLoopResult,
+        tool_engine: &NativeToolEngine,
+        tool_context: &ToolExecutionContext<'_>,
     ) -> NativeInvocationTrace {
-        let turns = result
+        let turns: Vec<NativeTurnTrace> = result
             .turns
             .iter()
             .map(|turn| {
@@ -129,30 +138,13 @@ impl NativeRuntimeAdapter {
                 });
 
                 let tool_calls = match &turn.directive {
-                    ModelDirective::Act { action } => {
-                        let call_id = format!("{invocation_id}:turn:{}:tool:0", turn.turn_index);
-                        if let Some(message) = action.strip_prefix("fail_tool:") {
-                            vec![NativeToolCallTrace {
-                                call_id,
-                                tool_name: "native_action".to_string(),
-                                request: action.clone(),
-                                response: None,
-                                failure: Some(NativeToolCallFailure {
-                                    code: "native_tool_call_failed".to_string(),
-                                    message: message.trim().to_string(),
-                                    recoverable: false,
-                                }),
-                            }]
-                        } else {
-                            vec![NativeToolCallTrace {
-                                call_id,
-                                tool_name: "native_action".to_string(),
-                                request: action.clone(),
-                                response: Some(format!("completed:{action}")),
-                                failure: None,
-                            }]
-                        }
-                    }
+                    ModelDirective::Act { action } => Self::tool_trace_for_act(
+                        invocation_id,
+                        turn.turn_index,
+                        action,
+                        tool_engine,
+                        tool_context,
+                    ),
                     _ => Vec::new(),
                 };
 
@@ -174,6 +166,20 @@ impl NativeRuntimeAdapter {
             })
             .collect();
 
+        let failure = turns
+            .iter()
+            .flat_map(|turn| turn.tool_calls.iter())
+            .find_map(|call| {
+                call.failure
+                    .as_ref()
+                    .map(|failure| NativeInvocationFailure {
+                        code: failure.code.clone(),
+                        message: failure.message.clone(),
+                        recoverable: failure.recoverable,
+                        recovery_hint: None,
+                    })
+            });
+
         NativeInvocationTrace {
             invocation_id: invocation_id.to_string(),
             provider: config.provider_name.clone(),
@@ -183,7 +189,7 @@ impl NativeRuntimeAdapter {
             turns,
             final_state: result.final_state.as_str().to_string(),
             final_summary: result.final_summary.clone(),
-            failure: None,
+            failure,
         }
     }
 
@@ -210,6 +216,68 @@ impl NativeRuntimeAdapter {
             }),
         }
     }
+
+    fn tool_trace_for_act(
+        invocation_id: &str,
+        turn_index: u32,
+        action: &str,
+        tool_engine: &NativeToolEngine,
+        tool_context: &ToolExecutionContext<'_>,
+    ) -> Vec<NativeToolCallTrace> {
+        let call_id = format!("{invocation_id}:turn:{turn_index}:tool:0");
+        if let Some(message) = action.strip_prefix("fail_tool:") {
+            return vec![NativeToolCallTrace {
+                call_id,
+                tool_name: "native_action".to_string(),
+                request: action.to_string(),
+                response: None,
+                failure: Some(NativeToolCallFailure {
+                    code: "native_tool_call_failed".to_string(),
+                    message: message.trim().to_string(),
+                    recoverable: false,
+                }),
+            }];
+        }
+
+        match NativeToolAction::parse(action) {
+            Ok(Some(tool_action)) => {
+                vec![tool_engine.execute_action_trace(call_id, &tool_action, tool_context)]
+            }
+            Ok(None) => vec![NativeToolCallTrace {
+                call_id,
+                tool_name: "native_action".to_string(),
+                request: action.to_string(),
+                response: Some(format!("completed:{action}")),
+                failure: None,
+            }],
+            Err(error) => vec![NativeToolCallTrace {
+                call_id,
+                tool_name: "native_action".to_string(),
+                request: action.to_string(),
+                response: None,
+                failure: Some(NativeToolCallFailure {
+                    code: error.code,
+                    message: error.message,
+                    recoverable: error.recoverable,
+                }),
+            }],
+        }
+    }
+
+    fn scope_from_env(env: &HashMap<String, String>) -> Result<Option<Scope>, RuntimeError> {
+        let Some(raw_scope) = env.get("HIVEMIND_TASK_SCOPE_JSON") else {
+            return Ok(None);
+        };
+        serde_json::from_str::<Scope>(raw_scope)
+            .map(Some)
+            .map_err(|error| {
+                RuntimeError::new(
+                    "native_scope_decode_failed",
+                    format!("Failed to decode HIVEMIND_TASK_SCOPE_JSON: {error}"),
+                    false,
+                )
+            })
+    }
 }
 
 impl RuntimeAdapter for NativeRuntimeAdapter {
@@ -221,8 +289,9 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
         Ok(())
     }
 
-    fn prepare(&mut self, _task_id: Uuid, _worktree: &Path) -> Result<(), RuntimeError> {
+    fn prepare(&mut self, _task_id: Uuid, worktree: &Path) -> Result<(), RuntimeError> {
         self.prepared = true;
+        self.worktree = Some(worktree.to_path_buf());
         Ok(())
     }
 
@@ -234,6 +303,21 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
                 false,
             ));
         }
+        let worktree = self.worktree.as_ref().ok_or_else(|| {
+            RuntimeError::new(
+                "worktree_not_prepared",
+                "Native runtime adapter missing prepared worktree",
+                false,
+            )
+        })?;
+        let scope = Self::scope_from_env(&self.config.base.env)?;
+        let command_policy = NativeCommandPolicy::from_env(&self.config.base.env);
+        let tool_context = ToolExecutionContext {
+            worktree,
+            scope: scope.as_ref(),
+            command_policy: &command_policy,
+        };
+        let tool_engine = NativeToolEngine::default();
 
         let started_at = Instant::now();
         let invocation_id = Uuid::new_v4().to_string();
@@ -248,11 +332,27 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
 
         match run {
             Ok(result) => {
-                let trace = Self::trace_from_success(&invocation_id, &self.config, &result);
-                Ok(
-                    ExecutionReport::success(duration, Self::render_stdout(&result), String::new())
-                        .with_native_invocation(trace),
-                )
+                let trace = Self::trace_from_success(
+                    &invocation_id,
+                    &self.config,
+                    &result,
+                    &tool_engine,
+                    &tool_context,
+                );
+                let stdout = Self::render_stdout(&result);
+                if let Some(failure) = trace.failure.clone() {
+                    Ok(ExecutionReport::failure_with_output(
+                        1,
+                        duration,
+                        RuntimeError::new(failure.code, failure.message, failure.recoverable),
+                        stdout,
+                        String::new(),
+                    )
+                    .with_native_invocation(trace))
+                } else {
+                    Ok(ExecutionReport::success(duration, stdout, String::new())
+                        .with_native_invocation(trace))
+                }
             }
             Err(err) => {
                 let trace = Self::trace_from_failure(
@@ -275,6 +375,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
 
     fn terminate(&mut self) -> Result<(), RuntimeError> {
         self.prepared = false;
+        self.worktree = None;
         Ok(())
     }
 

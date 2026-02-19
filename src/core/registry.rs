@@ -8285,7 +8285,18 @@ impl Registry {
         runtime_for_adapter
             .env
             .insert("HIVEMIND_ATTEMPT_ID".to_string(), attempt_id.to_string());
-        if task.scope.is_some() {
+        if let Some(scope) = &task.scope {
+            let scope_json = serde_json::to_string(scope).map_err(|e| {
+                HivemindError::system(
+                    "scope_serialize_failed",
+                    e.to_string(),
+                    "registry:tick_flow",
+                )
+            })?;
+            runtime_for_adapter
+                .env
+                .insert("HIVEMIND_TASK_SCOPE_JSON".to_string(), scope_json);
+
             let trace_path = self.scope_trace_path(attempt_id);
             let _ = fs::create_dir_all(self.scope_traces_dir());
             runtime_for_adapter.env.insert(
@@ -8613,6 +8624,20 @@ impl Registry {
         })?;
 
         if report.exit_code != 0 {
+            let (failure_code, failure_message, recoverable) = report
+                .errors
+                .first()
+                .filter(|error| error.code.starts_with("native_"))
+                .map_or_else(
+                    || {
+                        (
+                            "runtime_nonzero_exit".to_string(),
+                            format!("Runtime exited with code {}", report.exit_code),
+                            true,
+                        )
+                    },
+                    |error| (error.code.clone(), error.message.clone(), error.recoverable),
+                );
             self.handle_runtime_failure(
                 &state,
                 &flow,
@@ -8621,9 +8646,9 @@ impl Registry {
                 &runtime_for_adapter,
                 next_attempt_number,
                 max_attempts,
-                "runtime_nonzero_exit",
-                &format!("Runtime exited with code {}", report.exit_code),
-                true,
+                &failure_code,
+                &failure_message,
+                recoverable,
                 &report.stdout,
                 &report.stderr,
                 "registry:tick_flow",
@@ -18694,10 +18719,17 @@ rules:
             )
             .unwrap();
 
-        let err = registry
+        let updated = registry
             .tick_flow(&flow.id.to_string(), false, None)
-            .unwrap_err();
-        assert_eq!(err.code, "checkpoints_incomplete");
+            .unwrap();
+        assert_eq!(
+            updated
+                .task_executions
+                .get(&task.id)
+                .expect("task execution")
+                .state,
+            TaskExecState::Failed
+        );
 
         let events = registry.read_events(&EventFilter::all()).unwrap();
         assert!(events.iter().any(|event| {
@@ -18718,6 +18750,151 @@ rules:
                 } if !success
                     && error_code.as_deref() == Some("native_tool_call_failed")
                     && recoverable == &Some(false)
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::RuntimeErrorClassified { code, retryable, .. }
+                    if code == "native_tool_call_failed" && !retryable
+            )
+        }));
+    }
+
+    #[test]
+    fn tick_flow_native_executes_typed_list_files_tool() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry
+            .create_graph("proj", "g-native-typed-tools", &[task.id])
+            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "native",
+                "builtin-native",
+                Some("native-test-model".to_string()),
+                &[
+                    "ACT:tool:list_files:{\"path\":\".\",\"recursive\":false}".to_string(),
+                    "DONE:typed tool executed".to_string(),
+                ],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let err = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap_err();
+        assert_eq!(err.code, "checkpoints_incomplete");
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::ToolCallRequested { tool_name, .. } if tool_name == "list_files"
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::ToolCallCompleted { tool_name, .. } if tool_name == "list_files"
+            )
+        }));
+        assert!(!events
+            .iter()
+            .any(|event| matches!(&event.payload, EventPayload::ToolCallFailed { .. })));
+    }
+
+    #[test]
+    fn tick_flow_native_policy_violation_fails_attempt_deterministically() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry
+            .create_graph("proj", "g-native-policy", &[task.id])
+            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "native",
+                "builtin-native",
+                Some("native-test-model".to_string()),
+                &[
+                    "ACT:tool:run_command:{\"command\":\"echo\",\"args\":[\"hello\"]}".to_string(),
+                    "DONE:this should not be treated as success".to_string(),
+                ],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let updated = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap();
+        assert_eq!(
+            updated
+                .task_executions
+                .get(&task.id)
+                .expect("task execution")
+                .state,
+            TaskExecState::Failed
+        );
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::ToolCallFailed { code, .. } if code == "native_policy_violation"
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::AgentInvocationCompleted { success, error_code, .. }
+                    if !success && error_code.as_deref() == Some("native_policy_violation")
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::RuntimeErrorClassified { code, retryable, .. }
+                    if code == "native_policy_violation" && !retryable
             )
         }));
     }

@@ -213,15 +213,19 @@ A native runtime foundation includes:
 
 ---
 
-### 8.2 Current Native Scope (Sprints 42-43)
+### 8.2 Current Native Scope (Sprints 42-44)
 
-Sprints 42-43 introduce a first native runtime adapter mode (`native`) while preserving existing
+Sprints 42-44 introduce a first native runtime adapter mode (`native`) while preserving existing
 external adapters as first-class execution backends.
 
 Current native mode includes:
 - deterministic loop contracts and error semantics
 - explicit capability reporting via `runtime list` / `runtime health`
 - explicit `RuntimeCapabilitiesEvaluated` event emission before `RuntimeStarted`
+- deterministic typed tool engine (`native`):
+  - registry-based lookup with explicit `name@version` contracts
+  - generated JSON schema input/output contracts per built-in tool
+  - strict rejection of unknown tool names and invalid tool payloads
 - additive native invocation event family:
   - `AgentInvocationStarted`
   - `AgentTurnStarted`
@@ -238,6 +242,19 @@ Current native mode includes:
   - default metadata-only blob references
   - optional full payload inlining via `HIVEMIND_NATIVE_CAPTURE_FULL_PAYLOADS=true`
   - provider provenance via `HIVEMIND_NATIVE_PROVIDER`
+- built-in native tools (v1):
+  - `read_file`
+  - `list_files`
+  - `write_file` (scope-gated)
+  - `run_command` (deny-by-default command policy, optional allowlist/denylist)
+  - `git_status`
+  - `git_diff`
+- native policy/scope enforcement surfaces:
+  - task scope projection via `HIVEMIND_TASK_SCOPE_JSON`
+  - run-command policy controls:
+    - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_ALLOWLIST`
+    - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_DENYLIST`
+    - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_DENY_BY_DEFAULT`
 
 Richer native execution internals (typed tool engine, policy-aware enforcement, and broader replay
 projection surfaces) continue in follow-on Phase 4 sprints.

@@ -1,0 +1,66 @@
+HOME=/tmp/tmp.RbfYAjnDF1/sprint44_home
+REPO=/tmp/tmp.RbfYAjnDF1/sprint44_repo
+ID:          a58b1fca-3b27-42ac-ba5a-6f2b01d43eb9
+Name:        proj
+Created:     2026-02-19 22:12:46.075045312 UTC
+Updated:     2026-02-19 22:12:46.075045312 UTC
+ID:          a58b1fca-3b27-42ac-ba5a-6f2b01d43eb9
+Name:        proj
+Created:     2026-02-19 22:12:46.075045312 UTC
+Updated:     2026-02-19 22:12:46.110227105 UTC
+Repositories:
+  - sprint44_repo (/tmp/tmp.RbfYAjnDF1/sprint44_repo) [readwrite]
+ID:          a58b1fca-3b27-42ac-ba5a-6f2b01d43eb9
+Name:        proj
+Created:     2026-02-19 22:12:46.075045312 UTC
+Updated:     2026-02-19 22:12:46.214581006 UTC
+Repositories:
+  - sprint44_repo (/tmp/tmp.RbfYAjnDF1/sprint44_repo) [readwrite]
+ID:          676ef7dd-5aa6-4316-a135-054b4fee523d
+Project:     a58b1fca-3b27-42ac-ba5a-6f2b01d43eb9
+Title:       Native list files
+Description: List files deterministically
+State:       Open
+RunMode:     Auto
+Created:     2026-02-19 22:12:46.251631627 UTC
+Graph ID: 0636f549-793e-4af6-9257-2127cbdc280b
+Flow ID: 608b1c70-295e-43ab-852d-a1281f51fb45
+Flow ID: 608b1c70-295e-43ab-852d-a1281f51fb45
+Error: [user:checkpoints_incomplete] All checkpoints must be completed before task completion
+Hint: Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 2882cffb-65e5-4460-88bd-4c8887682c60 --id <checkpoint-id>` before finishing the task attempt
+{"success":false,"error":{"category":"user","code":"checkpoints_incomplete","message":"All checkpoints must be completed before task completion","origin":"registry:complete_task_execution","hint":"Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 2882cffb-65e5-4460-88bd-4c8887682c60 --id <checkpoint-id>` before finishing the task attempt"}}
+flow_tick_status_success_path=1
+ID:          a58b1fca-3b27-42ac-ba5a-6f2b01d43eb9
+Name:        proj
+Created:     2026-02-19 22:12:46.075045312 UTC
+Updated:     2026-02-19 22:12:47.106860442 UTC
+Repositories:
+  - sprint44_repo (/tmp/tmp.RbfYAjnDF1/sprint44_repo) [readwrite]
+ID:          66c03e50-35a4-4c86-94e6-7c9b0844afc0
+Project:     a58b1fca-3b27-42ac-ba5a-6f2b01d43eb9
+Title:       Native policy deny
+Description: Policy deny path
+State:       Open
+RunMode:     Auto
+Created:     2026-02-19 22:12:47.147274959 UTC
+Graph ID: 0f3a4915-7037-4e49-9131-1f018014731f
+Flow ID: 186ac643-34bc-4829-8ec8-a08889a78c3a
+Flow ID: 186ac643-34bc-4829-8ec8-a08889a78c3a
+Flow ID: 186ac643-34bc-4829-8ec8-a08889a78c3a
+flow_tick_status_policy_path=0
+db_path=/tmp/tmp.RbfYAjnDF1/sprint44_home/.hivemind/db.sqlite
+# Tool-call event excerpts
+# Flow 1 events
+        "type": "agent_invocation_started",
+        "type": "tool_call_requested",
+        "type": "tool_call_started",
+        "type": "tool_call_completed",
+        "type": "agent_invocation_completed",
+        "type": "runtime_error_classified",
+# Flow 2 events
+        "type": "agent_invocation_started",
+        "type": "tool_call_requested",
+        "type": "tool_call_started",
+        "type": "tool_call_failed",
+        "type": "agent_invocation_completed",
+        "type": "runtime_error_classified",
