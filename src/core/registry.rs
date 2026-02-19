@@ -7,7 +7,8 @@ use crate::core::diff::{unified_diff, Baseline, ChangeType, Diff, FileChange};
 use crate::core::enforcement::{ScopeEnforcer, VerificationResult};
 use crate::core::error::{ErrorCategory, HivemindError, Result};
 use crate::core::events::{
-    CorrelationIds, Event, EventPayload, RuntimeOutputStream, RuntimeRole, RuntimeSelectionSource,
+    CorrelationIds, Event, EventPayload, NativeBlobRef, NativeEventCorrelation,
+    NativeEventPayloadCaptureMode, RuntimeOutputStream, RuntimeRole, RuntimeSelectionSource,
 };
 use crate::core::flow::{FlowState, RetryMode, RunMode, TaskExecState, TaskFlow};
 use crate::core::graph::{GraphState, GraphTask, RetryPolicy, SuccessCriteria, TaskGraph};
@@ -22,6 +23,7 @@ use crate::storage::event_store::{EventFilter, EventStore, SqliteEventStore};
 use chrono::Utc;
 use fs2::FileExt;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fmt::Write as _;
@@ -46,7 +48,8 @@ use crate::adapters::kilo::{KiloAdapter, KiloConfig};
 use crate::adapters::opencode::OpenCodeConfig;
 use crate::adapters::runtime::{
     format_execution_prompt, AttemptSummary, ExecutionInput, InteractiveAdapterEvent,
-    InteractiveExecutionResult, RuntimeAdapter, RuntimeError,
+    InteractiveExecutionResult, NativeInvocationTrace, NativePayloadCaptureMode, RuntimeAdapter,
+    RuntimeError,
 };
 use crate::adapters::{runtime_descriptors, SUPPORTED_ADAPTERS};
 use crate::native::adapter::{NativeAdapterConfig, NativeRuntimeAdapter};
@@ -1748,6 +1751,310 @@ impl Registry {
                 origin,
             )?;
         }
+        Ok(())
+    }
+
+    fn native_capture_mode_for_event(
+        mode: NativePayloadCaptureMode,
+    ) -> NativeEventPayloadCaptureMode {
+        match mode {
+            NativePayloadCaptureMode::MetadataOnly => NativeEventPayloadCaptureMode::MetadataOnly,
+            NativePayloadCaptureMode::FullPayload => NativeEventPayloadCaptureMode::FullPayload,
+        }
+    }
+
+    fn native_event_correlation(
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt_id: Uuid,
+    ) -> NativeEventCorrelation {
+        NativeEventCorrelation {
+            project_id: flow.project_id,
+            graph_id: flow.graph_id,
+            flow_id: flow.id,
+            task_id,
+            attempt_id,
+        }
+    }
+
+    fn native_blob_sha256(payload: &[u8]) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(payload);
+        let digest = hasher.finalize();
+        let mut hex = String::with_capacity(digest.len() * 2);
+        for byte in digest {
+            let _ = write!(&mut hex, "{byte:02x}");
+        }
+        hex
+    }
+
+    fn blobs_dir(&self) -> PathBuf {
+        self.config.data_dir.join("blobs")
+    }
+
+    fn blob_path_for_digest(&self, digest: &str) -> PathBuf {
+        let prefix = digest.get(..2).unwrap_or("00");
+        self.blobs_dir()
+            .join("sha256")
+            .join(prefix)
+            .join(format!("{digest}.blob"))
+    }
+
+    fn persist_native_blob(
+        &self,
+        media_type: &str,
+        payload: &str,
+        mode: NativePayloadCaptureMode,
+        origin: &'static str,
+    ) -> Result<NativeBlobRef> {
+        let payload_bytes = payload.as_bytes();
+        let digest = Self::native_blob_sha256(payload_bytes);
+        let blob_path = self.blob_path_for_digest(&digest);
+        if let Some(parent) = blob_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                HivemindError::system("blob_write_failed", e.to_string(), origin)
+                    .with_context("path", parent.display().to_string())
+            })?;
+        }
+        if !blob_path.exists() {
+            fs::write(&blob_path, payload_bytes).map_err(|e| {
+                HivemindError::system("blob_write_failed", e.to_string(), origin)
+                    .with_context("path", blob_path.display().to_string())
+            })?;
+        }
+
+        let byte_size = u64::try_from(payload_bytes.len()).unwrap_or(u64::MAX);
+
+        Ok(NativeBlobRef {
+            digest,
+            byte_size,
+            media_type: media_type.to_string(),
+            blob_path: blob_path.to_string_lossy().to_string(),
+            payload: if matches!(mode, NativePayloadCaptureMode::FullPayload) {
+                Some(payload.to_string())
+            } else {
+                None
+            },
+        })
+    }
+
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    fn append_native_invocation_events(
+        &self,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        correlation: &CorrelationIds,
+        adapter_name: &str,
+        invocation: &NativeInvocationTrace,
+        origin: &'static str,
+    ) -> Result<()> {
+        let native_correlation = Self::native_event_correlation(flow, task_id, attempt_id);
+        let capture_mode = Self::native_capture_mode_for_event(invocation.capture_mode);
+
+        self.append_event(
+            Event::new(
+                EventPayload::AgentInvocationStarted {
+                    native_correlation: native_correlation.clone(),
+                    invocation_id: invocation.invocation_id.clone(),
+                    adapter_name: adapter_name.to_string(),
+                    provider: invocation.provider.clone(),
+                    model: invocation.model.clone(),
+                    runtime_version: invocation.runtime_version.clone(),
+                    capture_mode,
+                },
+                correlation.clone(),
+            ),
+            origin,
+        )?;
+
+        let mut saw_tool_failure = false;
+
+        for turn in &invocation.turns {
+            self.append_event(
+                Event::new(
+                    EventPayload::AgentTurnStarted {
+                        native_correlation: native_correlation.clone(),
+                        invocation_id: invocation.invocation_id.clone(),
+                        turn_index: turn.turn_index,
+                        from_state: turn.from_state.clone(),
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+
+            let request = self.persist_native_blob(
+                "application/json",
+                &turn.model_request,
+                invocation.capture_mode,
+                origin,
+            )?;
+            self.append_event(
+                Event::new(
+                    EventPayload::ModelRequestPrepared {
+                        native_correlation: native_correlation.clone(),
+                        invocation_id: invocation.invocation_id.clone(),
+                        turn_index: turn.turn_index,
+                        request,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+
+            let response = self.persist_native_blob(
+                "text/plain; charset=utf-8",
+                &turn.model_response,
+                invocation.capture_mode,
+                origin,
+            )?;
+            self.append_event(
+                Event::new(
+                    EventPayload::ModelResponseReceived {
+                        native_correlation: native_correlation.clone(),
+                        invocation_id: invocation.invocation_id.clone(),
+                        turn_index: turn.turn_index,
+                        response,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+
+            for tool_call in &turn.tool_calls {
+                let request = self.persist_native_blob(
+                    "text/plain; charset=utf-8",
+                    &tool_call.request,
+                    invocation.capture_mode,
+                    origin,
+                )?;
+                self.append_event(
+                    Event::new(
+                        EventPayload::ToolCallRequested {
+                            native_correlation: native_correlation.clone(),
+                            invocation_id: invocation.invocation_id.clone(),
+                            turn_index: turn.turn_index,
+                            call_id: tool_call.call_id.clone(),
+                            tool_name: tool_call.tool_name.clone(),
+                            request,
+                        },
+                        correlation.clone(),
+                    ),
+                    origin,
+                )?;
+
+                self.append_event(
+                    Event::new(
+                        EventPayload::ToolCallStarted {
+                            native_correlation: native_correlation.clone(),
+                            invocation_id: invocation.invocation_id.clone(),
+                            turn_index: turn.turn_index,
+                            call_id: tool_call.call_id.clone(),
+                            tool_name: tool_call.tool_name.clone(),
+                        },
+                        correlation.clone(),
+                    ),
+                    origin,
+                )?;
+
+                if let Some(failure) = &tool_call.failure {
+                    saw_tool_failure = true;
+                    self.append_event(
+                        Event::new(
+                            EventPayload::ToolCallFailed {
+                                native_correlation: native_correlation.clone(),
+                                invocation_id: invocation.invocation_id.clone(),
+                                turn_index: turn.turn_index,
+                                call_id: tool_call.call_id.clone(),
+                                tool_name: tool_call.tool_name.clone(),
+                                code: failure.code.clone(),
+                                message: failure.message.clone(),
+                                recoverable: failure.recoverable,
+                            },
+                            correlation.clone(),
+                        ),
+                        origin,
+                    )?;
+                } else if let Some(response_payload) = tool_call.response.as_deref() {
+                    let response = self.persist_native_blob(
+                        "text/plain; charset=utf-8",
+                        response_payload,
+                        invocation.capture_mode,
+                        origin,
+                    )?;
+                    self.append_event(
+                        Event::new(
+                            EventPayload::ToolCallCompleted {
+                                native_correlation: native_correlation.clone(),
+                                invocation_id: invocation.invocation_id.clone(),
+                                turn_index: turn.turn_index,
+                                call_id: tool_call.call_id.clone(),
+                                tool_name: tool_call.tool_name.clone(),
+                                response,
+                            },
+                            correlation.clone(),
+                        ),
+                        origin,
+                    )?;
+                }
+            }
+
+            self.append_event(
+                Event::new(
+                    EventPayload::AgentTurnCompleted {
+                        native_correlation: native_correlation.clone(),
+                        invocation_id: invocation.invocation_id.clone(),
+                        turn_index: turn.turn_index,
+                        to_state: turn.to_state.clone(),
+                        summary: turn.turn_summary.clone(),
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+        }
+
+        let success = invocation.failure.is_none() && !saw_tool_failure;
+        let (error_code, error_message, recoverable) = invocation.failure.as_ref().map_or_else(
+            || {
+                if saw_tool_failure {
+                    (
+                        Some("native_tool_call_failed".to_string()),
+                        Some("One or more native tool calls failed".to_string()),
+                        Some(false),
+                    )
+                } else {
+                    (None, None, None)
+                }
+            },
+            |failure| {
+                (
+                    Some(failure.code.clone()),
+                    Some(failure.message.clone()),
+                    Some(failure.recoverable),
+                )
+            },
+        );
+
+        self.append_event(
+            Event::new(
+                EventPayload::AgentInvocationCompleted {
+                    native_correlation,
+                    invocation_id: invocation.invocation_id.clone(),
+                    total_turns: u32::try_from(invocation.turns.len()).unwrap_or(u32::MAX),
+                    final_state: invocation.final_state.clone(),
+                    success,
+                    final_summary: invocation.final_summary.clone(),
+                    error_code,
+                    error_message,
+                    recoverable,
+                },
+                correlation.clone(),
+            ),
+            origin,
+        )?;
+
         Ok(())
     }
 
@@ -7441,6 +7748,18 @@ impl Registry {
             }
             "native" => {
                 let mut cfg = NativeAdapterConfig::new();
+                cfg.model_name = runtime
+                    .model
+                    .clone()
+                    .unwrap_or_else(|| cfg.model_name.clone());
+                if let Some(provider) = runtime.env.get("HIVEMIND_NATIVE_PROVIDER") {
+                    cfg.provider_name.clone_from(provider);
+                }
+                if let Some(raw) = runtime.env.get("HIVEMIND_NATIVE_CAPTURE_FULL_PAYLOADS") {
+                    let normalized = raw.trim().to_ascii_lowercase();
+                    cfg.native.capture_full_payloads =
+                        matches!(normalized.as_str(), "1" | "true" | "yes" | "on");
+                }
                 cfg.base.binary_path = PathBuf::from(runtime.binary_path);
                 cfg.base.timeout = timeout;
                 cfg.base.env = runtime.env;
@@ -8156,6 +8475,18 @@ impl Registry {
             };
             (report, None)
         };
+
+        if let Some(native_invocation) = report.native_invocation.as_ref() {
+            self.append_native_invocation_events(
+                &flow,
+                task_id,
+                attempt_id,
+                &attempt_corr,
+                &runtime_for_adapter.adapter_name,
+                native_invocation,
+                "registry:tick_flow",
+            )?;
+        }
 
         // Best-effort filesystem observed based on the persisted baseline.
         if let Ok(state) = self.state() {
@@ -17789,6 +18120,7 @@ rules:
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn tick_flow_executes_ready_task_and_emits_runtime_events() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let repo_dir = tmp.path().join("repo");
@@ -17884,6 +18216,21 @@ rules:
         assert!(!events.iter().any(|e| {
             matches!(e.payload, EventPayload::RuntimeRecoveryScheduled { .. })
                 && e.metadata.correlation.flow_id == Some(flow.id)
+        }));
+        assert!(!events.iter().any(|e| {
+            matches!(
+                e.payload,
+                EventPayload::AgentInvocationStarted { .. }
+                    | EventPayload::AgentTurnStarted { .. }
+                    | EventPayload::ModelRequestPrepared { .. }
+                    | EventPayload::ModelResponseReceived { .. }
+                    | EventPayload::ToolCallRequested { .. }
+                    | EventPayload::ToolCallStarted { .. }
+                    | EventPayload::ToolCallCompleted { .. }
+                    | EventPayload::ToolCallFailed { .. }
+                    | EventPayload::AgentTurnCompleted { .. }
+                    | EventPayload::AgentInvocationCompleted { .. }
+            )
         }));
     }
 
@@ -18078,6 +18425,301 @@ rules:
             .capabilities
             .iter()
             .any(|c| c == "deterministic_harness"));
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn tick_flow_native_emits_event_family_with_blob_refs_and_replay_is_idempotent() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry
+            .create_graph("proj", "g-native", &[task.id])
+            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "native",
+                "builtin-native",
+                Some("native-test-model".to_string()),
+                &[],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let err = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap_err();
+        assert_eq!(err.code, "checkpoints_incomplete");
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+
+        let native_corr = events
+            .iter()
+            .find_map(|event| {
+                if let EventPayload::AgentInvocationStarted {
+                    native_correlation, ..
+                } = &event.payload
+                {
+                    Some(native_correlation.clone())
+                } else {
+                    None
+                }
+            })
+            .expect("native invocation start event should exist");
+
+        assert_eq!(native_corr.project_id, flow.project_id);
+        assert_eq!(native_corr.graph_id, flow.graph_id);
+        assert_eq!(native_corr.flow_id, flow.id);
+        assert_eq!(native_corr.task_id, task.id);
+
+        let mut request_blob_refs = Vec::new();
+        let mut response_blob_refs = Vec::new();
+        let mut tool_request_blob_refs = Vec::new();
+        let mut tool_response_blob_refs = Vec::new();
+
+        for event in &events {
+            match &event.payload {
+                EventPayload::AgentInvocationStarted {
+                    native_correlation, ..
+                }
+                | EventPayload::AgentTurnStarted {
+                    native_correlation, ..
+                }
+                | EventPayload::ModelRequestPrepared {
+                    native_correlation, ..
+                }
+                | EventPayload::ModelResponseReceived {
+                    native_correlation, ..
+                }
+                | EventPayload::ToolCallRequested {
+                    native_correlation, ..
+                }
+                | EventPayload::ToolCallStarted {
+                    native_correlation, ..
+                }
+                | EventPayload::ToolCallCompleted {
+                    native_correlation, ..
+                }
+                | EventPayload::ToolCallFailed {
+                    native_correlation, ..
+                }
+                | EventPayload::AgentTurnCompleted {
+                    native_correlation, ..
+                }
+                | EventPayload::AgentInvocationCompleted {
+                    native_correlation, ..
+                } => {
+                    assert_eq!(native_correlation, &native_corr);
+                    assert_eq!(
+                        event.metadata.correlation.project_id,
+                        Some(native_corr.project_id)
+                    );
+                    assert_eq!(
+                        event.metadata.correlation.graph_id,
+                        Some(native_corr.graph_id)
+                    );
+                    assert_eq!(
+                        event.metadata.correlation.flow_id,
+                        Some(native_corr.flow_id)
+                    );
+                    assert_eq!(
+                        event.metadata.correlation.task_id,
+                        Some(native_corr.task_id)
+                    );
+                    assert_eq!(
+                        event.metadata.correlation.attempt_id,
+                        Some(native_corr.attempt_id)
+                    );
+                }
+                _ => {}
+            }
+
+            match &event.payload {
+                EventPayload::ModelRequestPrepared { request, .. } => {
+                    request_blob_refs.push(request.clone());
+                }
+                EventPayload::ModelResponseReceived { response, .. } => {
+                    response_blob_refs.push(response.clone());
+                }
+                EventPayload::ToolCallRequested { request, .. } => {
+                    tool_request_blob_refs.push(request.clone());
+                }
+                EventPayload::ToolCallCompleted { response, .. } => {
+                    tool_response_blob_refs.push(response.clone());
+                }
+                _ => {}
+            }
+        }
+
+        assert!(events
+            .iter()
+            .any(|event| { matches!(event.payload, EventPayload::AgentInvocationStarted { .. }) }));
+        assert!(events
+            .iter()
+            .any(|event| matches!(event.payload, EventPayload::AgentTurnStarted { .. })));
+        assert!(events
+            .iter()
+            .any(|event| { matches!(event.payload, EventPayload::ModelRequestPrepared { .. }) }));
+        assert!(events
+            .iter()
+            .any(|event| { matches!(event.payload, EventPayload::ModelResponseReceived { .. }) }));
+        assert!(events
+            .iter()
+            .any(|event| matches!(event.payload, EventPayload::ToolCallRequested { .. })));
+        assert!(events
+            .iter()
+            .any(|event| matches!(event.payload, EventPayload::ToolCallStarted { .. })));
+        assert!(events
+            .iter()
+            .any(|event| matches!(event.payload, EventPayload::ToolCallCompleted { .. })));
+        assert!(events
+            .iter()
+            .any(|event| matches!(event.payload, EventPayload::AgentTurnCompleted { .. })));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::AgentInvocationCompleted { success, .. } if *success
+            )
+        }));
+
+        let mut all_blob_refs = Vec::new();
+        all_blob_refs.extend(request_blob_refs);
+        all_blob_refs.extend(response_blob_refs);
+        all_blob_refs.extend(tool_request_blob_refs);
+        all_blob_refs.extend(tool_response_blob_refs);
+        assert!(!all_blob_refs.is_empty());
+
+        for blob_ref in &all_blob_refs {
+            assert!(
+                blob_ref.payload.is_none(),
+                "default capture mode is metadata-only"
+            );
+            let blob_path = PathBuf::from(&blob_ref.blob_path);
+            assert!(
+                blob_path.exists(),
+                "blob path should exist: {}",
+                blob_ref.blob_path
+            );
+            let bytes = fs::read(&blob_path).expect("blob bytes should be readable");
+            let byte_len = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+            assert_eq!(blob_ref.byte_size, byte_len);
+            assert_eq!(blob_ref.digest, Registry::native_blob_sha256(&bytes));
+        }
+
+        let replay_once = AppState::replay(&events);
+        let replay_twice = AppState::replay(&events);
+        assert_eq!(replay_once.projects.len(), replay_twice.projects.len());
+        assert_eq!(replay_once.tasks.len(), replay_twice.tasks.len());
+        assert_eq!(replay_once.graphs.len(), replay_twice.graphs.len());
+        assert_eq!(replay_once.flows.len(), replay_twice.flows.len());
+        assert_eq!(replay_once.attempts.len(), replay_twice.attempts.len());
+
+        let replay_once_flow = replay_once
+            .flows
+            .get(&flow.id)
+            .expect("replay once flow should exist");
+        let replay_twice_flow = replay_twice
+            .flows
+            .get(&flow.id)
+            .expect("replay twice flow should exist");
+        assert_eq!(replay_once_flow.state, replay_twice_flow.state);
+        assert_eq!(
+            replay_once_flow
+                .task_executions
+                .get(&task.id)
+                .map(|exec| exec.state),
+            replay_twice_flow
+                .task_executions
+                .get(&task.id)
+                .map(|exec| exec.state)
+        );
+    }
+
+    #[test]
+    fn tick_flow_native_emits_tool_call_failed_and_failed_invocation_completion() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry
+            .create_graph("proj", "g-native-fail", &[task.id])
+            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "native",
+                "builtin-native",
+                Some("native-test-model".to_string()),
+                &[
+                    "ACT:fail_tool:intentional tool failure".to_string(),
+                    "DONE:continue despite failed tool".to_string(),
+                ],
+                &[],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let err = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap_err();
+        assert_eq!(err.code, "checkpoints_incomplete");
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::ToolCallFailed { code, message, .. }
+                    if code == "native_tool_call_failed" && message == "intentional tool failure"
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::AgentInvocationCompleted {
+                    success,
+                    error_code,
+                    recoverable,
+                    ..
+                } if !success
+                    && error_code.as_deref() == Some("native_tool_call_failed")
+                    && recoverable == &Some(false)
+            )
+        }));
     }
 
     #[test]

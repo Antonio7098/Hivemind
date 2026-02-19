@@ -25,15 +25,17 @@
 //!
 //! ```no_run
 //! use hivemind::storage::event_store::{EventStore, EventFilter, SqliteEventStore};
+//! use uuid::Uuid;
 //!
-//! let store = SqliteEventStore::open("/path/to/events.db")?;
+//! let temp_dir = tempfile::tempdir()?;
+//! let store = SqliteEventStore::open(temp_dir.path())?;
 //!
 //! // Query events by project
 //! let filter = EventFilter {
-//!     project_id: Some(project_id),
+//!     project_id: Some(Uuid::new_v4()),
 //!     ..Default::default()
 //! };
-//! let events = store.query(filter)?;
+//! let events = store.read(&filter)?;
 //! # Ok::<(), hivemind::storage::event_store::EventStoreError>(())
 //! ```
 //!

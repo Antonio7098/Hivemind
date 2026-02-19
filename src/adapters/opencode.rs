@@ -489,6 +489,7 @@ impl OpenCodeAdapter {
                     format!("Process exited with code {exit_code}"),
                     true,
                 )],
+                native_invocation: None,
             }
         };
 

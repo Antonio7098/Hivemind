@@ -118,6 +118,77 @@ pub struct AttemptSummary {
     pub failure_reason: Option<String>,
 }
 
+/// Payload capture mode for native runtime traces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NativePayloadCaptureMode {
+    #[default]
+    MetadataOnly,
+    FullPayload,
+}
+
+/// Native runtime invocation provenance and turn trace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeInvocationTrace {
+    pub invocation_id: String,
+    pub provider: String,
+    pub model: String,
+    pub runtime_version: String,
+    #[serde(default)]
+    pub capture_mode: NativePayloadCaptureMode,
+    #[serde(default)]
+    pub turns: Vec<NativeTurnTrace>,
+    pub final_state: String,
+    #[serde(default)]
+    pub final_summary: Option<String>,
+    #[serde(default)]
+    pub failure: Option<NativeInvocationFailure>,
+}
+
+/// One native runtime turn trace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeTurnTrace {
+    pub turn_index: u32,
+    pub from_state: String,
+    pub to_state: String,
+    pub model_request: String,
+    pub model_response: String,
+    #[serde(default)]
+    pub tool_calls: Vec<NativeToolCallTrace>,
+    #[serde(default)]
+    pub turn_summary: Option<String>,
+}
+
+/// One native runtime tool-call trace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeToolCallTrace {
+    pub call_id: String,
+    pub tool_name: String,
+    pub request: String,
+    #[serde(default)]
+    pub response: Option<String>,
+    #[serde(default)]
+    pub failure: Option<NativeToolCallFailure>,
+}
+
+/// Native tool-call failure payload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeToolCallFailure {
+    pub code: String,
+    pub message: String,
+    pub recoverable: bool,
+}
+
+/// Native invocation failure payload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeInvocationFailure {
+    pub code: String,
+    pub message: String,
+    pub recoverable: bool,
+    #[serde(default)]
+    pub recovery_hint: Option<String>,
+}
+
 /// Report from runtime execution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionReport {
@@ -137,6 +208,9 @@ pub struct ExecutionReport {
     pub files_deleted: Vec<PathBuf>,
     /// Any errors that occurred.
     pub errors: Vec<RuntimeError>,
+    /// Native runtime turn-level invocation trace (when available).
+    #[serde(default)]
+    pub native_invocation: Option<NativeInvocationTrace>,
 }
 
 impl ExecutionReport {
@@ -151,6 +225,7 @@ impl ExecutionReport {
             files_modified: Vec::new(),
             files_deleted: Vec::new(),
             errors: Vec::new(),
+            native_invocation: None,
         }
     }
 
@@ -176,6 +251,7 @@ impl ExecutionReport {
             files_modified: Vec::new(),
             files_deleted: Vec::new(),
             errors: vec![error],
+            native_invocation: None,
         }
     }
 
@@ -195,6 +271,13 @@ impl ExecutionReport {
         self.files_created = created;
         self.files_modified = modified;
         self.files_deleted = deleted;
+        self
+    }
+
+    /// Attaches native invocation trace details to this report.
+    #[must_use]
+    pub fn with_native_invocation(mut self, invocation: NativeInvocationTrace) -> Self {
+        self.native_invocation = Some(invocation);
         self
     }
 }

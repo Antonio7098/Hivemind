@@ -1657,6 +1657,95 @@ TaskExecutionStateChanged:
   task_id: <task-id>
   from: RUNNING
   to: VERIFYING
+
+# Additional native runtime events (when adapter_name == "native")
+AgentInvocationStarted:
+  native_correlation: {project_id, graph_id, flow_id, task_id, attempt_id}
+  invocation_id: <invocation-id>
+  adapter_name: native
+  provider: <provider-name>
+  model: <model-name>
+  runtime_version: <hivemind-version>
+  capture_mode: metadata_only|full_payload
+
+AgentTurnStarted:
+  native_correlation: {project_id, graph_id, flow_id, task_id, attempt_id}
+  invocation_id: <invocation-id>
+  turn_index: <n>
+  from_state: init|think|act|done
+
+ModelRequestPrepared:
+  native_correlation: {project_id, graph_id, flow_id, task_id, attempt_id}
+  invocation_id: <invocation-id>
+  turn_index: <n>
+  request:
+    digest: <sha256-hex>
+    byte_size: <bytes>
+    media_type: <mime-type>
+    blob_path: <absolute-path>
+    payload: <text|null>
+
+ModelResponseReceived:
+  native_correlation: {project_id, graph_id, flow_id, task_id, attempt_id}
+  invocation_id: <invocation-id>
+  turn_index: <n>
+  response:
+    digest: <sha256-hex>
+    byte_size: <bytes>
+    media_type: <mime-type>
+    blob_path: <absolute-path>
+    payload: <text|null>
+
+ToolCallRequested:
+  native_correlation: {project_id, graph_id, flow_id, task_id, attempt_id}
+  invocation_id: <invocation-id>
+  turn_index: <n>
+  call_id: <call-id>
+  tool_name: <tool-name>
+  request: <native-blob-ref>
+
+ToolCallStarted:
+  native_correlation: {project_id, graph_id, flow_id, task_id, attempt_id}
+  invocation_id: <invocation-id>
+  turn_index: <n>
+  call_id: <call-id>
+  tool_name: <tool-name>
+
+ToolCallCompleted:
+  native_correlation: {project_id, graph_id, flow_id, task_id, attempt_id}
+  invocation_id: <invocation-id>
+  turn_index: <n>
+  call_id: <call-id>
+  tool_name: <tool-name>
+  response: <native-blob-ref>
+
+ToolCallFailed:
+  native_correlation: {project_id, graph_id, flow_id, task_id, attempt_id}
+  invocation_id: <invocation-id>
+  turn_index: <n>
+  call_id: <call-id>
+  tool_name: <tool-name>
+  code: <error-code>
+  message: <error-message>
+  recoverable: true|false
+
+AgentTurnCompleted:
+  native_correlation: {project_id, graph_id, flow_id, task_id, attempt_id}
+  invocation_id: <invocation-id>
+  turn_index: <n>
+  to_state: init|think|act|done
+  summary: <text|null>
+
+AgentInvocationCompleted:
+  native_correlation: {project_id, graph_id, flow_id, task_id, attempt_id}
+  invocation_id: <invocation-id>
+  total_turns: <n>
+  final_state: init|think|act|done
+  success: true|false
+  final_summary: <text|null>
+  error_code: <error-code|null>
+  error_message: <error-message|null>
+  recoverable: true|false|null
 ```
 
 **Failures:**
@@ -1665,6 +1754,7 @@ TaskExecutionStateChanged:
 - `RUNTIME_NOT_CONFIGURED`
 - `WORKTREE_NOT_FOUND`
 - `UNSUPPORTED_RUNTIME`
+- `checkpoints_incomplete`
 - `interactive_mode_deprecated`: `--interactive` is no longer supported
 - `invalid_max_parallel`: `--max-parallel` must be >= 1
 - `invalid_global_parallel_limit`: `HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL` is invalid

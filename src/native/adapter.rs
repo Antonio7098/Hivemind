@@ -2,9 +2,11 @@
 
 use crate::adapters::runtime::{
     AdapterConfig, ExecutionInput, ExecutionReport, InteractiveAdapterEvent,
-    InteractiveExecutionResult, RuntimeAdapter, RuntimeError,
+    InteractiveExecutionResult, NativeInvocationFailure, NativeInvocationTrace,
+    NativePayloadCaptureMode, NativeToolCallFailure, NativeToolCallTrace, NativeTurnTrace,
+    RuntimeAdapter, RuntimeError,
 };
-use crate::native::{AgentLoop, MockModelClient, NativeRuntimeConfig};
+use crate::native::{AgentLoop, MockModelClient, ModelDirective, NativeRuntimeConfig};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -16,6 +18,8 @@ pub struct NativeAdapterConfig {
     pub native: NativeRuntimeConfig,
     /// Scripted directives for deterministic harness execution.
     pub scripted_directives: Vec<String>,
+    pub provider_name: String,
+    pub model_name: String,
 }
 
 impl NativeAdapterConfig {
@@ -29,6 +33,8 @@ impl NativeAdapterConfig {
                 "ACT:emit deterministic runtime marker".to_string(),
                 "DONE:native runtime completed deterministically".to_string(),
             ],
+            provider_name: "mock".to_string(),
+            model_name: "native-mock-v1".to_string(),
         }
     }
 }
@@ -95,6 +101,115 @@ impl NativeRuntimeAdapter {
         }
         lines.join("\n")
     }
+
+    fn capture_mode(config: &NativeRuntimeConfig) -> NativePayloadCaptureMode {
+        if config.capture_full_payloads {
+            NativePayloadCaptureMode::FullPayload
+        } else {
+            NativePayloadCaptureMode::MetadataOnly
+        }
+    }
+
+    fn trace_from_success(
+        invocation_id: &str,
+        config: &NativeAdapterConfig,
+        result: &crate::native::AgentLoopResult,
+    ) -> NativeInvocationTrace {
+        let turns = result
+            .turns
+            .iter()
+            .map(|turn| {
+                let model_request = serde_json::to_string(&turn.request).unwrap_or_else(|_| {
+                    format!(
+                        "turn={} state={} prompt={}",
+                        turn.request.turn_index,
+                        turn.request.state.as_str(),
+                        turn.request.prompt
+                    )
+                });
+
+                let tool_calls = match &turn.directive {
+                    ModelDirective::Act { action } => {
+                        let call_id = format!("{invocation_id}:turn:{}:tool:0", turn.turn_index);
+                        if let Some(message) = action.strip_prefix("fail_tool:") {
+                            vec![NativeToolCallTrace {
+                                call_id,
+                                tool_name: "native_action".to_string(),
+                                request: action.clone(),
+                                response: None,
+                                failure: Some(NativeToolCallFailure {
+                                    code: "native_tool_call_failed".to_string(),
+                                    message: message.trim().to_string(),
+                                    recoverable: false,
+                                }),
+                            }]
+                        } else {
+                            vec![NativeToolCallTrace {
+                                call_id,
+                                tool_name: "native_action".to_string(),
+                                request: action.clone(),
+                                response: Some(format!("completed:{action}")),
+                                failure: None,
+                            }]
+                        }
+                    }
+                    _ => Vec::new(),
+                };
+
+                let turn_summary = if let ModelDirective::Done { summary } = &turn.directive {
+                    Some(summary.clone())
+                } else {
+                    None
+                };
+
+                NativeTurnTrace {
+                    turn_index: turn.turn_index,
+                    from_state: turn.from_state.as_str().to_string(),
+                    to_state: turn.to_state.as_str().to_string(),
+                    model_request,
+                    model_response: turn.raw_output.clone(),
+                    tool_calls,
+                    turn_summary,
+                }
+            })
+            .collect();
+
+        NativeInvocationTrace {
+            invocation_id: invocation_id.to_string(),
+            provider: config.provider_name.clone(),
+            model: config.model_name.clone(),
+            runtime_version: env!("CARGO_PKG_VERSION").to_string(),
+            capture_mode: Self::capture_mode(&config.native),
+            turns,
+            final_state: result.final_state.as_str().to_string(),
+            final_summary: result.final_summary.clone(),
+            failure: None,
+        }
+    }
+
+    fn trace_from_failure(
+        invocation_id: &str,
+        config: &NativeAdapterConfig,
+        final_state: crate::native::AgentLoopState,
+        err: &crate::native::NativeRuntimeError,
+    ) -> NativeInvocationTrace {
+        NativeInvocationTrace {
+            invocation_id: invocation_id.to_string(),
+            provider: config.provider_name.clone(),
+            model: config.model_name.clone(),
+            runtime_version: env!("CARGO_PKG_VERSION").to_string(),
+            capture_mode: Self::capture_mode(&config.native),
+            turns: Vec::new(),
+            final_state: final_state.as_str().to_string(),
+            final_summary: None,
+            failure: Some(NativeInvocationFailure {
+                code: err.code().to_string(),
+                message: err.message(),
+                recoverable: err.recoverable(),
+                recovery_hint: err.recovery_hint(),
+            }),
+        }
+    }
 }
 
 impl RuntimeAdapter for NativeRuntimeAdapter {
@@ -121,6 +236,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
         }
 
         let started_at = Instant::now();
+        let invocation_id = Uuid::new_v4().to_string();
         let model = MockModelClient::from_outputs(self.config.scripted_directives.clone());
         let mut loop_harness = AgentLoop::new(self.config.native.clone(), model);
         let prompt = format!(
@@ -131,12 +247,29 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
         let duration = started_at.elapsed();
 
         match run {
-            Ok(result) => Ok(ExecutionReport::success(
-                duration,
-                Self::render_stdout(&result),
-                String::new(),
-            )),
-            Err(err) => Err(err.to_runtime_error()),
+            Ok(result) => {
+                let trace = Self::trace_from_success(&invocation_id, &self.config, &result);
+                Ok(
+                    ExecutionReport::success(duration, Self::render_stdout(&result), String::new())
+                        .with_native_invocation(trace),
+                )
+            }
+            Err(err) => {
+                let trace = Self::trace_from_failure(
+                    &invocation_id,
+                    &self.config,
+                    loop_harness.state(),
+                    &err,
+                );
+                Ok(ExecutionReport::failure_with_output(
+                    1,
+                    duration,
+                    err.to_runtime_error(),
+                    String::new(),
+                    err.message(),
+                )
+                .with_native_invocation(trace))
+            }
         }
     }
 

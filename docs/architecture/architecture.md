@@ -262,15 +262,19 @@ This approach prioritizes leverage, speed, and replaceability.
 
 ---
 
-### 8.3 Native Runtime (Future, Optional)
+### 8.3 Native Runtime (Optional, Incremental)
 
 A native runtime may later:
 
 - Own prompt assembly
 - Produce structured patch objects
 - Enable AST-aware verification
+- Emit turn/tool-level native invocation events with explicit correlation IDs
+- Persist model/tool payloads as hash-addressed blobs for replay-time inspection
 
-This evolution does **not** change TaskFlow, state, events, scope, or commit semantics.
+This evolution does **not** change TaskFlow, scope, or commit semantics.
+It extends observability with additive native event contracts while preserving legacy
+state projections and adapter compatibility.
 
 ---
 
@@ -281,6 +285,7 @@ Hivemind is **event-native**.
 - Every meaningful transition emits an event
 - All state is derived from the event log
 - Execution history is replayable and auditable
+- Native runtime invocations emit explicit turn/tool event trails with blob metadata references
 - Operators can query governance-specific event slices by artifact/template/rule identifiers
 - Governance diagnostics are explicit CLI outputs (missing artifacts, invalid references, stale snapshots)
 - Governance replay/snapshot/repair workflows are CLI-first with explicit confirmation boundaries and recovery telemetry

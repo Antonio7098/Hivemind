@@ -48,7 +48,7 @@
 //! use hivemind::core::registry::Registry;
 //!
 //! let registry = Registry::open()?;
-//! let project = registry.create_project("my-project", "/path/to/repo")?;
+//! let project = registry.create_project("my-project", Some("Example project"))?;
 //! println!("Created project: {}", project.id);
 //! # Ok::<(), hivemind::core::error::HivemindError>(())
 //! ```
@@ -57,9 +57,11 @@
 //!
 //! ```no_run
 //! use hivemind::core::graph::{TaskGraph, GraphTask, SuccessCriteria};
+//! use uuid::Uuid;
 //!
 //! let task = GraphTask::new("Implement feature X", SuccessCriteria::new("Feature works correctly"));
-//! let graph = TaskGraph::new("feature-x").with_task(task);
+//! let mut graph = TaskGraph::new(Uuid::new_v4(), "feature-x");
+//! let _task_id = graph.add_task(task).unwrap();
 //! ```
 //!
 //! ## Event-Sourced State

@@ -45,42 +45,42 @@
 > **Principles 1, 8, 10, 15:** Event authority, absolute observability, failures preserved, no hidden magic.
 
 ### 43.1 Native Runtime Event Family
-- [ ] Introduce native runtime event payloads:
-  - [ ] `AgentInvocationStarted`
-  - [ ] `AgentTurnStarted`
-  - [ ] `ModelRequestPrepared`
-  - [ ] `ModelResponseReceived`
-  - [ ] `ToolCallRequested`
-  - [ ] `ToolCallStarted`
-  - [ ] `ToolCallCompleted`
-  - [ ] `ToolCallFailed`
-  - [ ] `AgentTurnCompleted`
-  - [ ] `AgentInvocationCompleted`
-- [ ] Include correlation IDs (`project`, `graph`, `flow`, `task`, `attempt`) on all native events
+- [x] Introduce native runtime event payloads:
+  - [x] `AgentInvocationStarted`
+  - [x] `AgentTurnStarted`
+  - [x] `ModelRequestPrepared`
+  - [x] `ModelResponseReceived`
+  - [x] `ToolCallRequested`
+  - [x] `ToolCallStarted`
+  - [x] `ToolCallCompleted`
+  - [x] `ToolCallFailed`
+  - [x] `AgentTurnCompleted`
+  - [x] `AgentInvocationCompleted`
+- [x] Include correlation IDs (`project`, `graph`, `flow`, `task`, `attempt`) on all native events
 
 ### 43.2 Payload and Provenance Strategy
-- [ ] Add hash-addressed blob storage for large prompt/response payloads:
-  - [ ] canonical path under `~/.hivemind/blobs/`
-  - [ ] digest + byte-size + media-type metadata in events
-- [ ] Default to metadata + hashes in event payloads; enable full payload capture by explicit config
-- [ ] Persist provider/model metadata and runtime version provenance for each invocation
+- [x] Add hash-addressed blob storage for large prompt/response payloads:
+  - [x] canonical path under `~/.hivemind/blobs/`
+  - [x] digest + byte-size + media-type metadata in events
+- [x] Default to metadata + hashes in event payloads; enable full payload capture by explicit config
+- [x] Persist provider/model metadata and runtime version provenance for each invocation
 
 ### 43.3 Replay Determinism Proof
-- [ ] Add replay tests proving deterministic state reconstruction from native events + blob references
-- [ ] Add idempotence tests for projection rebuild under repeated replay
-- [ ] Ensure native events do not alter legacy flow/task semantics when feature-disabled
+- [x] Add replay tests proving deterministic state reconstruction from native events + blob references
+- [x] Add idempotence tests for projection rebuild under repeated replay
+- [x] Ensure native events do not alter legacy flow/task semantics when feature-disabled
 
 ### 43.4 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 43 manual checklist under `@hivemind-test`
-- [ ] Validate native event trail completeness for successful and failed invocations
-- [ ] Validate blob reference integrity and recovery behavior
-- [ ] Publish Sprint 43 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 43 manual checklist under `@hivemind-test`
+- [x] Validate native event trail completeness for successful and failed invocations
+- [x] Validate blob reference integrity and recovery behavior
+- [x] Publish Sprint 43 manual test report artifact in `@hivemind-test`
 
 ### 43.5 Exit Criteria
-- [ ] Native runtime emits complete, attributable event trails
-- [ ] Replay reproduces identical native runtime projection state
-- [ ] Large payload strategy is observable and configurable
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Native runtime emits complete, attributable event trails
+- [x] Replay reproduces identical native runtime projection state
+- [x] Large payload strategy is observable and configurable
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

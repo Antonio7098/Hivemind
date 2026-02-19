@@ -239,7 +239,30 @@ Examples:
 - `RuntimeErrorClassified`
 - `RuntimeRecoveryScheduled`
 
-Runtime events are intentionally coarse-grained.
+Wrapper runtime events are intentionally coarse-grained.
+
+### 12.1 Native Runtime Invocation Events
+
+When adapter `native` is selected, Hivemind emits an additive turn/tool-level event family:
+
+- `AgentInvocationStarted`
+- `AgentTurnStarted`
+- `ModelRequestPrepared`
+- `ModelResponseReceived`
+- `ToolCallRequested`
+- `ToolCallStarted`
+- `ToolCallCompleted`
+- `ToolCallFailed`
+- `AgentTurnCompleted`
+- `AgentInvocationCompleted`
+
+Properties:
+- Each event includes correlation IDs (`project_id`, `graph_id`, `flow_id`, `task_id`, `attempt_id`) in both metadata and payload (`native_correlation`)
+- Model/tool payloads are stored as hash-addressed blob references (`digest`, `byte_size`, `media_type`, `blob_path`)
+- Capture mode is explicit:
+  - `metadata_only` (default; payload content omitted)
+  - `full_payload` (explicit opt-in; payload content included in event blob metadata)
+- Provider/model/runtime-version provenance is attached to every native invocation trail
 
 ---
 
