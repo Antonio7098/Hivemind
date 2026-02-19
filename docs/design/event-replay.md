@@ -172,6 +172,16 @@ RuntimeOutputChunk:
 RuntimeStarted:
   prompt: "Task: ..."
   flags: ["--model", "..."]
+
+ModelRequestPrepared:
+  request:
+    digest: "sha256:..."
+    blob_path: "~/.hivemind/blobs/sha256/..../....blob"
+
+ModelResponseReceived:
+  response:
+    digest: "sha256:..."
+    blob_path: "~/.hivemind/blobs/sha256/..../....blob"
 ```
 
 These are useful for debugging but not for state reconstruction.
@@ -195,6 +205,7 @@ Preserved by: Git reflog, explicit branch retention policy
 - Diffs
 - Snapshots
 - Output logs
+- Native model/tool payload blobs (`~/.hivemind/blobs/sha256/...`)
 
 Preserved by: Artifact storage (filesystem or object store)
 
@@ -228,6 +239,8 @@ project:
       retain: 30_days
     output_logs:
       retain: 7_days
+    native_blobs:
+      retain: 30_days
 ```
 
 ---

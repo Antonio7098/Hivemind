@@ -1179,6 +1179,16 @@ impl AppState {
             | EventPayload::MergeCheckCompleted { .. }
             | EventPayload::RuntimeStarted { .. }
             | EventPayload::RuntimeCapabilitiesEvaluated { .. }
+            | EventPayload::AgentInvocationStarted { .. }
+            | EventPayload::AgentTurnStarted { .. }
+            | EventPayload::ModelRequestPrepared { .. }
+            | EventPayload::ModelResponseReceived { .. }
+            | EventPayload::ToolCallRequested { .. }
+            | EventPayload::ToolCallStarted { .. }
+            | EventPayload::ToolCallCompleted { .. }
+            | EventPayload::ToolCallFailed { .. }
+            | EventPayload::AgentTurnCompleted { .. }
+            | EventPayload::AgentInvocationCompleted { .. }
             | EventPayload::RuntimeOutputChunk { .. }
             | EventPayload::RuntimeInputProvided { .. }
             | EventPayload::RuntimeInterrupted { .. }

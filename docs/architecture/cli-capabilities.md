@@ -332,6 +332,10 @@ Capabilities:
 - Inspect runtime status with role-aware resolution (`runtime health --role --project/--flow/--task`)
 - Inspect adapter capability surfaces (`runtime list`, `runtime health`)
 - Select built-in native runtime mode (`--adapter native`) without requiring an external runtime binary
+- Configure native runtime provenance/capture policy with runtime env keys:
+  - `HIVEMIND_NATIVE_PROVIDER`
+  - `HIVEMIND_NATIVE_CAPTURE_FULL_PAYLOADS`
+- Inspect native invocation event trails and blob references via `events list`
 
 ---
 

@@ -213,18 +213,34 @@ A native runtime foundation includes:
 
 ---
 
-### 8.2 Why Native Is Deferred
+### 8.2 Current Native Scope (Sprints 42-43)
 
-Sprint 42 introduces a first native runtime adapter mode (`native`) while preserving existing
+Sprints 42-43 introduce a first native runtime adapter mode (`native`) while preserving existing
 external adapters as first-class execution backends.
 
-Current native mode is intentionally minimal:
+Current native mode includes:
 - deterministic loop contracts and error semantics
 - explicit capability reporting via `runtime list` / `runtime health`
 - explicit `RuntimeCapabilitiesEvaluated` event emission before `RuntimeStarted`
+- additive native invocation event family:
+  - `AgentInvocationStarted`
+  - `AgentTurnStarted`
+  - `ModelRequestPrepared`
+  - `ModelResponseReceived`
+  - `ToolCallRequested`
+  - `ToolCallStarted`
+  - `ToolCallCompleted`
+  - `ToolCallFailed`
+  - `AgentTurnCompleted`
+  - `AgentInvocationCompleted`
+- hash-addressed payload blobs under `~/.hivemind/blobs/sha256/<prefix>/<digest>.blob`
+- capture mode policy:
+  - default metadata-only blob references
+  - optional full payload inlining via `HIVEMIND_NATIVE_CAPTURE_FULL_PAYLOADS=true`
+  - provider provenance via `HIVEMIND_NATIVE_PROVIDER`
 
-Richer native execution internals (tool engine, payload capture, replayable turn-level model/tool
-events) continue in follow-on Phase 4 sprints.
+Richer native execution internals (typed tool engine, policy-aware enforcement, and broader replay
+projection surfaces) continue in follow-on Phase 4 sprints.
 
 ---
 
@@ -232,7 +248,9 @@ events) continue in follow-on Phase 4 sprints.
 
 The architecture guarantees:
 - TaskFlow does not change
-- State and events do not change
+- Legacy flow/task state semantics do not change
+- Existing runtime lifecycle events remain valid
+- Native runtime adds an additive event family with explicit correlation and payload provenance
 - Scope and commit models remain valid
 
 Only the adapter implementation changes.

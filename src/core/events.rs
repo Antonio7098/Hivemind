@@ -54,6 +54,35 @@ impl RuntimeSelectionSource {
     }
 }
 
+/// Correlation identifiers embedded in native runtime event payloads.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeEventCorrelation {
+    pub project_id: Uuid,
+    pub graph_id: Uuid,
+    pub flow_id: Uuid,
+    pub task_id: Uuid,
+    pub attempt_id: Uuid,
+}
+
+/// Payload capture mode for native runtime event payload fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeEventPayloadCaptureMode {
+    MetadataOnly,
+    FullPayload,
+}
+
+/// Hash-addressed payload blob metadata used by native runtime events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeBlobRef {
+    pub digest: String,
+    pub byte_size: u64,
+    pub media_type: String,
+    pub blob_path: String,
+    #[serde(default)]
+    pub payload: Option<String>,
+}
+
 /// Unique identifier for an event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct EventId(Uuid);
@@ -1063,6 +1092,89 @@ pub enum EventPayload {
         selection_source: RuntimeSelectionSource,
         #[serde(default)]
         capabilities: Vec<String>,
+    },
+    AgentInvocationStarted {
+        native_correlation: NativeEventCorrelation,
+        invocation_id: String,
+        adapter_name: String,
+        provider: String,
+        model: String,
+        runtime_version: String,
+        capture_mode: NativeEventPayloadCaptureMode,
+    },
+    AgentTurnStarted {
+        native_correlation: NativeEventCorrelation,
+        invocation_id: String,
+        turn_index: u32,
+        from_state: String,
+    },
+    ModelRequestPrepared {
+        native_correlation: NativeEventCorrelation,
+        invocation_id: String,
+        turn_index: u32,
+        request: NativeBlobRef,
+    },
+    ModelResponseReceived {
+        native_correlation: NativeEventCorrelation,
+        invocation_id: String,
+        turn_index: u32,
+        response: NativeBlobRef,
+    },
+    ToolCallRequested {
+        native_correlation: NativeEventCorrelation,
+        invocation_id: String,
+        turn_index: u32,
+        call_id: String,
+        tool_name: String,
+        request: NativeBlobRef,
+    },
+    ToolCallStarted {
+        native_correlation: NativeEventCorrelation,
+        invocation_id: String,
+        turn_index: u32,
+        call_id: String,
+        tool_name: String,
+    },
+    ToolCallCompleted {
+        native_correlation: NativeEventCorrelation,
+        invocation_id: String,
+        turn_index: u32,
+        call_id: String,
+        tool_name: String,
+        response: NativeBlobRef,
+    },
+    ToolCallFailed {
+        native_correlation: NativeEventCorrelation,
+        invocation_id: String,
+        turn_index: u32,
+        call_id: String,
+        tool_name: String,
+        code: String,
+        message: String,
+        recoverable: bool,
+    },
+    AgentTurnCompleted {
+        native_correlation: NativeEventCorrelation,
+        invocation_id: String,
+        turn_index: u32,
+        to_state: String,
+        #[serde(default)]
+        summary: Option<String>,
+    },
+    AgentInvocationCompleted {
+        native_correlation: NativeEventCorrelation,
+        invocation_id: String,
+        total_turns: u32,
+        final_state: String,
+        success: bool,
+        #[serde(default)]
+        final_summary: Option<String>,
+        #[serde(default)]
+        error_code: Option<String>,
+        #[serde(default)]
+        error_message: Option<String>,
+        #[serde(default)]
+        recoverable: Option<bool>,
     },
     RuntimeOutputChunk {
         attempt_id: Uuid,

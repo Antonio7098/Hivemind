@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.39",
+      "date": "2026-02-19",
+      "phase": 43,
+      "changes": [
+        {
+          "type": "added",
+          "area": "events",
+          "description": "Add native runtime invocation event family: `AgentInvocationStarted`, `AgentTurnStarted`, `ModelRequestPrepared`, `ModelResponseReceived`, `ToolCallRequested`, `ToolCallStarted`, `ToolCallCompleted`, `ToolCallFailed`, `AgentTurnCompleted`, `AgentInvocationCompleted`"
+        },
+        {
+          "type": "added",
+          "area": "storage",
+          "description": "Persist native model/tool payloads as hash-addressed blobs under `~/.hivemind/blobs/sha256/<prefix>/<digest>.blob`, with digest/byte-size/media-type metadata in events"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Wire native invocation tracing into runtime execution reports and registry event emission; preserve legacy flow/task semantics by treating native events as additive observability data"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Surface native event payload types in CLI/server event label mappings and category projections"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add replay/idempotence regression coverage for native events + blob references, including successful and failed native tool-call paths"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update Phase 4 roadmap and architecture/design docs for native event contracts, blob provenance strategy, capture-mode policy, and replay semantics"
+        }
+      ]
+    },
+    {
       "version": "v0.1.38",
       "date": "2026-02-19",
       "phase": 42,

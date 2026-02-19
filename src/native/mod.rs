@@ -47,6 +47,8 @@ pub struct NativeRuntimeConfig {
     pub timeout_budget: Duration,
     /// Approximate token budget (UTF-8 char count in v1 harness).
     pub token_budget: usize,
+    /// Whether native runtime events should inline full payload text.
+    pub capture_full_payloads: bool,
 }
 
 impl Default for NativeRuntimeConfig {
@@ -55,6 +57,7 @@ impl Default for NativeRuntimeConfig {
             max_turns: 8,
             timeout_budget: Duration::from_secs(300),
             token_budget: 32_000,
+            capture_full_payloads: false,
         }
     }
 }
@@ -99,6 +102,7 @@ pub struct AgentLoopTurn {
     pub turn_index: u32,
     pub from_state: AgentLoopState,
     pub to_state: AgentLoopState,
+    pub request: ModelTurnRequest,
     pub directive: ModelDirective,
     pub raw_output: String,
 }
@@ -406,6 +410,7 @@ impl<M: ModelClient> AgentLoop<M> {
                 turn_index: self.next_turn_index,
                 from_state,
                 to_state,
+                request,
                 directive,
                 raw_output,
             });

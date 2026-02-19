@@ -45,7 +45,8 @@
 //! use hivemind::server::{serve, ServeConfig};
 //!
 //! let config = ServeConfig::default();
-//! serve(config)?;
+//! serve(&config)?;
+//! # Ok::<(), hivemind::core::error::HivemindError>(())
 //! ```
 //!
 //! # Response Format
@@ -269,6 +270,16 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::MergeCompleted { .. } => "MergeCompleted",
         EventPayload::WorktreeCleanupPerformed { .. } => "WorktreeCleanupPerformed",
         EventPayload::RuntimeCapabilitiesEvaluated { .. } => "RuntimeCapabilitiesEvaluated",
+        EventPayload::AgentInvocationStarted { .. } => "AgentInvocationStarted",
+        EventPayload::AgentTurnStarted { .. } => "AgentTurnStarted",
+        EventPayload::ModelRequestPrepared { .. } => "ModelRequestPrepared",
+        EventPayload::ModelResponseReceived { .. } => "ModelResponseReceived",
+        EventPayload::ToolCallRequested { .. } => "ToolCallRequested",
+        EventPayload::ToolCallStarted { .. } => "ToolCallStarted",
+        EventPayload::ToolCallCompleted { .. } => "ToolCallCompleted",
+        EventPayload::ToolCallFailed { .. } => "ToolCallFailed",
+        EventPayload::AgentTurnCompleted { .. } => "AgentTurnCompleted",
+        EventPayload::AgentInvocationCompleted { .. } => "AgentInvocationCompleted",
         EventPayload::RuntimeStarted { .. } => "RuntimeStarted",
         EventPayload::RuntimeOutputChunk { .. } => "RuntimeOutputChunk",
         EventPayload::RuntimeInputProvided { .. } => "RuntimeInputProvided",
@@ -391,6 +402,16 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::MergeCompleted { .. } => "merge",
 
         EventPayload::RuntimeCapabilitiesEvaluated { .. }
+        | EventPayload::AgentInvocationStarted { .. }
+        | EventPayload::AgentTurnStarted { .. }
+        | EventPayload::ModelRequestPrepared { .. }
+        | EventPayload::ModelResponseReceived { .. }
+        | EventPayload::ToolCallRequested { .. }
+        | EventPayload::ToolCallStarted { .. }
+        | EventPayload::ToolCallCompleted { .. }
+        | EventPayload::ToolCallFailed { .. }
+        | EventPayload::AgentTurnCompleted { .. }
+        | EventPayload::AgentInvocationCompleted { .. }
         | EventPayload::RuntimeStarted { .. }
         | EventPayload::RuntimeOutputChunk { .. }
         | EventPayload::RuntimeInputProvided { .. }
