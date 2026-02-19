@@ -1,6 +1,6 @@
 [package]
 name = "hivemind-core"
-version = "0.1.39"
+version = "0.1.40"
 edition = "2021"
 authors = ["Antonio"]
 description = "A structured orchestration system for agentic coding workflows"
@@ -35,9 +35,13 @@ portable-pty = "0.9"
 signal-hook = "0.4"
 tempfile = "3"
 sha2 = "0.10"
+schemars = "0.8"
+jsonschema = "0.17"
+serde_path_to_error = "0.1"
 ucp-api = { git = "https://github.com/Antonio7098/unified-content-protocol.git", rev = "cf745b5efb66711f5fbcd89a41c640533b2fdc84" }
 
 [dev-dependencies]
+proptest = "1"
 
 [profile.release]
 lto = true

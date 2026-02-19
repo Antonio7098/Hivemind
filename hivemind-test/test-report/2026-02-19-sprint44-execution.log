@@ -1,0 +1,117 @@
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint: 
+hint: 	git config --global init.defaultBranch <name>
+hint: 
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint: 
+hint: 	git branch -m <name>
+Initialized empty Git repository in /tmp/hivemind-test/test-fresh/.git/
+[master (root-commit) 684f432] Initial commit
+ 1 file changed, 1 insertion(+)
+ create mode 100644 README.md
+=== Creating project ===
+ID:          292130b2-28c1-4de0-adb8-a7a6febfe79e
+Name:        test-fresh
+Description: Test project
+Created:     2026-02-19 22:07:21.084116191 UTC
+Updated:     2026-02-19 22:07:21.084116191 UTC
+=== Attaching repository ===
+ID:          292130b2-28c1-4de0-adb8-a7a6febfe79e
+Name:        test-fresh
+Description: Test project
+Created:     2026-02-19 22:07:21.084116191 UTC
+Updated:     2026-02-19 22:07:21.108103262 UTC
+Repositories:
+  - main (/tmp/hivemind-test/test-fresh) [readwrite]
+=== Configuring runtime ===
+ID:          292130b2-28c1-4de0-adb8-a7a6febfe79e
+Name:        test-fresh
+Description: Test project
+Created:     2026-02-19 22:07:21.084116191 UTC
+Updated:     2026-02-19 22:07:21.170505208 UTC
+Repositories:
+  - main (/tmp/hivemind-test/test-fresh) [readwrite]
+=== Creating task with better description ===
+ID:          5423e76a-02f8-41c8-80a2-2e4e6b9e6d36
+Project:     292130b2-28c1-4de0-adb8-a7a6febfe79e
+Title:       Create hello world file
+Description: Create a file called hello.txt with the content 'Hello, World!'
+State:       Open
+RunMode:     Auto
+Created:     2026-02-19 22:07:21.193790823 UTC
+Task ID: 5423e76a-02f8-41c8-80a2-2e4e6b9e6d36
+=== Creating new graph ===
+Graph ID: 1efd7905-0958-4819-82aa-a90a4bb03ce0
+Graph ID: 1efd7905-0958-4819-82aa-a90a4bb03ce0
+=== Creating new flow ===
+Flow ID: 3147d6b8-c8bd-4e96-9597-2a3f196fc369
+Flow ID: 3147d6b8-c8bd-4e96-9597-2a3f196fc369
+=== Starting flow ===
+Flow ID: 3147d6b8-c8bd-4e96-9597-2a3f196fc369
+=== Ticking flow ===
+Error: [user:checkpoints_incomplete] All checkpoints must be completed before task completion
+Hint: Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 6ff416f4-42f4-4014-b754-9ecfbaa8749d --id <checkpoint-id>` before finishing the task attempt
+{"success":false,"error":{"category":"user","code":"checkpoints_incomplete","message":"All checkpoints must be completed before task completion","origin":"registry:complete_task_execution","hint":"Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 6ff416f4-42f4-4014-b754-9ecfbaa8749d --id <checkpoint-id>` before finishing the task attempt"}}
+=== Completing checkpoint and retrying tick ===
+Attempt:    6ff416f4-42f4-4014-b754-9ecfbaa8749d
+Checkpoint: checkpoint-1 (1/1)
+Commit:     0c63dced0d3516651a47ba1895a4318301ef3547
+Next:       none
+All done:   true
+Flow ID: 3147d6b8-c8bd-4e96-9597-2a3f196fc369
+Flow ID: 3147d6b8-c8bd-4e96-9597-2a3f196fc369
+=== Checking events ===
+SEQ     TYPE                      TIMESTAMP               PROJECT
+------------------------------------------------------------------------------------------
+0       project_created           2026-02-19T22:07:21.084116191+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+1       repo_attached             2026-02-19T22:07:21.108103262+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+2       graph_snapshot_started    2026-02-19T22:07:21.119474094+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+3       governance_artifact_upserted  2026-02-19T22:07:21.134270227+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+4       graph_snapshot_diff_detected  2026-02-19T22:07:21.142458804+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+5       graph_snapshot_completed  2026-02-19T22:07:21.149336348+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+6       project_runtime_configured  2026-02-19T22:07:21.170505208+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+7       task_created              2026-02-19T22:07:21.193790823+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+8       graph_created             2026-02-19T22:07:21.226067370+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+9       graph_task_added          2026-02-19T22:07:21.235770240+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+10      graph_validated           2026-02-19T22:07:21.264684794+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+11      graph_locked              2026-02-19T22:07:21.272376858+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+12      flow_created              2026-02-19T22:07:21.282897934+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+13      flow_started              2026-02-19T22:07:21.319813262+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+14      task_ready                2026-02-19T22:07:21.328047263+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+15      task_execution_state_changed  2026-02-19T22:07:21.440276282+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+16      attempt_started           2026-02-19T22:07:21.449898390+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+17      checkpoint_declared       2026-02-19T22:07:21.457640427+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+18      checkpoint_activated      2026-02-19T22:07:21.467281140+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+19      task_execution_started    2026-02-19T22:07:21.475618876+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+20      baseline_captured         2026-02-19T22:07:21.483312143+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+21      attempt_context_assembled  2026-02-19T22:07:21.496563425+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+22      attempt_context_delivered  2026-02-19T22:07:21.507230275+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+23      runtime_capabilities_evaluated  2026-02-19T22:07:21.516476527+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+24      runtime_started           2026-02-19T22:07:21.524978432+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+25      runtime_filesystem_observed  2026-02-19T22:07:21.550009955+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+26      runtime_exited            2026-02-19T22:07:21.559366193+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+27      error_occurred            2026-02-19T22:07:21.572195844+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+28      runtime_terminated        2026-02-19T22:07:21.580814488+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+29      runtime_error_classified  2026-02-19T22:07:21.587668739+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+30      error_occurred            2026-02-19T22:07:21.596848666+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+31      checkpoint_completed      2026-02-19T22:07:22.678940308+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+32      checkpoint_commit_created  2026-02-19T22:07:22.689304860+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+33      all_checkpoints_completed  2026-02-19T22:07:22.700425142+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+34      graph_snapshot_started    2026-02-19T22:07:22.717940261+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+35      governance_artifact_upserted  2026-02-19T22:07:22.740256395+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+36      graph_snapshot_completed  2026-02-19T22:07:22.750368753+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+37      task_execution_state_changed  2026-02-19T22:07:22.806182307+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+38      file_modified             2026-02-19T22:07:22.818267330+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+39      diff_computed             2026-02-19T22:07:22.830134484+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+40      task_execution_state_changed  2026-02-19T22:07:22.913483362+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+41      task_execution_succeeded  2026-02-19T22:07:22.926901128+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+42      task_execution_frozen     2026-02-19T22:07:22.947397334+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+43      flow_completed            2026-02-19T22:07:22.989321417+00:00  292130b2-28c1-4de0-adb8-a7a6febfe79e
+=== Listing files in worktree ===
+total 8
+drwxrwxr-x 2 antonio antonio 4096 Feb 19 22:07 .
+drwxrwxr-x 3 antonio antonio 4096 Feb 19 22:07 ..
+=== Done ===

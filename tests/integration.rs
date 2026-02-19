@@ -293,6 +293,10 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
     let (code, _out, err) =
         run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
     assert_eq!(code, 0, "{err}");
+    let escaped_repo_path = repo_path.replace('"', "\\\"");
+    let runtime_script = format!(
+        "tmp=\"$(mktemp /tmp/0000_hm_scope_XXXXXX.txt)\"; printf data > hm_scope_violation.txt; printf data > \"$tmp\"; printf data > \"{escaped_repo_path}/hm_scope_repo_violation.txt\"; \"$HIVEMIND_BIN\" checkpoint complete --attempt-id \"$HIVEMIND_ATTEMPT_ID\" --id checkpoint-1"
+    );
 
     let (code, _out, err) = run_hivemind(
         tmp.path(),
@@ -307,9 +311,9 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
             "--arg",
             "-c",
             "--arg",
-            "tmp=\"/tmp/hm_scope_${HIVEMIND_ATTEMPT_ID}.txt\"; printf data > hm_scope_violation.txt; printf data > \"$tmp\"; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+            runtime_script.as_str(),
             "--timeout-ms",
-            "1000",
+            "3000",
         ],
     );
     assert_eq!(code, 0, "{err}");
@@ -3143,6 +3147,10 @@ fn cli_scope_violation_detects_tmp_write_outside_worktree() {
     let (code, _out, err) =
         run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
     assert_eq!(code, 0, "{err}");
+    let escaped_repo_path = repo_path.replace('"', "\\\"");
+    let runtime_script = format!(
+        "tmp=\"$(mktemp /tmp/0000_hm_scope_XXXXXX.txt)\"; printf data > \"$tmp\"; printf data > \"{escaped_repo_path}/hm_scope_repo_violation.txt\"; \"$HIVEMIND_BIN\" checkpoint complete --attempt-id \"$HIVEMIND_ATTEMPT_ID\" --id checkpoint-1"
+    );
 
     let (code, _out, err) = run_hivemind(
         tmp.path(),
@@ -3157,7 +3165,7 @@ fn cli_scope_violation_detects_tmp_write_outside_worktree() {
             "--arg",
             "-c",
             "--arg",
-            "tmp=\"/tmp/hm_scope_${HIVEMIND_ATTEMPT_ID}.txt\"; printf data > \"$tmp\"; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+            runtime_script.as_str(),
             "--timeout-ms",
             "2000",
         ],

@@ -9,6 +9,7 @@
 //! - scripted mock model client for deterministic harness tests
 
 pub mod adapter;
+pub mod tool_engine;
 
 use crate::adapters::runtime::RuntimeError;
 use crate::core::error::{ErrorCategory, HivemindError};

@@ -93,7 +93,10 @@ Scope violations are prevented before they occur.
 **Mechanisms:**
 - All tool calls routed through Hivemind
 - Filesystem access mediated by Hivemind
-- No direct subprocess execution
+- Typed tool contracts with strict JSON-schema payload validation
+- Native command policy gates (`allowlist` / `denylist`, deny-by-default)
+- Task scope projection (`HIVEMIND_TASK_SCOPE_JSON`) enforced before tool side effects
+- Policy/scope violations emit explicit `ToolCallFailed` + `RuntimeErrorClassified` and fail attempts deterministically
 
 **Timing:**
 - Before any operation executes

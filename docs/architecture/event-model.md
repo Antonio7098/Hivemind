@@ -259,10 +259,15 @@ When adapter `native` is selected, Hivemind emits an additive turn/tool-level ev
 Properties:
 - Each event includes correlation IDs (`project_id`, `graph_id`, `flow_id`, `task_id`, `attempt_id`) in both metadata and payload (`native_correlation`)
 - Model/tool payloads are stored as hash-addressed blob references (`digest`, `byte_size`, `media_type`, `blob_path`)
+- Tool call payloads are schema-validated against typed native tool contracts before execution
+- Unknown tools, schema violations, scope violations, and policy violations emit explicit `ToolCallFailed` payloads with stable error codes
 - Capture mode is explicit:
   - `metadata_only` (default; payload content omitted)
   - `full_payload` (explicit opt-in; payload content included in event blob metadata)
 - Provider/model/runtime-version provenance is attached to every native invocation trail
+- Invocation completion is deterministic:
+  - any failed tool call sets `AgentInvocationCompleted.success=false`
+  - policy/scope failures are attributable via `error_code` and mirrored in `RuntimeErrorClassified`
 
 ---
 

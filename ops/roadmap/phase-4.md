@@ -91,44 +91,44 @@
 > **Principles 2, 4, 5, 9:** Fail loud, explicit taxonomy, structured execution, mandatory checks.
 
 ### 44.1 Tool Registry and Contracts
-- [ ] Define `Tool` contract including:
-  - [ ] name + version
-  - [ ] JSON schema input/output contract
-  - [ ] required scope and permissions
-  - [ ] timeout/cancellation envelope
-- [ ] Add registry-based dispatch with deterministic tool lookup
-- [ ] Reject unknown tool names and invalid schemas with structured errors
+- [x] Define `Tool` contract including:
+  - [x] name + version
+  - [x] JSON schema input/output contract
+  - [x] required scope and permissions
+  - [x] timeout/cancellation envelope
+- [x] Add registry-based dispatch with deterministic tool lookup
+- [x] Reject unknown tool names and invalid schemas with structured errors
 
 ### 44.2 Built-In Tools (Minimal Set)
-- [ ] Implement minimal built-in tool set:
-  - [ ] `read_file`
-  - [ ] `list_files`
-  - [ ] `write_file` (scope-gated)
-  - [ ] `run_command` (deny-by-default policy)
-  - [ ] `git_status` and `git_diff` (read-only)
-- [ ] Ensure every tool execution emits request/start/completion/failure events
+- [x] Implement minimal built-in tool set:
+  - [x] `read_file`
+  - [x] `list_files`
+  - [x] `write_file` (scope-gated)
+  - [x] `run_command` (deny-by-default policy)
+  - [x] `git_status` and `git_diff` (read-only)
+- [x] Ensure every tool execution emits request/start/completion/failure events
 
 ### 44.3 Safety and Policy Enforcement
-- [ ] Wire tool execution to existing scope enforcement model (`Scope`, repo access, execution limits)
-- [ ] Add command allowlist/denylist policy config with explicit violation eventing
-- [ ] Make policy violations fail attempts deterministically (no silent auto-retry)
+- [x] Wire tool execution to existing scope enforcement model (`Scope`, repo access, execution limits)
+- [x] Add command allowlist/denylist policy config with explicit violation eventing
+- [x] Make policy violations fail attempts deterministically (no silent auto-retry)
 
 ### 44.4 Test and Benchmark Coverage
-- [ ] Unit tests for schema validation, permission gates, and failure classification
-- [ ] Property tests for deterministic tool call replay
-- [ ] Performance baselines for tool dispatch overhead and validation latency
+- [x] Unit tests for schema validation, permission gates, and failure classification
+- [x] Property tests for deterministic tool call replay
+- [x] Performance baselines for tool dispatch overhead and validation latency
 
 ### 44.5 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 44 manual checklist under `@hivemind-test`
-- [ ] Validate allowed tool success paths and denied tool violation paths
-- [ ] Validate replay and inspectability of tool traces
-- [ ] Publish Sprint 44 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 44 manual checklist under `@hivemind-test`
+- [x] Validate allowed tool success paths and denied tool violation paths
+- [x] Validate replay and inspectability of tool traces
+- [x] Publish Sprint 44 manual test report artifact in `@hivemind-test`
 
 ### 44.6 Exit Criteria
-- [ ] Tool engine is typed, schema-validated, and fully event-observable
-- [ ] Scope/policy violations are explicit and attributable
-- [ ] Replay reconstructs tool outcomes deterministically
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Tool engine is typed, schema-validated, and fully event-observable
+- [x] Scope/policy violations are explicit and attributable
+- [x] Replay reconstructs tool outcomes deterministically
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

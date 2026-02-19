@@ -105,6 +105,9 @@ pub fn runtime_descriptors() -> [RuntimeDescriptor; 5] {
             requires_binary: false,
             capabilities: &[
                 "native_loop",
+                "typed_tool_engine",
+                "schema_validated_tools",
+                "scope_policy_enforcement",
                 "deterministic_harness",
                 "provider_agnostic_contracts",
             ],
