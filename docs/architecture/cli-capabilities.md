@@ -361,6 +361,11 @@ Constraints:
 
 Capabilities:
 - Create/list/inspect/update/delete global skill artifacts
+- List available external skill registries (agentskills, skillsmp, github)
+- Search skills across registries by name or keyword
+- Inspect remote skill details before pulling
+- Pull skills from registries and save to hivemind
+- Pull all skills from a GitHub repository
 
 ### 12.2 System Prompts
 

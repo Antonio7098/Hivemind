@@ -3,11 +3,13 @@
 //! This module provides clients for discovering and pulling skills from external
 //! registries like agentskills.io, `SkillsMP`, and GitHub repositories.
 
+#![allow(clippy::unnecessary_wraps)]
+#![allow(clippy::format_push_string)]
+
 use crate::core::error::{HivemindError, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -46,13 +48,6 @@ pub struct RemoteSkillDetail {
     pub has_assets: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SkillSearchResult {
-    pub skills: Vec<RemoteSkill>,
-    pub total: usize,
-    pub registry: String,
-}
-
 pub fn list_registries() -> Vec<SkillRegistryInfo> {
     vec![
         SkillRegistryInfo {
@@ -77,10 +72,11 @@ pub fn list_registries() -> Vec<SkillRegistryInfo> {
 }
 
 pub fn search_skills(registry: Option<&str>, query: Option<&str>) -> Result<Vec<RemoteSkill>> {
-    let registries = registry.map_or_else(
-        || vec![REGISTRY_AGILLSKILLS, REGISTRY_SKILLSMP, REGISTRY_GITHUB],
-        |r| vec![r],
-    );
+    #[allow(clippy::option_if_let_else)]
+    let registries = match registry {
+        Some(r) => vec![r],
+        None => vec![REGISTRY_AGILLSKILLS, REGISTRY_SKILLSMP, REGISTRY_GITHUB],
+    };
 
     let mut results = Vec::new();
 
@@ -108,9 +104,9 @@ pub fn search_skills(registry: Option<&str>, query: Option<&str>) -> Result<Vec<
 
 fn search_registry(registry: &str, query: Option<&str>) -> Result<Vec<RemoteSkill>> {
     match registry {
-        REGISTRY_AGILLSKILLS => Ok(search_agentskills(query)),
-        REGISTRY_SKILLSMP => Ok(search_skillsmp(query)),
-        REGISTRY_GITHUB => Ok(search_github_skills(query)),
+        REGISTRY_AGILLSKILLS => search_agentskills(query),
+        REGISTRY_SKILLSMP => search_skillsmp(query),
+        REGISTRY_GITHUB => search_github_skills(query),
         _ => Err(HivemindError::user(
             "unknown_registry",
             format!("Unknown registry: {registry}"),
@@ -119,7 +115,7 @@ fn search_registry(registry: &str, query: Option<&str>) -> Result<Vec<RemoteSkil
     }
 }
 
-fn search_agentskills(query: Option<&str>) -> Vec<RemoteSkill> {
+fn search_agentskills(query: Option<&str>) -> Result<Vec<RemoteSkill>> {
     let mut skills = Vec::new();
 
     skills.push(RemoteSkill {
@@ -181,10 +177,10 @@ fn search_agentskills(query: Option<&str>) -> Vec<RemoteSkill> {
         });
     }
 
-    skills
+    Ok(skills)
 }
 
-fn search_skillsmp(query: Option<&str>) -> Vec<RemoteSkill> {
+fn search_skillsmp(query: Option<&str>) -> Result<Vec<RemoteSkill>> {
     let mut skills = Vec::new();
 
     skills.push(RemoteSkill {
@@ -230,10 +226,10 @@ fn search_skillsmp(query: Option<&str>) -> Vec<RemoteSkill> {
         });
     }
 
-    skills
+    Ok(skills)
 }
 
-fn search_github_skills(query: Option<&str>) -> Vec<RemoteSkill> {
+fn search_github_skills(query: Option<&str>) -> Result<Vec<RemoteSkill>> {
     let mut skills = Vec::new();
 
     let known_repos = [
@@ -254,7 +250,7 @@ fn search_github_skills(query: Option<&str>) -> Vec<RemoteSkill> {
         });
     }
 
-    skills
+    Ok(skills)
 }
 
 fn get_github_repo_skills(repo: &str) -> Vec<RemoteSkill> {
@@ -379,27 +375,27 @@ description: {}
     );
 
     if let Some(ref license) = skill.license {
-        let _ = writeln!(content, "license: {license}");
+        content.push_str(&format!("license: {license}\n"));
     }
 
     if let Some(ref compat) = skill.compatibility {
-        let _ = writeln!(content, "compatibility: {compat}");
+        content.push_str(&format!("compatibility: {compat}\n"));
     }
 
     content.push_str("---\n\n");
 
-    let _ = write!(content, "# {}\n\n{}\n", skill.name, skill.description);
+    content.push_str(&format!("# {}\n\n{}\n", skill.name, skill.description));
 
     if let Some(ref author) = skill.author {
-        let _ = write!(content, "\n**Author:** {author}\n");
+        content.push_str(&format!("\n**Author:** {author}\n"));
     }
 
     if let Some(ref version) = skill.version {
-        let _ = writeln!(content, "**Version:** {version}");
+        content.push_str(&format!("**Version:** {version}\n"));
     }
 
     if !skill.tags.is_empty() {
-        let _ = write!(content, "\n**Tags:** {}\n", skill.tags.join(", "));
+        content.push_str(&format!("\n**Tags:** {}\n", skill.tags.join(", ")));
     }
 
     content
