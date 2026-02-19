@@ -793,11 +793,22 @@ hivemind [-f json|table|yaml] global skill list
 hivemind [-f json|table|yaml] global skill inspect <skill-id>
 hivemind [-f json|table|yaml] global skill update <skill-id> [--name <text>] [--content <text>] [--tag <tag>...]
 hivemind [-f json|table|yaml] global skill delete <skill-id>
+
+# Skill registry operations
+hivemind [-f json|table|yaml] global skill registry registry-list
+hivemind [-f json|table|yaml] global skill registry search [--registry <name>] [query]
+hivemind [-f json|table|yaml] global skill registry registry-inspect <registry> <skill-name>
+hivemind [-f json|table|yaml] global skill registry pull <registry> <skill-name> [--skill-id <id>]
+hivemind [-f json|table|yaml] global skill registry pull-github <repo> [--skill <name>]
 ```
 
 **Effects:**
 - Maintains globally reusable skill artifacts under `~/.hivemind/global/skills/`
 - Enforces schema/identifier validation with structured failures
+- Registry operations discover and pull skills from external registries:
+  - `agentskills` - Official Agent Skills registry (agentskills.io)
+  - `skillsmp` - Community marketplace with 200k+ skills (skillsmp.com)
+  - `github` - GitHub repositories (anthropics/skills, openai/skills, etc.)
 
 **Events:**
 - Mutations emit governance upsert/delete events with `scope: global` and `artifact_kind: skill`
@@ -806,6 +817,7 @@ hivemind [-f json|table|yaml] global skill delete <skill-id>
 - `invalid_governance_identifier`
 - `governance_artifact_schema_invalid`
 - `skill_not_found`
+- `unknown_registry`
 
 ---
 

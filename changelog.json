@@ -4,6 +4,28 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.37",
+      "date": "2026-02-19",
+      "phase": 42,
+      "changes": [
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add skill registry integration commands: `global skill registry registry-list`, `search`, `registry-inspect`, `pull`, and `pull-github` for discovering and importing skills from external registries"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Integrate with three skill registries: agentskills.io (official standard), SkillsMP (community marketplace), and GitHub repositories (anthropics/skills, openai/skills, etc.)"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update CLI semantics and capabilities documentation for skill registry operations"
+        }
+      ]
+    },
+    {
       "version": "v0.1.36",
       "date": "2026-02-19",
       "phase": 41.5,
