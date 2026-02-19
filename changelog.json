@@ -4,6 +4,122 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.36",
+      "date": "2026-02-19",
+      "phase": 41.5,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "storage",
+          "description": "Enforce append-only semantics at the SQLite layer by rejecting `UPDATE`/`DELETE` on canonical `events` rows via DB triggers"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add `events verify` integrity/parity diagnostics and `events recover --from-mirror --confirm` for explicit canonical SQLite reconstruction from the JSONL mirror"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add regression coverage for mirror-based SQLite recovery flow (`events verify` mismatch detection, confirmation gate enforcement, and post-recovery parity restoration)"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add regression coverage proving direct SQL mutation attempts on `db.sqlite` fail with `events_append_only_violation` and preserve event history"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Support `project governance init --project <project>` as a flag-compatible selector alongside existing positional syntax"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Document DB-level append-only guarantees and clarify `events list` JSON/YAML response envelope semantics"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.35",
+      "date": "2026-02-19",
+      "phase": 41.5,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Add backward-compatible task command arity support for legacy beta harnesses: `task start|complete|retry <project> <task-id>`"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Add compatibility parsing for legacy `task complete --success/--message` flags, mapping failed legacy completions to explicit task close behavior"
+        },
+        {
+          "type": "changed",
+          "area": "events",
+          "description": "Serialize retry requests as `task_retried` while keeping `task_retry_requested` as a deserialization alias for historical event logs"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Extend `events list` and `events stream` with `--error-type <category>` filtering for `error_occurred` payloads"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add regression coverage for legacy task command arity, `events --error-type` filtering, and retry event payload compatibility aliases"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update CLI semantics for legacy task forms, retry event naming (`task_retried`), and `events` error-type filtering"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.34",
+      "date": "2026-02-19",
+      "phase": 41.5,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Harden `project governance replay --verify` to fail with `governance_replay_verification_failed` when replayed governance projections are missing on disk"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Extend `project governance diagnose` with deterministic drift checks from governance repair planning so missing or malformed governed artifacts are reported in health results"
+        },
+        {
+          "type": "changed",
+          "area": "events",
+          "description": "Emit `error_occurred` events for invalid `task start` and `task retry` operations (`task_not_in_flow`, retry misuse paths) to improve anti-magic observability"
+        },
+        {
+          "type": "changed",
+          "area": "events",
+          "description": "Extend `GovernanceSnapshotRestored` telemetry with `stale_files` and `repaired_projection_count`, and lock migration observability with no-op `governance_storage_migrated` emission coverage"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Increase `events list` default limit from 50 to 200 and clarify retry mode help (`--mode clean|continue`) for better operator discoverability"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add regression coverage for replay/diagnose detection of missing governance artifacts and for `error_occurred` emission on invalid task start/retry operations"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update CLI semantics and governance runbook with retry-mode semantics, events list default limit, and replay verification failure behavior for missing projection files"
+        }
+      ]
+    },
+    {
       "version": "v0.1.33",
       "date": "2026-02-18",
       "phase": 41.5,

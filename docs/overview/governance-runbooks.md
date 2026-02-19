@@ -38,6 +38,7 @@ Use when governance context fails due stale snapshot, missing references, or mis
    hivemind -f json project governance diagnose <project>
    hivemind -f json project governance replay <project> --verify
    ```
+   `replay --verify` fails with `governance_replay_verification_failed` when projection files are missing on disk.
 2. Capture/inspect recovery snapshots.
    ```bash
    hivemind -f json project governance snapshot create <project> --interval-minutes 30
@@ -95,3 +96,21 @@ Use when adding/updating constitution rules.
 - Treat diagnostics output as the authoritative operator checklist.
 - Prefer deterministic fixes (`snapshot`, `repair preview`, `repair apply`) before manual file edits.
 - Keep rollback steps explicit in incident notes (what changed, who approved, what was revalidated).
+
+## 5) Event Store Recovery Runbook (SQLite from Mirror)
+
+Use when `db.sqlite` is missing/corrupt or when `events verify` reports canonical/mirror mismatch.
+
+1. Inspect parity and integrity status.
+   ```bash
+   hivemind -f json events verify
+   ```
+2. If parity is broken and mirror data is trusted, rebuild canonical DB from mirror.
+   ```bash
+   hivemind -f json events recover --from-mirror --confirm
+   ```
+3. Re-verify and confirm parity is restored.
+   ```bash
+   hivemind -f json events verify
+   ```
+4. Record the generated backup path from recovery output in incident notes.

@@ -543,9 +543,15 @@ pub enum TaskRetryMode {
 
 #[derive(Args)]
 pub struct TaskRetryArgs {
+    /// Task ID
     pub task_id: String,
+    /// Legacy positional task ID for `task retry <project> <task-id>`
+    #[arg(hide = true)]
+    pub legacy_task_id: Option<String>,
+    /// Reset retry counter before requeueing
     #[arg(long)]
     pub reset_count: bool,
+    /// Retry mode (`clean` or `continue`)
     #[arg(long, value_enum, default_value_t = TaskRetryMode::Clean)]
     pub mode: TaskRetryMode,
 }
@@ -791,6 +797,60 @@ pub enum GlobalSkillCommands {
     Update(GlobalSkillUpdateArgs),
     /// Delete a global skill artifact
     Delete(GlobalSkillDeleteArgs),
+    /// Skill registry operations (search, pull from external registries)
+    #[command(subcommand)]
+    Registry(GlobalSkillRegistryCommands),
+}
+
+#[derive(Subcommand)]
+pub enum GlobalSkillRegistryCommands {
+    /// List available skill registries
+    RegistryList,
+    /// Search skills across registries
+    Search(GlobalSkillRegistrySearchArgs),
+    /// Inspect a remote skill from a registry
+    RegistryInspect(GlobalSkillRegistryInspectArgs),
+    /// Pull a skill from a registry and save to hivemind
+    Pull(GlobalSkillRegistryPullArgs),
+    /// Pull all skills from a GitHub repository
+    PullGithub(GlobalSkillRegistryPullGithubArgs),
+}
+
+#[derive(Args)]
+pub struct GlobalSkillRegistrySearchArgs {
+    /// Registry to search (agentskills, skillsmp, github). Omit to search all.
+    #[arg(long)]
+    pub registry: Option<String>,
+    /// Search query (skill name or keyword)
+    pub query: Option<String>,
+}
+
+#[derive(Args)]
+pub struct GlobalSkillRegistryInspectArgs {
+    /// Registry name (agentskills, skillsmp, github)
+    pub registry: String,
+    /// Skill name to inspect
+    pub skill_name: String,
+}
+
+#[derive(Args)]
+pub struct GlobalSkillRegistryPullArgs {
+    /// Registry name (agentskills, skillsmp, github)
+    pub registry: String,
+    /// Skill name to pull
+    pub skill_name: String,
+    /// Optional skill_id override (defaults to skill_name)
+    #[arg(long)]
+    pub skill_id: Option<String>,
+}
+
+#[derive(Args)]
+pub struct GlobalSkillRegistryPullGithubArgs {
+    /// GitHub repository (e.g., anthropics/skills)
+    pub repo: String,
+    /// Optional specific skill name to pull
+    #[arg(long)]
+    pub skill: Option<String>,
 }
 
 #[derive(Args)]
@@ -980,7 +1040,10 @@ pub struct GlobalNotepadUpdateArgs {
 #[derive(Args)]
 pub struct ProjectGovernanceInitArgs {
     /// Project ID or name
-    pub project: String,
+    pub project: Option<String>,
+    /// Project ID or name (flag form)
+    #[arg(long = "project")]
+    pub project_flag: Option<String>,
 }
 
 #[derive(Args)]
@@ -1233,12 +1296,24 @@ pub enum TaskCommands {
 pub struct TaskStartArgs {
     /// Task ID
     pub task_id: String,
+    /// Legacy positional task ID for `task start <project> <task-id>`
+    #[arg(hide = true)]
+    pub legacy_task_id: Option<String>,
 }
 
 #[derive(Args)]
 pub struct TaskCompleteArgs {
     /// Task ID
     pub task_id: String,
+    /// Legacy positional task ID for `task complete <project> <task-id>`
+    #[arg(hide = true)]
+    pub legacy_task_id: Option<String>,
+    /// Legacy compatibility flag used by older beta harnesses
+    #[arg(long, hide = true)]
+    pub success: Option<bool>,
+    /// Legacy compatibility message used by older beta harnesses
+    #[arg(long, hide = true)]
+    pub message: Option<String>,
 }
 
 /// Arguments for task create.
@@ -1438,6 +1513,12 @@ pub enum EventCommands {
 
     /// Replay events to reconstruct state
     Replay(EventReplayArgs),
+
+    /// Verify canonical SQLite and mirror event-store integrity/parity
+    Verify(EventVerifyArgs),
+
+    /// Recover canonical SQLite event-store state from the append-only mirror
+    Recover(EventRecoverArgs),
 }
 
 /// Arguments for event list.
@@ -1475,6 +1556,10 @@ pub struct EventListArgs {
     #[arg(long = "rule-id")]
     pub rule_id: Option<String>,
 
+    /// Filter `error_occurred` events by error category (for example: `user`)
+    #[arg(long = "error-type")]
+    pub error_type: Option<String>,
+
     /// Lower bound timestamp (RFC3339), inclusive
     #[arg(long)]
     pub since: Option<String>,
@@ -1484,7 +1569,7 @@ pub struct EventListArgs {
     pub until: Option<String>,
 
     /// Maximum number of events
-    #[arg(long, default_value = "50")]
+    #[arg(long, default_value = "200")]
     pub limit: usize,
 }
 
@@ -1530,6 +1615,10 @@ pub struct EventStreamArgs {
     #[arg(long = "rule-id")]
     pub rule_id: Option<String>,
 
+    /// Filter `error_occurred` events by error category (for example: `user`)
+    #[arg(long = "error-type")]
+    pub error_type: Option<String>,
+
     /// Lower bound timestamp (RFC3339), inclusive
     #[arg(long)]
     pub since: Option<String>,
@@ -1552,6 +1641,22 @@ pub struct EventReplayArgs {
     /// Verify replayed state against current state
     #[arg(long)]
     pub verify: bool,
+}
+
+/// Arguments for event-store verification.
+#[derive(Args, Default)]
+pub struct EventVerifyArgs {}
+
+/// Arguments for event-store recovery.
+#[derive(Args)]
+pub struct EventRecoverArgs {
+    /// Recover canonical `db.sqlite` from `events.jsonl`
+    #[arg(long, default_value_t = false)]
+    pub from_mirror: bool,
+
+    /// Explicit confirmation gate for destructive canonical DB replacement
+    #[arg(long, default_value_t = false)]
+    pub confirm: bool,
 }
 
 /// Verify subcommands.

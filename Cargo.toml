@@ -33,10 +33,10 @@ tiny_http = "0.12"
 crossterm = "0.29"
 portable-pty = "0.9"
 signal-hook = "0.4"
+tempfile = "3"
 ucp-api = { git = "https://github.com/Antonio7098/unified-content-protocol.git", rev = "cf745b5efb66711f5fbcd89a41c640533b2fdc84" }
 
 [dev-dependencies]
-tempfile = "3"
 
 [profile.release]
 lto = true
@@ -54,3 +54,17 @@ must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 result_large_err = "allow"
+
+[workspace.metadata.dist]
+cargo-dist-version = "0.28.0"
+ci = "github"
+installers = ["shell", "powershell", "npm"]
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+npm-scope = "@antonio7098"
+unix-archive = ".tar.gz"
+windows-archive = ".zip"
+pr-run-mode = "plan"
+release-branch = "main"
+create-release = true
+install-path = "CARGO_HOME"
+install-updater = false
