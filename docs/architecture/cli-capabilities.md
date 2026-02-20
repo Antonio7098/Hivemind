@@ -211,7 +211,7 @@ Capabilities:
 - List attempts
 - Inspect attempt details
 - View agent output
-- Inspect assembled attempt context (`attempt inspect --context`) including retry context, immutable manifest, and context hashes
+- Inspect assembled attempt context (`attempt inspect --context`) including retry context, immutable manifest v2, context window hash, rendered prompt hash, and delivered-context hash
 
 Constraints:
 - Manifest inputs are ordered (`constitution`, `system_prompt`, `skills`, `project_documents`, `graph_summary`)

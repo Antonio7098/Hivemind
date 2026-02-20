@@ -1167,6 +1167,9 @@ impl AppState {
             | EventPayload::ConstitutionViolationDetected { .. }
             | EventPayload::TemplateInstantiated { .. }
             | EventPayload::AttemptContextOverridesApplied { .. }
+            | EventPayload::ContextWindowCreated { .. }
+            | EventPayload::ContextOpApplied { .. }
+            | EventPayload::ContextWindowSnapshotCreated { .. }
             | EventPayload::AttemptContextAssembled { .. }
             | EventPayload::AttemptContextTruncated { .. }
             | EventPayload::AttemptContextDelivered { .. }

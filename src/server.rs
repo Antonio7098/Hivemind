@@ -202,6 +202,9 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::ConstitutionViolationDetected { .. } => "ConstitutionViolationDetected",
         EventPayload::TemplateInstantiated { .. } => "TemplateInstantiated",
         EventPayload::AttemptContextOverridesApplied { .. } => "AttemptContextOverridesApplied",
+        EventPayload::ContextWindowCreated { .. } => "ContextWindowCreated",
+        EventPayload::ContextOpApplied { .. } => "ContextOpApplied",
+        EventPayload::ContextWindowSnapshotCreated { .. } => "ContextWindowSnapshotCreated",
         EventPayload::AttemptContextAssembled { .. } => "AttemptContextAssembled",
         EventPayload::AttemptContextTruncated { .. } => "AttemptContextTruncated",
         EventPayload::AttemptContextDelivered { .. } => "AttemptContextDelivered",
@@ -370,6 +373,9 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskExecutionFailed { .. }
         | EventPayload::AttemptStarted { .. }
         | EventPayload::AttemptContextOverridesApplied { .. }
+        | EventPayload::ContextWindowCreated { .. }
+        | EventPayload::ContextOpApplied { .. }
+        | EventPayload::ContextWindowSnapshotCreated { .. }
         | EventPayload::AttemptContextAssembled { .. }
         | EventPayload::AttemptContextTruncated { .. }
         | EventPayload::AttemptContextDelivered { .. }

@@ -3505,6 +3505,19 @@ fn cli_attempt_inspect_context_returns_manifest_and_retry_linkage() {
         .and_then(serde_json::Value::as_str)
         .expect("inputs hash")
         .to_string();
+    let first_window_hash = flow1_events
+        .iter()
+        .find_map(|ev| {
+            let payload = ev.get("payload")?;
+            if payload.get("type")?.as_str()? != "context_window_created" {
+                return None;
+            }
+            payload
+                .get("state_hash")
+                .and_then(serde_json::Value::as_str)
+                .map(std::string::ToString::to_string)
+        })
+        .expect("context window hash");
 
     let (code, flow2_events_out, err) = run_hivemind(
         tmp.path(),
@@ -3540,6 +3553,20 @@ fn cli_attempt_inspect_context_returns_manifest_and_retry_linkage() {
         })
         .expect("second inputs hash");
     assert_eq!(first_inputs_hash, second_inputs_hash);
+    let second_window_hash = flow2_events
+        .iter()
+        .find_map(|ev| {
+            let payload = ev.get("payload")?;
+            if payload.get("type")?.as_str()? != "context_window_created" {
+                return None;
+            }
+            payload
+                .get("state_hash")
+                .and_then(serde_json::Value::as_str)
+                .map(std::string::ToString::to_string)
+        })
+        .expect("second context window hash");
+    assert_eq!(first_window_hash, second_window_hash);
 
     let (code, _out, err) =
         run_hivemind(tmp.path(), &["task", "retry", &t1_id, "--mode", "continue"]);
@@ -3593,6 +3620,12 @@ fn cli_attempt_inspect_context_returns_manifest_and_retry_linkage() {
     assert!(retry.contains("Retry attempt 2/"), "{retry}");
 
     let manifest = context.get("manifest").expect("manifest");
+    assert_eq!(
+        manifest
+            .get("manifest_version")
+            .and_then(serde_json::Value::as_u64),
+        Some(2)
+    );
     let ordered_inputs = manifest
         .get("ordered_inputs")
         .and_then(serde_json::Value::as_array)
@@ -3659,6 +3692,19 @@ fn cli_attempt_inspect_context_returns_manifest_and_retry_linkage() {
     assert!(
         context
             .get("inputs_hash")
+            .and_then(serde_json::Value::as_str)
+            .is_some(),
+        "{inspect_out}"
+    );
+    assert_eq!(
+        context
+            .get("context_window_hash")
+            .and_then(serde_json::Value::as_str),
+        Some(first_window_hash.as_str())
+    );
+    assert!(
+        context
+            .get("rendered_prompt_hash")
             .and_then(serde_json::Value::as_str)
             .is_some(),
         "{inspect_out}"

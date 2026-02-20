@@ -38,7 +38,7 @@ A TaskFlow is created from:
 
 Once created, these inputs are **immutable** for the lifetime of the TaskFlow.
 
-At attempt start, worker input is assembled from explicit governance artifacts into a frozen attempt context manifest (constitution, resolved template system prompt/skills/documents, graph summary, and retry links).
+At attempt start, worker input is assembled through an attempt-scoped active context window with explicit operations (`add`, `expand`, `prune`, `snapshot`) and then frozen into an immutable attempt context manifest (constitution, resolved template system prompt/skills/documents, graph summary, and retry links).
 
 ---
 
