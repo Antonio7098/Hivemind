@@ -73,6 +73,7 @@
 //! - [`worktree`] - Git worktree management
 //! - [`runtime_event_projection`] - Runtime event observation projection
 
+pub mod context_window;
 pub mod diff;
 pub mod enforcement;
 pub mod error;

@@ -3,6 +3,10 @@
 //! The registry derives project state from events and provides
 //! operations that emit new events.
 
+use crate::core::context_window::{
+    ContextBudgetPolicy, ContextEntry, ContextEntryCandidate, ContextOpRecord,
+    ContextOperationActor, ContextWindow,
+};
 use crate::core::diff::{unified_diff, Baseline, ChangeType, Diff, FileChange};
 use crate::core::enforcement::{ScopeEnforcer, VerificationResult};
 use crate::core::error::{ErrorCategory, HivemindError, Result};
@@ -302,10 +306,11 @@ const CONSTITUTION_VERSION: u32 = 1;
 const GRAPH_SNAPSHOT_SCHEMA_VERSION: &str = "graph_snapshot.v1";
 const GRAPH_SNAPSHOT_VERSION: u32 = 1;
 const GOVERNANCE_RECOVERY_SNAPSHOT_SCHEMA_VERSION: &str = "governance_recovery_snapshot.v1";
-const ATTEMPT_CONTEXT_SCHEMA_VERSION: &str = "attempt_context.v1";
-const ATTEMPT_CONTEXT_VERSION: u32 = 1;
+const ATTEMPT_CONTEXT_SCHEMA_VERSION: &str = "attempt_context.v2";
+const ATTEMPT_CONTEXT_VERSION: u32 = 2;
 const ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES: usize = 6_000;
 const ATTEMPT_CONTEXT_TOTAL_BUDGET_BYTES: usize = 24_000;
+const ATTEMPT_CONTEXT_MAX_EXPAND_DEPTH: usize = 2;
 const ATTEMPT_CONTEXT_TRUNCATION_POLICY: &str = "ordered_section_then_total_budget";
 
 #[derive(Debug, Clone, Serialize)]
@@ -1006,11 +1011,17 @@ struct AttemptContextRetryLink {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AttemptContextBudgetManifest {
     total_budget_bytes: usize,
-    section_budget_bytes: usize,
+    default_section_budget_bytes: usize,
+    #[serde(default)]
+    per_section_budget_bytes: BTreeMap<String, usize>,
+    max_expand_depth: usize,
+    deduplicate: bool,
     original_size_bytes: usize,
     context_size_bytes: usize,
     #[serde(default)]
     truncated_sections: Vec<String>,
+    #[serde(default)]
+    truncation_reasons: BTreeMap<String, Vec<String>>,
     policy: String,
 }
 
@@ -1050,7 +1061,12 @@ struct AttemptContextBuildResult {
     original_size_bytes: usize,
     context_size_bytes: usize,
     truncated_sections: Vec<String>,
+    truncation_reasons: BTreeMap<String, Vec<String>>,
     prior_manifest_hashes: Vec<String>,
+    context_window_id: String,
+    context_window_state_hash: String,
+    context_window_snapshot_json: String,
+    context_window_ops: Vec<ContextOpRecord>,
     template_document_ids: Vec<String>,
     included_document_ids: Vec<String>,
     excluded_document_ids: Vec<String>,
@@ -5132,31 +5148,14 @@ impl Registry {
         Ok(manifest_hash)
     }
 
-    fn truncate_to_budget(content: &str, max_bytes: usize) -> String {
-        if content.len() <= max_bytes {
-            return content.to_string();
-        }
-        if max_bytes == 0 {
-            return String::new();
-        }
-
-        let mut end = 0usize;
-        for (idx, ch) in content.char_indices() {
-            let next = idx + ch.len_utf8();
-            if next > max_bytes {
-                break;
-            }
-            end = next;
-        }
-        content[..end].to_string()
-    }
-
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     fn assemble_attempt_context(
         &self,
         state: &AppState,
         flow: &TaskFlow,
         task_id: Uuid,
+        attempt_id: Uuid,
+        runtime_name: &str,
         prior_attempt_ids: &[Uuid],
         origin: &'static str,
     ) -> Result<AttemptContextBuildResult> {
@@ -5371,65 +5370,160 @@ impl Registry {
             "implicit_memory".to_string(),
         ];
 
-        let mut sections = vec![
-            ("constitution".to_string(), constitution_section),
-            ("system_prompt".to_string(), system_prompt_section),
-            ("skills".to_string(), skills_section),
-            ("project_documents".to_string(), documents_section),
-            ("graph_summary".to_string(), graph_section),
-        ];
-
-        let mut original_size_bytes = 0usize;
-        for (_, content) in &sections {
-            original_size_bytes = original_size_bytes.saturating_add(content.len());
+        let mut per_section_budget_bytes = BTreeMap::new();
+        for section in &ordered_inputs {
+            per_section_budget_bytes.insert(section.clone(), ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES);
         }
+        let budget_policy = ContextBudgetPolicy {
+            total_budget_bytes: ATTEMPT_CONTEXT_TOTAL_BUDGET_BYTES,
+            default_section_budget_bytes: ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES,
+            per_section_budget_bytes: per_section_budget_bytes.clone(),
+            max_expand_depth: ATTEMPT_CONTEXT_MAX_EXPAND_DEPTH,
+            deduplicate: true,
+            truncation_policy: ATTEMPT_CONTEXT_TRUNCATION_POLICY.to_string(),
+        };
 
-        let mut truncated_sections = Vec::new();
-        for (name, content) in &mut sections {
-            if content.len() > ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES {
-                *content = Self::truncate_to_budget(content, ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES);
-                if !truncated_sections.iter().any(|existing| existing == name) {
-                    truncated_sections.push(name.clone());
-                }
-            }
+        let context_window_id = format!("attempt-context-{attempt_id}");
+        let mut window = ContextWindow::new(
+            context_window_id.clone(),
+            ordered_inputs.clone(),
+            budget_policy,
+        );
+        let window_actor = ContextOperationActor {
+            actor: "flow_engine".to_string(),
+            runtime: Some(runtime_name.to_string()),
+            tool: None,
+        };
+        let mut context_window_ops = Vec::new();
+        context_window_ops.push(window.add_entry(
+            ContextEntryCandidate {
+                entry_id: "constitution-primary".to_string(),
+                section: "constitution".to_string(),
+                content: constitution_section,
+                source: "governance_constitution".to_string(),
+                depth: 0,
+            },
+            "seed_constitution",
+            window_actor.clone(),
+        ));
+        context_window_ops.push(window.add_entry(
+            ContextEntryCandidate {
+                entry_id: "system-prompt-primary".to_string(),
+                section: "system_prompt".to_string(),
+                content: system_prompt_section,
+                source: "template_system_prompt".to_string(),
+                depth: 0,
+            },
+            "seed_system_prompt",
+            window_actor.clone(),
+        ));
+        if skill_sections.is_empty() {
+            context_window_ops.push(window.add_entry(
+                ContextEntryCandidate {
+                    entry_id: "skills-none".to_string(),
+                    section: "skills".to_string(),
+                    content: skills_section,
+                    source: "template_skills".to_string(),
+                    depth: 0,
+                },
+                "seed_skills_empty",
+                window_actor.clone(),
+            ));
+        } else {
+            context_window_ops.push(window.add_entry(
+                ContextEntryCandidate {
+                    entry_id: "skills-header".to_string(),
+                    section: "skills".to_string(),
+                    content: "Skills:".to_string(),
+                    source: "template_skills".to_string(),
+                    depth: 0,
+                },
+                "seed_skills_header",
+                window_actor.clone(),
+            ));
+            let skill_candidates: Vec<ContextEntryCandidate> = skill_sections
+                .iter()
+                .enumerate()
+                .map(|(idx, content)| ContextEntryCandidate {
+                    entry_id: format!("skills-entry-{idx:03}"),
+                    section: "skills".to_string(),
+                    content: content.clone(),
+                    source: "template_skills".to_string(),
+                    depth: 1,
+                })
+                .collect();
+            context_window_ops.push(window.expand_entries(
+                skill_candidates,
+                "expand_skills",
+                window_actor.clone(),
+                true,
+            ));
         }
-
-        let mut rendered_sections = Vec::new();
-        let mut remaining = ATTEMPT_CONTEXT_TOTAL_BUDGET_BYTES;
-        for (idx, (name, content)) in sections.iter().enumerate() {
-            if remaining == 0 {
-                if !truncated_sections.iter().any(|existing| existing == name) {
-                    truncated_sections.push(name.clone());
-                }
-                continue;
-            }
-
-            if content.len() <= remaining {
-                rendered_sections.push(content.clone());
-                remaining = remaining.saturating_sub(content.len());
-                continue;
-            }
-
-            let truncated = Self::truncate_to_budget(content, remaining);
-            if !truncated.is_empty() {
-                rendered_sections.push(truncated);
-            }
-            if !truncated_sections.iter().any(|existing| existing == name) {
-                truncated_sections.push(name.clone());
-            }
-            for (later_name, _) in sections.iter().skip(idx.saturating_add(1)) {
-                if !truncated_sections
-                    .iter()
-                    .any(|existing| existing == later_name)
-                {
-                    truncated_sections.push(later_name.clone());
-                }
-            }
-            remaining = 0;
+        if document_sections.is_empty() {
+            context_window_ops.push(window.add_entry(
+                ContextEntryCandidate {
+                    entry_id: "documents-none".to_string(),
+                    section: "project_documents".to_string(),
+                    content: documents_section,
+                    source: "project_documents".to_string(),
+                    depth: 0,
+                },
+                "seed_documents_empty",
+                window_actor.clone(),
+            ));
+        } else {
+            context_window_ops.push(window.add_entry(
+                ContextEntryCandidate {
+                    entry_id: "documents-header".to_string(),
+                    section: "project_documents".to_string(),
+                    content: "Documents:".to_string(),
+                    source: "project_documents".to_string(),
+                    depth: 0,
+                },
+                "seed_documents_header",
+                window_actor.clone(),
+            ));
+            let document_candidates: Vec<ContextEntryCandidate> = document_sections
+                .iter()
+                .enumerate()
+                .map(|(idx, content)| ContextEntryCandidate {
+                    entry_id: format!("documents-entry-{idx:03}"),
+                    section: "project_documents".to_string(),
+                    content: content.clone(),
+                    source: "project_documents".to_string(),
+                    depth: 1,
+                })
+                .collect();
+            context_window_ops.push(window.expand_entries(
+                document_candidates,
+                "expand_documents",
+                window_actor.clone(),
+                true,
+            ));
         }
+        context_window_ops.push(window.add_entry(
+            ContextEntryCandidate {
+                entry_id: "graph-summary-primary".to_string(),
+                section: "graph_summary".to_string(),
+                content: graph_section,
+                source: "graph_snapshot".to_string(),
+                depth: 0,
+            },
+            "seed_graph_summary",
+            window_actor.clone(),
+        ));
 
-        let context = rendered_sections.join("\n\n");
-        let context_size_bytes = context.len();
+        let original_size_bytes: usize =
+            window.entries.values().map(ContextEntry::size_bytes).sum();
+        let prune_op = window.prune("enforce_budget_policy", window_actor.clone());
+        context_window_ops.push(prune_op.clone());
+        let (snapshot, snapshot_op) = window.snapshot("create_context_snapshot", window_actor);
+        context_window_ops.push(snapshot_op);
+
+        let context = snapshot.rendered_prompt.clone();
+        let context_size_bytes = snapshot.total_size_bytes;
+        let truncated_sections = prune_op.truncated_sections.clone();
+        let truncation_reasons = prune_op.section_reasons;
 
         let manifest = AttemptContextManifest {
             schema_version: ATTEMPT_CONTEXT_SCHEMA_VERSION.to_string(),
@@ -5459,15 +5553,19 @@ impl Registry {
             retry_links,
             budget: AttemptContextBudgetManifest {
                 total_budget_bytes: ATTEMPT_CONTEXT_TOTAL_BUDGET_BYTES,
-                section_budget_bytes: ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES,
+                default_section_budget_bytes: ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES,
+                per_section_budget_bytes,
+                max_expand_depth: ATTEMPT_CONTEXT_MAX_EXPAND_DEPTH,
+                deduplicate: true,
                 original_size_bytes,
                 context_size_bytes,
                 truncated_sections: truncated_sections.clone(),
+                truncation_reasons: truncation_reasons.clone(),
                 policy: ATTEMPT_CONTEXT_TRUNCATION_POLICY.to_string(),
             },
         };
 
-        let manifest_json = serde_json::to_string_pretty(&manifest).map_err(|e| {
+        let manifest_json = serde_json::to_string(&manifest).map_err(|e| {
             HivemindError::system("context_manifest_serialize_failed", e.to_string(), origin)
         })?;
         let manifest_hash = Self::constitution_digest(manifest_json.as_bytes());
@@ -5484,16 +5582,30 @@ impl Registry {
             "retry_manifest_hashes": prior_manifest_hashes,
             "budget": {
                 "total_budget_bytes": ATTEMPT_CONTEXT_TOTAL_BUDGET_BYTES,
-                "section_budget_bytes": ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES,
+                "default_section_budget_bytes": ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES,
+                "per_section_budget_bytes": manifest.budget.per_section_budget_bytes,
+                "max_expand_depth": ATTEMPT_CONTEXT_MAX_EXPAND_DEPTH,
+                "deduplicate": true,
                 "truncated_sections": manifest.budget.truncated_sections,
+                "truncation_reasons": manifest.budget.truncation_reasons,
                 "policy": ATTEMPT_CONTEXT_TRUNCATION_POLICY
-            }
+            },
+            "context_window": {
+                "state_hash": snapshot.state_hash
+            },
         });
         let inputs_bytes = serde_json::to_vec(&inputs_fingerprint_payload).map_err(|e| {
             HivemindError::system("context_inputs_serialize_failed", e.to_string(), origin)
         })?;
         let inputs_hash = Self::constitution_digest(&inputs_bytes);
         let context_hash = Self::constitution_digest(context.as_bytes());
+        let context_window_snapshot_json = serde_json::to_string(&snapshot).map_err(|e| {
+            HivemindError::system(
+                "context_window_snapshot_serialize_failed",
+                e.to_string(),
+                origin,
+            )
+        })?;
 
         Ok(AttemptContextBuildResult {
             manifest_json,
@@ -5504,7 +5616,12 @@ impl Registry {
             original_size_bytes,
             context_size_bytes,
             truncated_sections,
+            truncation_reasons,
             prior_manifest_hashes,
+            context_window_id,
+            context_window_state_hash: snapshot.state_hash,
+            context_window_snapshot_json,
+            context_window_ops,
             template_document_ids,
             included_document_ids,
             excluded_document_ids,
@@ -8133,6 +8250,8 @@ impl Registry {
             &state,
             &flow,
             task_id,
+            attempt_id,
+            &runtime.adapter_name,
             &retry_prior_attempt_ids,
             "registry:tick_flow",
         )?;
@@ -8150,6 +8269,47 @@ impl Registry {
                         included_document_ids: context_build.included_document_ids.clone(),
                         excluded_document_ids: context_build.excluded_document_ids.clone(),
                         resolved_document_ids: context_build.resolved_document_ids.clone(),
+                    },
+                    attempt_corr.clone(),
+                ),
+                "registry:tick_flow",
+            )?;
+        }
+
+        self.append_event(
+            Event::new(
+                EventPayload::ContextWindowCreated {
+                    flow_id: flow.id,
+                    task_id,
+                    attempt_id,
+                    window_id: context_build.context_window_id.clone(),
+                    policy: ATTEMPT_CONTEXT_TRUNCATION_POLICY.to_string(),
+                    state_hash: context_build.context_window_state_hash.clone(),
+                },
+                attempt_corr.clone(),
+            ),
+            "registry:tick_flow",
+        )?;
+
+        for op in &context_build.context_window_ops {
+            self.append_event(
+                Event::new(
+                    EventPayload::ContextOpApplied {
+                        flow_id: flow.id,
+                        task_id,
+                        attempt_id,
+                        window_id: context_build.context_window_id.clone(),
+                        op: op.op.clone(),
+                        actor: op.actor.actor.clone(),
+                        runtime: op.actor.runtime.clone(),
+                        tool: op.actor.tool.clone(),
+                        reason: op.reason.clone(),
+                        before_hash: op.before_hash.clone(),
+                        after_hash: op.after_hash.clone(),
+                        added_ids: op.added_ids.clone(),
+                        removed_ids: op.removed_ids.clone(),
+                        truncated_sections: op.truncated_sections.clone(),
+                        section_reasons: op.section_reasons.clone(),
                     },
                     attempt_corr.clone(),
                 ),
@@ -8187,6 +8347,7 @@ impl Registry {
                         original_size_bytes: context_build.original_size_bytes,
                         truncated_size_bytes: context_build.context_size_bytes,
                         sections: context_build.truncated_sections.clone(),
+                        section_reasons: context_build.truncation_reasons.clone(),
                         policy: ATTEMPT_CONTEXT_TRUNCATION_POLICY.to_string(),
                     },
                     attempt_corr.clone(),
@@ -8207,6 +8368,23 @@ impl Registry {
             (None, None) => execution_context_base,
         };
         let runtime_context_hash = Self::constitution_digest(runtime_context.as_bytes());
+
+        self.append_event(
+            Event::new(
+                EventPayload::ContextWindowSnapshotCreated {
+                    flow_id: flow.id,
+                    task_id,
+                    attempt_id,
+                    window_id: context_build.context_window_id.clone(),
+                    state_hash: context_build.context_window_state_hash.clone(),
+                    rendered_prompt_hash: context_build.context_hash.clone(),
+                    delivered_input_hash: runtime_context_hash.clone(),
+                    snapshot_json: context_build.context_window_snapshot_json.clone(),
+                },
+                attempt_corr.clone(),
+            ),
+            "registry:tick_flow",
+        )?;
 
         self.append_event(
             Event::new(

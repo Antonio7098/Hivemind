@@ -139,45 +139,45 @@
 > **Principles 1, 3, 8, 13:** Observable context state, deterministic behavior, no hidden context, abstraction with control.
 
 ### 45.1 Context Window Model
-- [ ] Introduce attempt-scoped `ContextWindow` with explicit operations:
-  - [ ] `add`
-  - [ ] `remove`
-  - [ ] `expand`
-  - [ ] `prune`
-  - [ ] `snapshot`
-- [ ] Preserve existing context manifest contract as baseline compatibility layer
+- [x] Introduce attempt-scoped `ContextWindow` with explicit operations:
+  - [x] `add`
+  - [x] `remove`
+  - [x] `expand`
+  - [x] `prune`
+  - [x] `snapshot`
+- [x] Preserve existing context manifest contract as baseline compatibility layer
 
 ### 45.2 Context Operation Events
-- [ ] Add event payloads:
-  - [ ] `ContextWindowCreated`
-  - [ ] `ContextOpApplied`
-  - [ ] `ContextWindowSnapshotCreated`
-- [ ] Include operation provenance (actor/runtime/tool, reason, before/after hash)
+- [x] Add event payloads:
+  - [x] `ContextWindowCreated`
+  - [x] `ContextOpApplied`
+  - [x] `ContextWindowSnapshotCreated`
+- [x] Include operation provenance (actor/runtime/tool, reason, before/after hash)
 
 ### 45.3 Deterministic Prompt Manifest v2
-- [ ] Define prompt manifest v2 with stable section ordering and canonical serialization
-- [ ] Enforce deterministic hashing for:
-  - [ ] context window state
-  - [ ] rendered prompt payload
-  - [ ] delivered runtime input
-- [ ] Maintain compatibility bridge for `AttemptContextAssembled`/`AttemptContextDelivered`
+- [x] Define prompt manifest v2 with stable section ordering and canonical serialization
+- [x] Enforce deterministic hashing for:
+  - [x] context window state
+  - [x] rendered prompt payload
+  - [x] delivered runtime input
+- [x] Maintain compatibility bridge for `AttemptContextAssembled`/`AttemptContextDelivered`
 
 ### 45.4 Budget and Constraint Policies
-- [ ] Replace ad hoc truncation with explicit budget policy object (global + per-section)
-- [ ] Enforce deduplication and max-depth constraints for context expansion
-- [ ] Emit explicit truncation/pruning reasons as events
+- [x] Replace ad hoc truncation with explicit budget policy object (global + per-section)
+- [x] Enforce deduplication and max-depth constraints for context expansion
+- [x] Emit explicit truncation/pruning reasons as events
 
 ### 45.5 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 45 manual checklist under `@hivemind-test`
-- [ ] Validate deterministic context evolution across repeated runs
-- [ ] Validate context op inspection and truncation explainability
-- [ ] Publish Sprint 45 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 45 manual checklist under `@hivemind-test`
+- [x] Validate deterministic context evolution across repeated runs
+- [x] Validate context op inspection and truncation explainability
+- [x] Publish Sprint 45 manual test report artifact in `@hivemind-test`
 
 ### 45.6 Exit Criteria
-- [ ] Context window is mutable, bounded, and replayable
-- [ ] Prompt assembly is deterministic and hash-stable
-- [ ] Legacy attempt context inspection remains functional
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Context window is mutable, bounded, and replayable
+- [x] Prompt assembly is deterministic and hash-stable
+- [x] Legacy attempt context inspection remains functional
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.41",
+      "date": "2026-02-20",
+      "phase": 45,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Introduce attempt-scoped active context window operations in `src/core/context_window.rs` (`add`, `remove`, `expand`, `prune`, `snapshot`) with deterministic state hashing, budget policy enforcement, and operation provenance records"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Refactor attempt context assembly to use prompt manifest v2 (`attempt_context.v2`) with canonical serialization, explicit per-section budgets, max-depth + dedup constraints, and compatibility-layer delivery events"
+        },
+        {
+          "type": "added",
+          "area": "events",
+          "description": "Emit context-window event family (`ContextWindowCreated`, `ContextOpApplied`, `ContextWindowSnapshotCreated`) and extend truncation telemetry with explicit `section_reasons`"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Extend `attempt inspect --context` outputs and event fallback projection to include `context_window_hash` and `rendered_prompt_hash` alongside manifest/input/delivery hashes"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add context-window unit/property/golden coverage (`proptest`, `insta`) and integration assertions for deterministic window hashing and manifest v2 inspectability"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Sprint 45 roadmap completion, update architecture/design docs for active context window semantics, and publish Sprint 45 manual checklist/report artifacts in `hivemind-test`"
+        }
+      ]
+    },
+    {
       "version": "v0.1.40",
       "date": "2026-02-19",
       "phase": 44,

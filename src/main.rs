@@ -2269,6 +2269,9 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::ConstitutionViolationDetected { .. } => "constitution_violation_detected",
         EventPayload::TemplateInstantiated { .. } => "template_instantiated",
         EventPayload::AttemptContextOverridesApplied { .. } => "attempt_context_overrides_applied",
+        EventPayload::ContextWindowCreated { .. } => "context_window_created",
+        EventPayload::ContextOpApplied { .. } => "context_op_applied",
+        EventPayload::ContextWindowSnapshotCreated { .. } => "context_window_snapshot_created",
         EventPayload::AttemptContextAssembled { .. } => "attempt_context_assembled",
         EventPayload::AttemptContextTruncated { .. } => "attempt_context_truncated",
         EventPayload::AttemptContextDelivered { .. } => "attempt_context_delivered",
@@ -3193,9 +3196,12 @@ struct AttemptInspectCollected {
     context_manifest: Option<serde_json::Value>,
     context_manifest_hash: Option<String>,
     context_inputs_hash: Option<String>,
+    context_window_state_hash: Option<String>,
+    rendered_prompt_hash: Option<String>,
     delivered_context_hash: Option<String>,
 }
 
+#[allow(clippy::too_many_lines)]
 fn collect_attempt_runtime_data(
     events: &[hivemind::core::events::Event],
 ) -> AttemptInspectCollected {
@@ -3216,6 +3222,8 @@ fn collect_attempt_runtime_data(
         context_manifest: None,
         context_manifest_hash: None,
         context_inputs_hash: None,
+        context_window_state_hash: None,
+        rendered_prompt_hash: None,
         delivered_context_hash: None,
     };
 
@@ -3273,17 +3281,30 @@ fn collect_attempt_runtime_data(
             EventPayload::AttemptContextAssembled {
                 manifest_hash,
                 inputs_hash,
+                context_hash,
                 manifest_json,
                 ..
             } => {
                 collected.context_manifest_hash = Some(manifest_hash.clone());
                 collected.context_inputs_hash = Some(inputs_hash.clone());
+                collected.rendered_prompt_hash = Some(context_hash.clone());
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(manifest_json) {
                     collected.context_manifest = Some(parsed);
                 } else {
                     collected.context_manifest =
                         Some(serde_json::Value::String(manifest_json.clone()));
                 }
+            }
+            EventPayload::ContextWindowCreated { state_hash, .. } => {
+                collected.context_window_state_hash = Some(state_hash.clone());
+            }
+            EventPayload::ContextWindowSnapshotCreated {
+                rendered_prompt_hash,
+                delivered_input_hash,
+                ..
+            } => {
+                collected.rendered_prompt_hash = Some(rendered_prompt_hash.clone());
+                collected.delivered_context_hash = Some(delivered_input_hash.clone());
             }
             EventPayload::AttemptContextDelivered { context_hash, .. } => {
                 collected.delivered_context_hash = Some(context_hash.clone());
@@ -3383,8 +3404,10 @@ fn build_attempt_inspect_json(
             serde_json::json!({
                 "retry": collected.retry_context.clone(),
                 "manifest": collected.context_manifest.clone(),
+                "context_window_hash": collected.context_window_state_hash.clone(),
                 "manifest_hash": collected.context_manifest_hash.clone(),
                 "inputs_hash": collected.context_inputs_hash.clone(),
+                "rendered_prompt_hash": collected.rendered_prompt_hash.clone(),
                 "delivered_context_hash": collected.delivered_context_hash.clone(),
             }),
         );
@@ -3451,6 +3474,12 @@ fn print_attempt_inspect_table(
         if let Some(hash) = collected.context_inputs_hash.as_ref() {
             println!("  Inputs hash:   {hash}");
         }
+        if let Some(hash) = collected.context_window_state_hash.as_ref() {
+            println!("  Window hash:   {hash}");
+        }
+        if let Some(hash) = collected.rendered_prompt_hash.as_ref() {
+            println!("  Prompt hash:   {hash}");
+        }
         if let Some(hash) = collected.delivered_context_hash.as_ref() {
             println!("  Delivered hash:{hash}");
         }
@@ -3478,8 +3507,10 @@ fn attempt_context_from_events(registry: &Registry, attempt_id: Uuid) -> Option<
     let events = registry.read_events(&filter).ok()?;
     let mut retry_context: Option<String> = None;
     let mut manifest: Option<serde_json::Value> = None;
+    let mut context_window_hash: Option<String> = None;
     let mut manifest_hash: Option<String> = None;
     let mut inputs_hash: Option<String> = None;
+    let mut rendered_prompt_hash: Option<String> = None;
     let mut delivered_context_hash: Option<String> = None;
 
     for event in events {
@@ -3487,14 +3518,27 @@ fn attempt_context_from_events(registry: &Registry, attempt_id: Uuid) -> Option<
             EventPayload::RetryContextAssembled { context, .. } => {
                 retry_context = Some(context);
             }
+            EventPayload::ContextWindowCreated { state_hash, .. } => {
+                context_window_hash = Some(state_hash);
+            }
+            EventPayload::ContextWindowSnapshotCreated {
+                rendered_prompt_hash: hash,
+                delivered_input_hash,
+                ..
+            } => {
+                rendered_prompt_hash = Some(hash);
+                delivered_context_hash = Some(delivered_input_hash);
+            }
             EventPayload::AttemptContextAssembled {
                 manifest_hash: hash,
                 inputs_hash: in_hash,
+                context_hash,
                 manifest_json,
                 ..
             } => {
                 manifest_hash = Some(hash);
                 inputs_hash = Some(in_hash);
+                rendered_prompt_hash = Some(context_hash);
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&manifest_json) {
                     manifest = Some(parsed);
                 } else {
@@ -3514,8 +3558,10 @@ fn attempt_context_from_events(registry: &Registry, attempt_id: Uuid) -> Option<
         Some(serde_json::json!({
             "retry": retry_context,
             "manifest": manifest,
+            "context_window_hash": context_window_hash,
             "manifest_hash": manifest_hash,
             "inputs_hash": inputs_hash,
+            "rendered_prompt_hash": rendered_prompt_hash,
             "delivered_context_hash": delivered_context_hash,
         }))
     }

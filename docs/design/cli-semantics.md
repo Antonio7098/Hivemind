@@ -1598,6 +1598,31 @@ RuntimeCapabilitiesEvaluated:
   selection_source: task_override|flow_default|project_default|global_default
   capabilities: [<capability>...]
 
+ContextWindowCreated:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  attempt_id: <attempt-id>
+  window_id: <window-id>
+  policy: ordered_section_then_total_budget
+  state_hash: <hash>
+
+ContextOpApplied:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  attempt_id: <attempt-id>
+  window_id: <window-id>
+  op: add|remove|expand|prune|snapshot
+  actor: <actor>
+  runtime: <runtime-name|null>
+  tool: <tool-name|null>
+  reason: <reason>
+  before_hash: <hash>
+  after_hash: <hash>
+  added_ids: [<entry-id>...]
+  removed_ids: [<entry-id>...]
+  truncated_sections: [<section>...]
+  section_reasons: {<section>: [<reason>...]}
+
 AttemptContextAssembled:
   flow_id: <flow-id>
   task_id: <task-id>
@@ -1618,7 +1643,18 @@ AttemptContextTruncated:
   original_size_bytes: <bytes>
   truncated_size_bytes: <bytes>
   sections: [<section>...]
+  section_reasons: {<section>: [<reason>...]}
   policy: ordered_section_then_total_budget
+
+ContextWindowSnapshotCreated:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  attempt_id: <attempt-id>
+  window_id: <window-id>
+  state_hash: <hash>
+  rendered_prompt_hash: <hash>
+  delivered_input_hash: <hash>
+  snapshot_json: <snapshot-json>
 
 AttemptContextDelivered:
   flow_id: <flow-id>
@@ -2091,6 +2127,8 @@ hivemind attempt inspect <attempt-id> [--context] [--diff] [--output]
   - `manifest`: immutable attempt context manifest (ordered inputs, resolved artifacts, budget/truncation metadata, retry links)
   - `manifest_hash`: digest of stored manifest
   - `inputs_hash`: deterministic digest of resolved context inputs
+  - `context_window_hash`: digest of active context window snapshot state
+  - `rendered_prompt_hash`: digest of rendered prompt produced by context window snapshot
   - `delivered_context_hash`: digest of runtime-delivered context payload
 - With --diff: changes made
 - With --output: runtime output

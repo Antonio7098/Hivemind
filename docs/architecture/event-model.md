@@ -111,6 +111,9 @@ Examples:
 - `ConstitutionValidated`
 - `ConstitutionViolationDetected`
 - `TemplateInstantiated`
+- `ContextWindowCreated`
+- `ContextOpApplied`
+- `ContextWindowSnapshotCreated`
 - `AttemptContextOverridesApplied`
 - `AttemptContextAssembled`
 - `AttemptContextTruncated`
@@ -126,7 +129,8 @@ Properties:
 - Constitution lifecycle events include digest, schema/version metadata, confirmation flag, mutation intent, and actor attribution
 - Constitution enforcement emits `ConstitutionViolationDetected` with gate (`manual_check`, `checkpoint_complete`, `merge_prepare`, `merge_approve`, `merge_execute`), rule ID/type/severity, and structured evidence/remediation hints
 - Template instantiation records resolved artifact IDs for replay-safe context provenance
-- Attempt context assembly emits immutable manifest, input hash, delivery hash, and override/truncation telemetry for replay-safe attempt provenance
+- Context window events expose operation-level provenance (`actor`/`runtime`/`tool`, reason, before/after hash) and explicit prune reasons
+- Attempt context assembly emits immutable manifest v2, input hash, rendered prompt hash, delivery hash, and override/truncation telemetry for replay-safe attempt provenance
 
 ---
 
@@ -198,6 +202,9 @@ Examples:
 - `AttemptCompleted`
 - `AttemptCrashed`
 - `RetryContextAssembled`
+- `ContextWindowCreated`
+- `ContextOpApplied`
+- `ContextWindowSnapshotCreated`
 - `AttemptContextOverridesApplied`
 - `AttemptContextAssembled`
 - `AttemptContextTruncated`

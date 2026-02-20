@@ -12,7 +12,7 @@ use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::verification::CheckConfig;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -638,6 +638,50 @@ pub enum EventPayload {
         resolved_document_ids: Vec<String>,
     },
 
+    ContextWindowCreated {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        window_id: String,
+        policy: String,
+        state_hash: String,
+    },
+
+    ContextOpApplied {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        window_id: String,
+        op: String,
+        actor: String,
+        #[serde(default)]
+        runtime: Option<String>,
+        #[serde(default)]
+        tool: Option<String>,
+        reason: String,
+        before_hash: String,
+        after_hash: String,
+        #[serde(default)]
+        added_ids: Vec<String>,
+        #[serde(default)]
+        removed_ids: Vec<String>,
+        #[serde(default)]
+        truncated_sections: Vec<String>,
+        #[serde(default)]
+        section_reasons: BTreeMap<String, Vec<String>>,
+    },
+
+    ContextWindowSnapshotCreated {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        window_id: String,
+        state_hash: String,
+        rendered_prompt_hash: String,
+        delivered_input_hash: String,
+        snapshot_json: String,
+    },
+
     AttemptContextAssembled {
         flow_id: Uuid,
         task_id: Uuid,
@@ -661,6 +705,8 @@ pub enum EventPayload {
         truncated_size_bytes: usize,
         #[serde(default)]
         sections: Vec<String>,
+        #[serde(default)]
+        section_reasons: BTreeMap<String, Vec<String>>,
         policy: String,
     },
 

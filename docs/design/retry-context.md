@@ -325,8 +325,39 @@ AttemptContextAssembled:
   attempt_id: string
   manifest_hash: string
   inputs_hash: string
-  context_hash: string
+  context_hash: string  # rendered prompt hash from snapshot
   manifest_json: string
+
+ContextWindowCreated:
+  flow_id: string
+  task_id: string
+  attempt_id: string
+  window_id: string
+  policy: ordered_section_then_total_budget
+  state_hash: string
+
+ContextOpApplied:
+  flow_id: string
+  task_id: string
+  attempt_id: string
+  window_id: string
+  op: add|remove|expand|prune|snapshot
+  reason: string
+  actor: string
+  runtime: string|null
+  tool: string|null
+  before_hash: string
+  after_hash: string
+  section_reasons: {string: [string]}
+
+ContextWindowSnapshotCreated:
+  flow_id: string
+  task_id: string
+  attempt_id: string
+  window_id: string
+  state_hash: string
+  rendered_prompt_hash: string
+  delivered_input_hash: string
 ```
 
 ### 7.2 Context Delivery Event
@@ -358,6 +389,7 @@ AttemptContextTruncated:
   original_size_bytes: int
   truncated_size_bytes: int
   sections: [string]
+  section_reasons: {string: [string]}
   policy: ordered_section_then_total_budget
 ```
 
@@ -371,7 +403,7 @@ Retry context is fully inspectable:
 - Stored as part of attempt record
 - Viewable via CLI: `hivemind attempt inspect <attempt_id> --context`
 - Included in attempt events
-- Bundled with immutable manifest + hash metadata (`manifest_hash`, `inputs_hash`, `delivered_context_hash`)
+- Bundled with immutable manifest v2 + hash metadata (`manifest_hash`, `inputs_hash`, `context_window_hash`, `rendered_prompt_hash`, `delivered_context_hash`)
 
 ### 8.2 Debugging Retries
 
