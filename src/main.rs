@@ -7,7 +7,7 @@ use hivemind::cli::commands::{
     AttemptCommands, AttemptInspectArgs, CheckpointCommands, Cli, Commands, ConstitutionCommands,
     EventCommands, FlowCommands, GlobalCommands, GlobalNotepadCommands, GlobalSkillCommands,
     GlobalSkillRegistryCommands, GlobalSystemPromptCommands, GlobalTemplateCommands, GraphCommands,
-    GraphSnapshotCommands, MergeCommands, MergeExecuteModeArg, ProjectCommands,
+    GraphQueryCommands, GraphSnapshotCommands, MergeCommands, MergeExecuteModeArg, ProjectCommands,
     ProjectGovernanceAttachmentCommands, ProjectGovernanceCommands,
     ProjectGovernanceDocumentCommands, ProjectGovernanceNotepadCommands,
     ProjectGovernanceRepairCommands, ProjectGovernanceSnapshotCommands, RunModeArg,
@@ -19,6 +19,7 @@ use hivemind::cli::output::{output, output_error, OutputFormat};
 use hivemind::core::error::ExitCode;
 use hivemind::core::events::RuntimeRole;
 use hivemind::core::flow::{RetryMode, RunMode};
+use hivemind::core::graph_query::{GraphQueryRequest, GraphQueryResult};
 use hivemind::core::registry::{
     MergeExecuteMode, MergeExecuteOptions, ProjectGovernanceInitResult,
     ProjectGovernanceInspectResult, ProjectGovernanceMigrateResult, Registry,
@@ -389,6 +390,51 @@ fn print_flows(flows: &[hivemind::core::flow::TaskFlow], format: OutputFormat) {
     }
 }
 
+fn print_graph_query_result(result: &GraphQueryResult, format: OutputFormat) {
+    match format {
+        OutputFormat::Table => {
+            println!("Query kind:           {}", result.query_kind);
+            println!("Fingerprint:          {}", result.canonical_fingerprint);
+            println!("Max results:          {}", result.max_results);
+            println!("Truncated:            {}", result.truncated);
+            println!("Visited nodes:        {}", result.cost.visited_nodes);
+            println!("Visited edges:        {}", result.cost.visited_edges);
+            println!("Result nodes:         {}", result.nodes.len());
+            println!("Result edges:         {}", result.edges.len());
+            if !result.nodes.is_empty() {
+                println!("\nNodes:");
+                println!(
+                    "{:<40}  {:<10}  {:<14}  {:<24}  PATH",
+                    "NODE ID", "REPO", "CLASS", "PARTITION"
+                );
+                println!("{}", "-".repeat(124));
+                for node in &result.nodes {
+                    println!(
+                        "{:<40}  {:<10}  {:<14}  {:<24}  {}",
+                        node.node_id,
+                        node.repo_name,
+                        node.node_class,
+                        node.partition.as_deref().unwrap_or("-"),
+                        node.path.as_deref().unwrap_or("-")
+                    );
+                }
+            }
+            if !result.edges.is_empty() {
+                println!("\nEdges:");
+                println!("{:<40}  {:<40}  TYPE", "SOURCE", "TARGET");
+                println!("{}", "-".repeat(102));
+                for edge in &result.edges {
+                    println!(
+                        "{:<40}  {:<40}  {}",
+                        edge.source, edge.target, edge.edge_type
+                    );
+                }
+            }
+        }
+        _ => print_structured(result, format, "graph query result"),
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
@@ -415,6 +461,52 @@ fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
             match registry.create_graph(&args.project, &args.name, &task_ids) {
                 Ok(graph) => {
                     print_graph_id(graph.id, format);
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+        GraphCommands::Query(cmd) => {
+            let (project, request) = match cmd {
+                GraphQueryCommands::Neighbors(args) => (
+                    args.project,
+                    GraphQueryRequest::Neighbors {
+                        node: args.node,
+                        edge_types: args.edge_types,
+                        max_results: Some(args.max_results),
+                    },
+                ),
+                GraphQueryCommands::Dependents(args) => (
+                    args.project,
+                    GraphQueryRequest::Dependents {
+                        node: args.node,
+                        edge_types: args.edge_types,
+                        max_results: Some(args.max_results),
+                    },
+                ),
+                GraphQueryCommands::Subgraph(args) => (
+                    args.project,
+                    GraphQueryRequest::Subgraph {
+                        seed: args.seed,
+                        depth: args.depth,
+                        edge_types: args.edge_types,
+                        max_results: Some(args.max_results),
+                    },
+                ),
+                GraphQueryCommands::Filter(args) => (
+                    args.project,
+                    GraphQueryRequest::Filter {
+                        node_type: args.node_type,
+                        path_prefix: args.path,
+                        partition: args.partition,
+                        max_results: Some(args.max_results),
+                    },
+                ),
+            };
+
+            match registry.graph_query_execute(&project, &request, "cli_graph_query") {
+                Ok(result) => {
+                    print_graph_query_result(&result, format);
                     ExitCode::Success
                 }
                 Err(e) => output_error(&e, format),
@@ -2263,6 +2355,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::GraphSnapshotCompleted { .. } => "graph_snapshot_completed",
         EventPayload::GraphSnapshotFailed { .. } => "graph_snapshot_failed",
         EventPayload::GraphSnapshotDiffDetected { .. } => "graph_snapshot_diff_detected",
+        EventPayload::GraphQueryExecuted { .. } => "graph_query_executed",
         EventPayload::ConstitutionInitialized { .. } => "constitution_initialized",
         EventPayload::ConstitutionUpdated { .. } => "constitution_updated",
         EventPayload::ConstitutionValidated { .. } => "constitution_validated",

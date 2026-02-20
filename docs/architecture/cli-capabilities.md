@@ -159,6 +159,11 @@ Capabilities:
 - Assign scopes
 - Validate TaskGraph
 - Refresh static codegraph snapshot envelope (`graph snapshot refresh`)
+- Inspect graph snapshot substrate via bounded query commands:
+  - `graph query neighbors`
+  - `graph query dependents`
+  - `graph query subgraph`
+  - `graph query filter`
 - Delete TaskGraph
 
 ---

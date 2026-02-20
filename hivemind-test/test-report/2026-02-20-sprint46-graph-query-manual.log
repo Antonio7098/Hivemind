@@ -1,0 +1,120 @@
++ cd /tmp/sprint46-graph-query-repo
++ git init
+Initialized empty Git repository in /tmp/sprint46-graph-query-repo/.git/
++ cat
++ cat
++ git add .
++ git -c user.name=Hivemind -c user.email=hivemind@example.com commit -m init
+[main (root-commit) c7a7182] init
+ 2 files changed, 4 insertions(+)
+ create mode 100644 src/lib.rs
+ create mode 100644 src/main.rs
++ export HOME=/tmp/sprint46-graph-query-home
++ HOME=/tmp/sprint46-graph-query-home
++ HM=/tmp/sprint46-release-target/release/hivemind
++ /tmp/sprint46-release-target/release/hivemind project create sprint46-manual --description 'Sprint 46 manual graph query'
+ID:          7a8af6f1-3211-41a0-af2f-5c8789fc4dc1
+Name:        sprint46-manual
+Description: Sprint 46 manual graph query
+Created:     2026-02-20 11:39:57.576359783 UTC
+Updated:     2026-02-20 11:39:57.576359783 UTC
++ /tmp/sprint46-release-target/release/hivemind project attach-repo sprint46-manual /tmp/sprint46-graph-query-repo --name main
+ID:          7a8af6f1-3211-41a0-af2f-5c8789fc4dc1
+Name:        sprint46-manual
+Description: Sprint 46 manual graph query
+Created:     2026-02-20 11:39:57.576359783 UTC
+Updated:     2026-02-20 11:39:57.604637650 UTC
+Repositories:
+  - main (/tmp/sprint46-graph-query-repo) [readwrite]
++ /tmp/sprint46-release-target/release/hivemind graph snapshot refresh sprint46-manual
+Project:              7a8af6f1-3211-41a0-af2f-5c8789fc4dc1
+Snapshot path:        /tmp/sprint46-graph-query-home/.hivemind/projects/7a8af6f1-3211-41a0-af2f-5c8789fc4dc1/graph_snapshot.json
+Trigger:              manual_refresh
+Repository count:     1
+UCP profile:          codegraph.v1
+UCP engine:           ucp-codegraph-extractor.v1
+Fingerprint:          e86125e4573693c8
+Artifact revision:    2
++ /tmp/sprint46-release-target/release/hivemind -f json graph query filter sprint46-manual --type file --path src --max-results 2
++ /tmp/sprint46-release-target/release/hivemind -f json graph query filter sprint46-manual --type file --path src --max-results 2
++ python3 -
+{
+  "query_kind_1": "filter",
+  "query_kind_2": "filter",
+  "nodes_1": [
+    "main::file:src/lib.rs",
+    "main::file:src/main.rs"
+  ],
+  "nodes_2": [
+    "main::file:src/lib.rs",
+    "main::file:src/main.rs"
+  ],
+  "deterministic_nodes": true,
+  "fingerprint_1": "e86125e4573693c8",
+  "fingerprint_2": "e86125e4573693c8",
+  "deterministic_fingerprint": true
+}
++ /tmp/sprint46-release-target/release/hivemind -f json graph query subgraph sprint46-manual --seed main::src/main.rs --depth 10 --max-results 25
+{"success":false,"error":{"category":"user","code":"graph_query_depth_exceeded","message":"Subgraph depth 10 exceeds limit 4","origin":"registry:graph_query_execute","hint":"Reduce --max-results/--depth to fit bounded graph query limits"}}
++ true
+++ /tmp/sprint46-release-target/release/hivemind task create sprint46-manual 'runtime graph query'
+++ awk '/ID:/{print $2; exit}'
++ TASK_ID=b070c8a3-351f-47cf-84d3-d143b67d56cd
+++ /tmp/sprint46-release-target/release/hivemind graph create sprint46-manual g46 --from-tasks b070c8a3-351f-47cf-84d3-d143b67d56cd
+++ awk '/Graph ID:/{print $3; exit}'
++ GRAPH_ID=fe2b5a75-1168-4ad0-93e6-ddf2aae956e9
+++ /tmp/sprint46-release-target/release/hivemind flow create fe2b5a75-1168-4ad0-93e6-ddf2aae956e9
+++ awk '/Flow ID:/{print $3; exit}'
++ FLOW_ID=31b18de8-6b6e-482d-b537-8bcd2bfd1564
++ /tmp/sprint46-release-target/release/hivemind flow start 31b18de8-6b6e-482d-b537-8bcd2bfd1564
+Flow ID: 31b18de8-6b6e-482d-b537-8bcd2bfd1564
++ /tmp/sprint46-release-target/release/hivemind project runtime-set sprint46-manual --adapter native --binary-path builtin-native --model native-test-model --arg 'ACT:tool:graph_query:{"kind":"filter","max_results":25}' --arg 'DONE:runtime graph query'
+ID:          7a8af6f1-3211-41a0-af2f-5c8789fc4dc1
+Name:        sprint46-manual
+Description: Sprint 46 manual graph query
+Created:     2026-02-20 11:39:57.576359783 UTC
+Updated:     2026-02-20 11:39:58.057180418 UTC
+Repositories:
+  - main (/tmp/sprint46-graph-query-repo) [readwrite]
++ echo '// stale'
++ git add src/lib.rs
++ git -c user.name=Hivemind -c user.email=hivemind@example.com commit -m stale
+[main 0afd1aa] stale
+ 1 file changed, 1 insertion(+)
++ /tmp/sprint46-release-target/release/hivemind flow tick 31b18de8-6b6e-482d-b537-8bcd2bfd1564
+Flow ID: 31b18de8-6b6e-482d-b537-8bcd2bfd1564
++ /tmp/sprint46-release-target/release/hivemind -f json events stream --project sprint46-manual --limit 500
++ /tmp/sprint46-release-target/release/hivemind graph snapshot refresh sprint46-manual
+Project:              7a8af6f1-3211-41a0-af2f-5c8789fc4dc1
+Snapshot path:        /tmp/sprint46-graph-query-home/.hivemind/projects/7a8af6f1-3211-41a0-af2f-5c8789fc4dc1/graph_snapshot.json
+Trigger:              manual_refresh
+Repository count:     1
+UCP profile:          codegraph.v1
+UCP engine:           ucp-codegraph-extractor.v1
+Fingerprint:          9625810b016b7752
+Artifact revision:    3
+++ /tmp/sprint46-release-target/release/hivemind task create sprint46-manual 'runtime graph query success'
+++ awk '/ID:/{print $2; exit}'
++ TASK_ID=716beea2-3bec-43b9-9174-9a6bf8eb9508
+++ /tmp/sprint46-release-target/release/hivemind graph create sprint46-manual g46-success --from-tasks 716beea2-3bec-43b9-9174-9a6bf8eb9508
+++ awk '/Graph ID:/{print $3; exit}'
++ GRAPH_ID=a60ef7e5-df41-4e49-a195-c7c1f12c27a6
+++ /tmp/sprint46-release-target/release/hivemind flow create a60ef7e5-df41-4e49-a195-c7c1f12c27a6
+++ awk '/Flow ID:/{print $3; exit}'
++ FLOW_ID=80c177c4-cb19-4aea-b699-0711e070d980
++ /tmp/sprint46-release-target/release/hivemind flow start 80c177c4-cb19-4aea-b699-0711e070d980
+Flow ID: 80c177c4-cb19-4aea-b699-0711e070d980
++ /tmp/sprint46-release-target/release/hivemind project runtime-set sprint46-manual --adapter native --binary-path builtin-native --model native-test-model --arg 'ACT:tool:graph_query:{"kind":"filter","max_results":25}' --arg 'DONE:runtime graph query success'
+ID:          7a8af6f1-3211-41a0-af2f-5c8789fc4dc1
+Name:        sprint46-manual
+Description: Sprint 46 manual graph query
+Created:     2026-02-20 11:39:57.576359783 UTC
+Updated:     2026-02-20 11:40:19.632654303 UTC
+Repositories:
+  - main (/tmp/sprint46-graph-query-repo) [readwrite]
++ /tmp/sprint46-release-target/release/hivemind flow tick 80c177c4-cb19-4aea-b699-0711e070d980
+Error: [user:checkpoints_incomplete] All checkpoints must be completed before task completion
+Hint: Complete the active checkpoint via `hivemind checkpoint complete --attempt-id c0f0243b-e8bc-409c-8d7b-f01ab217df31 --id <checkpoint-id>` before finishing the task attempt
+{"success":false,"error":{"category":"user","code":"checkpoints_incomplete","message":"All checkpoints must be completed before task completion","origin":"registry:complete_task_execution","hint":"Complete the active checkpoint via `hivemind checkpoint complete --attempt-id c0f0243b-e8bc-409c-8d7b-f01ab217df31 --id <checkpoint-id>` before finishing the task attempt"}}
++ true
++ /tmp/sprint46-release-target/release/hivemind -f json events stream --project sprint46-manual --limit 800

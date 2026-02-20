@@ -275,6 +275,9 @@ pub struct WorktreeCleanupArgs {
 pub enum GraphCommands {
     /// Create a new task graph from project tasks
     Create(GraphCreateArgs),
+    /// Query UCP graph snapshot data with deterministic bounded semantics
+    #[command(subcommand)]
+    Query(GraphQueryCommands),
     /// Code graph snapshot lifecycle commands
     #[command(subcommand)]
     Snapshot(GraphSnapshotCommands),
@@ -296,10 +299,88 @@ pub enum GraphSnapshotCommands {
     Refresh(GraphSnapshotRefreshArgs),
 }
 
+#[derive(Subcommand)]
+pub enum GraphQueryCommands {
+    /// Return outgoing neighbors for a node
+    Neighbors(GraphQueryNeighborsArgs),
+    /// Return reverse neighbors (incoming dependents) for a node
+    Dependents(GraphQueryDependentsArgs),
+    /// Return a bounded outgoing subgraph from a seed node
+    Subgraph(GraphQuerySubgraphArgs),
+    /// Filter nodes by class/path/partition
+    Filter(GraphQueryFilterArgs),
+}
+
 #[derive(Args)]
 pub struct GraphSnapshotRefreshArgs {
     /// Project ID or name
     pub project: String,
+}
+
+#[derive(Args)]
+pub struct GraphQueryNeighborsArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Node reference (`<repo>::<logical_key>` or file path/logical key)
+    #[arg(long)]
+    pub node: String,
+    /// Optional edge-type filters (repeatable). Use `*` for all edge types.
+    #[arg(long = "edge-type")]
+    pub edge_types: Vec<String>,
+    /// Max number of nodes returned (bounded globally)
+    #[arg(long, default_value_t = 200)]
+    pub max_results: usize,
+}
+
+#[derive(Args)]
+pub struct GraphQueryDependentsArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Node reference (`<repo>::<logical_key>` or file path/logical key)
+    #[arg(long)]
+    pub node: String,
+    /// Optional edge-type filters (repeatable). Use `*` for all edge types.
+    #[arg(long = "edge-type")]
+    pub edge_types: Vec<String>,
+    /// Max number of nodes returned (bounded globally)
+    #[arg(long, default_value_t = 200)]
+    pub max_results: usize,
+}
+
+#[derive(Args)]
+pub struct GraphQuerySubgraphArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Seed node reference (`<repo>::<logical_key>` or file path/logical key)
+    #[arg(long)]
+    pub seed: String,
+    /// Outgoing traversal depth (bounded globally)
+    #[arg(long)]
+    pub depth: usize,
+    /// Optional edge-type filters (repeatable). Use `*` for all edge types.
+    #[arg(long = "edge-type")]
+    pub edge_types: Vec<String>,
+    /// Max number of nodes returned (bounded globally)
+    #[arg(long, default_value_t = 200)]
+    pub max_results: usize,
+}
+
+#[derive(Args)]
+pub struct GraphQueryFilterArgs {
+    /// Project ID or name
+    pub project: String,
+    /// Optional node class filter (`repository|directory|file|symbol`)
+    #[arg(long = "type")]
+    pub node_type: Option<String>,
+    /// Optional normalized path-prefix filter
+    #[arg(long)]
+    pub path: Option<String>,
+    /// Optional constitution partition ID filter
+    #[arg(long)]
+    pub partition: Option<String>,
+    /// Max number of nodes returned (bounded globally)
+    #[arg(long, default_value_t = 200)]
+    pub max_results: usize,
 }
 
 #[derive(Args)]

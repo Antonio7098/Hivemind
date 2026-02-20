@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.42",
+      "date": "2026-02-20",
+      "phase": 46,
+      "changes": [
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add deterministic UCP graph-query substrate (`src/core/graph_query.rs`) with bounded primitives (`neighbors`, `dependents`, `subgraph`, `filter`), deterministic ordering, cost telemetry, and partition-aware path filtering"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add `graph query` inspection commands (`neighbors`, `dependents`, `subgraph`, `filter`) wired to bounded snapshot-backed query execution"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Integrate runtime graph-query context gating in `tick_flow` and expose snapshot/constitution env surfaces for native runtime graph-query execution"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Extend native typed tool engine with `graph_query` tool contract, runtime snapshot integrity/staleness validation, and actionable stale/missing snapshot failures"
+        },
+        {
+          "type": "added",
+          "area": "events",
+          "description": "Emit `GraphQueryExecuted` telemetry for CLI and native tool paths with source attribution, result-size metrics, visited-node/edge cost, truncation, duration, and canonical fingerprint"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Sprint 46 roadmap completion; update architecture/design docs and publish Sprint 46 manual checklist/report artifacts in `hivemind-test`"
+        }
+      ]
+    },
+    {
       "version": "v0.1.41",
       "date": "2026-02-20",
       "phase": 45,
@@ -1064,7 +1101,7 @@
         {
           "type": "added",
           "area": "tests",
-          "description": "Extend hivemind-test/test_merge.sh to assert FrozenForMerge → Merged transitions and sentinel merge events"
+          "description": "Extend hivemind-test/test_merge.sh to assert FrozenForMerge \u2192 Merged transitions and sentinel merge events"
         }
       ]
     },

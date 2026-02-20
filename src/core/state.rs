@@ -1163,6 +1163,7 @@ impl AppState {
             | EventPayload::GraphSnapshotCompleted { .. }
             | EventPayload::GraphSnapshotFailed { .. }
             | EventPayload::GraphSnapshotDiffDetected { .. }
+            | EventPayload::GraphQueryExecuted { .. }
             | EventPayload::ConstitutionValidated { .. }
             | EventPayload::ConstitutionViolationDetected { .. }
             | EventPayload::TemplateInstantiated { .. }

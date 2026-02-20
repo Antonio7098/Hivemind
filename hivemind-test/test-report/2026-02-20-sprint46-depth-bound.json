@@ -1,0 +1,1 @@
+{"success":false,"error":{"category":"user","code":"graph_query_depth_exceeded","message":"Subgraph depth 10 exceeds limit 4","origin":"registry:graph_query_execute","hint":"Reduce --max-results/--depth to fit bounded graph query limits"}}

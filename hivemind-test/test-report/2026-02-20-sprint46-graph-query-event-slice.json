@@ -1,0 +1,275 @@
+[
+  {
+    "metadata": {
+      "id": "00000000-0000-0009-9af2-a1c957a235b1",
+      "timestamp": "2026-02-20T11:39:57.747469596Z",
+      "correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": null,
+        "flow_id": null,
+        "task_id": null,
+        "attempt_id": null
+      },
+      "sequence": 9
+    },
+    "payload": {
+      "type": "graph_query_executed",
+      "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+      "flow_id": null,
+      "task_id": null,
+      "attempt_id": null,
+      "source": "cli_graph_query",
+      "query_kind": "filter",
+      "result_node_count": 2,
+      "result_edge_count": 0,
+      "visited_node_count": 6,
+      "visited_edge_count": 1,
+      "max_results": 2,
+      "truncated": false,
+      "duration_ms": 0,
+      "canonical_fingerprint": "e86125e4573693c8"
+    }
+  },
+  {
+    "metadata": {
+      "id": "00000000-0000-000a-9143-5540879bc413",
+      "timestamp": "2026-02-20T11:39:57.777209091Z",
+      "correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": null,
+        "flow_id": null,
+        "task_id": null,
+        "attempt_id": null
+      },
+      "sequence": 10
+    },
+    "payload": {
+      "type": "graph_query_executed",
+      "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+      "flow_id": null,
+      "task_id": null,
+      "attempt_id": null,
+      "source": "cli_graph_query",
+      "query_kind": "filter",
+      "result_node_count": 2,
+      "result_edge_count": 0,
+      "visited_node_count": 6,
+      "visited_edge_count": 1,
+      "max_results": 2,
+      "truncated": false,
+      "duration_ms": 0,
+      "canonical_fingerprint": "e86125e4573693c8"
+    }
+  },
+  {
+    "metadata": {
+      "id": "00000000-0000-002d-9f10-46261729b5b3",
+      "timestamp": "2026-02-20T11:39:58.497712570Z",
+      "correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": "fe2b5a75-1168-4ad0-93e6-ddf2aae956e9",
+        "flow_id": "31b18de8-6b6e-482d-b537-8bcd2bfd1564",
+        "task_id": "b070c8a3-351f-47cf-84d3-d143b67d56cd",
+        "attempt_id": "08fba13e-7429-4d93-95b2-b0eaf1f1a1f6"
+      },
+      "sequence": 45
+    },
+    "payload": {
+      "type": "tool_call_failed",
+      "native_correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": "fe2b5a75-1168-4ad0-93e6-ddf2aae956e9",
+        "flow_id": "31b18de8-6b6e-482d-b537-8bcd2bfd1564",
+        "task_id": "b070c8a3-351f-47cf-84d3-d143b67d56cd",
+        "attempt_id": "08fba13e-7429-4d93-95b2-b0eaf1f1a1f6"
+      },
+      "invocation_id": "4071974e-eb27-426b-aecd-29cfa1534715",
+      "turn_index": 0,
+      "call_id": "4071974e-eb27-426b-aecd-29cfa1534715:turn:0:tool:0",
+      "tool_name": "graph_query",
+      "code": "graph_snapshot_stale",
+      "message": "Graph snapshot is stale for repository 'main' (snapshot=c7a7182794569969b9286090efa6546ef2ae0d72 current=0afd1aa7b4d9c2c4721d15fbfa9eb4cef9b6c90b). Hint: Run: hivemind graph snapshot refresh <project>",
+      "recoverable": false
+    }
+  },
+  {
+    "metadata": {
+      "id": "00000000-0000-0033-8bc2-c8ce60019846",
+      "timestamp": "2026-02-20T11:39:58.564810665Z",
+      "correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": "fe2b5a75-1168-4ad0-93e6-ddf2aae956e9",
+        "flow_id": "31b18de8-6b6e-482d-b537-8bcd2bfd1564",
+        "task_id": "b070c8a3-351f-47cf-84d3-d143b67d56cd",
+        "attempt_id": "08fba13e-7429-4d93-95b2-b0eaf1f1a1f6"
+      },
+      "sequence": 51
+    },
+    "payload": {
+      "type": "agent_invocation_completed",
+      "native_correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": "fe2b5a75-1168-4ad0-93e6-ddf2aae956e9",
+        "flow_id": "31b18de8-6b6e-482d-b537-8bcd2bfd1564",
+        "task_id": "b070c8a3-351f-47cf-84d3-d143b67d56cd",
+        "attempt_id": "08fba13e-7429-4d93-95b2-b0eaf1f1a1f6"
+      },
+      "invocation_id": "4071974e-eb27-426b-aecd-29cfa1534715",
+      "total_turns": 2,
+      "final_state": "done",
+      "success": false,
+      "final_summary": "runtime graph query",
+      "error_code": "graph_snapshot_stale",
+      "error_message": "Graph snapshot is stale for repository 'main' (snapshot=c7a7182794569969b9286090efa6546ef2ae0d72 current=0afd1aa7b4d9c2c4721d15fbfa9eb4cef9b6c90b). Hint: Run: hivemind graph snapshot refresh <project>",
+      "recoverable": false
+    }
+  },
+  {
+    "metadata": {
+      "id": "00000000-0000-003a-980d-dadf80f4bd8f",
+      "timestamp": "2026-02-20T11:39:58.649908280Z",
+      "correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": "fe2b5a75-1168-4ad0-93e6-ddf2aae956e9",
+        "flow_id": "31b18de8-6b6e-482d-b537-8bcd2bfd1564",
+        "task_id": "b070c8a3-351f-47cf-84d3-d143b67d56cd",
+        "attempt_id": "08fba13e-7429-4d93-95b2-b0eaf1f1a1f6"
+      },
+      "sequence": 58
+    },
+    "payload": {
+      "type": "runtime_error_classified",
+      "attempt_id": "08fba13e-7429-4d93-95b2-b0eaf1f1a1f6",
+      "adapter_name": "native",
+      "code": "runtime_nonzero_exit",
+      "category": "runtime_execution",
+      "message": "Runtime exited with code 1",
+      "recoverable": true,
+      "retryable": true,
+      "rate_limited": false
+    }
+  },
+  {
+    "metadata": {
+      "id": "00000000-0000-0064-9b04-a305b5a9135b",
+      "timestamp": "2026-02-20T11:40:20.107556617Z",
+      "correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": "a60ef7e5-df41-4e49-a195-c7c1f12c27a6",
+        "flow_id": "80c177c4-cb19-4aea-b699-0711e070d980",
+        "task_id": "716beea2-3bec-43b9-9174-9a6bf8eb9508",
+        "attempt_id": "c0f0243b-e8bc-409c-8d7b-f01ab217df31"
+      },
+      "sequence": 100
+    },
+    "payload": {
+      "type": "tool_call_completed",
+      "native_correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": "a60ef7e5-df41-4e49-a195-c7c1f12c27a6",
+        "flow_id": "80c177c4-cb19-4aea-b699-0711e070d980",
+        "task_id": "716beea2-3bec-43b9-9174-9a6bf8eb9508",
+        "attempt_id": "c0f0243b-e8bc-409c-8d7b-f01ab217df31"
+      },
+      "invocation_id": "d03bb5b3-c24a-4e5e-8e0e-324820606657",
+      "turn_index": 0,
+      "call_id": "d03bb5b3-c24a-4e5e-8e0e-324820606657:turn:0:tool:0",
+      "tool_name": "graph_query",
+      "response": {
+        "digest": "0dafcd1ee7bff7edf32e47e4e580ae094a243a2e95c22b035bda360bc0bc665d",
+        "byte_size": 1254,
+        "media_type": "text/plain; charset=utf-8",
+        "blob_path": "/tmp/sprint46-graph-query-home/.hivemind/blobs/sha256/0d/0dafcd1ee7bff7edf32e47e4e580ae094a243a2e95c22b035bda360bc0bc665d.blob",
+        "payload": null
+      }
+    }
+  },
+  {
+    "metadata": {
+      "id": "00000000-0000-0065-bdd0-4c03898e2b26",
+      "timestamp": "2026-02-20T11:40:20.117466114Z",
+      "correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": "a60ef7e5-df41-4e49-a195-c7c1f12c27a6",
+        "flow_id": "80c177c4-cb19-4aea-b699-0711e070d980",
+        "task_id": "716beea2-3bec-43b9-9174-9a6bf8eb9508",
+        "attempt_id": "c0f0243b-e8bc-409c-8d7b-f01ab217df31"
+      },
+      "sequence": 101
+    },
+    "payload": {
+      "type": "graph_query_executed",
+      "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+      "flow_id": "80c177c4-cb19-4aea-b699-0711e070d980",
+      "task_id": "716beea2-3bec-43b9-9174-9a6bf8eb9508",
+      "attempt_id": "c0f0243b-e8bc-409c-8d7b-f01ab217df31",
+      "source": "native_tool_graph_query",
+      "query_kind": "filter",
+      "result_node_count": 6,
+      "result_edge_count": 1,
+      "visited_node_count": 6,
+      "visited_edge_count": 1,
+      "max_results": 25,
+      "truncated": false,
+      "duration_ms": 0,
+      "canonical_fingerprint": "9625810b016b7752"
+    }
+  },
+  {
+    "metadata": {
+      "id": "00000000-0000-006b-98a6-b429a3477407",
+      "timestamp": "2026-02-20T11:40:20.184974591Z",
+      "correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": "a60ef7e5-df41-4e49-a195-c7c1f12c27a6",
+        "flow_id": "80c177c4-cb19-4aea-b699-0711e070d980",
+        "task_id": "716beea2-3bec-43b9-9174-9a6bf8eb9508",
+        "attempt_id": "c0f0243b-e8bc-409c-8d7b-f01ab217df31"
+      },
+      "sequence": 107
+    },
+    "payload": {
+      "type": "agent_invocation_completed",
+      "native_correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": "a60ef7e5-df41-4e49-a195-c7c1f12c27a6",
+        "flow_id": "80c177c4-cb19-4aea-b699-0711e070d980",
+        "task_id": "716beea2-3bec-43b9-9174-9a6bf8eb9508",
+        "attempt_id": "c0f0243b-e8bc-409c-8d7b-f01ab217df31"
+      },
+      "invocation_id": "d03bb5b3-c24a-4e5e-8e0e-324820606657",
+      "total_turns": 2,
+      "final_state": "done",
+      "success": true,
+      "final_summary": "runtime graph query success",
+      "error_code": null,
+      "error_message": null,
+      "recoverable": null
+    }
+  },
+  {
+    "metadata": {
+      "id": "00000000-0000-0073-87ce-1b66d98cd10f",
+      "timestamp": "2026-02-20T11:40:20.298494968Z",
+      "correlation": {
+        "project_id": "7a8af6f1-3211-41a0-af2f-5c8789fc4dc1",
+        "graph_id": "a60ef7e5-df41-4e49-a195-c7c1f12c27a6",
+        "flow_id": "80c177c4-cb19-4aea-b699-0711e070d980",
+        "task_id": "716beea2-3bec-43b9-9174-9a6bf8eb9508",
+        "attempt_id": "c0f0243b-e8bc-409c-8d7b-f01ab217df31"
+      },
+      "sequence": 115
+    },
+    "payload": {
+      "type": "runtime_error_classified",
+      "attempt_id": "c0f0243b-e8bc-409c-8d7b-f01ab217df31",
+      "adapter_name": "native",
+      "code": "checkpoints_incomplete",
+      "category": "checkpoint_incomplete",
+      "message": "All checkpoints must be completed before task completion",
+      "recoverable": true,
+      "retryable": false,
+      "rate_limited": false
+    }
+  }
+]

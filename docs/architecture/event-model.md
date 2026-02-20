@@ -106,6 +106,7 @@ Examples:
 - `GraphSnapshotCompleted`
 - `GraphSnapshotFailed`
 - `GraphSnapshotDiffDetected`
+- `GraphQueryExecuted`
 - `ConstitutionInitialized`
 - `ConstitutionUpdated`
 - `ConstitutionValidated`
@@ -124,6 +125,7 @@ Properties:
 - Attachment lifecycle is task-scoped and auditable
 - Graph snapshot lifecycle emits explicit start/completion/failure and diff telemetry with trigger attribution (`project_attach`, `checkpoint_complete`, `merge_completed`, `manual_refresh`)
 - Snapshot completion payload records snapshot path, governance revision, UCP profile/engine metadata, and canonical fingerprint for replay-safe provenance
+- Graph query execution emits bounded cost/result telemetry (`visited_*`, result sizes, truncation, duration, canonical fingerprint) with source attribution (`cli_graph_query`, `native_tool_graph_query`)
 - Governance recovery snapshot events record snapshot identity, coverage size, and source event sequence used for bounded restore
 - Drift/repair events expose recoverable vs unrecoverable issue counts and applied operation totals for operator audit trails
 - Constitution lifecycle events include digest, schema/version metadata, confirmation flag, mutation intent, and actor attribution
