@@ -188,33 +188,33 @@
 > **User Story 12 continuation:** Architecture governance and context selection should come from observable code facts.
 
 ### 46.1 Graph Query Contract
-- [ ] Implement graph query primitives over existing snapshot artifacts:
-  - [ ] `neighbors(node)`
-  - [ ] `dependents(node)`
-  - [ ] `subgraph(seed, depth, edge_types)`
-  - [ ] `filter(type/path/partition)`
-- [ ] Guarantee deterministic ordering of query responses
+- [x] Implement graph query primitives over existing snapshot artifacts:
+  - [x] `neighbors(node)`
+  - [x] `dependents(node)`
+  - [x] `subgraph(seed, depth, edge_types)`
+  - [x] `filter(type/path/partition)`
+- [x] Guarantee deterministic ordering of query responses
 
 ### 46.2 Runtime and Tool Integration
-- [ ] Expose graph queries through native tool engine with explicit bounds
-- [ ] Add CLI inspection commands for graph query debugging
-- [ ] Record query cost and result-size telemetry in events
+- [x] Expose graph queries through native tool engine with explicit bounds
+- [x] Add CLI inspection commands for graph query debugging
+- [x] Record query cost and result-size telemetry in events
 
 ### 46.3 Staleness and Integrity Gates
-- [ ] Reuse existing snapshot staleness checks before serving runtime graph queries
-- [ ] Hard-fail on stale/missing snapshot with actionable recovery hint (`hivemind graph snapshot refresh`)
-- [ ] Preserve UCP canonical fingerprint verification in query pipeline
+- [x] Reuse existing snapshot staleness checks before serving runtime graph queries
+- [x] Hard-fail on stale/missing snapshot with actionable recovery hint (`hivemind graph snapshot refresh`)
+- [x] Preserve UCP canonical fingerprint verification in query pipeline
 
 ### 46.4 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 46 manual checklist under `@hivemind-test`
-- [ ] Validate query determinism, bounds, and stale snapshot handling
-- [ ] Publish Sprint 46 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 46 manual checklist under `@hivemind-test`
+- [x] Validate query determinism, bounds, and stale snapshot handling
+- [x] Publish Sprint 46 manual test report artifact in `@hivemind-test`
 
 ### 46.5 Exit Criteria
-- [ ] Runtime can query graph substrate via bounded tools
-- [ ] Query behavior is deterministic and observable
-- [ ] Integrity/staleness gates prevent invalid graph context
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Runtime can query graph substrate via bounded tools
+- [x] Query behavior is deterministic and observable
+- [x] Integrity/staleness gates prevent invalid graph context
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 

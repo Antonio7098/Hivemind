@@ -553,6 +553,26 @@ pub enum EventPayload {
         canonical_fingerprint: String,
     },
 
+    GraphQueryExecuted {
+        project_id: Uuid,
+        #[serde(default)]
+        flow_id: Option<Uuid>,
+        #[serde(default)]
+        task_id: Option<Uuid>,
+        #[serde(default)]
+        attempt_id: Option<Uuid>,
+        source: String,
+        query_kind: String,
+        result_node_count: usize,
+        result_edge_count: usize,
+        visited_node_count: usize,
+        visited_edge_count: usize,
+        max_results: usize,
+        truncated: bool,
+        duration_ms: u64,
+        canonical_fingerprint: String,
+    },
+
     ConstitutionInitialized {
         project_id: Uuid,
         path: String,

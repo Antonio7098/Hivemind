@@ -196,6 +196,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::GraphSnapshotCompleted { .. } => "GraphSnapshotCompleted",
         EventPayload::GraphSnapshotFailed { .. } => "GraphSnapshotFailed",
         EventPayload::GraphSnapshotDiffDetected { .. } => "GraphSnapshotDiffDetected",
+        EventPayload::GraphQueryExecuted { .. } => "GraphQueryExecuted",
         EventPayload::ConstitutionInitialized { .. } => "ConstitutionInitialized",
         EventPayload::ConstitutionUpdated { .. } => "ConstitutionUpdated",
         EventPayload::ConstitutionValidated { .. } => "ConstitutionValidated",
@@ -326,6 +327,7 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::GraphSnapshotCompleted { .. }
         | EventPayload::GraphSnapshotFailed { .. }
         | EventPayload::GraphSnapshotDiffDetected { .. }
+        | EventPayload::GraphQueryExecuted { .. }
         | EventPayload::ConstitutionInitialized { .. }
         | EventPayload::ConstitutionUpdated { .. }
         | EventPayload::ConstitutionValidated { .. }

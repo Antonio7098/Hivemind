@@ -3,6 +3,11 @@
 //! Sprint 44 introduces a deterministic tool registry for native runtime turns.
 
 use crate::adapters::runtime::{NativeToolCallFailure, NativeToolCallTrace};
+use crate::core::graph_query::{
+    load_partition_paths_from_constitution, GraphQueryBounds, GraphQueryIndex,
+    GraphQueryRepository, GraphQueryRequest, GraphQueryResult, GRAPH_QUERY_ENV_CONSTITUTION_PATH,
+    GRAPH_QUERY_ENV_GATE_ERROR, GRAPH_QUERY_ENV_SNAPSHOT_PATH, GRAPH_QUERY_REFRESH_HINT,
+};
 use crate::core::scope::Scope;
 use jsonschema::JSONSchema;
 use schemars::{schema_for, JsonSchema};
@@ -11,10 +16,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
+use ucp_api::{canonical_fingerprint, PortableDocument, CODEGRAPH_PROFILE_MARKER};
 
 const TOOL_VERSION_V1: &str = "1.0.0";
 const DEFAULT_TIMEOUT_MS: u64 = 5_000;
@@ -226,6 +233,7 @@ pub struct ToolExecutionContext<'a> {
     pub worktree: &'a Path,
     pub scope: Option<&'a Scope>,
     pub command_policy: &'a NativeCommandPolicy,
+    pub env: &'a HashMap<String, String>,
 }
 
 type ToolHandler =
@@ -306,6 +314,14 @@ impl NativeToolEngine {
             DEFAULT_TIMEOUT_MS,
             true,
             handle_git_diff,
+        )?;
+        engine.register_builtin::<GraphQueryInput, GraphQueryResult>(
+            "graph_query",
+            "graph_query_read",
+            vec![ToolPermission::FilesystemRead, ToolPermission::GitRead],
+            DEFAULT_TIMEOUT_MS,
+            true,
+            handle_graph_query,
         )?;
         Ok(engine)
     }
@@ -980,11 +996,530 @@ fn handle_git_diff(
     })
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum GraphQueryKindInput {
+    Neighbors,
+    Dependents,
+    Subgraph,
+    Filter,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct GraphQueryInput {
+    kind: GraphQueryKindInput,
+    #[serde(default)]
+    node: Option<String>,
+    #[serde(default)]
+    seed: Option<String>,
+    #[serde(default)]
+    depth: Option<usize>,
+    #[serde(default)]
+    edge_types: Vec<String>,
+    #[serde(default)]
+    node_type: Option<String>,
+    #[serde(default)]
+    path_prefix: Option<String>,
+    #[serde(default)]
+    partition: Option<String>,
+    #[serde(default)]
+    max_results: Option<usize>,
+}
+
+impl GraphQueryInput {
+    fn into_request(self) -> Result<GraphQueryRequest, NativeToolEngineError> {
+        match self.kind {
+            GraphQueryKindInput::Neighbors => Ok(GraphQueryRequest::Neighbors {
+                node: self.node.ok_or_else(|| {
+                    NativeToolEngineError::validation("graph_query.neighbors requires 'node'")
+                })?,
+                edge_types: self.edge_types,
+                max_results: self.max_results,
+            }),
+            GraphQueryKindInput::Dependents => Ok(GraphQueryRequest::Dependents {
+                node: self.node.ok_or_else(|| {
+                    NativeToolEngineError::validation("graph_query.dependents requires 'node'")
+                })?,
+                edge_types: self.edge_types,
+                max_results: self.max_results,
+            }),
+            GraphQueryKindInput::Subgraph => Ok(GraphQueryRequest::Subgraph {
+                seed: self.seed.ok_or_else(|| {
+                    NativeToolEngineError::validation("graph_query.subgraph requires 'seed'")
+                })?,
+                depth: self.depth.ok_or_else(|| {
+                    NativeToolEngineError::validation("graph_query.subgraph requires 'depth'")
+                })?,
+                edge_types: self.edge_types,
+                max_results: self.max_results,
+            }),
+            GraphQueryKindInput::Filter => Ok(GraphQueryRequest::Filter {
+                node_type: self.node_type,
+                path_prefix: self.path_prefix,
+                partition: self.partition,
+                max_results: self.max_results,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RuntimeGraphQueryGateError {
+    code: String,
+    message: String,
+    #[serde(default)]
+    hint: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RuntimeGraphSnapshotCommit {
+    repo_name: String,
+    repo_path: String,
+    commit_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RuntimeGraphSnapshotProvenance {
+    head_commits: Vec<RuntimeGraphSnapshotCommit>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RuntimeGraphSnapshotRepository {
+    repo_name: String,
+    repo_path: String,
+    commit_hash: String,
+    canonical_fingerprint: String,
+    document: PortableDocument,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RuntimeGraphSnapshotArtifact {
+    profile_version: String,
+    canonical_fingerprint: String,
+    provenance: RuntimeGraphSnapshotProvenance,
+    repositories: Vec<RuntimeGraphSnapshotRepository>,
+}
+
+fn graph_query_runtime_error(code: &str, message: impl Into<String>) -> NativeToolEngineError {
+    NativeToolEngineError::new(code, message, false)
+}
+
+fn graph_query_runtime_error_with_refresh_hint(
+    code: &str,
+    message: impl Into<String>,
+) -> NativeToolEngineError {
+    graph_query_runtime_error(
+        code,
+        format!("{}. Hint: {GRAPH_QUERY_REFRESH_HINT}", message.into()),
+    )
+}
+
+fn resolve_repo_head_commit(repo_path: &Path) -> Result<String, NativeToolEngineError> {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|error| {
+            graph_query_runtime_error_with_refresh_hint(
+                "graph_snapshot_stale",
+                format!(
+                    "failed to resolve git HEAD for '{}': {error}",
+                    repo_path.display()
+                ),
+            )
+        })?;
+    if !output.status.success() {
+        return Err(graph_query_runtime_error_with_refresh_hint(
+            "graph_snapshot_stale",
+            format!(
+                "failed to resolve git HEAD for '{}': {}",
+                repo_path.display(),
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        ));
+    }
+    let head = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if head.is_empty() {
+        return Err(graph_query_runtime_error_with_refresh_hint(
+            "graph_snapshot_stale",
+            format!("resolved empty HEAD for '{}'", repo_path.display()),
+        ));
+    }
+    Ok(head)
+}
+
+fn graph_query_bounds_from_env(
+    env: &HashMap<String, String>,
+) -> Result<GraphQueryBounds, NativeToolEngineError> {
+    let mut bounds = GraphQueryBounds::default();
+    if let Some(raw) = env.get("HIVEMIND_GRAPH_QUERY_MAX_RESULTS_LIMIT") {
+        bounds.max_results_limit = raw.parse::<usize>().map_err(|error| {
+            NativeToolEngineError::execution(format!(
+                "invalid HIVEMIND_GRAPH_QUERY_MAX_RESULTS_LIMIT '{raw}': {error}"
+            ))
+        })?;
+    }
+    if let Some(raw) = env.get("HIVEMIND_GRAPH_QUERY_MAX_SUBGRAPH_DEPTH") {
+        bounds.max_subgraph_depth = raw.parse::<usize>().map_err(|error| {
+            NativeToolEngineError::execution(format!(
+                "invalid HIVEMIND_GRAPH_QUERY_MAX_SUBGRAPH_DEPTH '{raw}': {error}"
+            ))
+        })?;
+    }
+    if let Some(raw) = env.get("HIVEMIND_GRAPH_QUERY_DEFAULT_MAX_RESULTS") {
+        bounds.default_max_results = raw.parse::<usize>().map_err(|error| {
+            NativeToolEngineError::execution(format!(
+                "invalid HIVEMIND_GRAPH_QUERY_DEFAULT_MAX_RESULTS '{raw}': {error}"
+            ))
+        })?;
+    }
+    if bounds.max_results_limit == 0
+        || bounds.max_subgraph_depth == 0
+        || bounds.default_max_results == 0
+    {
+        return Err(NativeToolEngineError::execution(
+            "graph query bounds configuration values must be > 0",
+        ));
+    }
+    if bounds.default_max_results > bounds.max_results_limit {
+        return Err(NativeToolEngineError::execution(format!(
+            "graph query default max results {} exceeds max limit {}",
+            bounds.default_max_results, bounds.max_results_limit
+        )));
+    }
+    Ok(bounds)
+}
+
+fn load_runtime_graph_snapshot(
+    env: &HashMap<String, String>,
+) -> Result<RuntimeGraphSnapshotArtifact, NativeToolEngineError> {
+    if let Some(raw) = env.get(GRAPH_QUERY_ENV_GATE_ERROR) {
+        let gate = serde_json::from_str::<RuntimeGraphQueryGateError>(raw).map_err(|error| {
+            NativeToolEngineError::execution(format!(
+                "failed to decode {GRAPH_QUERY_ENV_GATE_ERROR}: {error}"
+            ))
+        })?;
+        let message = gate.hint.as_ref().map_or_else(
+            || gate.message.clone(),
+            |hint| format!("{}. Hint: {hint}", gate.message),
+        );
+        return Err(graph_query_runtime_error(&gate.code, message));
+    }
+
+    let snapshot_path = env
+        .get(GRAPH_QUERY_ENV_SNAPSHOT_PATH)
+        .ok_or_else(|| {
+            graph_query_runtime_error_with_refresh_hint(
+                "graph_snapshot_missing",
+                format!("missing runtime env {GRAPH_QUERY_ENV_SNAPSHOT_PATH}"),
+            )
+        })?
+        .clone();
+    let raw = fs::read_to_string(&snapshot_path).map_err(|error| {
+        graph_query_runtime_error_with_refresh_hint(
+            "graph_snapshot_missing",
+            format!("failed to read graph snapshot '{snapshot_path}': {error}"),
+        )
+    })?;
+    if raw.trim().is_empty() || raw.trim() == "{}" {
+        return Err(graph_query_runtime_error_with_refresh_hint(
+            "graph_snapshot_missing",
+            format!("graph snapshot '{snapshot_path}' is empty"),
+        ));
+    }
+
+    serde_json::from_str::<RuntimeGraphSnapshotArtifact>(&raw).map_err(|error| {
+        graph_query_runtime_error_with_refresh_hint(
+            "graph_snapshot_invalid",
+            format!("invalid graph snapshot '{snapshot_path}': {error}"),
+        )
+    })
+}
+
+fn validate_runtime_graph_snapshot(
+    artifact: &RuntimeGraphSnapshotArtifact,
+) -> Result<(), NativeToolEngineError> {
+    if artifact.profile_version != CODEGRAPH_PROFILE_MARKER {
+        return Err(graph_query_runtime_error_with_refresh_hint(
+            "graph_snapshot_profile_mismatch",
+            format!(
+                "snapshot profile '{}' is not supported; expected '{}'",
+                artifact.profile_version, CODEGRAPH_PROFILE_MARKER
+            ),
+        ));
+    }
+
+    let head_by_repo: HashMap<(String, String), String> = artifact
+        .provenance
+        .head_commits
+        .iter()
+        .map(|entry| {
+            (
+                (entry.repo_name.clone(), entry.repo_path.clone()),
+                entry.commit_hash.clone(),
+            )
+        })
+        .collect();
+
+    for repo in &artifact.repositories {
+        let document = repo.document.to_document().map_err(|error| {
+            graph_query_runtime_error_with_refresh_hint(
+                "graph_snapshot_integrity_invalid",
+                format!(
+                    "invalid portable document for repository '{}': {error}",
+                    repo.repo_name
+                ),
+            )
+        })?;
+        let computed = canonical_fingerprint(&document).map_err(|error| {
+            graph_query_runtime_error_with_refresh_hint(
+                "graph_snapshot_integrity_invalid",
+                format!(
+                    "failed to compute fingerprint for repository '{}': {error}",
+                    repo.repo_name
+                ),
+            )
+        })?;
+        if computed != repo.canonical_fingerprint {
+            return Err(graph_query_runtime_error_with_refresh_hint(
+                "graph_snapshot_integrity_invalid",
+                format!("fingerprint mismatch for repository '{}'", repo.repo_name),
+            ));
+        }
+
+        let key = (repo.repo_name.clone(), repo.repo_path.clone());
+        let recorded_head = head_by_repo.get(&key).ok_or_else(|| {
+            graph_query_runtime_error_with_refresh_hint(
+                "graph_snapshot_stale",
+                format!(
+                    "missing head commit provenance for repository '{}'",
+                    repo.repo_name
+                ),
+            )
+        })?;
+        if recorded_head != &repo.commit_hash {
+            return Err(graph_query_runtime_error_with_refresh_hint(
+                "graph_snapshot_stale",
+                format!(
+                    "snapshot repository commit mismatch for '{}' (snapshot={} provenance={})",
+                    repo.repo_name, repo.commit_hash, recorded_head
+                ),
+            ));
+        }
+
+        let current_head = resolve_repo_head_commit(Path::new(&repo.repo_path))?;
+        if current_head != *recorded_head {
+            return Err(graph_query_runtime_error_with_refresh_hint(
+                "graph_snapshot_stale",
+                format!(
+                    "graph snapshot is stale for repository '{}' (snapshot={} current={})",
+                    repo.repo_name, recorded_head, current_head
+                ),
+            ));
+        }
+    }
+
+    let aggregate = aggregate_snapshot_fingerprint_registry_style(&artifact.repositories);
+    if aggregate != artifact.canonical_fingerprint {
+        return Err(graph_query_runtime_error_with_refresh_hint(
+            "graph_snapshot_integrity_invalid",
+            "aggregate graph snapshot fingerprint mismatch",
+        ));
+    }
+
+    Ok(())
+}
+
+fn aggregate_snapshot_fingerprint_registry_style(
+    repositories: &[RuntimeGraphSnapshotRepository],
+) -> String {
+    let mut entries = repositories
+        .iter()
+        .map(|repo| {
+            format!(
+                "{}|{}|{}|{}",
+                repo.repo_name, repo.repo_path, repo.commit_hash, repo.canonical_fingerprint
+            )
+        })
+        .collect::<Vec<_>>();
+    entries.sort();
+    let joined = entries.join("\n");
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    joined.as_bytes().hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
+}
+
+fn map_graph_query_error(
+    error: crate::core::graph_query::GraphQueryError,
+) -> NativeToolEngineError {
+    NativeToolEngineError::new(error.code, error.message, false)
+}
+
+fn handle_graph_query(
+    ctx: &ToolExecutionContext<'_>,
+    input: &Value,
+    _timeout_ms: u64,
+) -> Result<Value, NativeToolEngineError> {
+    let input = decode_input::<GraphQueryInput>(input)?;
+    let request = input.into_request()?;
+    let bounds = graph_query_bounds_from_env(ctx.env)?;
+    let artifact = load_runtime_graph_snapshot(ctx.env)?;
+    validate_runtime_graph_snapshot(&artifact)?;
+
+    let partition_paths = ctx
+        .env
+        .get(GRAPH_QUERY_ENV_CONSTITUTION_PATH)
+        .map(PathBuf::from)
+        .as_deref()
+        .map_or_else(BTreeMap::new, load_partition_paths_from_constitution);
+
+    let repositories = artifact
+        .repositories
+        .iter()
+        .map(|repo| GraphQueryRepository {
+            repo_name: repo.repo_name.clone(),
+            document: repo.document.clone(),
+        })
+        .collect::<Vec<_>>();
+    let index = GraphQueryIndex::from_snapshot_repositories(&repositories, &partition_paths)
+        .map_err(map_graph_query_error)?;
+
+    let started = Instant::now();
+    let mut result = index
+        .execute(&request, &artifact.canonical_fingerprint, &bounds)
+        .map_err(map_graph_query_error)?;
+    result.duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    serde_json::to_value(result).map_err(|error| {
+        NativeToolEngineError::execution(format!("failed to encode graph_query output: {error}"))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::core::scope::{ExecutionScope, FilePermission, FilesystemScope, PathRule, Scope};
     use proptest::prelude::*;
+    use ucp_api::{
+        build_code_graph, CodeGraphBuildInput, CodeGraphExtractorConfig,
+        CODEGRAPH_EXTRACTOR_VERSION,
+    };
+
+    fn init_git_repo(path: &Path) {
+        fs::create_dir_all(path).expect("create repo dir");
+        let output = Command::new("git")
+            .args(["init"])
+            .current_dir(path)
+            .output()
+            .expect("git init");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn git_commit_all(path: &Path, message: &str) {
+        let add = Command::new("git")
+            .args(["add", "."])
+            .current_dir(path)
+            .output()
+            .expect("git add");
+        assert!(
+            add.status.success(),
+            "{}",
+            String::from_utf8_lossy(&add.stderr)
+        );
+        let commit = Command::new("git")
+            .args([
+                "-c",
+                "user.name=Hivemind",
+                "-c",
+                "user.email=hivemind@example.com",
+                "commit",
+                "-m",
+                message,
+            ])
+            .current_dir(path)
+            .output()
+            .expect("git commit");
+        assert!(
+            commit.status.success(),
+            "{}",
+            String::from_utf8_lossy(&commit.stderr)
+        );
+    }
+
+    fn git_head(path: &Path) -> String {
+        let output = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(path)
+            .output()
+            .expect("git rev-parse");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    fn write_snapshot_artifact(repo_path: &Path, snapshot_path: &Path) {
+        let commit_hash = git_head(repo_path);
+        let built = build_code_graph(&CodeGraphBuildInput {
+            repository_path: repo_path.to_path_buf(),
+            commit_hash: commit_hash.clone(),
+            config: CodeGraphExtractorConfig::default(),
+        })
+        .expect("build code graph");
+        let portable = PortableDocument::from_document(&built.document);
+        let repositories = vec![RuntimeGraphSnapshotRepository {
+            repo_name: "repo".to_string(),
+            repo_path: repo_path.to_string_lossy().to_string(),
+            commit_hash: commit_hash.clone(),
+            canonical_fingerprint: built.canonical_fingerprint.clone(),
+            document: portable,
+        }];
+        let artifact = RuntimeGraphSnapshotArtifact {
+            profile_version: CODEGRAPH_PROFILE_MARKER.to_string(),
+            canonical_fingerprint: aggregate_snapshot_fingerprint_registry_style(&repositories),
+            provenance: RuntimeGraphSnapshotProvenance {
+                head_commits: vec![RuntimeGraphSnapshotCommit {
+                    repo_name: "repo".to_string(),
+                    repo_path: repo_path.to_string_lossy().to_string(),
+                    commit_hash,
+                }],
+            },
+            repositories,
+        };
+        let raw = serde_json::to_string_pretty(&serde_json::json!({
+            "schema_version": "graph_snapshot.v1",
+            "snapshot_version": 1,
+            "provenance": {
+                "project_id": uuid::Uuid::new_v4(),
+                "head_commits": artifact.provenance.head_commits,
+                "generated_at": chrono::Utc::now(),
+            },
+            "ucp_engine_version": CODEGRAPH_EXTRACTOR_VERSION,
+            "profile_version": artifact.profile_version,
+            "canonical_fingerprint": artifact.canonical_fingerprint,
+            "summary": {
+                "total_nodes": built.stats.total_nodes,
+                "repository_nodes": built.stats.repository_nodes,
+                "directory_nodes": built.stats.directory_nodes,
+                "file_nodes": built.stats.file_nodes,
+                "symbol_nodes": built.stats.symbol_nodes,
+                "total_edges": built.stats.total_edges,
+                "reference_edges": built.stats.reference_edges,
+                "export_edges": built.stats.export_edges,
+                "languages": built.stats.languages,
+            },
+            "repositories": artifact.repositories,
+            "static_projection": "",
+        }))
+        .expect("serialize snapshot");
+        fs::write(snapshot_path, raw).expect("write snapshot");
+    }
 
     fn allow_all_scope() -> Scope {
         Scope::new()
@@ -999,11 +1534,13 @@ mod tests {
         let engine = NativeToolEngine::default();
         let tmp = tempfile::tempdir().expect("tempdir");
         let policy = NativeCommandPolicy::default();
+        let env = HashMap::new();
         let scope = allow_all_scope();
         let ctx = ToolExecutionContext {
             worktree: tmp.path(),
             scope: Some(&scope),
             command_policy: &policy,
+            env: &env,
         };
         let action = NativeToolAction {
             name: "nope".to_string(),
@@ -1022,11 +1559,13 @@ mod tests {
         let engine = NativeToolEngine::default();
         let tmp = tempfile::tempdir().expect("tempdir");
         let policy = NativeCommandPolicy::default();
+        let env = HashMap::new();
         let scope = allow_all_scope();
         let ctx = ToolExecutionContext {
             worktree: tmp.path(),
             scope: Some(&scope),
             command_policy: &policy,
+            env: &env,
         };
         let action = NativeToolAction {
             name: "read_file".to_string(),
@@ -1045,6 +1584,7 @@ mod tests {
         let engine = NativeToolEngine::default();
         let tmp = tempfile::tempdir().expect("tempdir");
         let policy = NativeCommandPolicy::default();
+        let env = HashMap::new();
         let scope = Scope::new().with_filesystem(
             FilesystemScope::new().with_rule(PathRule::new("src/", FilePermission::Read)),
         );
@@ -1052,6 +1592,7 @@ mod tests {
             worktree: tmp.path(),
             scope: Some(&scope),
             command_policy: &policy,
+            env: &env,
         };
         let action = NativeToolAction {
             name: "write_file".to_string(),
@@ -1070,11 +1611,13 @@ mod tests {
         let engine = NativeToolEngine::default();
         let tmp = tempfile::tempdir().expect("tempdir");
         let policy = NativeCommandPolicy::default();
+        let env = HashMap::new();
         let scope = allow_all_scope();
         let ctx = ToolExecutionContext {
             worktree: tmp.path(),
             scope: Some(&scope),
             command_policy: &policy,
+            env: &env,
         };
         let action = NativeToolAction {
             name: "run_command".to_string(),
@@ -1097,11 +1640,13 @@ mod tests {
             denylist: Vec::new(),
             deny_by_default: true,
         };
+        let env = HashMap::new();
         let scope = allow_all_scope();
         let ctx = ToolExecutionContext {
             worktree: tmp.path(),
             scope: Some(&scope),
             command_policy: &policy,
+            env: &env,
         };
         let action = NativeToolAction {
             name: "run_command".to_string(),
@@ -1116,6 +1661,117 @@ mod tests {
             serde_json::from_value(value).expect("run_command output should decode");
         assert_eq!(output.exit_code, 0);
         assert!(output.stdout.contains("hello"));
+    }
+
+    #[test]
+    fn graph_query_tool_reads_snapshot_with_bounds() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path().join("repo");
+        init_git_repo(&repo);
+        fs::create_dir_all(repo.join("src")).expect("mkdir src");
+        fs::write(repo.join("src/lib.rs"), "pub fn helper() {}\n").expect("write lib");
+        fs::write(repo.join("src/main.rs"), "fn main() { helper(); }\n").expect("write main");
+        git_commit_all(&repo, "seed");
+
+        let snapshot_path = tmp.path().join("graph_snapshot.json");
+        write_snapshot_artifact(&repo, &snapshot_path);
+
+        let constitution_path = tmp.path().join("constitution.yaml");
+        fs::write(
+            &constitution_path,
+            "partitions:\n  - id: core\n    path: src\n",
+        )
+        .expect("write constitution");
+
+        let policy = NativeCommandPolicy::default();
+        let scope = allow_all_scope();
+        let mut env = HashMap::new();
+        env.insert(
+            GRAPH_QUERY_ENV_SNAPSHOT_PATH.to_string(),
+            snapshot_path.to_string_lossy().to_string(),
+        );
+        env.insert(
+            GRAPH_QUERY_ENV_CONSTITUTION_PATH.to_string(),
+            constitution_path.to_string_lossy().to_string(),
+        );
+        let ctx = ToolExecutionContext {
+            worktree: repo.as_path(),
+            scope: Some(&scope),
+            command_policy: &policy,
+            env: &env,
+        };
+        let action = NativeToolAction {
+            name: "graph_query".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "kind": "filter",
+                "node_type": "file",
+                "path_prefix": "src",
+                "max_results": 50
+            }),
+        };
+
+        let value = engine
+            .execute(&action, &ctx)
+            .expect("graph query should run");
+        let result: GraphQueryResult = serde_json::from_value(value).expect("decode result");
+        assert_eq!(result.query_kind, "filter");
+        assert!(
+            !result.nodes.is_empty(),
+            "{}",
+            serde_json::to_string(&result).unwrap_or_default()
+        );
+        assert!(result.duration_ms <= 5_000);
+    }
+
+    #[test]
+    fn graph_query_tool_fails_when_snapshot_is_stale() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path().join("repo");
+        init_git_repo(&repo);
+        fs::create_dir_all(repo.join("src")).expect("mkdir src");
+        fs::write(repo.join("src/lib.rs"), "pub fn helper() {}\n").expect("write lib");
+        git_commit_all(&repo, "seed");
+
+        let snapshot_path = tmp.path().join("graph_snapshot.json");
+        write_snapshot_artifact(&repo, &snapshot_path);
+
+        fs::write(
+            repo.join("src/lib.rs"),
+            "pub fn helper() { println!(\"x\"); }\n",
+        )
+        .expect("mutate repo");
+        git_commit_all(&repo, "stale");
+
+        let policy = NativeCommandPolicy::default();
+        let scope = allow_all_scope();
+        let mut env = HashMap::new();
+        env.insert(
+            GRAPH_QUERY_ENV_SNAPSHOT_PATH.to_string(),
+            snapshot_path.to_string_lossy().to_string(),
+        );
+        let ctx = ToolExecutionContext {
+            worktree: repo.as_path(),
+            scope: Some(&scope),
+            command_policy: &policy,
+            env: &env,
+        };
+        let action = NativeToolAction {
+            name: "graph_query".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "kind": "filter",
+                "max_results": 10
+            }),
+        };
+
+        let error = engine
+            .execute(&action, &ctx)
+            .expect_err("stale snapshot should fail");
+        assert_eq!(error.code, "graph_snapshot_stale");
+        assert!(error.message.contains("hivemind graph snapshot refresh"));
     }
 
     proptest! {
@@ -1133,10 +1789,12 @@ mod tests {
             };
 
             let run_once = |root: &Path| -> (Value, Value) {
+                let env = HashMap::new();
                 let ctx = ToolExecutionContext {
                     worktree: root,
                     scope: Some(&scope),
                     command_policy: &policy,
+                    env: &env,
                 };
                 let relative_path = format!("src/{file_name}.txt");
                 let write = NativeToolAction {
@@ -1168,11 +1826,13 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         fs::write(tmp.path().join("README.md"), "hello").expect("seed file");
         let policy = NativeCommandPolicy::default();
+        let env = HashMap::new();
         let scope = allow_all_scope();
         let ctx = ToolExecutionContext {
             worktree: tmp.path(),
             scope: Some(&scope),
             command_policy: &policy,
+            env: &env,
         };
         let action = NativeToolAction {
             name: "list_files".to_string(),
@@ -1199,11 +1859,13 @@ mod tests {
         let engine = NativeToolEngine::default();
         let tmp = tempfile::tempdir().expect("tempdir");
         let policy = NativeCommandPolicy::default();
+        let env = HashMap::new();
         let scope = allow_all_scope();
         let ctx = ToolExecutionContext {
             worktree: tmp.path(),
             scope: Some(&scope),
             command_policy: &policy,
+            env: &env,
         };
         let action = NativeToolAction {
             name: "read_file".to_string(),

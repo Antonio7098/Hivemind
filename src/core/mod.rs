@@ -80,6 +80,7 @@ pub mod error;
 pub mod events;
 pub mod flow;
 pub mod graph;
+pub mod graph_query;
 pub mod registry;
 pub mod runtime_event_projection;
 pub mod scheduler;

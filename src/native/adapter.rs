@@ -316,6 +316,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
             worktree,
             scope: scope.as_ref(),
             command_policy: &command_policy,
+            env: &self.config.base.env,
         };
         let tool_engine = NativeToolEngine::default();
 

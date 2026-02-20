@@ -50,6 +50,38 @@ fn init_git_repo(repo_dir: &std::path::Path) {
     );
 }
 
+fn git_commit_all(repo_dir: &std::path::Path, message: &str) {
+    let out = Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(repo_dir)
+        .output()
+        .expect("git add");
+    assert!(
+        out.status.success(),
+        "git add: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let out = Command::new("git")
+        .args([
+            "-c",
+            "user.name=Hivemind",
+            "-c",
+            "user.email=hivemind@example.com",
+            "commit",
+            "-m",
+            message,
+        ])
+        .current_dir(repo_dir)
+        .output()
+        .expect("git commit");
+    assert!(
+        out.status.success(),
+        "git commit: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 #[test]
 fn cli_project_governance_lifecycle_is_observable() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1468,6 +1500,62 @@ fn cli_project_governance_diagnose_reports_invalid_refs_and_stale_snapshot() {
     assert!(stale_issues.iter().any(|issue| {
         issue.get("code").and_then(serde_json::Value::as_str) == Some("graph_snapshot_stale")
     }));
+}
+
+#[test]
+fn cli_graph_query_filter_returns_bounded_results() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+    std::fs::create_dir_all(repo_dir.join("src")).expect("mkdir src");
+    std::fs::write(repo_dir.join("src/lib.rs"), "pub fn helper() {}\n").expect("write lib");
+    std::fs::write(repo_dir.join("src/main.rs"), "fn main() { helper(); }\n").expect("write main");
+    git_commit_all(&repo_dir, "add source files");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(tmp.path(), &["graph", "snapshot", "refresh", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "graph",
+            "query",
+            "filter",
+            "proj",
+            "--type",
+            "file",
+            "--path",
+            "src",
+            "--max-results",
+            "2",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let raw: serde_json::Value = serde_json::from_str(&out).expect("json output");
+    let data = raw.get("data").unwrap_or(&raw);
+    assert_eq!(
+        data.get("query_kind").and_then(serde_json::Value::as_str),
+        Some("filter"),
+        "{out}"
+    );
+    assert_eq!(
+        data.get("max_results").and_then(serde_json::Value::as_u64),
+        Some(2),
+        "{out}"
+    );
+    let nodes = data
+        .get("nodes")
+        .and_then(serde_json::Value::as_array)
+        .expect("nodes array");
+    assert!(nodes.len() <= 2, "{out}");
 }
 
 #[test]

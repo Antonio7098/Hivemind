@@ -249,8 +249,13 @@ Current native mode includes:
   - `run_command` (deny-by-default command policy, optional allowlist/denylist)
   - `git_status`
   - `git_diff`
+  - `graph_query` (bounded query over UCP snapshot substrate)
 - native policy/scope enforcement surfaces:
   - task scope projection via `HIVEMIND_TASK_SCOPE_JSON`
+  - graph-query runtime context surfaces:
+    - `HIVEMIND_GRAPH_SNAPSHOT_PATH`
+    - `HIVEMIND_PROJECT_CONSTITUTION_PATH`
+    - `HIVEMIND_GRAPH_QUERY_GATE_ERROR` (pre-flight stale/missing/integrity gate payload)
   - run-command policy controls:
     - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_ALLOWLIST`
     - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_DENYLIST`

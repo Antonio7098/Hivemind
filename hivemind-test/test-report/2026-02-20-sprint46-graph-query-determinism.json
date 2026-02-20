@@ -1,0 +1,16 @@
+{
+  "query_kind_1": "filter",
+  "query_kind_2": "filter",
+  "nodes_1": [
+    "main::file:src/lib.rs",
+    "main::file:src/main.rs"
+  ],
+  "nodes_2": [
+    "main::file:src/lib.rs",
+    "main::file:src/main.rs"
+  ],
+  "deterministic_nodes": true,
+  "fingerprint_1": "e86125e4573693c8",
+  "fingerprint_2": "e86125e4573693c8",
+  "deterministic_fingerprint": true
+}

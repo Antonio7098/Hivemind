@@ -1289,6 +1289,37 @@ GraphSnapshotFailed:
 
 ---
 
+### 4.5 graph query *
+
+**Synopsis:**
+```bash
+hivemind [-f json|table|yaml] graph query neighbors <project> --node <node-ref> [--edge-type <type> ...] [--max-results <n>]
+hivemind [-f json|table|yaml] graph query dependents <project> --node <node-ref> [--edge-type <type> ...] [--max-results <n>]
+hivemind [-f json|table|yaml] graph query subgraph <project> --seed <node-ref> --depth <n> [--edge-type <type> ...] [--max-results <n>]
+hivemind [-f json|table|yaml] graph query filter <project> [--type <class>] [--path <prefix>] [--partition <id>] [--max-results <n>]
+```
+
+**Preconditions:**
+- Project exists
+- Graph snapshot exists, is current, and passes integrity checks
+
+**Effects:**
+- Executes deterministic bounded query over stored UCP graph snapshot substrate
+- Emits `GraphQueryExecuted` telemetry with source attribution (`cli_graph_query`)
+
+**Failures:**
+- `graph_snapshot_missing`
+- `graph_snapshot_stale`
+- `graph_snapshot_integrity_invalid`
+- `graph_query_bounds_exceeded`
+- `graph_query_depth_exceeded`
+- `graph_query_node_not_found`
+- `graph_query_node_ambiguous`
+
+**Idempotence:** Deterministic for equivalent snapshot + query input + bounds.
+
+---
+
 ## 5. TaskFlow Commands
 
 ### 5.1 flow create
