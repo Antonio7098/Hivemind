@@ -875,6 +875,17 @@ struct RuntimeDefaultsSetRequest {
     max_parallel_tasks: Option<u16>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ProjectIdRequest {
+    project: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphSnapshotRefreshRequest {
+    project: String,
+    trigger: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct VerifyResultsView {
     attempt_id: String,
@@ -922,6 +933,15 @@ fn api_catalog() -> ApiCatalog {
             "/api/flows/replay?flow_id=<id>",
             "/api/worktrees?flow_id=<id>",
             "/api/worktrees/inspect?task_id=<id>",
+            "/api/governance/constitution?project=<id|name>",
+            "/api/governance/documents?project=<id|name>",
+            "/api/governance/documents/inspect?project=<id|name>&document_id=<id>",
+            "/api/governance/notepad?project=<id|name>",
+            "/api/governance/global/notepad",
+            "/api/governance/global/skills",
+            "/api/governance/global/skills/inspect?skill_id=<id>",
+            "/api/governance/global/templates",
+            "/api/governance/global/templates/inspect?template_id=<id>",
         ],
         write_endpoints: vec![
             "/api/projects/create",
@@ -963,6 +983,8 @@ fn api_catalog() -> ApiCatalog {
             "/api/merge/execute",
             "/api/checkpoints/complete",
             "/api/worktrees/cleanup",
+            "/api/governance/constitution/check",
+            "/api/governance/graph-snapshot/refresh",
         ],
     }
 }
@@ -1729,6 +1751,87 @@ fn handle_api_request_inner(
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
         }
+        "/api/governance/constitution" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let project = query.get("project").map(|s| s.as_str()).unwrap_or("");
+            let wrapped = CliResponse::success(registry.constitution_show(project)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/governance/constitution/check" if method == ApiMethod::Post => {
+            let req: ProjectIdRequest = parse_json_body(body, "server:governance:constitution:check")?;
+            let wrapped = CliResponse::success(registry.constitution_check(&req.project)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/governance/documents" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let project = query.get("project").map(|s| s.as_str()).unwrap_or("");
+            let wrapped = CliResponse::success(registry.project_governance_document_list(project)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/governance/documents/inspect" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let project = query.get("project").map(|s| s.as_str()).unwrap_or("");
+            let document_id = query.get("document_id").map(|s| s.as_str()).unwrap_or("");
+            let wrapped = CliResponse::success(registry.project_governance_document_inspect(project, document_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/governance/notepad" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let project = query.get("project").map(|s| s.as_str()).unwrap_or("");
+            let wrapped = CliResponse::success(registry.project_governance_notepad_show(project)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/governance/global/notepad" if method == ApiMethod::Get => {
+            let wrapped = CliResponse::success(registry.global_notepad_show()?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/governance/global/skills" if method == ApiMethod::Get => {
+            let wrapped = CliResponse::success(registry.global_skill_list()?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/governance/global/skills/inspect" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let skill_id = query.get("skill_id").map(|s| s.as_str()).unwrap_or("");
+            let wrapped = CliResponse::success(registry.global_skill_inspect(skill_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/governance/global/templates" if method == ApiMethod::Get => {
+            let wrapped = CliResponse::success(registry.global_template_list()?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/governance/global/templates/inspect" if method == ApiMethod::Get => {
+            let query = parse_query(url);
+            let template_id = query.get("template_id").map(|s| s.as_str()).unwrap_or("");
+            let wrapped = CliResponse::success(registry.global_template_inspect(template_id)?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
+        "/api/governance/graph-snapshot/refresh" if method == ApiMethod::Post => {
+            let req: GraphSnapshotRefreshRequest = parse_json_body(body, "server:governance:graph-snapshot:refresh")?;
+            let wrapped = CliResponse::success(registry.graph_snapshot_refresh(&req.project, req.trigger.as_deref().unwrap_or("api"))?);
+            let mut resp = ApiResponse::json(200, &wrapped)?;
+            resp.extra_headers.extend(cors_headers());
+            Ok(resp)
+        }
         "/health"
         | "/api/version"
         | "/api/catalog"
@@ -1747,7 +1850,16 @@ fn handle_api_request_inner(
         | "/api/attempts/diff"
         | "/api/flows/replay"
         | "/api/worktrees"
-        | "/api/worktrees/inspect" => method_not_allowed(path, method, "GET"),
+        | "/api/worktrees/inspect"
+        | "/api/governance/constitution"
+        | "/api/governance/documents"
+        | "/api/governance/documents/inspect"
+        | "/api/governance/notepad"
+        | "/api/governance/global/notepad"
+        | "/api/governance/global/skills"
+        | "/api/governance/global/skills/inspect"
+        | "/api/governance/global/templates"
+        | "/api/governance/global/templates/inspect" => method_not_allowed(path, method, "GET"),
         "/api/projects/create"
         | "/api/projects/update"
         | "/api/projects/delete"
@@ -1786,7 +1898,9 @@ fn handle_api_request_inner(
         | "/api/merge/approve"
         | "/api/merge/execute"
         | "/api/checkpoints/complete"
-        | "/api/worktrees/cleanup" => method_not_allowed(path, method, "POST"),
+        | "/api/worktrees/cleanup"
+        | "/api/governance/constitution/check"
+        | "/api/governance/graph-snapshot/refresh" => method_not_allowed(path, method, "POST"),
         _ => {
             let err = HivemindError::user(
                 "endpoint_not_found",
