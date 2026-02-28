@@ -4,6 +4,80 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.44",
+      "date": "2026-02-28",
+      "phase": 42,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "adapters",
+          "description": "Harden native directive system prompt (`src/native/mod.rs`) to prevent premature completion bias: prefer `ACT` while work remains, disallow first-turn `DONE` (except explicit no-op), require ordered step execution, and require deliverable verification before `DONE`"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add comprehensive live OpenRouter beta harness `hivemind-test/test_native_openrouter_beta_api.sh` that provisions governance artifacts/templates/skills/constitution, runs multi-task graph + dependent flow, verifies context manifest pass-through, enforces tool/event coverage, and emits report/log artifacts under `hivemind-test/test-report/`"
+        },
+        {
+          "type": "fixed",
+          "area": "tests",
+          "description": "Fix beta harness orchestration edge cases: detect `retry_limit_exceeded` and abort flow to avoid infinite tick loops, validate task artifacts against task worktree paths (not repo root), switch runtime test execution to `python3`, add merge prepare/approve/execute before host assertions, and make model provenance assertions dynamic"
+        },
+        {
+          "type": "changed",
+          "area": "tests",
+          "description": "Rebalance beta task flow prompts to improve deterministic completion under low-cost OpenRouter models (Task A/B/C split by artifact responsibility) while preserving required tool exercise (`list_files`, `write_file`, `read_file`, `run_command`, `git_status`, `git_diff`)"
+        },
+        {
+          "type": "changed",
+          "area": "tests",
+          "description": "Validate live native OpenRouter stack with model `openrouter/nvidia/nemotron-3-nano-30b-a3b:free`: Flow 1 + Flow 2 completed, merge lifecycle completed, host unittest suite passed, and zero `tool_call_failed` events across final beta run"
+        },
+        {
+          "type": "changed",
+          "area": "tests",
+          "description": "Run broader phase regression verification after native/OpenRouter updates: `cargo test --lib` (236 passed), `hivemind-test/test_worktree.sh`, `hivemind-test/test_execution.sh`, `hivemind-test/test_merge.sh`, and `hivemind-test/test_runtime_projection.sh` (all passed when `HIVEMIND` points to `/home/antonio/.cargo/shared-target/debug/hivemind`)"
+        },
+        {
+          "type": "changed",
+          "area": "adapters",
+          "description": "Carry forward and explicitly validate the v0.1.43 OpenRouter native client integration under broader real-runtime conditions, including multi-flow governance/context propagation and tool execution integrity"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.43",
+      "date": "2026-02-28",
+      "phase": 42,
+      "changes": [
+        {
+          "type": "added",
+          "area": "adapters",
+          "description": "Add live OpenRouter-backed native model client in `src/native/mod.rs` and wire native adapter model-client selection in `src/native/adapter.rs` so `HIVEMIND_NATIVE_PROVIDER=openrouter` performs real chat-completion calls instead of mock-only execution"
+        },
+        {
+          "type": "fixed",
+          "area": "adapters",
+          "description": "Normalize OpenRouter model IDs by stripping an optional `openrouter/` prefix before API requests to prevent `invalid model ID` failures when users provide provider-prefixed model names"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add OpenRouter client parsing/normalization unit coverage (`openrouter_normalize_directive_extracts_prefix_line`, `openrouter_extract_text_content_supports_array_segments`, `openrouter_normalize_model_id_strips_provider_prefix`) and preserve existing native/tool-engine regression coverage"
+        },
+        {
+          "type": "changed",
+          "area": "tests",
+          "description": "Execute broad phase regression validation: `cargo test --lib` (235 passed), `hivemind-test/test_worktree.sh`, `test_execution.sh`, `test_merge.sh`, `test_runtime_projection.sh`, governance lifecycle smoke (Phase 3 artifact/template/constitution/snapshot flow), and live native OpenRouter multi-tool run validating `list_files`, `write_file`, `read_file`, `git_status`, and `git_diff` event trails plus frozen-commit artifact content"
+        },
+        {
+          "type": "changed",
+          "area": "tests",
+          "description": "Validate native policy enforcement integration with `run_command` deny-by-default behavior, confirming explicit `tool_call_failed` (`native_policy_violation`) and classified runtime error eventing"
+        }
+      ]
+    },
+    {
       "version": "v0.1.42",
       "date": "2026-02-20",
       "phase": 46,
