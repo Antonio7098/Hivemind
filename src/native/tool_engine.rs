@@ -587,6 +587,8 @@ impl ManagedProxyRuntime {
     fn apply_proxy_env(&self, cmd: &mut Command) {
         cmd.env("HTTP_PROXY", &self.http_addr);
         cmd.env("HTTPS_PROXY", &self.http_addr);
+        cmd.env("http_proxy", &self.http_addr);
+        cmd.env("https_proxy", &self.http_addr);
         cmd.env("NO_PROXY", "localhost,127.0.0.1,::1");
         cmd.env("HIVEMIND_NATIVE_NETWORK_PROXY_ADMIN", &self.admin_addr);
         if let Some(socks5) = self.socks5_addr.as_ref() {
@@ -1465,9 +1467,7 @@ impl NativeToolEngine {
 
         if let Some(line) = command_line.as_deref() {
             let cache = ctx.approval_cache.borrow();
-            if !ctx.exec_policy_manager.is_allowed(line, &cache)
-                || !ctx.command_policy.is_allowed(line)
-            {
+            if !ctx.exec_policy_manager.is_allowed(line, &cache) {
                 tags.push("exec_decision:denied_exec_policy".to_string());
                 return Err(NativeToolEngineError::policy_violation(format!(
                     "run_command blocked by execution policy: {line}"
