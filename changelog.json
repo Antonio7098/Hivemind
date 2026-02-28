@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.48",
+      "date": "2026-02-28",
+      "phase": 55,
+      "changes": [
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Add persistent interactive native execution tools in `src/native/tool_engine.rs`: `exec_command` (session spawn) and `write_stdin` (session resume), with stable collision-safe session IDs and typed JSON-schema contracts"
+        },
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Introduce process-group-aware session lifecycle hardening with bounded trailing output capture (`capture_ms`/`wait_ms`), deterministic per-stream output limits, and explicit truncation metadata (`*_truncated`, `*_truncated_bytes`)"
+        },
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Add bounded open-session governance via `HIVEMIND_NATIVE_EXEC_SESSION_CAP` with deterministic pruning (prefer exited/LRU outside protected recent set), approach-cap warnings, and runtime shutdown cleanup through `cleanup_exec_sessions()` in native adapter termination"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 55 tool-engine coverage for interactive session roundtrip, truncation metadata projection, and cap/pruning determinism"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Sprint 55 roadmap completion, update runtime adapter architecture docs for interactive native command surfaces, and add Sprint 55 report/manual test artifacts"
+        }
+      ]
+    },
+    {
       "version": "v0.1.47",
       "date": "2026-02-28",
       "phase": 54,

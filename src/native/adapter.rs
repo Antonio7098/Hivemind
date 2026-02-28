@@ -8,9 +8,9 @@ use crate::adapters::runtime::{
 };
 use crate::core::scope::Scope;
 use crate::native::tool_engine::{
-    NativeApprovalCache, NativeApprovalPolicy, NativeCommandPolicy, NativeExecPolicyManager,
-    NativeNetworkApprovalCache, NativeNetworkPolicy, NativeSandboxPolicy, NativeToolAction,
-    NativeToolEngine, ToolExecutionContext,
+    cleanup_exec_sessions, NativeApprovalCache, NativeApprovalPolicy, NativeCommandPolicy,
+    NativeExecPolicyManager, NativeNetworkApprovalCache, NativeNetworkPolicy, NativeSandboxPolicy,
+    NativeToolAction, NativeToolEngine, ToolExecutionContext,
 };
 use crate::native::{
     AgentLoop, MockModelClient, ModelClient, ModelDirective, NativeRuntimeConfig,
@@ -409,6 +409,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
     }
 
     fn terminate(&mut self) -> Result<(), RuntimeError> {
+        let _ = cleanup_exec_sessions();
         self.prepared = false;
         self.worktree = None;
         Ok(())

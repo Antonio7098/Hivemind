@@ -102,25 +102,25 @@
 **Goal:** Introduce persistent interactive command sessions with robust lifecycle management.
 
 ### 55.1 Unified exec contract
-- [ ] Add native interactive command APIs:
-  - [ ] `exec_command` (spawn + optional initial output capture)
-  - [ ] `write_stdin` (resume existing process session)
-- [ ] Add stable process/session IDs with collision-safe allocation
+- [x] Add native interactive command APIs:
+  - [x] `exec_command` (spawn + optional initial output capture)
+  - [x] `write_stdin` (resume existing process session)
+- [x] Add stable process/session IDs with collision-safe allocation
 
 ### 55.2 Process lifecycle hardening
-- [ ] Enforce process-group isolation and termination semantics
-- [ ] Add cancellation-token propagation and trailing-output grace handling
-- [ ] Add deterministic output chunking bounds and truncation metadata
+- [x] Enforce process-group isolation and termination semantics
+- [x] Add cancellation-token propagation and trailing-output grace handling
+- [x] Add deterministic output chunking bounds and truncation metadata
 
 ### 55.3 Capacity and cleanup controls
-- [ ] Add open-session caps and pruning strategy (prefer exited/LRU outside protected recent set)
-- [ ] Add runtime warnings as session counts approach cap
-- [ ] Ensure full cleanup on turn abort/runtime shutdown
+- [x] Add open-session caps and pruning strategy (prefer exited/LRU outside protected recent set)
+- [x] Add runtime warnings as session counts approach cap
+- [x] Ensure full cleanup on turn abort/runtime shutdown
 
 ### 55.4 Exit Criteria
-- [ ] Long-lived interactive command sessions are safe, bounded, and observable
-- [ ] Aborts and shutdowns terminate process groups reliably
-- [ ] Session-cap/pruning behavior is deterministic and tested
+- [x] Long-lived interactive command sessions are safe, bounded, and observable
+- [x] Aborts and shutdowns terminate process groups reliably
+- [x] Session-cap/pruning behavior is deterministic and tested
 
 ---
 

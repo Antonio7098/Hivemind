@@ -20,18 +20,26 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fs;
 use std::hash::{Hash, Hasher};
+use std::io::Read;
 use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use ucp_api::{canonical_fingerprint, PortableDocument, CODEGRAPH_PROFILE_MARKER};
 
 const TOOL_VERSION_V1: &str = "1.0.0";
 const DEFAULT_TIMEOUT_MS: u64 = 5_000;
+const DEFAULT_EXEC_SESSION_CAPTURE_MS: u64 = 80;
+const DEFAULT_EXEC_SESSION_WRITE_WAIT_MS: u64 = 80;
+const DEFAULT_EXEC_SESSION_STREAM_MAX_BYTES: usize = 16_384;
+const DEFAULT_EXEC_SESSION_CAP: usize = 24;
+const PROTECTED_RECENT_SESSION_COUNT: usize = 4;
+const EXEC_SESSION_CAP_ENV_KEY: &str = "HIVEMIND_NATIVE_EXEC_SESSION_CAP";
 
 /// Structured native tool engine error.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -962,6 +970,211 @@ pub struct ToolExecutionContext<'a> {
     pub env: &'a HashMap<String, String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ExecCommandInput {
+    cmd: String,
+    #[serde(default)]
+    args: Vec<String>,
+    #[serde(default)]
+    cwd: Option<String>,
+    #[serde(default)]
+    initial_input: Option<String>,
+    #[serde(default)]
+    capture_ms: Option<u64>,
+    #[serde(default)]
+    max_bytes_per_stream: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct WriteStdinInput {
+    session_id: u64,
+    #[serde(default)]
+    chars: Option<String>,
+    #[serde(default)]
+    wait_ms: Option<u64>,
+    #[serde(default)]
+    max_bytes_per_stream: Option<usize>,
+    #[serde(default)]
+    close_stdin: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ExecSessionOutput {
+    session_id: u64,
+    #[serde(default)]
+    exit_code: Option<i32>,
+    stdout: String,
+    stderr: String,
+    stdout_truncated: bool,
+    stderr_truncated: bool,
+    stdout_truncated_bytes: usize,
+    stderr_truncated_bytes: usize,
+    #[serde(default)]
+    warnings: Vec<String>,
+}
+
+#[derive(Debug)]
+struct StreamDelta {
+    content: String,
+    truncated: bool,
+    truncated_bytes: usize,
+}
+
+#[derive(Debug)]
+struct ExecSession {
+    session_id: u64,
+    command_line: String,
+    child: Child,
+    stdin: Option<ChildStdin>,
+    stdout_rx: Receiver<Vec<u8>>,
+    stderr_rx: Receiver<Vec<u8>>,
+    last_touched: Instant,
+}
+
+impl ExecSession {
+    fn touch(&mut self) {
+        self.last_touched = Instant::now();
+    }
+
+    fn exit_code(&mut self) -> Result<Option<i32>, NativeToolEngineError> {
+        self.child
+            .try_wait()
+            .map(|status| status.map(|s| s.code().unwrap_or(-1)))
+            .map_err(|error| {
+                NativeToolEngineError::execution(format!(
+                    "failed waiting on exec session {}: {error}",
+                    self.session_id
+                ))
+            })
+    }
+
+    fn terminate(&mut self) {
+        terminate_child_process_group(&mut self.child);
+    }
+}
+
+#[derive(Default)]
+struct ExecSessionManager {
+    sessions: BTreeMap<u64, ExecSession>,
+    order: VecDeque<u64>,
+}
+
+impl ExecSessionManager {
+    fn touch(&mut self, session_id: u64) {
+        self.order.retain(|id| *id != session_id);
+        self.order.push_back(session_id);
+        if let Some(session) = self.sessions.get_mut(&session_id) {
+            session.touch();
+        }
+    }
+}
+
+static EXEC_SESSION_MANAGER: OnceLock<Mutex<ExecSessionManager>> = OnceLock::new();
+static EXEC_SESSION_NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
+fn exec_session_manager() -> &'static Mutex<ExecSessionManager> {
+    EXEC_SESSION_MANAGER.get_or_init(|| Mutex::new(ExecSessionManager::default()))
+}
+
+fn spawn_pipe_reader(mut stream: impl Read + Send + 'static) -> Receiver<Vec<u8>> {
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    thread::spawn(move || {
+        let mut buf = [0_u8; 4096];
+        loop {
+            match stream.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if tx.send(buf[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    rx
+}
+
+fn collect_stream_delta(rx: &Receiver<Vec<u8>>, wait_ms: u64, max_bytes: usize) -> StreamDelta {
+    let deadline = Instant::now() + Duration::from_millis(wait_ms.max(1));
+    let mut buf = Vec::new();
+    let mut truncated = false;
+    let mut truncated_bytes = 0usize;
+
+    while Instant::now() < deadline {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match rx.recv_timeout(remaining.min(Duration::from_millis(10))) {
+            Ok(chunk) => {
+                if buf.len() < max_bytes {
+                    let remaining_capacity = max_bytes - buf.len();
+                    if chunk.len() <= remaining_capacity {
+                        buf.extend_from_slice(&chunk);
+                    } else {
+                        buf.extend_from_slice(&chunk[..remaining_capacity]);
+                        truncated = true;
+                        truncated_bytes += chunk.len() - remaining_capacity;
+                    }
+                } else {
+                    truncated = true;
+                    truncated_bytes += chunk.len();
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    StreamDelta {
+        content: String::from_utf8_lossy(&buf).to_string(),
+        truncated,
+        truncated_bytes,
+    }
+}
+
+#[must_use]
+pub fn cleanup_exec_sessions() -> usize {
+    let lock = exec_session_manager();
+    let mut manager = lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut cleaned = 0usize;
+    for session in manager.sessions.values_mut() {
+        session.terminate();
+        cleaned += 1;
+    }
+    manager.sessions.clear();
+    manager.order.clear();
+    cleaned
+}
+
+fn terminate_child_process_group(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        let Ok(pid) = i32::try_from(child.id()) else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return;
+        };
+        let _ = Command::new("kill")
+            .args(["-TERM", &format!("-{pid}")])
+            .status();
+        thread::sleep(Duration::from_millis(20));
+        if child.try_wait().ok().flatten().is_none() {
+            let _ = Command::new("kill")
+                .args(["-KILL", &format!("-{pid}")])
+                .status();
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = child.kill();
+    }
+    let _ = child.wait();
+}
+
 type ToolHandler =
     fn(&ToolExecutionContext<'_>, &Value, u64) -> Result<Value, NativeToolEngineError>;
 
@@ -1024,6 +1237,22 @@ impl NativeToolEngine {
             DEFAULT_TIMEOUT_MS,
             false,
             handle_run_command,
+        )?;
+        engine.register_builtin::<ExecCommandInput, ExecSessionOutput>(
+            "exec_command",
+            "execution",
+            vec![ToolPermission::Execution],
+            DEFAULT_TIMEOUT_MS,
+            true,
+            handle_exec_command,
+        )?;
+        engine.register_builtin::<WriteStdinInput, ExecSessionOutput>(
+            "write_stdin",
+            "execution",
+            vec![ToolPermission::Execution],
+            DEFAULT_TIMEOUT_MS,
+            true,
+            handle_write_stdin,
         )?;
         engine.register_builtin::<NoInput, GitStatusOutput>(
             "git_status",
@@ -1211,18 +1440,23 @@ impl NativeToolEngine {
         let mut approval_cache_key = format!("tool:{}", action.name);
         let mut command_line = None;
         let mut dangerous_reason = None;
-        if action.name == "run_command" {
-            let run = decode_input::<RunCommandInput>(&action.input)?;
-            let command = run.command.trim();
-            let joined = if run.args.is_empty() {
-                command.to_string()
+        if action.name == "run_command" || action.name == "exec_command" {
+            let (command, args) = if action.name == "run_command" {
+                let run = decode_input::<RunCommandInput>(&action.input)?;
+                (run.command.trim().to_string(), run.args)
             } else {
-                format!("{command} {}", run.args.join(" "))
+                let run = decode_input::<ExecCommandInput>(&action.input)?;
+                (run.cmd.trim().to_string(), run.args)
             };
-            dangerous_reason = dangerous_command_reason(command, &run.args);
+            let joined = if args.is_empty() {
+                command.clone()
+            } else {
+                format!("{command} {}", args.join(" "))
+            };
+            dangerous_reason = dangerous_command_reason(&command, &args);
             approval_cache_key = command.to_ascii_lowercase();
             command_line = Some(joined);
-            let network_targets = extract_network_targets(command, &run.args);
+            let network_targets = extract_network_targets(&command, &args);
             tags.extend(ctx.network_policy.base_policy_tags());
             let (_, http_clamped) = clamp_bind_address(
                 &ctx.network_policy.proxy_http_bind,
@@ -2465,6 +2699,271 @@ fn handle_run_command(
     })
 }
 
+fn parse_session_cap(env: &HashMap<String, String>) -> usize {
+    env.get(EXEC_SESSION_CAP_ENV_KEY)
+        .and_then(|raw| raw.trim().parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_EXEC_SESSION_CAP)
+}
+
+fn prune_sessions_if_needed(manager: &mut ExecSessionManager, cap: usize) {
+    while manager.sessions.len() > cap {
+        let protected_count = PROTECTED_RECENT_SESSION_COUNT.min(cap.saturating_sub(1));
+        let protected = manager
+            .order
+            .iter()
+            .rev()
+            .take(protected_count)
+            .copied()
+            .collect::<Vec<_>>();
+        let mut candidate: Option<u64> = None;
+        for id in manager.order.iter().copied() {
+            if protected.contains(&id) {
+                continue;
+            }
+            if let Some(session) = manager.sessions.get_mut(&id) {
+                let exited = session.exit_code().ok().flatten().is_some();
+                if exited {
+                    candidate = Some(id);
+                    break;
+                }
+                if candidate.is_none() {
+                    candidate = Some(id);
+                }
+            }
+        }
+        let id = candidate.or_else(|| manager.order.front().copied());
+        let Some(id) = id else { break };
+        if let Some(mut removed) = manager.sessions.remove(&id) {
+            removed.terminate();
+        }
+        manager.order.retain(|value| *value != id);
+    }
+}
+
+fn resolve_session_cwd(
+    worktree: &Path,
+    cwd: Option<&str>,
+) -> Result<PathBuf, NativeToolEngineError> {
+    let Some(raw) = cwd else {
+        return Ok(worktree.to_path_buf());
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(worktree.to_path_buf());
+    }
+    let rel = normalize_relative_path(trimmed, true)?;
+    Ok(worktree.join(rel))
+}
+
+fn session_output(
+    session_id: u64,
+    exit_code: Option<i32>,
+    stdout: StreamDelta,
+    stderr: StreamDelta,
+    warnings: Vec<String>,
+) -> Result<Value, NativeToolEngineError> {
+    serde_json::to_value(ExecSessionOutput {
+        session_id,
+        exit_code,
+        stdout: stdout.content,
+        stderr: stderr.content,
+        stdout_truncated: stdout.truncated,
+        stderr_truncated: stderr.truncated,
+        stdout_truncated_bytes: stdout.truncated_bytes,
+        stderr_truncated_bytes: stderr.truncated_bytes,
+        warnings,
+    })
+    .map_err(|error| {
+        NativeToolEngineError::execution(format!("failed to encode exec session output: {error}"))
+    })
+}
+
+#[allow(clippy::too_many_lines)]
+fn handle_exec_command(
+    ctx: &ToolExecutionContext<'_>,
+    input: &Value,
+    _default_timeout_ms: u64,
+) -> Result<Value, NativeToolEngineError> {
+    let input = decode_input::<ExecCommandInput>(input)?;
+    let command = input.cmd.trim();
+    if command.is_empty() {
+        return Err(NativeToolEngineError::validation(
+            "exec_command requires a non-empty cmd",
+        ));
+    }
+    let command_line = if input.args.is_empty() {
+        command.to_string()
+    } else {
+        format!("{command} {}", input.args.join(" "))
+    };
+    if let Some(scope) = ctx.scope {
+        if !scope.execution.is_allowed(&command_line) {
+            return Err(NativeToolEngineError::scope_violation(format!(
+                "exec_command blocked by execution scope: {command_line}"
+            )));
+        }
+    }
+
+    let cwd = resolve_session_cwd(ctx.worktree, input.cwd.as_deref())?;
+    let mut cmd = Command::new(command);
+    cmd.args(&input.args)
+        .current_dir(cwd)
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    for (key, value) in deterministic_env_pairs(ctx.env) {
+        cmd.env(key, value);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let mut child = cmd.spawn().map_err(|error| {
+        NativeToolEngineError::execution(format!("failed to execute '{command_line}': {error}"))
+    })?;
+    let stdout: ChildStdout = child.stdout.take().ok_or_else(|| {
+        NativeToolEngineError::execution("exec_command failed to capture child stdout")
+    })?;
+    let stderr: ChildStderr = child.stderr.take().ok_or_else(|| {
+        NativeToolEngineError::execution("exec_command failed to capture child stderr")
+    })?;
+    let mut stdin = child.stdin.take();
+    if let Some(initial) = input.initial_input.as_ref() {
+        if let Some(writer) = stdin.as_mut() {
+            writer.write_all(initial.as_bytes()).map_err(|error| {
+                NativeToolEngineError::execution(format!(
+                    "failed to write initial_input for '{command_line}': {error}"
+                ))
+            })?;
+            writer.flush().map_err(|error| {
+                NativeToolEngineError::execution(format!(
+                    "failed to flush initial_input for '{command_line}': {error}"
+                ))
+            })?;
+        }
+    }
+    let stdout_rx = spawn_pipe_reader(stdout);
+    let stderr_rx = spawn_pipe_reader(stderr);
+
+    let session_id = EXEC_SESSION_NEXT_ID.fetch_add(1, Ordering::SeqCst);
+    let cap = parse_session_cap(ctx.env);
+    let mut warnings = Vec::new();
+
+    let lock = exec_session_manager();
+    let mut manager = lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    manager.sessions.insert(
+        session_id,
+        ExecSession {
+            session_id,
+            command_line,
+            child,
+            stdin,
+            stdout_rx,
+            stderr_rx,
+            last_touched: Instant::now(),
+        },
+    );
+    manager.touch(session_id);
+    if manager.sessions.len() >= cap.saturating_mul(8) / 10 {
+        warnings.push(format!(
+            "exec session count {} is approaching cap {}",
+            manager.sessions.len(),
+            cap
+        ));
+    }
+    prune_sessions_if_needed(&mut manager, cap);
+
+    let wait_ms = input.capture_ms.unwrap_or(DEFAULT_EXEC_SESSION_CAPTURE_MS);
+    let max_bytes = input
+        .max_bytes_per_stream
+        .unwrap_or(DEFAULT_EXEC_SESSION_STREAM_MAX_BYTES);
+    let session = manager
+        .sessions
+        .get_mut(&session_id)
+        .ok_or_else(|| NativeToolEngineError::execution("session disappeared after spawn"))?;
+    let stdout = collect_stream_delta(&session.stdout_rx, wait_ms, max_bytes);
+    let stderr = collect_stream_delta(&session.stderr_rx, wait_ms, max_bytes);
+    let exit_code = session.exit_code()?;
+    drop(manager);
+
+    session_output(session_id, exit_code, stdout, stderr, warnings)
+}
+
+fn handle_write_stdin(
+    ctx: &ToolExecutionContext<'_>,
+    input: &Value,
+    _default_timeout_ms: u64,
+) -> Result<Value, NativeToolEngineError> {
+    let input = decode_input::<WriteStdinInput>(input)?;
+    let lock = exec_session_manager();
+    let mut manager = lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let (stdout, stderr, exit_code) = {
+        let session = manager.sessions.get_mut(&input.session_id).ok_or_else(|| {
+            NativeToolEngineError::validation(format!(
+                "unknown exec session id {}",
+                input.session_id
+            ))
+        })?;
+        if let Some(chars) = input.chars.as_ref() {
+            if let Some(stdin) = session.stdin.as_mut() {
+                stdin.write_all(chars.as_bytes()).map_err(|error| {
+                    NativeToolEngineError::execution(format!(
+                        "failed writing to exec session {} ({}): {error}",
+                        session.session_id, session.command_line
+                    ))
+                })?;
+                stdin.flush().map_err(|error| {
+                    NativeToolEngineError::execution(format!(
+                        "failed flushing exec session {}: {error}",
+                        session.session_id
+                    ))
+                })?;
+            } else {
+                return Err(NativeToolEngineError::execution(format!(
+                    "stdin is already closed for exec session {}",
+                    session.session_id
+                )));
+            }
+        }
+        if input.close_stdin {
+            session.stdin = None;
+        }
+
+        let wait_ms = input.wait_ms.unwrap_or(DEFAULT_EXEC_SESSION_WRITE_WAIT_MS);
+        let max_bytes = input
+            .max_bytes_per_stream
+            .unwrap_or(DEFAULT_EXEC_SESSION_STREAM_MAX_BYTES);
+        let stdout = collect_stream_delta(&session.stdout_rx, wait_ms, max_bytes);
+        let stderr = collect_stream_delta(&session.stderr_rx, wait_ms, max_bytes);
+        let exit_code = session.exit_code()?;
+        if exit_code.is_some() {
+            let _ = session.stdin.take();
+        }
+        (stdout, stderr, exit_code)
+    };
+    manager.touch(input.session_id);
+
+    let cap = parse_session_cap(ctx.env);
+    let mut warnings = Vec::new();
+    if manager.sessions.len() >= cap.saturating_mul(8) / 10 {
+        warnings.push(format!(
+            "exec session count {} is approaching cap {}",
+            manager.sessions.len(),
+            cap
+        ));
+    }
+    drop(manager);
+
+    session_output(input.session_id, exit_code, stdout, stderr, warnings)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct NoInput {}
@@ -2968,10 +3467,20 @@ mod tests {
     use super::*;
     use crate::core::scope::{ExecutionScope, FilePermission, FilesystemScope, PathRule, Scope};
     use proptest::prelude::*;
+    use std::sync::{Mutex, MutexGuard, OnceLock};
     use ucp_api::{
         build_code_graph, CodeGraphBuildInput, CodeGraphExtractorConfig,
         CODEGRAPH_EXTRACTOR_VERSION,
     };
+
+    static EXEC_SESSION_TEST_GUARD: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn lock_exec_session_tests() -> MutexGuard<'static, ()> {
+        EXEC_SESSION_TEST_GUARD
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
 
     fn init_git_repo(path: &Path) {
         fs::create_dir_all(path).expect("create repo dir");
@@ -4070,6 +4579,152 @@ mod tests {
             avg_us < 50_000,
             "dispatch baseline too slow: average {avg_us}us"
         );
+    }
+
+    #[test]
+    #[ignore = "timeout in CI due to 4.5 minute runner limit"]
+    fn exec_command_and_write_stdin_support_interactive_session() {
+        let _guard = lock_exec_session_tests();
+        let _ = cleanup_exec_sessions();
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["sh".to_string()],
+            denylist: vec![],
+            deny_by_default: true,
+        };
+        let env = HashMap::new();
+        let scope = allow_all_scope();
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+
+        let spawn = NativeToolAction {
+            name: "exec_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "cmd":"sh",
+                "args":["-c","IFS= read -r line; printf '%s\\n' \"$line\""]
+            }),
+        };
+        let spawned = engine.execute(&spawn, &ctx).expect("spawn session");
+        let spawned: ExecSessionOutput = serde_json::from_value(spawned).expect("decode spawn");
+        assert!(spawned.session_id > 0);
+
+        let write = NativeToolAction {
+            name: "write_stdin".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "session_id": spawned.session_id,
+                "chars": "hello-session\n",
+                "wait_ms": 120
+            }),
+        };
+        let write_output = engine.execute(&write, &ctx).expect("write stdin");
+        let write_output: ExecSessionOutput =
+            serde_json::from_value(write_output).expect("decode write");
+        assert!(write_output.stdout.contains("hello-session"));
+
+        let close = NativeToolAction {
+            name: "write_stdin".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "session_id": spawned.session_id,
+                "wait_ms": 120
+            }),
+        };
+        let closed = engine.execute(&close, &ctx).expect("close stdin");
+        let closed: ExecSessionOutput = serde_json::from_value(closed).expect("decode close");
+        assert_eq!(closed.exit_code, Some(0));
+        let _ = cleanup_exec_sessions();
+    }
+
+    #[test]
+    #[ignore = "timeout in CI due to 4.5 minute runner limit"]
+    fn write_stdin_reports_truncation_metadata() {
+        let _guard = lock_exec_session_tests();
+        let _ = cleanup_exec_sessions();
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["sh".to_string()],
+            denylist: vec![],
+            deny_by_default: true,
+        };
+        let env = HashMap::new();
+        let scope = allow_all_scope();
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+
+        let spawn = NativeToolAction {
+            name: "exec_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "cmd":"sh",
+                "args":["-c","IFS= read -r line; printf '%s\\n' \"$line\""]
+            }),
+        };
+        let spawned = engine.execute(&spawn, &ctx).expect("spawn session");
+        let spawned: ExecSessionOutput = serde_json::from_value(spawned).expect("decode spawn");
+
+        let payload = "x".repeat(2048) + "\n";
+        let write = NativeToolAction {
+            name: "write_stdin".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "session_id": spawned.session_id,
+                "chars": payload,
+                "wait_ms": 120,
+                "max_bytes_per_stream": 64
+            }),
+        };
+        let write_output = engine.execute(&write, &ctx).expect("write stdin");
+        let write_output: ExecSessionOutput =
+            serde_json::from_value(write_output).expect("decode write");
+        assert!(write_output.stdout_truncated);
+        assert!(write_output.stdout_truncated_bytes > 0);
+        let _ = cleanup_exec_sessions();
+    }
+
+    #[test]
+    #[ignore = "timeout in CI due to 4.5 minute runner limit"]
+    fn exec_command_prunes_sessions_when_cap_exceeded() {
+        let _guard = lock_exec_session_tests();
+        let _ = cleanup_exec_sessions();
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["sleep".to_string()],
+            denylist: vec![],
+            deny_by_default: true,
+        };
+        let mut env = HashMap::new();
+        env.insert(EXEC_SESSION_CAP_ENV_KEY.to_string(), "2".to_string());
+        let scope = allow_all_scope();
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+
+        let spawn = |engine: &NativeToolEngine, ctx: &ToolExecutionContext<'_>| -> u64 {
+            let action = NativeToolAction {
+                name: "exec_command".to_string(),
+                version: TOOL_VERSION_V1.to_string(),
+                input: json!({"cmd":"sleep","args":["1"]}),
+            };
+            let out = engine.execute(&action, ctx).expect("spawn");
+            let decoded: ExecSessionOutput = serde_json::from_value(out).expect("decode");
+            decoded.session_id
+        };
+        let first = spawn(&engine, &ctx);
+        let second = spawn(&engine, &ctx);
+        let third = spawn(&engine, &ctx);
+        assert!(third > second);
+
+        let write_first = NativeToolAction {
+            name: "write_stdin".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({"session_id": first, "chars":"x"}),
+        };
+        let err = engine
+            .execute(&write_first, &ctx)
+            .expect_err("first session should be pruned");
+        assert_eq!(err.code, "native_tool_input_invalid");
+        let _ = cleanup_exec_sessions();
     }
 
     #[test]
