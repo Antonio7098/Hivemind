@@ -1615,6 +1615,22 @@ TaskExecutionStateChanged:
   from: READY
   to: RUNNING
 
+RuntimeCapabilitiesEvaluated:
+  adapter_name: <adapter-name>
+  role: worker|validator
+  selection_source: task_override|flow_default|project_default|global_default
+  capabilities: [<capability>...]
+
+RuntimeEnvironmentPrepared:
+  attempt_id: <attempt-id>
+  adapter_name: <adapter-name>
+  inherit_mode: all|core|none
+  inherited_keys: [<env-key>...]
+  overlay_keys: [<env-key>...]
+  explicit_sensitive_overlay_keys: [<env-key>...]
+  dropped_sensitive_inherited_keys: [<env-key>...]
+  dropped_reserved_inherited_keys: [<env-key>...]
+
 RuntimeStarted:
   attempt_id: <attempt-id>
   task_id: <task-id>
@@ -1622,12 +1638,6 @@ RuntimeStarted:
   role: worker|validator
   prompt: <runtime-prompt>
   flags: [<runtime-args-and-flags...>]
-
-RuntimeCapabilitiesEvaluated:
-  adapter_name: <adapter-name>
-  role: worker|validator
-  selection_source: task_override|flow_default|project_default|global_default
-  capabilities: [<capability>...]
 
 ContextWindowCreated:
   flow_id: <flow-id>
@@ -2730,6 +2740,7 @@ Errors are always structured:
 | 2 | Resource not found |
 | 3 | Conflict or invalid state |
 | 4 | Permission denied |
+| 70 | Startup hardening failed before CLI command execution |
 | 10+ | System errors |
 
 ---

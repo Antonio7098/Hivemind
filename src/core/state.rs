@@ -1182,6 +1182,7 @@ impl AppState {
             | EventPayload::MergeCheckStarted { .. }
             | EventPayload::MergeCheckCompleted { .. }
             | EventPayload::RuntimeStarted { .. }
+            | EventPayload::RuntimeEnvironmentPrepared { .. }
             | EventPayload::RuntimeCapabilitiesEvaluated { .. }
             | EventPayload::AgentInvocationStarted { .. }
             | EventPayload::AgentTurnStarted { .. }

@@ -285,6 +285,7 @@ fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::AgentTurnCompleted { .. } => "AgentTurnCompleted",
         EventPayload::AgentInvocationCompleted { .. } => "AgentInvocationCompleted",
         EventPayload::RuntimeStarted { .. } => "RuntimeStarted",
+        EventPayload::RuntimeEnvironmentPrepared { .. } => "RuntimeEnvironmentPrepared",
         EventPayload::RuntimeOutputChunk { .. } => "RuntimeOutputChunk",
         EventPayload::RuntimeInputProvided { .. } => "RuntimeInputProvided",
         EventPayload::RuntimeInterrupted { .. } => "RuntimeInterrupted",
@@ -421,6 +422,7 @@ fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::AgentTurnCompleted { .. }
         | EventPayload::AgentInvocationCompleted { .. }
         | EventPayload::RuntimeStarted { .. }
+        | EventPayload::RuntimeEnvironmentPrepared { .. }
         | EventPayload::RuntimeOutputChunk { .. }
         | EventPayload::RuntimeInputProvided { .. }
         | EventPayload::RuntimeInterrupted { .. }

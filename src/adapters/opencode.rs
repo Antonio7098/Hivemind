@@ -4,8 +4,9 @@
 //! capabilities within Hivemind's orchestration framework.
 
 use super::runtime::{
-    format_execution_prompt, AdapterConfig, ExecutionInput, ExecutionReport,
-    InteractiveAdapterEvent, InteractiveExecutionResult, RuntimeAdapter, RuntimeError,
+    deterministic_env_pairs, format_execution_prompt, AdapterConfig, ExecutionInput,
+    ExecutionReport, InteractiveAdapterEvent, InteractiveExecutionResult, RuntimeAdapter,
+    RuntimeError,
 };
 use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::terminal;
@@ -179,8 +180,8 @@ impl OpenCodeAdapter {
 
         let mut cmd = CommandBuilder::new(&self.config.base.binary_path);
         cmd.cwd(worktree);
-
-        for (key, value) in &self.config.base.env {
+        cmd.env_clear();
+        for (key, value) in deterministic_env_pairs(&self.config.base.env) {
             cmd.env(key, value);
         }
 
@@ -655,7 +656,8 @@ impl RuntimeAdapter for OpenCodeAdapter {
         }
 
         // Add environment variables
-        for (key, value) in &self.config.base.env {
+        cmd.env_clear();
+        for (key, value) in deterministic_env_pairs(&self.config.base.env) {
             cmd.env(key, value);
         }
 

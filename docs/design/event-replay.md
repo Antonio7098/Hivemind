@@ -173,6 +173,13 @@ RuntimeStarted:
   prompt: "Task: ..."
   flags: ["--model", "..."]
 
+RuntimeEnvironmentPrepared:
+  inherit_mode: "core"
+  inherited_keys: ["PATH", "HOME", ...]
+  overlay_keys: ["HIVEMIND_ATTEMPT_ID", ...]
+  dropped_sensitive_inherited_keys: []
+  dropped_reserved_inherited_keys: []
+
 ModelRequestPrepared:
   request:
     digest: "sha256:..."

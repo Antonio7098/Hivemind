@@ -2,7 +2,9 @@
 //!
 //! Sprint 44 introduces a deterministic tool registry for native runtime turns.
 
-use crate::adapters::runtime::{NativeToolCallFailure, NativeToolCallTrace};
+use crate::adapters::runtime::{
+    deterministic_env_pairs, NativeToolCallFailure, NativeToolCallTrace,
+};
 use crate::core::graph_query::{
     load_partition_paths_from_constitution, GraphQueryBounds, GraphQueryIndex,
     GraphQueryRepository, GraphQueryRequest, GraphQueryResult, GRAPH_QUERY_ENV_CONSTITUTION_PATH,
@@ -889,13 +891,14 @@ fn handle_run_command(
         .unwrap_or(default_timeout_ms)
         .min(default_timeout_ms);
     let started = Instant::now();
-    let output = Command::new(command)
-        .args(&input.args)
-        .current_dir(ctx.worktree)
-        .output()
-        .map_err(|error| {
-            NativeToolEngineError::execution(format!("failed to execute '{command_line}': {error}"))
-        })?;
+    let mut cmd = Command::new(command);
+    cmd.args(&input.args).current_dir(ctx.worktree).env_clear();
+    for (key, value) in deterministic_env_pairs(ctx.env) {
+        cmd.env(key, value);
+    }
+    let output = cmd.output().map_err(|error| {
+        NativeToolEngineError::execution(format!("failed to execute '{command_line}': {error}"))
+    })?;
     if started.elapsed() > Duration::from_millis(timeout_ms) {
         return Err(NativeToolEngineError::timeout("run_command", timeout_ms));
     }
@@ -942,9 +945,14 @@ fn handle_git_status(
 ) -> Result<Value, NativeToolEngineError> {
     let _ = decode_input::<NoInput>(input)?;
     ensure_repository_read(ctx.scope)?;
-    let output = Command::new("git")
-        .args(["status", "--short", "--branch"])
+    let mut cmd = Command::new("git");
+    cmd.args(["status", "--short", "--branch"])
         .current_dir(ctx.worktree)
+        .env_clear();
+    for (key, value) in deterministic_env_pairs(ctx.env) {
+        cmd.env(key, value);
+    }
+    let output = cmd
         .output()
         .map_err(|error| NativeToolEngineError::execution(format!("git status failed: {error}")))?;
     if !output.status.success() {
@@ -976,9 +984,12 @@ fn handle_git_diff(
     }
     args.push("--no-ext-diff");
 
-    let output = Command::new("git")
-        .args(&args)
-        .current_dir(ctx.worktree)
+    let mut cmd = Command::new("git");
+    cmd.args(&args).current_dir(ctx.worktree).env_clear();
+    for (key, value) in deterministic_env_pairs(ctx.env) {
+        cmd.env(key, value);
+    }
+    let output = cmd
         .output()
         .map_err(|error| NativeToolEngineError::execution(format!("git diff failed: {error}")))?;
     if !output.status.success() {
@@ -1115,20 +1126,26 @@ fn graph_query_runtime_error_with_refresh_hint(
     )
 }
 
-fn resolve_repo_head_commit(repo_path: &Path) -> Result<String, NativeToolEngineError> {
-    let output = Command::new("git")
-        .args(["rev-parse", "HEAD"])
+fn resolve_repo_head_commit(
+    repo_path: &Path,
+    env: &HashMap<String, String>,
+) -> Result<String, NativeToolEngineError> {
+    let mut cmd = Command::new("git");
+    cmd.args(["rev-parse", "HEAD"])
         .current_dir(repo_path)
-        .output()
-        .map_err(|error| {
-            graph_query_runtime_error_with_refresh_hint(
-                "graph_snapshot_stale",
-                format!(
-                    "failed to resolve git HEAD for '{}': {error}",
-                    repo_path.display()
-                ),
-            )
-        })?;
+        .env_clear();
+    for (key, value) in deterministic_env_pairs(env) {
+        cmd.env(key, value);
+    }
+    let output = cmd.output().map_err(|error| {
+        graph_query_runtime_error_with_refresh_hint(
+            "graph_snapshot_stale",
+            format!(
+                "failed to resolve git HEAD for '{}': {error}",
+                repo_path.display()
+            ),
+        )
+    })?;
     if !output.status.success() {
         return Err(graph_query_runtime_error_with_refresh_hint(
             "graph_snapshot_stale",
@@ -1239,6 +1256,7 @@ fn load_runtime_graph_snapshot(
 
 fn validate_runtime_graph_snapshot(
     artifact: &RuntimeGraphSnapshotArtifact,
+    env: &HashMap<String, String>,
 ) -> Result<(), NativeToolEngineError> {
     if artifact.profile_version != CODEGRAPH_PROFILE_MARKER {
         return Err(graph_query_runtime_error_with_refresh_hint(
@@ -1308,7 +1326,7 @@ fn validate_runtime_graph_snapshot(
             ));
         }
 
-        let current_head = resolve_repo_head_commit(Path::new(&repo.repo_path))?;
+        let current_head = resolve_repo_head_commit(Path::new(&repo.repo_path), env)?;
         if current_head != *recorded_head {
             return Err(graph_query_runtime_error_with_refresh_hint(
                 "graph_snapshot_stale",
@@ -1365,7 +1383,7 @@ fn handle_graph_query(
     let request = input.into_request()?;
     let bounds = graph_query_bounds_from_env(ctx.env)?;
     let artifact = load_runtime_graph_snapshot(ctx.env)?;
-    validate_runtime_graph_snapshot(&artifact)?;
+    validate_runtime_graph_snapshot(&artifact, ctx.env)?;
 
     let partition_paths = ctx
         .env
@@ -1661,6 +1679,51 @@ mod tests {
             serde_json::from_value(value).expect("run_command output should decode");
         assert_eq!(output.exit_code, 0);
         assert!(output.stdout.contains("hello"));
+    }
+
+    #[test]
+    fn run_command_uses_hardened_runtime_env_only() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["sh".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let old = std::env::var("PARENT_SECRET").ok();
+        std::env::set_var("PARENT_SECRET", "leak-me");
+
+        let mut env = HashMap::new();
+        env.insert("ONLY_THIS".to_string(), "visible".to_string());
+        let scope = allow_all_scope();
+        let ctx = ToolExecutionContext {
+            worktree: tmp.path(),
+            scope: Some(&scope),
+            command_policy: &policy,
+            env: &env,
+        };
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "command": "sh",
+                "args": ["-c", "printf '%s|%s' \"$ONLY_THIS\" \"$PARENT_SECRET\""]
+            }),
+        };
+
+        let value = engine
+            .execute(&action, &ctx)
+            .expect("allowlisted command should run");
+        let output: RunCommandOutput =
+            serde_json::from_value(value).expect("run_command output should decode");
+
+        match old {
+            Some(value) => std::env::set_var("PARENT_SECRET", value),
+            None => std::env::remove_var("PARENT_SECRET"),
+        }
+
+        assert_eq!(output.exit_code, 0);
+        assert_eq!(output.stdout, "visible|");
     }
 
     #[test]
