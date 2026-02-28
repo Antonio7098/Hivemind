@@ -213,7 +213,7 @@ A native runtime foundation includes:
 
 ---
 
-### 8.2 Current Native Scope (Sprints 42-53)
+### 8.2 Current Native Scope (Sprints 42-54)
 
 Sprints 42-53 introduce a first native runtime adapter mode (`native`) while preserving existing
 external adapters as first-class execution backends.
@@ -246,7 +246,7 @@ Current native mode includes:
   - `read_file`
   - `list_files`
   - `write_file` (scope-gated)
-  - `run_command` (sandbox + approval orchestrated, deny-by-default exec policy with dangerous-command analysis)
+  - `run_command` (sandbox + approval orchestrated, deny-by-default exec policy with dangerous-command analysis, managed network policy/host approvals, deferred network denial watcher termination)
   - `git_status`
   - `git_diff`
   - `graph_query` (bounded query over UCP snapshot substrate)
@@ -271,6 +271,22 @@ Current native mode includes:
     - `HIVEMIND_NATIVE_APPROVAL_REVIEW_DECISION` (`approve|deny`)
     - `HIVEMIND_NATIVE_APPROVAL_TRUSTED_PREFIXES`
     - `HIVEMIND_NATIVE_APPROVAL_CACHE_MAX`
+  - network policy controls:
+    - `HIVEMIND_NATIVE_NETWORK_PROXY_MODE` (`off|managed`)
+    - `HIVEMIND_NATIVE_NETWORK_PROXY_HTTP_BIND`
+    - `HIVEMIND_NATIVE_NETWORK_PROXY_SOCKS5_ENABLED`
+    - `HIVEMIND_NATIVE_NETWORK_PROXY_SOCKS5_BIND`
+    - `HIVEMIND_NATIVE_NETWORK_PROXY_ADMIN_BIND`
+    - `HIVEMIND_NATIVE_NETWORK_PROXY_ALLOW_NON_LOOPBACK`
+    - `HIVEMIND_NATIVE_NETWORK_ALLOWLIST`
+    - `HIVEMIND_NATIVE_NETWORK_DENYLIST`
+    - `HIVEMIND_NATIVE_NETWORK_BLOCK_PRIVATE`
+    - `HIVEMIND_NATIVE_NETWORK_MODE` (`full|limited|disabled`)
+    - `HIVEMIND_NATIVE_NETWORK_LIMITED_METHODS`
+    - `HIVEMIND_NATIVE_NETWORK_APPROVAL_MODE` (`none|immediate|deferred`)
+    - `HIVEMIND_NATIVE_NETWORK_APPROVAL_DECISION` (`approve|deny`)
+    - `HIVEMIND_NATIVE_NETWORK_APPROVAL_CACHE_MAX`
+    - `HIVEMIND_NATIVE_NETWORK_APPROVAL_DEFERRED_DECISIONS_FILE`
   - policy decisions are emitted as `policy_tags` on native tool-call events (`ToolCallRequested/Started/Completed/Failed`)
 - host/process startup hardening for native binaries:
   - disable core dumps on supported UNIX platforms before normal CLI/runtime startup

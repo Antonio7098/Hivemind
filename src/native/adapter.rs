@@ -9,7 +9,8 @@ use crate::adapters::runtime::{
 use crate::core::scope::Scope;
 use crate::native::tool_engine::{
     NativeApprovalCache, NativeApprovalPolicy, NativeCommandPolicy, NativeExecPolicyManager,
-    NativeSandboxPolicy, NativeToolAction, NativeToolEngine, ToolExecutionContext,
+    NativeNetworkApprovalCache, NativeNetworkPolicy, NativeSandboxPolicy, NativeToolAction,
+    NativeToolEngine, ToolExecutionContext,
 };
 use crate::native::{
     AgentLoop, MockModelClient, ModelClient, ModelDirective, NativeRuntimeConfig,
@@ -336,6 +337,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
         let scope = Self::scope_from_env(&self.config.base.env)?;
         let sandbox_policy = NativeSandboxPolicy::from_env(&self.config.base.env);
         let approval_policy = NativeApprovalPolicy::from_env(&self.config.base.env);
+        let network_policy = NativeNetworkPolicy::from_env(&self.config.base.env);
         let command_policy = NativeCommandPolicy::from_env(&self.config.base.env);
         let exec_policy_manager = NativeExecPolicyManager::from_env(&self.config.base.env);
         let tool_context = ToolExecutionContext {
@@ -343,9 +345,11 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
             scope: scope.as_ref(),
             sandbox_policy,
             approval_policy,
+            network_policy,
             command_policy,
             exec_policy_manager,
             approval_cache: RefCell::new(NativeApprovalCache::default()),
+            network_approval_cache: RefCell::new(NativeNetworkApprovalCache::default()),
             env: &self.config.base.env,
         };
         let tool_engine = NativeToolEngine::default();

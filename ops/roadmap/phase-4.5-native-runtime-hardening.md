@@ -74,26 +74,26 @@
 **Goal:** Enforce network behavior through explicit proxy policy and interactive host approvals.
 
 ### 54.1 Managed network proxy
-- [ ] Introduce local managed network proxy mode for native runtime execution:
-  - [ ] HTTP proxy listener
-  - [ ] optional SOCKS5 listener
-  - [ ] local admin control endpoint
-- [ ] Enforce safe bind defaults (loopback clamp unless explicit dangerous override)
+- [x] Introduce local managed network proxy mode for native runtime execution:
+  - [x] HTTP proxy listener
+  - [x] optional SOCKS5 listener
+  - [x] local admin control endpoint
+- [x] Enforce safe bind defaults (loopback clamp unless explicit dangerous override)
 
 ### 54.2 Host/domain policy engine
-- [ ] Add allowlist/denylist host policy with deny-wins precedence
-- [ ] Add local/private address protection controls
-- [ ] Add limited network mode with method restrictions
+- [x] Add allowlist/denylist host policy with deny-wins precedence
+- [x] Add local/private address protection controls
+- [x] Add limited network mode with method restrictions
 
 ### 54.3 Network approval lifecycle
-- [ ] Add per-attempt host/protocol approval flow (immediate + deferred modes)
-- [ ] Add denial reason taxonomy and explicit failure projection
-- [ ] Add deferred denial watchers that terminate running command sessions when policy/user denial lands
+- [x] Add per-attempt host/protocol approval flow (immediate + deferred modes)
+- [x] Add denial reason taxonomy and explicit failure projection
+- [x] Add deferred denial watchers that terminate running command sessions when policy/user denial lands
 
 ### 54.4 Exit Criteria
-- [ ] Native network egress is governed by explicit, testable policy
-- [ ] Host approvals are attributable and replay-visible
-- [ ] Network-denied operations fail closed, not open
+- [x] Native network egress is governed by explicit, testable policy
+- [x] Host approvals are attributable and replay-visible
+- [x] Network-denied operations fail closed, not open
 
 ---
 

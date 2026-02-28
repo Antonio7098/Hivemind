@@ -275,7 +275,7 @@ Properties:
 - Model/tool payloads are stored as hash-addressed blob references (`digest`, `byte_size`, `media_type`, `blob_path`)
 - Tool call payloads are schema-validated against typed native tool contracts before execution
 - Unknown tools, schema violations, scope violations, and policy violations emit explicit `ToolCallFailed` payloads with stable error codes
-- Sandbox/approval/exec policy outcomes are attached as deterministic `policy_tags` on `ToolCallRequested`, `ToolCallStarted`, `ToolCallCompleted`, and `ToolCallFailed`
+- Sandbox/approval/exec/network policy outcomes are attached as deterministic `policy_tags` on `ToolCallRequested`, `ToolCallStarted`, `ToolCallCompleted`, and `ToolCallFailed` (including host policy denials, bind-clamp decisions, immediate/deferred approval outcomes, and deferred-denial termination attribution)
 - Capture mode is explicit:
   - `metadata_only` (default; payload content omitted)
   - `full_payload` (explicit opt-in; payload content included in event blob metadata)
