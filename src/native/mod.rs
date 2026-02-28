@@ -14,7 +14,8 @@ pub mod tool_engine;
 use crate::adapters::runtime::RuntimeError;
 use crate::core::error::{ErrorCategory, HivemindError};
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use serde_json::Value;
+use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 /// Native runtime loop state.
@@ -76,6 +77,12 @@ pub struct ModelTurnRequest {
 /// Provider-agnostic model contract used by native runtime.
 pub trait ModelClient: Send + Sync {
     fn complete_turn(&mut self, request: &ModelTurnRequest) -> Result<String, NativeRuntimeError>;
+}
+
+impl<T: ModelClient + ?Sized> ModelClient for Box<T> {
+    fn complete_turn(&mut self, request: &ModelTurnRequest) -> Result<String, NativeRuntimeError> {
+        (**self).complete_turn(request)
+    }
 }
 
 /// Parsed model directive.
@@ -235,6 +242,215 @@ impl NativeRuntimeError {
     #[must_use]
     pub fn to_runtime_error(&self) -> RuntimeError {
         RuntimeError::new(self.code(), self.message(), self.recoverable())
+    }
+}
+
+const OPENROUTER_CHAT_COMPLETIONS_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
+const NATIVE_DIRECTIVE_SYSTEM_PROMPT: &str = "You are the Hivemind native runtime controller.\nReturn exactly one directive per response with one of these formats:\n- THINK:<short reasoning>\n- ACT:tool:<tool_name>:<json_object>\n- DONE:<summary>\nRules:\n- Never return markdown, code fences, or prose outside the directive line.\n- For ACT, always use tool syntax accepted by Hivemind: tool:<name>:<json>.\n- Only use built-in tool names: read_file, list_files, write_file, run_command, git_status, git_diff, graph_query.\n- Do not invent tool names.\n- Prefer ACT over DONE while required work remains.\n- Do not return DONE on the first turn unless the user explicitly requested a no-op.\n- When the user prompt defines explicit steps, execute them in order before DONE.\n- Return DONE only after the requested deliverable has been created or verified.";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct OpenRouterMessage {
+    role: String,
+    content: String,
+}
+
+impl OpenRouterMessage {
+    fn system(content: impl Into<String>) -> Self {
+        Self {
+            role: "system".to_string(),
+            content: content.into(),
+        }
+    }
+
+    fn user(content: impl Into<String>) -> Self {
+        Self {
+            role: "user".to_string(),
+            content: content.into(),
+        }
+    }
+
+    fn assistant(content: impl Into<String>) -> Self {
+        Self {
+            role: "assistant".to_string(),
+            content: content.into(),
+        }
+    }
+}
+
+/// OpenRouter-backed native model implementation.
+#[derive(Clone)]
+pub struct OpenRouterModelClient {
+    model: String,
+    api_key: String,
+    endpoint: String,
+    http: reqwest::blocking::Client,
+    history: Vec<OpenRouterMessage>,
+}
+
+impl OpenRouterModelClient {
+    fn normalize_model_id(model: impl Into<String>) -> String {
+        let model = model.into();
+        model
+            .strip_prefix("openrouter/")
+            .map_or(model.clone(), ToString::to_string)
+    }
+
+    pub fn from_env(
+        model: impl Into<String>,
+        env: &HashMap<String, String>,
+    ) -> Result<Self, NativeRuntimeError> {
+        let model = Self::normalize_model_id(model);
+        let api_key = env
+            .get("OPENROUTER_API_KEY")
+            .cloned()
+            .or_else(|| std::env::var("OPENROUTER_API_KEY").ok())
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| NativeRuntimeError::ModelRequestFailed {
+                message: "Missing OpenRouter API key. Set OPENROUTER_API_KEY in runtime env or shell environment.".to_string(),
+                recoverable: false,
+            })?;
+
+        let endpoint = env
+            .get("OPENROUTER_API_BASE_URL")
+            .cloned()
+            .unwrap_or_else(|| OPENROUTER_CHAT_COMPLETIONS_URL.to_string());
+        let timeout_ms = env
+            .get("HIVEMIND_NATIVE_OPENROUTER_TIMEOUT_MS")
+            .and_then(|raw| raw.parse::<u64>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(60_000);
+        let http = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_millis(timeout_ms))
+            .build()
+            .map_err(|error| NativeRuntimeError::ModelRequestFailed {
+                message: format!("Failed to initialize OpenRouter HTTP client: {error}"),
+                recoverable: false,
+            })?;
+
+        Ok(Self {
+            model,
+            api_key,
+            endpoint,
+            http,
+            history: vec![OpenRouterMessage::system(NATIVE_DIRECTIVE_SYSTEM_PROMPT)],
+        })
+    }
+
+    fn user_prompt_for_turn(request: &ModelTurnRequest) -> String {
+        let mut prompt = format!(
+            "Turn index: {}\nCurrent state: {}\nTask prompt:\n{}\n",
+            request.turn_index,
+            request.state.as_str(),
+            request.prompt
+        );
+        if let Some(context) = request.context.as_ref() {
+            prompt.push_str("\nAdditional context:\n");
+            prompt.push_str(context);
+            prompt.push('\n');
+        }
+        prompt.push_str("\nReturn one directive line now.");
+        prompt
+    }
+
+    fn extract_text_content(body: &Value) -> Option<String> {
+        let content = body
+            .get("choices")?
+            .as_array()?
+            .first()?
+            .get("message")?
+            .get("content")?;
+
+        if let Some(text) = content.as_str() {
+            return Some(text.to_string());
+        }
+
+        let segments = content.as_array()?;
+        let mut merged = String::new();
+        for segment in segments {
+            if let Some(text) = segment.get("text").and_then(Value::as_str) {
+                if !merged.is_empty() {
+                    merged.push('\n');
+                }
+                merged.push_str(text);
+            }
+        }
+        if merged.trim().is_empty() {
+            None
+        } else {
+            Some(merged)
+        }
+    }
+
+    fn api_error_message(body: &Value) -> Option<String> {
+        body.get("error")
+            .and_then(|error| error.get("message"))
+            .and_then(Value::as_str)
+            .map(ToString::to_string)
+    }
+
+    fn normalize_directive(raw: &str) -> String {
+        let trimmed = raw.trim().trim_matches('`').trim();
+        for line in trimmed.lines() {
+            let line = line.trim().trim_matches('`').trim();
+            if line.starts_with("THINK:") || line.starts_with("ACT:") || line.starts_with("DONE:") {
+                return line.to_string();
+            }
+        }
+        trimmed.to_string()
+    }
+}
+
+impl ModelClient for OpenRouterModelClient {
+    fn complete_turn(&mut self, request: &ModelTurnRequest) -> Result<String, NativeRuntimeError> {
+        self.history
+            .push(OpenRouterMessage::user(Self::user_prompt_for_turn(request)));
+
+        let payload = serde_json::json!({
+            "model": self.model,
+            "temperature": 0.0,
+            "messages": self.history,
+        });
+        let response = self
+            .http
+            .post(&self.endpoint)
+            .bearer_auth(&self.api_key)
+            .header("Content-Type", "application/json")
+            .header("HTTP-Referer", "https://hivemind.local")
+            .header("X-Title", "hivemind-native-runtime")
+            .json(&payload)
+            .send()
+            .map_err(|error| NativeRuntimeError::ModelRequestFailed {
+                message: format!("OpenRouter request failed: {error}"),
+                recoverable: true,
+            })?;
+
+        let status = response.status();
+        let body: Value =
+            response
+                .json()
+                .map_err(|error| NativeRuntimeError::ModelRequestFailed {
+                    message: format!("OpenRouter response decode failed: {error}"),
+                    recoverable: true,
+                })?;
+        if !status.is_success() {
+            let details = Self::api_error_message(&body)
+                .unwrap_or_else(|| "unknown OpenRouter error".to_string());
+            return Err(NativeRuntimeError::ModelRequestFailed {
+                message: format!("OpenRouter request rejected ({status}): {details}"),
+                recoverable: true,
+            });
+        }
+
+        let response_text = Self::extract_text_content(&body).ok_or_else(|| {
+            NativeRuntimeError::ModelRequestFailed {
+                message: "OpenRouter response missing choices[0].message.content".to_string(),
+                recoverable: true,
+            }
+        })?;
+        let directive = Self::normalize_directive(&response_text);
+        self.history
+            .push(OpenRouterMessage::assistant(directive.clone()));
+        Ok(directive)
     }
 }
 
@@ -497,5 +713,37 @@ mod tests {
             recovery_hint.contains("THINK/ACT/DONE"),
             "recovery hint should be explicit"
         );
+    }
+
+    #[test]
+    fn openrouter_normalize_directive_extracts_prefix_line() {
+        let raw = "```text\nTHINK:plan next step\n```";
+        let normalized = OpenRouterModelClient::normalize_directive(raw);
+        assert_eq!(normalized, "THINK:plan next step");
+    }
+
+    #[test]
+    fn openrouter_extract_text_content_supports_array_segments() {
+        let body = serde_json::json!({
+            "choices": [
+                {
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": "ACT:tool:list_files:{\"path\":\".\",\"recursive\":false}"}
+                        ]
+                    }
+                }
+            ]
+        });
+        let content = OpenRouterModelClient::extract_text_content(&body).expect("content");
+        assert!(content.starts_with("ACT:tool:list_files:"));
+    }
+
+    #[test]
+    fn openrouter_normalize_model_id_strips_provider_prefix() {
+        let normalized = OpenRouterModelClient::normalize_model_id(
+            "openrouter/meta-llama/llama-3.2-3b-instruct:free",
+        );
+        assert_eq!(normalized, "meta-llama/llama-3.2-3b-instruct:free");
     }
 }

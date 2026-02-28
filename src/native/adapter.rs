@@ -10,7 +10,10 @@ use crate::core::scope::Scope;
 use crate::native::tool_engine::{
     NativeCommandPolicy, NativeToolAction, NativeToolEngine, ToolExecutionContext,
 };
-use crate::native::{AgentLoop, MockModelClient, ModelDirective, NativeRuntimeConfig};
+use crate::native::{
+    AgentLoop, MockModelClient, ModelClient, ModelDirective, NativeRuntimeConfig,
+    OpenRouterModelClient,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -278,6 +281,21 @@ impl NativeRuntimeAdapter {
                 )
             })
     }
+
+    fn build_model_client(
+        config: &NativeAdapterConfig,
+    ) -> Result<Box<dyn ModelClient>, RuntimeError> {
+        if config.provider_name.eq_ignore_ascii_case("openrouter") {
+            let client =
+                OpenRouterModelClient::from_env(config.model_name.clone(), &config.base.env)
+                    .map_err(|error| error.to_runtime_error())?;
+            Ok(Box::new(client))
+        } else {
+            Ok(Box::new(MockModelClient::from_outputs(
+                config.scripted_directives.clone(),
+            )))
+        }
+    }
 }
 
 impl RuntimeAdapter for NativeRuntimeAdapter {
@@ -322,7 +340,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
 
         let started_at = Instant::now();
         let invocation_id = Uuid::new_v4().to_string();
-        let model = MockModelClient::from_outputs(self.config.scripted_directives.clone());
+        let model = Self::build_model_client(&self.config)?;
         let mut loop_harness = AgentLoop::new(self.config.native.clone(), model);
         let prompt = format!(
             "Task: {}\nSuccess Criteria: {}",

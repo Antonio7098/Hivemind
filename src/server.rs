@@ -1760,7 +1760,8 @@ fn handle_api_request_inner(
             Ok(resp)
         }
         "/api/governance/constitution/check" if method == ApiMethod::Post => {
-            let req: ProjectIdRequest = parse_json_body(body, "server:governance:constitution:check")?;
+            let req: ProjectIdRequest =
+                parse_json_body(body, "server:governance:constitution:check")?;
             let wrapped = CliResponse::success(registry.constitution_check(&req.project)?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
@@ -1778,7 +1779,9 @@ fn handle_api_request_inner(
             let query = parse_query(url);
             let project = query.get("project").map(|s| s.as_str()).unwrap_or("");
             let document_id = query.get("document_id").map(|s| s.as_str()).unwrap_or("");
-            let wrapped = CliResponse::success(registry.project_governance_document_inspect(project, document_id)?);
+            let wrapped = CliResponse::success(
+                registry.project_governance_document_inspect(project, document_id)?,
+            );
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
@@ -1826,8 +1829,13 @@ fn handle_api_request_inner(
             Ok(resp)
         }
         "/api/governance/graph-snapshot/refresh" if method == ApiMethod::Post => {
-            let req: GraphSnapshotRefreshRequest = parse_json_body(body, "server:governance:graph-snapshot:refresh")?;
-            let wrapped = CliResponse::success(registry.graph_snapshot_refresh(&req.project, req.trigger.as_deref().unwrap_or("api"))?);
+            let req: GraphSnapshotRefreshRequest =
+                parse_json_body(body, "server:governance:graph-snapshot:refresh")?;
+            let wrapped =
+                CliResponse::success(registry.graph_snapshot_refresh(
+                    &req.project,
+                    req.trigger.as_deref().unwrap_or("api"),
+                )?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
             Ok(resp)
