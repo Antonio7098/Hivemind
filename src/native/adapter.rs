@@ -8,12 +8,14 @@ use crate::adapters::runtime::{
 };
 use crate::core::scope::Scope;
 use crate::native::tool_engine::{
-    NativeCommandPolicy, NativeToolAction, NativeToolEngine, ToolExecutionContext,
+    NativeApprovalCache, NativeApprovalPolicy, NativeCommandPolicy, NativeExecPolicyManager,
+    NativeSandboxPolicy, NativeToolAction, NativeToolEngine, ToolExecutionContext,
 };
 use crate::native::{
     AgentLoop, MockModelClient, ModelClient, ModelDirective, NativeRuntimeConfig,
     OpenRouterModelClient,
 };
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -239,6 +241,7 @@ impl NativeRuntimeAdapter {
                     message: message.trim().to_string(),
                     recoverable: false,
                 }),
+                policy_tags: Vec::new(),
             }];
         }
 
@@ -252,6 +255,7 @@ impl NativeRuntimeAdapter {
                 request: action.to_string(),
                 response: Some(format!("completed:{action}")),
                 failure: None,
+                policy_tags: Vec::new(),
             }],
             Err(error) => vec![NativeToolCallTrace {
                 call_id,
@@ -263,6 +267,7 @@ impl NativeRuntimeAdapter {
                     message: error.message,
                     recoverable: error.recoverable,
                 }),
+                policy_tags: error.policy_tags,
             }],
         }
     }
@@ -329,11 +334,18 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
             )
         })?;
         let scope = Self::scope_from_env(&self.config.base.env)?;
+        let sandbox_policy = NativeSandboxPolicy::from_env(&self.config.base.env);
+        let approval_policy = NativeApprovalPolicy::from_env(&self.config.base.env);
         let command_policy = NativeCommandPolicy::from_env(&self.config.base.env);
+        let exec_policy_manager = NativeExecPolicyManager::from_env(&self.config.base.env);
         let tool_context = ToolExecutionContext {
             worktree,
             scope: scope.as_ref(),
-            command_policy: &command_policy,
+            sandbox_policy,
+            approval_policy,
+            command_policy,
+            exec_policy_manager,
+            approval_cache: RefCell::new(NativeApprovalCache::default()),
             env: &self.config.base.env,
         };
         let tool_engine = NativeToolEngine::default();

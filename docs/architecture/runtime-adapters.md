@@ -213,9 +213,9 @@ A native runtime foundation includes:
 
 ---
 
-### 8.2 Current Native Scope (Sprints 42-52)
+### 8.2 Current Native Scope (Sprints 42-53)
 
-Sprints 42-52 introduce a first native runtime adapter mode (`native`) while preserving existing
+Sprints 42-53 introduce a first native runtime adapter mode (`native`) while preserving existing
 external adapters as first-class execution backends.
 
 Current native mode includes:
@@ -246,7 +246,7 @@ Current native mode includes:
   - `read_file`
   - `list_files`
   - `write_file` (scope-gated)
-  - `run_command` (deny-by-default command policy, optional allowlist/denylist)
+  - `run_command` (sandbox + approval orchestrated, deny-by-default exec policy with dangerous-command analysis)
   - `git_status`
   - `git_diff`
   - `graph_query` (bounded query over UCP snapshot substrate)
@@ -260,6 +260,18 @@ Current native mode includes:
     - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_ALLOWLIST`
     - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_DENYLIST`
     - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_DENY_BY_DEFAULT`
+    - `HIVEMIND_NATIVE_EXEC_PREFIX_RULE_MAX`
+    - `HIVEMIND_NATIVE_EXEC_PREFIX_AMENDMENTS`
+  - sandbox policy controls:
+    - `HIVEMIND_NATIVE_SANDBOX_MODE` (`read-only|workspace-write|danger-full-access|host-passthrough`)
+    - `HIVEMIND_NATIVE_SANDBOX_WRITABLE_ROOTS`
+    - `HIVEMIND_NATIVE_SANDBOX_READ_ONLY_OVERLAYS`
+  - approval policy controls:
+    - `HIVEMIND_NATIVE_APPROVAL_MODE` (`never|on-failure|on-request|unless-trusted`)
+    - `HIVEMIND_NATIVE_APPROVAL_REVIEW_DECISION` (`approve|deny`)
+    - `HIVEMIND_NATIVE_APPROVAL_TRUSTED_PREFIXES`
+    - `HIVEMIND_NATIVE_APPROVAL_CACHE_MAX`
+  - policy decisions are emitted as `policy_tags` on native tool-call events (`ToolCallRequested/Started/Completed/Failed`)
 - host/process startup hardening for native binaries:
   - disable core dumps on supported UNIX platforms before normal CLI/runtime startup
   - deny debugger attach where supported (`linux`)

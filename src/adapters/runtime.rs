@@ -378,6 +378,8 @@ pub struct NativeToolCallTrace {
     pub response: Option<String>,
     #[serde(default)]
     pub failure: Option<NativeToolCallFailure>,
+    #[serde(default)]
+    pub policy_tags: Vec<String>,
 }
 
 /// Native tool-call failure payload.

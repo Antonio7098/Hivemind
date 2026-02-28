@@ -342,6 +342,18 @@ Capabilities:
   - `HIVEMIND_NATIVE_CAPTURE_FULL_PAYLOADS`
 - Configure runtime subprocess environment inheritance policy with:
   - `HIVEMIND_RUNTIME_ENV_INHERIT` (`all|core|none`, default `core`)
+- Configure native sandbox policy with:
+  - `HIVEMIND_NATIVE_SANDBOX_MODE`
+  - `HIVEMIND_NATIVE_SANDBOX_WRITABLE_ROOTS`
+  - `HIVEMIND_NATIVE_SANDBOX_READ_ONLY_OVERLAYS`
+- Configure native approval policy with:
+  - `HIVEMIND_NATIVE_APPROVAL_MODE`
+  - `HIVEMIND_NATIVE_APPROVAL_REVIEW_DECISION`
+  - `HIVEMIND_NATIVE_APPROVAL_TRUSTED_PREFIXES`
+  - `HIVEMIND_NATIVE_APPROVAL_CACHE_MAX`
+- Configure native exec prefix-rule policy with:
+  - `HIVEMIND_NATIVE_EXEC_PREFIX_RULE_MAX`
+  - `HIVEMIND_NATIVE_EXEC_PREFIX_AMENDMENTS`
 - Inspect native invocation event trails and blob references via `events list`
 
 ---

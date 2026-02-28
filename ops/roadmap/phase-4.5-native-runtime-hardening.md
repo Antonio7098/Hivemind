@@ -42,30 +42,30 @@
 **Goal:** Add policy-grade sandbox and approval orchestration around native tool execution.
 
 ### 53.1 Sandbox policy model
-- [ ] Introduce explicit sandbox policy contract:
-  - [ ] `read-only`
-  - [ ] `workspace-write` with writable roots + read-only overlays
-  - [ ] `danger-full-access`
-  - [ ] external/host sandbox passthrough mode
-- [ ] Add platform-aware sandbox selection hooks and policy tagging in events
+- [x] Introduce explicit sandbox policy contract:
+  - [x] `read-only`
+  - [x] `workspace-write` with writable roots + read-only overlays
+  - [x] `danger-full-access`
+  - [x] external/host sandbox passthrough mode
+- [x] Add platform-aware sandbox selection hooks and policy tagging in events
 
 ### 53.2 Approval policy model
-- [ ] Add explicit approval modes:
-  - [ ] `never`
-  - [ ] `on-failure`
-  - [ ] `on-request`
-  - [ ] `unless-trusted`
-- [ ] Add approval cache semantics (`approved_for_session`) with explicit review decisions
+- [x] Add explicit approval modes:
+  - [x] `never`
+  - [x] `on-failure`
+  - [x] `on-request`
+  - [x] `unless-trusted`
+- [x] Add approval cache semantics (`approved_for_session`) with explicit review decisions
 
 ### 53.3 Exec policy and dangerous-command protection
-- [ ] Introduce rules-backed exec policy manager for `run_command`/native exec surfaces
-- [ ] Add safe/dangerous command analyzers (UNIX + Windows-aware)
-- [ ] Add bounded prefix-rule amendments with banned broad-prefix protections
+- [x] Introduce rules-backed exec policy manager for `run_command`/native exec surfaces
+- [x] Add safe/dangerous command analyzers (UNIX + Windows-aware)
+- [x] Add bounded prefix-rule amendments with banned broad-prefix protections
 
 ### 53.4 Exit Criteria
-- [ ] Every command/tool execution path evaluates sandbox + approval policy explicitly
-- [ ] Dangerous command and policy conflicts fail deterministically with actionable errors
-- [ ] Approval outcomes are cached and event-observable
+- [x] Every command/tool execution path evaluates sandbox + approval policy explicitly
+- [x] Dangerous command and policy conflicts fail deterministically with actionable errors
+- [x] Approval outcomes are cached and event-observable
 
 ---
 

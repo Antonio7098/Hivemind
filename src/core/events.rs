@@ -1208,6 +1208,8 @@ pub enum EventPayload {
         call_id: String,
         tool_name: String,
         request: NativeBlobRef,
+        #[serde(default)]
+        policy_tags: Vec<String>,
     },
     ToolCallStarted {
         native_correlation: NativeEventCorrelation,
@@ -1215,6 +1217,8 @@ pub enum EventPayload {
         turn_index: u32,
         call_id: String,
         tool_name: String,
+        #[serde(default)]
+        policy_tags: Vec<String>,
     },
     ToolCallCompleted {
         native_correlation: NativeEventCorrelation,
@@ -1223,6 +1227,8 @@ pub enum EventPayload {
         call_id: String,
         tool_name: String,
         response: NativeBlobRef,
+        #[serde(default)]
+        policy_tags: Vec<String>,
     },
     ToolCallFailed {
         native_correlation: NativeEventCorrelation,
@@ -1233,6 +1239,8 @@ pub enum EventPayload {
         code: String,
         message: String,
         recoverable: bool,
+        #[serde(default)]
+        policy_tags: Vec<String>,
     },
     AgentTurnCompleted {
         native_correlation: NativeEventCorrelation,

@@ -1982,6 +1982,7 @@ impl Registry {
                             call_id: tool_call.call_id.clone(),
                             tool_name: tool_call.tool_name.clone(),
                             request,
+                            policy_tags: tool_call.policy_tags.clone(),
                         },
                         correlation.clone(),
                     ),
@@ -1996,6 +1997,7 @@ impl Registry {
                             turn_index: turn.turn_index,
                             call_id: tool_call.call_id.clone(),
                             tool_name: tool_call.tool_name.clone(),
+                            policy_tags: tool_call.policy_tags.clone(),
                         },
                         correlation.clone(),
                     ),
@@ -2015,6 +2017,7 @@ impl Registry {
                                 code: failure.code.clone(),
                                 message: failure.message.clone(),
                                 recoverable: failure.recoverable,
+                                policy_tags: tool_call.policy_tags.clone(),
                             },
                             correlation.clone(),
                         ),
@@ -2036,6 +2039,7 @@ impl Registry {
                                 call_id: tool_call.call_id.clone(),
                                 tool_name: tool_call.tool_name.clone(),
                                 response,
+                                policy_tags: tool_call.policy_tags.clone(),
                             },
                             correlation.clone(),
                         ),
@@ -19649,6 +19653,15 @@ rules:
             matches!(
                 &event.payload,
                 EventPayload::ToolCallFailed { code, .. } if code == "native_policy_violation"
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::ToolCallFailed { code, policy_tags, .. }
+                    if code == "native_policy_violation"
+                        && policy_tags.iter().any(|tag| tag == "sandbox_mode:workspace-write")
+                        && policy_tags.iter().any(|tag| tag == "approval_mode:never")
             )
         }));
         assert!(events.iter().any(|event| {

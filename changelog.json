@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.46",
+      "date": "2026-02-28",
+      "phase": 53,
+      "changes": [
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Introduce explicit native sandbox policy contract in `src/native/tool_engine.rs` with modes `read-only`, `workspace-write`, `danger-full-access`, and `host-passthrough`, including platform-aware defaults and writable-root/read-only-overlay controls"
+        },
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Add approval policy orchestration (`never`, `on-failure`, `on-request`, `unless-trusted`) with explicit review decisions and bounded `approved_for_session` cache semantics"
+        },
+        {
+          "type": "changed",
+          "area": "native",
+          "description": "Refactor `run_command` gating behind a rules-backed exec policy manager with UNIX/Windows dangerous-command analyzers and bounded prefix-rule amendments that reject broad prefixes"
+        },
+        {
+          "type": "changed",
+          "area": "events",
+          "description": "Attach deterministic `policy_tags` to native tool-call events (`ToolCallRequested`, `ToolCallStarted`, `ToolCallCompleted`, `ToolCallFailed`) for explicit sandbox/approval/exec decision observability"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Sprint 53 roadmap completion, update architecture/design docs with sandbox+approval runtime controls, and add Sprint 53 report plus manual test artifacts"
+        }
+      ]
+    },
+    {
       "version": "v0.1.45",
       "date": "2026-02-28",
       "phase": 52,

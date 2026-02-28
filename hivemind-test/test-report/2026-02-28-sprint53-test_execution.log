@@ -1,0 +1,123 @@
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint: 
+hint: 	git config --global init.defaultBranch <name>
+hint: 
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint: 
+hint: 	git branch -m <name>
+Initialized empty Git repository in /tmp/hivemind-test/test-fresh/.git/
+[master (root-commit) 82b371c] Initial commit
+ 1 file changed, 1 insertion(+)
+ create mode 100644 README.md
+=== Creating project ===
+ID:          e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+Name:        test-fresh
+Description: Test project
+Created:     2026-02-28 18:26:56.746331206 UTC
+Updated:     2026-02-28 18:26:56.746331206 UTC
+=== Attaching repository ===
+ID:          e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+Name:        test-fresh
+Description: Test project
+Created:     2026-02-28 18:26:56.746331206 UTC
+Updated:     2026-02-28 18:26:56.777025383 UTC
+Repositories:
+  - main (/tmp/hivemind-test/test-fresh) [readwrite]
+=== Configuring runtime ===
+ID:          e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+Name:        test-fresh
+Description: Test project
+Created:     2026-02-28 18:26:56.746331206 UTC
+Updated:     2026-02-28 18:26:56.880545278 UTC
+Repositories:
+  - main (/tmp/hivemind-test/test-fresh) [readwrite]
+=== Creating task with better description ===
+ID:          ca0080a7-1507-4c16-8bdc-e648d364927c
+Project:     e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+Title:       Create hello world file
+Description: Create a file called hello.txt with the content 'Hello, World!'
+State:       Open
+RunMode:     Auto
+Created:     2026-02-28 18:26:56.912790321 UTC
+Task ID: ca0080a7-1507-4c16-8bdc-e648d364927c
+=== Creating new graph ===
+Graph ID: 489dde9a-e4bd-4f1a-b7eb-14d31e906556
+Graph ID: 489dde9a-e4bd-4f1a-b7eb-14d31e906556
+=== Creating new flow ===
+Flow ID: 481f6bc7-7408-48ac-9a1f-b4b7eebd68d1
+Flow ID: 481f6bc7-7408-48ac-9a1f-b4b7eebd68d1
+=== Starting flow ===
+Flow ID: 481f6bc7-7408-48ac-9a1f-b4b7eebd68d1
+=== Ticking flow ===
+Error: [user:checkpoints_incomplete] All checkpoints must be completed before task completion
+Hint: Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 352fc145-f565-47b8-a63c-d8ce41af79c0 --id <checkpoint-id>` before finishing the task attempt
+{"success":false,"error":{"category":"user","code":"checkpoints_incomplete","message":"All checkpoints must be completed before task completion","origin":"registry:complete_task_execution","hint":"Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 352fc145-f565-47b8-a63c-d8ce41af79c0 --id <checkpoint-id>` before finishing the task attempt"}}
+=== Completing checkpoint and retrying tick ===
+Attempt:    352fc145-f565-47b8-a63c-d8ce41af79c0
+Checkpoint: checkpoint-1 (1/1)
+Commit:     f9ee5f46c63fc4d7cab1f5bc0e859dd4ec8262e1
+Next:       none
+All done:   true
+Flow ID: 481f6bc7-7408-48ac-9a1f-b4b7eebd68d1
+Flow ID: 481f6bc7-7408-48ac-9a1f-b4b7eebd68d1
+=== Checking events ===
+SEQ     TYPE                      TIMESTAMP               PROJECT
+------------------------------------------------------------------------------------------
+0       project_created           2026-02-28T18:26:56.746331206+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+1       repo_attached             2026-02-28T18:26:56.777025383+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+2       graph_snapshot_started    2026-02-28T18:26:56.797575415+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+3       governance_artifact_upserted  2026-02-28T18:26:56.820286244+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+4       graph_snapshot_diff_detected  2026-02-28T18:26:56.835574638+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+5       graph_snapshot_completed  2026-02-28T18:26:56.850203734+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+6       project_runtime_configured  2026-02-28T18:26:56.880545278+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+7       task_created              2026-02-28T18:26:56.912790321+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+8       graph_created             2026-02-28T18:26:56.948809110+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+9       graph_task_added          2026-02-28T18:26:56.964932474+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+10      graph_validated           2026-02-28T18:26:57.002118636+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+11      graph_locked              2026-02-28T18:26:57.019913298+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+12      flow_created              2026-02-28T18:26:57.040314204+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+13      flow_started              2026-02-28T18:26:57.090182782+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+14      task_ready                2026-02-28T18:26:57.107172751+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+15      task_execution_state_changed  2026-02-28T18:26:57.218376645+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+16      attempt_started           2026-02-28T18:26:57.234669438+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+17      checkpoint_declared       2026-02-28T18:26:57.250881026+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+18      checkpoint_activated      2026-02-28T18:26:57.268550721+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+19      task_execution_started    2026-02-28T18:26:57.285433251+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+20      baseline_captured         2026-02-28T18:26:57.301617573+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+21      context_window_created    2026-02-28T18:26:57.323108114+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+22      context_op_applied        2026-02-28T18:26:57.342639636+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+23      context_op_applied        2026-02-28T18:26:57.358713783+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+24      context_op_applied        2026-02-28T18:26:57.375742559+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+25      context_op_applied        2026-02-28T18:26:57.393877806+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+26      context_op_applied        2026-02-28T18:26:57.409039349+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+27      context_op_applied        2026-02-28T18:26:57.424615343+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+28      context_op_applied        2026-02-28T18:26:57.444579126+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+29      attempt_context_assembled  2026-02-28T18:26:57.461559848+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+30      context_window_snapshot_created  2026-02-28T18:26:57.480254959+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+31      attempt_context_delivered  2026-02-28T18:26:57.499129559+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+32      runtime_capabilities_evaluated  2026-02-28T18:26:57.518414196+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+33      runtime_environment_prepared  2026-02-28T18:26:57.534388867+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+34      runtime_started           2026-02-28T18:26:57.549893001+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+35      runtime_filesystem_observed  2026-02-28T18:26:57.586665168+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+36      runtime_exited            2026-02-28T18:26:57.602609032+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+37      error_occurred            2026-02-28T18:26:57.622325539+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+38      runtime_terminated        2026-02-28T18:26:57.641090614+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+39      runtime_error_classified  2026-02-28T18:26:57.657536863+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+40      error_occurred            2026-02-28T18:26:57.674810459+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+41      checkpoint_completed      2026-02-28T18:26:58.789230153+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+42      checkpoint_commit_created  2026-02-28T18:26:58.811620268+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+43      all_checkpoints_completed  2026-02-28T18:26:58.831758172+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+44      graph_snapshot_started    2026-02-28T18:26:58.863724729+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+45      governance_artifact_upserted  2026-02-28T18:26:58.899138468+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+46      graph_snapshot_completed  2026-02-28T18:26:58.920948481+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+47      task_execution_state_changed  2026-02-28T18:26:59.008337483+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+48      file_modified             2026-02-28T18:26:59.028693580+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+49      diff_computed             2026-02-28T18:26:59.048816937+00:00  e6f69f30-c8ac-4df7-8e23-99ddab6ef617
+=== Listing files in worktree ===
+total 8
+drwxrwxr-x 2 antonio antonio 4096 Feb 28 18:26 .
+drwxrwxr-x 3 antonio antonio 4096 Feb 28 18:26 ..
+=== Done ===
