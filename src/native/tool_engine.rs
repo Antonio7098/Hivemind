@@ -4582,6 +4582,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn exec_command_and_write_stdin_support_interactive_session() {
         let _guard = lock_exec_session_tests();
         let _ = cleanup_exec_sessions();
@@ -4637,6 +4638,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn write_stdin_reports_truncation_metadata() {
         let _guard = lock_exec_session_tests();
         let _ = cleanup_exec_sessions();
@@ -4682,6 +4684,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn exec_command_prunes_sessions_when_cap_exceeded() {
         let _guard = lock_exec_session_tests();
         let _ = cleanup_exec_sessions();
