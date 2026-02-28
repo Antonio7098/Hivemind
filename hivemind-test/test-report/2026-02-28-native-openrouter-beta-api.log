@@ -1,0 +1,432 @@
+=== Native OpenRouter Beta API Test ===
+Using model: openrouter/nvidia/nemotron-3-nano-30b-a3b:free
+Using hivemind binary: /home/antonio/.cargo/shared-target/debug/hivemind
+
++ git init
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint: 
+hint: 	git config --global init.defaultBranch <name>
+hint: 
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint: 
+hint: 	git branch -m <name>
+Initialized empty Git repository in /tmp/hm-native-openrouter-beta-api/repo/.git/
+
++ git branch -m main
+
++ git add README.md
+
++ git -c user.name=Hivemind -c user.email=hivemind@example.com commit -m Initial commit
+[main (root-commit) aa24ac8] Initial commit
+ 1 file changed, 1 insertion(+)
+ create mode 100644 README.md
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project create beta-openrouter-api --description Native OpenRouter beta test project
+ID:          ee1bd700-8323-4476-bcef-fed2087312d0
+Name:        beta-openrouter-api
+Description: Native OpenRouter beta test project
+Created:     2026-02-28 15:41:43.419635848 UTC
+Updated:     2026-02-28 15:41:43.419635848 UTC
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project attach-repo beta-openrouter-api /tmp/hm-native-openrouter-beta-api/repo --name main
+ID:          ee1bd700-8323-4476-bcef-fed2087312d0
+Name:        beta-openrouter-api
+Description: Native OpenRouter beta test project
+Created:     2026-02-28 15:41:43.419635848 UTC
+Updated:     2026-02-28 15:41:43.445108522 UTC
+Repositories:
+  - main (/tmp/hm-native-openrouter-beta-api/repo) [readwrite]
+=== Governance setup ===
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project governance init beta-openrouter-api
+Project ID:        ee1bd700-8323-4476-bcef-fed2087312d0
+Governance Root:   /tmp/hm-native-openrouter-beta-api/home/.hivemind/projects/ee1bd700-8323-4476-bcef-fed2087312d0
+Schema Version:    governance.v1
+Projection Version:1
+Created Paths:     none (already initialized)
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project governance document create beta-openrouter-api architecture-notes --title Architecture Notes --owner qa --content Layered modules: store, router, server, tests.
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "document_id": "architecture-notes",
+  "revision": 1,
+  "path": "/tmp/hm-native-openrouter-beta-api/home/.hivemind/projects/ee1bd700-8323-4476-bcef-fed2087312d0/documents/architecture-notes.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-28T15:41:43.632651096Z"
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project governance document create beta-openrouter-api api-contract --title API Contract --owner qa --content Routes: GET /health, GET /items, POST /items with JSON body.
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "document_id": "api-contract",
+  "revision": 1,
+  "path": "/tmp/hm-native-openrouter-beta-api/home/.hivemind/projects/ee1bd700-8323-4476-bcef-fed2087312d0/documents/api-contract.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-28T15:41:43.662280766Z"
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project governance document create beta-openrouter-api testing-policy --title Testing Policy --owner qa --content Use unittest; tests must pass before DONE.
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "document_id": "testing-policy",
+  "revision": 1,
+  "path": "/tmp/hm-native-openrouter-beta-api/home/.hivemind/projects/ee1bd700-8323-4476-bcef-fed2087312d0/documents/testing-policy.json",
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "updated_at": "2026-02-28T15:41:43.691161642Z"
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind global system-prompt create beta-native-system --content Execute checklist steps exactly in order. Emit exactly one THINK/ACT/DONE directive line per turn. Never emit DONE until every numbered ACT step in the task prompt has succeeded.
+{
+  "prompt_id": "beta-native-system",
+  "updated_at": "2026-02-28T15:41:43.715216076Z",
+  "path": "/tmp/hm-native-openrouter-beta-api/home/.hivemind/global/system_prompts/beta-native-system.json"
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind global skill create beta-python-skill --name Python API Builder --content Prefer small modules and explicit interfaces.
+{
+  "skill_id": "beta-python-skill",
+  "name": "Python API Builder",
+  "tags": [],
+  "updated_at": "2026-02-28T15:41:43.739539063Z",
+  "path": "/tmp/hm-native-openrouter-beta-api/home/.hivemind/global/skills/beta-python-skill.json"
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind global skill create beta-testing-skill --name Testing Discipline --content Write tests and validate behavior before DONE.
+{
+  "skill_id": "beta-testing-skill",
+  "name": "Testing Discipline",
+  "tags": [],
+  "updated_at": "2026-02-28T15:41:43.767663931Z",
+  "path": "/tmp/hm-native-openrouter-beta-api/home/.hivemind/global/skills/beta-testing-skill.json"
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind global template create beta-api-template --system-prompt-id beta-native-system --skill-id beta-python-skill --skill-id beta-testing-skill --document-id architecture-notes --document-id api-contract --document-id testing-policy
+{
+  "template_id": "beta-api-template",
+  "system_prompt_id": "beta-native-system",
+  "skill_ids": [
+    "beta-python-skill",
+    "beta-testing-skill"
+  ],
+  "document_ids": [
+    "architecture-notes",
+    "api-contract",
+    "testing-policy"
+  ],
+  "updated_at": "2026-02-28T15:41:43.795730820Z",
+  "path": "/tmp/hm-native-openrouter-beta-api/home/.hivemind/global/templates/beta-api-template.json"
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind global template instantiate beta-openrouter-api beta-api-template
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "template_id": "beta-api-template",
+  "system_prompt_id": "beta-native-system",
+  "skill_ids": [
+    "beta-python-skill",
+    "beta-testing-skill"
+  ],
+  "document_ids": [
+    "architecture-notes",
+    "api-contract",
+    "testing-policy"
+  ],
+  "schema_version": "governance.v1",
+  "projection_version": 1,
+  "instantiated_at": "2026-02-28T15:41:43.825548924Z"
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind constitution init beta-openrouter-api --from-file /tmp/hm_beta_constitution.yaml --confirm
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "path": "/tmp/hm-native-openrouter-beta-api/home/.hivemind/projects/ee1bd700-8323-4476-bcef-fed2087312d0/constitution.yaml",
+  "revision": 2,
+  "digest": "60406b76eba973f9",
+  "previous_digest": null,
+  "schema_version": "constitution.v1",
+  "constitution_version": 1,
+  "actor": "antonio",
+  "mutation_intent": "initialize constitution",
+  "confirmed": true,
+  "updated_at": "2026-02-28T15:41:43.891443679Z"
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind constitution validate beta-openrouter-api
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "path": "/tmp/hm-native-openrouter-beta-api/home/.hivemind/projects/ee1bd700-8323-4476-bcef-fed2087312d0/constitution.yaml",
+  "digest": "60406b76eba973f9",
+  "schema_version": "constitution.v1",
+  "constitution_version": 1,
+  "valid": true,
+  "issues": [],
+  "validated_by": "antonio",
+  "validated_at": "2026-02-28T15:41:43.930230764Z"
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind constitution check --project beta-openrouter-api
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "gate": "manual_check",
+  "path": "/tmp/hm-native-openrouter-beta-api/home/.hivemind/projects/ee1bd700-8323-4476-bcef-fed2087312d0/constitution.yaml",
+  "digest": "60406b76eba973f9",
+  "schema_version": "constitution.v1",
+  "constitution_version": 1,
+  "flow_id": null,
+  "task_id": null,
+  "attempt_id": null,
+  "skipped": false,
+  "skip_reason": null,
+  "violations": [],
+  "hard_violations": 0,
+  "advisory_violations": 0,
+  "informational_violations": 0,
+  "blocked": false,
+  "checked_at": "2026-02-28T15:41:43.962185835Z"
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind graph snapshot refresh beta-openrouter-api
+Project:              ee1bd700-8323-4476-bcef-fed2087312d0
+Snapshot path:        /tmp/hm-native-openrouter-beta-api/home/.hivemind/projects/ee1bd700-8323-4476-bcef-fed2087312d0/graph_snapshot.json
+Trigger:              manual_refresh
+Repository count:     1
+UCP profile:          codegraph.v1
+UCP engine:           ucp-codegraph-extractor.v1
+Fingerprint:          c12b648a61fef6c8
+Artifact revision:    2
+
++ /home/antonio/.cargo/shared-target/debug/hivemind -f json project governance diagnose beta-openrouter-api
+{
+  "success": true,
+  "data": {
+    "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+    "checked_at": "2026-02-28T15:41:44.069000844Z",
+    "healthy": true,
+    "issue_count": 0,
+    "issues": []
+  }
+}
+=== Runtime setup (native + OpenRouter) ===
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project runtime-set beta-openrouter-api --role worker --adapter native --binary-path builtin-native --model openrouter/nvidia/nemotron-3-nano-30b-a3b:free --timeout-ms 180000 --env HIVEMIND_NATIVE_PROVIDER=openrouter --env HIVEMIND_NATIVE_CAPTURE_FULL_PAYLOADS=true --env HIVEMIND_NATIVE_TOOL_RUN_COMMAND_ALLOWLIST=python,python3
+ID:          ee1bd700-8323-4476-bcef-fed2087312d0
+Name:        beta-openrouter-api
+Description: Native OpenRouter beta test project
+Created:     2026-02-28 15:41:43.419635848 UTC
+Updated:     2026-02-28 15:41:44.087726444 UTC
+Repositories:
+  - main (/tmp/hm-native-openrouter-beta-api/repo) [readwrite]
+=== Create tasks and graph/flow #1 ===
+TASK_A_ID=28d615b6-22ed-4402-8080-7ea57bfcc403
+TASK_B_ID=9cdb6753-2a87-4ee0-8c61-bbc543b49874
+TASK_C_ID=bdd08b6a-2d0e-4851-bbc0-f414b7a06d7d
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project governance attachment include beta-openrouter-api 28d615b6-22ed-4402-8080-7ea57bfcc403 api-contract
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "task_id": "28d615b6-22ed-4402-8080-7ea57bfcc403",
+  "artifact_kind": "document",
+  "artifact_key": "api-contract",
+  "attached": true,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project governance attachment exclude beta-openrouter-api 28d615b6-22ed-4402-8080-7ea57bfcc403 testing-policy
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "task_id": "28d615b6-22ed-4402-8080-7ea57bfcc403",
+  "artifact_kind": "document",
+  "artifact_key": "testing-policy",
+  "attached": false,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project governance attachment exclude beta-openrouter-api 9cdb6753-2a87-4ee0-8c61-bbc543b49874 testing-policy
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "task_id": "9cdb6753-2a87-4ee0-8c61-bbc543b49874",
+  "artifact_kind": "document",
+  "artifact_key": "testing-policy",
+  "attached": false,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project governance attachment include beta-openrouter-api bdd08b6a-2d0e-4851-bbc0-f414b7a06d7d testing-policy
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "task_id": "bdd08b6a-2d0e-4851-bbc0-f414b7a06d7d",
+  "artifact_kind": "document",
+  "artifact_key": "testing-policy",
+  "attached": true,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+GRAPH1_ID=3796fae7-7aeb-46b6-8a0e-b264c2d16ad2
+
++ /home/antonio/.cargo/shared-target/debug/hivemind graph add-dependency 3796fae7-7aeb-46b6-8a0e-b264c2d16ad2 28d615b6-22ed-4402-8080-7ea57bfcc403 9cdb6753-2a87-4ee0-8c61-bbc543b49874
+Graph ID: 3796fae7-7aeb-46b6-8a0e-b264c2d16ad2
+
++ /home/antonio/.cargo/shared-target/debug/hivemind graph add-dependency 3796fae7-7aeb-46b6-8a0e-b264c2d16ad2 9cdb6753-2a87-4ee0-8c61-bbc543b49874 bdd08b6a-2d0e-4851-bbc0-f414b7a06d7d
+Graph ID: 3796fae7-7aeb-46b6-8a0e-b264c2d16ad2
+
++ /home/antonio/.cargo/shared-target/debug/hivemind graph validate 3796fae7-7aeb-46b6-8a0e-b264c2d16ad2
+valid
+FLOW1_ID=8c6e8360-afcc-4439-b221-dca5c5a834f3
+
++ /home/antonio/.cargo/shared-target/debug/hivemind flow start 8c6e8360-afcc-4439-b221-dca5c5a834f3
+Flow ID: 8c6e8360-afcc-4439-b221-dca5c5a834f3
+flow=8c6e8360-afcc-4439-b221-dca5c5a834f3 tick=1 state=running
+Error: [user:checkpoints_incomplete] All checkpoints must be completed before task completion
+Hint: Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 2b211ee4-fafe-427a-965e-79fe2e9f2000 --id <checkpoint-id>` before finishing the task attempt
+{"success":false,"error":{"category":"user","code":"checkpoints_incomplete","message":"All checkpoints must be completed before task completion","origin":"registry:complete_task_execution","hint":"Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 2b211ee4-fafe-427a-965e-79fe2e9f2000 --id <checkpoint-id>` before finishing the task attempt"}}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind checkpoint complete --attempt-id 2b211ee4-fafe-427a-965e-79fe2e9f2000 --id checkpoint-1 --summary beta-openrouter checkpoint
+Attempt:    2b211ee4-fafe-427a-965e-79fe2e9f2000
+Checkpoint: checkpoint-1 (1/1)
+Commit:     3024dcd5994cea285dd4575ec36eabcc5e0dce64
+Next:       none
+All done:   true
+
++ /home/antonio/.cargo/shared-target/debug/hivemind task complete 28d615b6-22ed-4402-8080-7ea57bfcc403
+Flow ID: 8c6e8360-afcc-4439-b221-dca5c5a834f3
+flow=8c6e8360-afcc-4439-b221-dca5c5a834f3 tick=2 state=running
+Flow ID: 8c6e8360-afcc-4439-b221-dca5c5a834f3
+flow=8c6e8360-afcc-4439-b221-dca5c5a834f3 tick=3 state=running
+Error: [user:checkpoints_incomplete] All checkpoints must be completed before task completion
+Hint: Complete the active checkpoint via `hivemind checkpoint complete --attempt-id d0328f23-2a4f-48d4-956f-2d277a7661a8 --id <checkpoint-id>` before finishing the task attempt
+{"success":false,"error":{"category":"user","code":"checkpoints_incomplete","message":"All checkpoints must be completed before task completion","origin":"registry:complete_task_execution","hint":"Complete the active checkpoint via `hivemind checkpoint complete --attempt-id d0328f23-2a4f-48d4-956f-2d277a7661a8 --id <checkpoint-id>` before finishing the task attempt"}}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind checkpoint complete --attempt-id d0328f23-2a4f-48d4-956f-2d277a7661a8 --id checkpoint-1 --summary beta-openrouter checkpoint
+Attempt:    d0328f23-2a4f-48d4-956f-2d277a7661a8
+Checkpoint: checkpoint-1 (1/1)
+Commit:     2cdfa5b5fa377adb198fccf8317b4134d50cc3a1
+Next:       none
+All done:   true
+
++ /home/antonio/.cargo/shared-target/debug/hivemind task complete 9cdb6753-2a87-4ee0-8c61-bbc543b49874
+Flow ID: 8c6e8360-afcc-4439-b221-dca5c5a834f3
+flow=8c6e8360-afcc-4439-b221-dca5c5a834f3 tick=4 state=running
+Flow ID: 8c6e8360-afcc-4439-b221-dca5c5a834f3
+flow=8c6e8360-afcc-4439-b221-dca5c5a834f3 tick=5 state=running
+Error: [user:checkpoints_incomplete] All checkpoints must be completed before task completion
+Hint: Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 14c9cb94-3812-4de3-ae5a-bbd64787f8be --id <checkpoint-id>` before finishing the task attempt
+{"success":false,"error":{"category":"user","code":"checkpoints_incomplete","message":"All checkpoints must be completed before task completion","origin":"registry:complete_task_execution","hint":"Complete the active checkpoint via `hivemind checkpoint complete --attempt-id 14c9cb94-3812-4de3-ae5a-bbd64787f8be --id <checkpoint-id>` before finishing the task attempt"}}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind checkpoint complete --attempt-id 14c9cb94-3812-4de3-ae5a-bbd64787f8be --id checkpoint-1 --summary beta-openrouter checkpoint
+Attempt:    14c9cb94-3812-4de3-ae5a-bbd64787f8be
+Checkpoint: checkpoint-1 (1/1)
+Commit:     17ee03ab1942323972266da27b239bd4643d8324
+Next:       none
+All done:   true
+
++ /home/antonio/.cargo/shared-target/debug/hivemind task complete bdd08b6a-2d0e-4851-bbc0-f414b7a06d7d
+Flow ID: 8c6e8360-afcc-4439-b221-dca5c5a834f3
+flow=8c6e8360-afcc-4439-b221-dca5c5a834f3 tick=6 state=running
+Flow ID: 8c6e8360-afcc-4439-b221-dca5c5a834f3
+flow=8c6e8360-afcc-4439-b221-dca5c5a834f3 tick=7 state=completed
+=== Create task and graph/flow #2 (depends on flow #1) ===
+TASK_D_ID=ee186480-643c-4e31-bae6-deb2b432eb8b
+
++ /home/antonio/.cargo/shared-target/debug/hivemind project governance attachment include beta-openrouter-api ee186480-643c-4e31-bae6-deb2b432eb8b architecture-notes
+{
+  "project_id": "ee1bd700-8323-4476-bcef-fed2087312d0",
+  "task_id": "ee186480-643c-4e31-bae6-deb2b432eb8b",
+  "artifact_kind": "document",
+  "artifact_key": "architecture-notes",
+  "attached": true,
+  "schema_version": "governance.v1",
+  "projection_version": 1
+}
+GRAPH2_ID=516e30e2-1410-4a28-a6fc-cfce549226b4
+FLOW2_ID=638af5af-f6fd-4002-a276-2949b1959794
+
++ /home/antonio/.cargo/shared-target/debug/hivemind flow add-dependency 638af5af-f6fd-4002-a276-2949b1959794 8c6e8360-afcc-4439-b221-dca5c5a834f3
+Flow ID: 638af5af-f6fd-4002-a276-2949b1959794
+
++ /home/antonio/.cargo/shared-target/debug/hivemind flow start 638af5af-f6fd-4002-a276-2949b1959794
+Flow ID: 638af5af-f6fd-4002-a276-2949b1959794
+flow=638af5af-f6fd-4002-a276-2949b1959794 tick=1 state=running
+Error: [user:checkpoints_incomplete] All checkpoints must be completed before task completion
+Hint: Complete the active checkpoint via `hivemind checkpoint complete --attempt-id f4e764e1-5ca2-40d8-842b-5b5924acf778 --id <checkpoint-id>` before finishing the task attempt
+{"success":false,"error":{"category":"user","code":"checkpoints_incomplete","message":"All checkpoints must be completed before task completion","origin":"registry:complete_task_execution","hint":"Complete the active checkpoint via `hivemind checkpoint complete --attempt-id f4e764e1-5ca2-40d8-842b-5b5924acf778 --id <checkpoint-id>` before finishing the task attempt"}}
+
++ /home/antonio/.cargo/shared-target/debug/hivemind checkpoint complete --attempt-id f4e764e1-5ca2-40d8-842b-5b5924acf778 --id checkpoint-1 --summary beta-openrouter checkpoint
+Attempt:    f4e764e1-5ca2-40d8-842b-5b5924acf778
+Checkpoint: checkpoint-1 (1/1)
+Commit:     0887f134dff72ea3cab8f2ee49755e66098eebd2
+Next:       none
+All done:   true
+
++ /home/antonio/.cargo/shared-target/debug/hivemind task complete ee186480-643c-4e31-bae6-deb2b432eb8b
+Flow ID: 638af5af-f6fd-4002-a276-2949b1959794
+flow=638af5af-f6fd-4002-a276-2949b1959794 tick=2 state=running
+Flow ID: 638af5af-f6fd-4002-a276-2949b1959794
+flow=638af5af-f6fd-4002-a276-2949b1959794 tick=3 state=completed
+=== Merge completed flows ===
+
++ /home/antonio/.cargo/shared-target/debug/hivemind merge prepare 8c6e8360-afcc-4439-b221-dca5c5a834f3
+3024dcd5994cea285dd4575ec36eabcc5e0dce64
+2cdfa5b5fa377adb198fccf8317b4134d50cc3a1
+17ee03ab1942323972266da27b239bd4643d8324
+Flow:     8c6e8360-afcc-4439-b221-dca5c5a834f3
+Status:   Prepared
+Target:   main
+
++ /home/antonio/.cargo/shared-target/debug/hivemind merge approve 8c6e8360-afcc-4439-b221-dca5c5a834f3
+Flow:   8c6e8360-afcc-4439-b221-dca5c5a834f3
+Status: Approved
+
++ /home/antonio/.cargo/shared-target/debug/hivemind merge execute 8c6e8360-afcc-4439-b221-dca5c5a834f3 --mode local
+Flow:   8c6e8360-afcc-4439-b221-dca5c5a834f3
+Status: Completed
+Commits:
+  - 3024dcd5994cea285dd4575ec36eabcc5e0dce64
+  - 2cdfa5b5fa377adb198fccf8317b4134d50cc3a1
+  - 17ee03ab1942323972266da27b239bd4643d8324
+  - c1383ea726e1d36aabec7b39edf387bf632eb2ba
+  - fa81d9db2ce49e75c2fe9be4af2c373623efa054
+  - e097ded72a38458be39cf9ba39376db62e92c61f
+
++ /home/antonio/.cargo/shared-target/debug/hivemind merge prepare 638af5af-f6fd-4002-a276-2949b1959794
+0887f134dff72ea3cab8f2ee49755e66098eebd2
+Flow:     638af5af-f6fd-4002-a276-2949b1959794
+Status:   Prepared
+Target:   main
+
++ /home/antonio/.cargo/shared-target/debug/hivemind merge approve 638af5af-f6fd-4002-a276-2949b1959794
+Flow:   638af5af-f6fd-4002-a276-2949b1959794
+Status: Approved
+
++ /home/antonio/.cargo/shared-target/debug/hivemind merge execute 638af5af-f6fd-4002-a276-2949b1959794 --mode local
+Flow:   638af5af-f6fd-4002-a276-2949b1959794
+Status: Completed
+Commits:
+  - 0887f134dff72ea3cab8f2ee49755e66098eebd2
+  - f4a395c563f6759cc2055ee11d6a27111232db90
+=== Host-side validation ===
+
++ python3 -m unittest discover -s tests -v
+test_add_item (test_router.RouterTests.test_add_item) ... ok
+test_health (test_router.RouterTests.test_health) ... ok
+test_items_list (test_router.RouterTests.test_items_list) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.000s
+
+OK
+FLOW1_TOOLS=git_diff git_status list_files run_command write_file 
+FLOW2_TOOLS=read_file run_command write_file 
+PROJECT_TOOLS=git_diff git_status list_files read_file run_command write_file 
+
+BETA_TEST_RESULT=PASS
+REPORT_PATH=/home/antonio/programming/Hivemind/hivemind/hivemind-test/test-report/2026-02-28-native-openrouter-beta-api-report.md
+LOG_PATH=/home/antonio/programming/Hivemind/hivemind/hivemind-test/test-report/2026-02-28-native-openrouter-beta-api.log
