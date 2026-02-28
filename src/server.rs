@@ -1753,7 +1753,7 @@ fn handle_api_request_inner(
         }
         "/api/governance/constitution" if method == ApiMethod::Get => {
             let query = parse_query(url);
-            let project = query.get("project").map(|s| s.as_str()).unwrap_or("");
+            let project = query.get("project").map_or("", |s| s.as_str());
             let wrapped = CliResponse::success(registry.constitution_show(project)?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
@@ -1769,7 +1769,7 @@ fn handle_api_request_inner(
         }
         "/api/governance/documents" if method == ApiMethod::Get => {
             let query = parse_query(url);
-            let project = query.get("project").map(|s| s.as_str()).unwrap_or("");
+            let project = query.get("project").map_or("", |s| s.as_str());
             let wrapped = CliResponse::success(registry.project_governance_document_list(project)?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
@@ -1777,8 +1777,8 @@ fn handle_api_request_inner(
         }
         "/api/governance/documents/inspect" if method == ApiMethod::Get => {
             let query = parse_query(url);
-            let project = query.get("project").map(|s| s.as_str()).unwrap_or("");
-            let document_id = query.get("document_id").map(|s| s.as_str()).unwrap_or("");
+            let project = query.get("project").map_or("", |s| s.as_str());
+            let document_id = query.get("document_id").map_or("", |s| s.as_str());
             let wrapped = CliResponse::success(
                 registry.project_governance_document_inspect(project, document_id)?,
             );
@@ -1788,7 +1788,7 @@ fn handle_api_request_inner(
         }
         "/api/governance/notepad" if method == ApiMethod::Get => {
             let query = parse_query(url);
-            let project = query.get("project").map(|s| s.as_str()).unwrap_or("");
+            let project = query.get("project").map_or("", |s| s.as_str());
             let wrapped = CliResponse::success(registry.project_governance_notepad_show(project)?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
@@ -1808,7 +1808,7 @@ fn handle_api_request_inner(
         }
         "/api/governance/global/skills/inspect" if method == ApiMethod::Get => {
             let query = parse_query(url);
-            let skill_id = query.get("skill_id").map(|s| s.as_str()).unwrap_or("");
+            let skill_id = query.get("skill_id").map_or("", |s| s.as_str());
             let wrapped = CliResponse::success(registry.global_skill_inspect(skill_id)?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());
@@ -1822,7 +1822,7 @@ fn handle_api_request_inner(
         }
         "/api/governance/global/templates/inspect" if method == ApiMethod::Get => {
             let query = parse_query(url);
-            let template_id = query.get("template_id").map(|s| s.as_str()).unwrap_or("");
+            let template_id = query.get("template_id").map_or("", |s| s.as_str());
             let wrapped = CliResponse::success(registry.global_template_inspect(template_id)?);
             let mut resp = ApiResponse::json(200, &wrapped)?;
             resp.extra_headers.extend(cors_headers());

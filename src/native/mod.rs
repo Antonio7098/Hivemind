@@ -292,7 +292,7 @@ impl OpenRouterModelClient {
         let model = model.into();
         model
             .strip_prefix("openrouter/")
-            .map_or(model.clone(), ToString::to_string)
+            .map_or_else(|| model.clone(), ToString::to_string)
     }
 
     pub fn from_env(
