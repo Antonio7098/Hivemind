@@ -16,7 +16,8 @@ use schemars::{schema_for, JsonSchema};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap};
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
@@ -34,6 +35,8 @@ pub struct NativeToolEngineError {
     pub code: String,
     pub message: String,
     pub recoverable: bool,
+    #[serde(default)]
+    pub policy_tags: Vec<String>,
 }
 
 impl NativeToolEngineError {
@@ -42,7 +45,13 @@ impl NativeToolEngineError {
             code: code.into(),
             message: message.into(),
             recoverable,
+            policy_tags: Vec::new(),
         }
+    }
+
+    fn with_policy_tags(mut self, policy_tags: Vec<String>) -> Self {
+        self.policy_tags = policy_tags;
+        self
     }
 
     fn unknown_tool(tool_name: &str) -> Self {
@@ -176,6 +185,226 @@ impl NativeToolAction {
     }
 }
 
+const SANDBOX_MODE_ENV_KEY: &str = "HIVEMIND_NATIVE_SANDBOX_MODE";
+const SANDBOX_WRITABLE_ROOTS_ENV_KEY: &str = "HIVEMIND_NATIVE_SANDBOX_WRITABLE_ROOTS";
+const SANDBOX_READ_ONLY_OVERLAYS_ENV_KEY: &str = "HIVEMIND_NATIVE_SANDBOX_READ_ONLY_OVERLAYS";
+const APPROVAL_MODE_ENV_KEY: &str = "HIVEMIND_NATIVE_APPROVAL_MODE";
+const APPROVAL_REVIEW_DECISION_ENV_KEY: &str = "HIVEMIND_NATIVE_APPROVAL_REVIEW_DECISION";
+const APPROVAL_TRUSTED_PREFIXES_ENV_KEY: &str = "HIVEMIND_NATIVE_APPROVAL_TRUSTED_PREFIXES";
+const APPROVAL_CACHE_MAX_ENV_KEY: &str = "HIVEMIND_NATIVE_APPROVAL_CACHE_MAX";
+const EXEC_PREFIX_RULE_MAX_ENV_KEY: &str = "HIVEMIND_NATIVE_EXEC_PREFIX_RULE_MAX";
+const EXEC_PREFIX_AMENDMENTS_ENV_KEY: &str = "HIVEMIND_NATIVE_EXEC_PREFIX_AMENDMENTS";
+
+/// Explicit sandbox modes for native tool execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeSandboxMode {
+    ReadOnly,
+    WorkspaceWrite,
+    DangerFullAccess,
+    HostPassthrough,
+}
+
+impl NativeSandboxMode {
+    #[must_use]
+    pub const fn as_policy_value(self) -> &'static str {
+        match self {
+            Self::ReadOnly => "read-only",
+            Self::WorkspaceWrite => "workspace-write",
+            Self::DangerFullAccess => "danger-full-access",
+            Self::HostPassthrough => "host-passthrough",
+        }
+    }
+}
+
+/// Sandbox policy contract resolved for one native runtime invocation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeSandboxPolicy {
+    pub mode: NativeSandboxMode,
+    pub writable_roots: Vec<String>,
+    pub read_only_overlays: Vec<String>,
+    pub platform: String,
+    pub selection: String,
+}
+
+impl Default for NativeSandboxPolicy {
+    fn default() -> Self {
+        let mode = default_sandbox_mode_for_platform();
+        let writable_roots = if mode == NativeSandboxMode::WorkspaceWrite {
+            vec![".".to_string()]
+        } else {
+            Vec::new()
+        };
+        Self {
+            mode,
+            writable_roots,
+            read_only_overlays: Vec::new(),
+            platform: current_platform_tag().to_string(),
+            selection: "platform_default".to_string(),
+        }
+    }
+}
+
+impl NativeSandboxPolicy {
+    #[must_use]
+    pub fn from_env(env: &HashMap<String, String>) -> Self {
+        let mut policy = Self::default();
+        if let Some(raw) = env.get(SANDBOX_MODE_ENV_KEY) {
+            if let Some(mode) = parse_sandbox_mode(raw) {
+                policy.mode = mode;
+                policy.selection = "env_override".to_string();
+                policy.writable_roots = if mode == NativeSandboxMode::WorkspaceWrite {
+                    vec![".".to_string()]
+                } else {
+                    Vec::new()
+                };
+            }
+        }
+        if let Some(raw) = env.get(SANDBOX_WRITABLE_ROOTS_ENV_KEY) {
+            policy.writable_roots = parse_csv_list(raw)
+                .into_iter()
+                .filter_map(|item| normalize_relative_path(&item, true).ok())
+                .map(|path| relative_display(&path))
+                .collect();
+        }
+        if let Some(raw) = env.get(SANDBOX_READ_ONLY_OVERLAYS_ENV_KEY) {
+            policy.read_only_overlays = parse_csv_list(raw)
+                .into_iter()
+                .filter_map(|item| normalize_relative_path(&item, true).ok())
+                .map(|path| relative_display(&path))
+                .collect();
+        }
+        policy
+    }
+
+    fn base_policy_tags(&self) -> Vec<String> {
+        vec![
+            format!("sandbox_mode:{}", self.mode.as_policy_value()),
+            format!("sandbox_platform:{}", self.platform),
+            format!("sandbox_selection:{}", self.selection),
+            format!("sandbox_writable_roots:{}", self.writable_roots.join("|")),
+            format!(
+                "sandbox_read_only_overlays:{}",
+                self.read_only_overlays.join("|")
+            ),
+        ]
+    }
+}
+
+/// Explicit approval modes for tool operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeApprovalMode {
+    Never,
+    OnFailure,
+    OnRequest,
+    UnlessTrusted,
+}
+
+impl NativeApprovalMode {
+    #[must_use]
+    pub const fn as_policy_value(self) -> &'static str {
+        match self {
+            Self::Never => "never",
+            Self::OnFailure => "on-failure",
+            Self::OnRequest => "on-request",
+            Self::UnlessTrusted => "unless-trusted",
+        }
+    }
+}
+
+/// Deterministic review decision source for non-interactive approval gates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeApprovalReviewDecision {
+    Approve,
+    Deny,
+}
+
+impl NativeApprovalReviewDecision {
+    #[must_use]
+    pub const fn as_policy_value(self) -> &'static str {
+        match self {
+            Self::Approve => "approve",
+            Self::Deny => "deny",
+        }
+    }
+}
+
+/// Approval policy contract for one native runtime invocation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeApprovalPolicy {
+    pub mode: NativeApprovalMode,
+    pub review_decision: NativeApprovalReviewDecision,
+    pub trusted_prefixes: Vec<String>,
+    pub cache_max_entries: usize,
+}
+
+impl Default for NativeApprovalPolicy {
+    fn default() -> Self {
+        Self {
+            mode: NativeApprovalMode::Never,
+            review_decision: NativeApprovalReviewDecision::Deny,
+            trusted_prefixes: vec![
+                "echo".to_string(),
+                "git status".to_string(),
+                "git diff".to_string(),
+            ],
+            cache_max_entries: 32,
+        }
+    }
+}
+
+impl NativeApprovalPolicy {
+    #[must_use]
+    pub fn from_env(env: &HashMap<String, String>) -> Self {
+        let mut policy = Self::default();
+        if let Some(raw) = env.get(APPROVAL_MODE_ENV_KEY) {
+            if let Some(mode) = parse_approval_mode(raw) {
+                policy.mode = mode;
+            }
+        }
+        if let Some(raw) = env.get(APPROVAL_REVIEW_DECISION_ENV_KEY) {
+            policy.review_decision = if raw.trim().eq_ignore_ascii_case("approve") {
+                NativeApprovalReviewDecision::Approve
+            } else {
+                NativeApprovalReviewDecision::Deny
+            };
+        }
+        if let Some(raw) = env.get(APPROVAL_TRUSTED_PREFIXES_ENV_KEY) {
+            policy.trusted_prefixes = parse_csv_list(raw);
+        }
+        if let Some(raw) = env.get(APPROVAL_CACHE_MAX_ENV_KEY) {
+            policy.cache_max_entries = raw
+                .trim()
+                .parse::<usize>()
+                .ok()
+                .filter(|v| *v > 0)
+                .unwrap_or(32);
+        }
+        policy
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct NativeApprovalCache {
+    approved_for_session: VecDeque<String>,
+}
+
+impl NativeApprovalCache {
+    fn contains(&self, key: &str) -> bool {
+        self.approved_for_session.iter().any(|item| item == key)
+    }
+
+    fn insert_bounded(&mut self, key: String, max_entries: usize) {
+        self.approved_for_session.retain(|item| item != &key);
+        self.approved_for_session.push_back(key);
+        while self.approved_for_session.len() > max_entries {
+            let _ = self.approved_for_session.pop_front();
+        }
+    }
+}
+
 /// Command policy for `run_command`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeCommandPolicy {
@@ -230,11 +459,93 @@ impl NativeCommandPolicy {
     }
 }
 
+/// Rules-backed execution policy manager.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeExecPolicyManager {
+    pub base: NativeCommandPolicy,
+    pub prefix_rule_max: usize,
+    pub prefix_amendments: Vec<String>,
+}
+
+impl Default for NativeExecPolicyManager {
+    fn default() -> Self {
+        Self {
+            base: NativeCommandPolicy::default(),
+            prefix_rule_max: 16,
+            prefix_amendments: Vec::new(),
+        }
+    }
+}
+
+impl NativeExecPolicyManager {
+    #[must_use]
+    pub fn from_env(env: &HashMap<String, String>) -> Self {
+        let mut manager = Self {
+            base: NativeCommandPolicy::from_env(env),
+            ..Self::default()
+        };
+        if let Some(raw) = env.get(EXEC_PREFIX_RULE_MAX_ENV_KEY) {
+            manager.prefix_rule_max = raw
+                .trim()
+                .parse::<usize>()
+                .ok()
+                .filter(|v| *v > 0)
+                .unwrap_or(16);
+        }
+        if let Some(raw) = env.get(EXEC_PREFIX_AMENDMENTS_ENV_KEY) {
+            manager.prefix_amendments = parse_csv_list(raw)
+                .into_iter()
+                .filter(|prefix| !is_broad_prefix(prefix))
+                .take(manager.prefix_rule_max)
+                .collect();
+        }
+        manager
+    }
+
+    fn is_allowed(&self, command_line: &str, approval_cache: &NativeApprovalCache) -> bool {
+        if self
+            .base
+            .denylist
+            .iter()
+            .any(|pattern| matches_command_pattern(pattern, command_line))
+        {
+            return false;
+        }
+        if self
+            .base
+            .allowlist
+            .iter()
+            .any(|pattern| matches_command_pattern(pattern, command_line))
+        {
+            return true;
+        }
+        if self
+            .prefix_amendments
+            .iter()
+            .any(|pattern| matches_command_pattern(pattern, command_line))
+        {
+            return true;
+        }
+        if approval_cache
+            .approved_for_session
+            .iter()
+            .any(|pattern| matches_command_pattern(pattern, command_line))
+        {
+            return true;
+        }
+        !self.base.deny_by_default
+    }
+}
+
 /// Execution context passed to tool handlers.
 pub struct ToolExecutionContext<'a> {
     pub worktree: &'a Path,
     pub scope: Option<&'a Scope>,
-    pub command_policy: &'a NativeCommandPolicy,
+    pub sandbox_policy: NativeSandboxPolicy,
+    pub approval_policy: NativeApprovalPolicy,
+    pub command_policy: NativeCommandPolicy,
+    pub exec_policy_manager: NativeExecPolicyManager,
+    pub approval_cache: RefCell<NativeApprovalCache>,
     pub env: &'a HashMap<String, String>,
 }
 
@@ -421,17 +732,204 @@ impl NativeToolEngine {
         })
     }
 
-    pub fn execute(
+    #[allow(clippy::too_many_lines)]
+    fn evaluate_tool_policies(
+        action: &NativeToolAction,
+        tool: &RegisteredTool,
+        ctx: &ToolExecutionContext<'_>,
+    ) -> Result<Vec<String>, NativeToolEngineError> {
+        let mut tags = ctx.sandbox_policy.base_policy_tags();
+        tags.push(format!(
+            "approval_mode:{}",
+            ctx.approval_policy.mode.as_policy_value()
+        ));
+
+        let requires_write = tool
+            .contract
+            .required_permissions
+            .iter()
+            .any(|perm| matches!(perm, ToolPermission::FilesystemWrite));
+        let requires_exec = tool
+            .contract
+            .required_permissions
+            .iter()
+            .any(|perm| matches!(perm, ToolPermission::Execution));
+
+        match ctx.sandbox_policy.mode {
+            NativeSandboxMode::ReadOnly if requires_write || requires_exec => {
+                tags.push("sandbox_decision:denied".to_string());
+                return Err(NativeToolEngineError::policy_violation(format!(
+                    "tool '{}' denied by sandbox policy '{}' (write/exec blocked)",
+                    action.name,
+                    ctx.sandbox_policy.mode.as_policy_value()
+                ))
+                .with_policy_tags(tags));
+            }
+            NativeSandboxMode::WorkspaceWrite if action.name == "write_file" => {
+                let write = decode_input::<WriteFileInput>(&action.input)?;
+                let rel = normalize_relative_path(&write.path, false)?;
+                let rel_display = relative_display(&rel);
+                let roots = if ctx.sandbox_policy.writable_roots.is_empty() {
+                    vec![".".to_string()]
+                } else {
+                    ctx.sandbox_policy.writable_roots.clone()
+                };
+                let allowed = roots.iter().any(|root| {
+                    root == "."
+                        || rel_display == *root
+                        || rel_display.starts_with(&format!("{root}/"))
+                });
+                if !allowed {
+                    tags.push("sandbox_decision:denied".to_string());
+                    return Err(NativeToolEngineError::policy_violation(format!(
+                        "tool 'write_file' denied by sandbox policy '{}': path '{}' is outside writable roots [{}]",
+                        ctx.sandbox_policy.mode.as_policy_value(),
+                        rel_display,
+                        roots.join(", ")
+                    ))
+                    .with_policy_tags(tags));
+                }
+                tags.push("sandbox_decision:workspace_write_allow".to_string());
+            }
+            _ => tags.push("sandbox_decision:allowed".to_string()),
+        }
+
+        let mut approval_required = false;
+        let mut approval_cache_key = format!("tool:{}", action.name);
+        let mut command_line = None;
+        let mut dangerous_reason = None;
+        if action.name == "run_command" {
+            let run = decode_input::<RunCommandInput>(&action.input)?;
+            let command = run.command.trim();
+            let joined = if run.args.is_empty() {
+                command.to_string()
+            } else {
+                format!("{command} {}", run.args.join(" "))
+            };
+            dangerous_reason = dangerous_command_reason(command, &run.args);
+            approval_cache_key = command.to_ascii_lowercase();
+            command_line = Some(joined);
+        }
+
+        let trusted = command_line.as_deref().is_some_and(|line| {
+            ctx.approval_policy
+                .trusted_prefixes
+                .iter()
+                .any(|prefix| matches_command_pattern(prefix, line))
+        });
+
+        match ctx.approval_policy.mode {
+            NativeApprovalMode::Never => {
+                tags.push("approval_required:false".to_string());
+                tags.push("approval_outcome:not_required".to_string());
+            }
+            NativeApprovalMode::OnFailure => {
+                tags.push("approval_required:false".to_string());
+                tags.push("approval_outcome:deferred_on_failure".to_string());
+            }
+            NativeApprovalMode::OnRequest => {
+                approval_required = requires_write || requires_exec;
+            }
+            NativeApprovalMode::UnlessTrusted => {
+                approval_required = (requires_write || requires_exec) && !trusted;
+                tags.push(format!("approval_trusted_prefix:{trusted}"));
+            }
+        }
+        if dangerous_reason.is_some() {
+            approval_required = true;
+            tags.push("exec_dangerous:true".to_string());
+        } else {
+            tags.push("exec_dangerous:false".to_string());
+        }
+
+        if approval_required {
+            tags.push("approval_required:true".to_string());
+            if is_broad_prefix(&approval_cache_key) {
+                tags.push("approval_outcome:denied_broad_prefix".to_string());
+                return Err(NativeToolEngineError::policy_violation(format!(
+                    "approval denied for broad prefix '{approval_cache_key}'; provide a specific command prefix"
+                ))
+                .with_policy_tags(tags));
+            }
+
+            let mut cache = ctx.approval_cache.borrow_mut();
+            if cache.contains(&approval_cache_key) {
+                tags.push("approval_review_decision:cached".to_string());
+                tags.push("approval_outcome:approved_for_session".to_string());
+                tags.push("approved_for_session:true".to_string());
+            } else if ctx.approval_policy.review_decision == NativeApprovalReviewDecision::Approve {
+                cache.insert_bounded(approval_cache_key, ctx.approval_policy.cache_max_entries);
+                tags.push("approval_review_decision:approve".to_string());
+                tags.push("approval_outcome:approved_for_session".to_string());
+                tags.push("approved_for_session:true".to_string());
+            } else {
+                tags.push("approval_review_decision:deny".to_string());
+                tags.push("approval_outcome:denied".to_string());
+                return Err(NativeToolEngineError::policy_violation(format!(
+                    "approval denied for '{}' under mode '{}'",
+                    approval_cache_key,
+                    ctx.approval_policy.mode.as_policy_value()
+                ))
+                .with_policy_tags(tags));
+            }
+        }
+
+        if let Some(reason) = dangerous_reason {
+            tags.push(format!(
+                "exec_danger_reason:{}",
+                sanitize_policy_tag_value(&reason)
+            ));
+            if !matches!(
+                ctx.sandbox_policy.mode,
+                NativeSandboxMode::DangerFullAccess | NativeSandboxMode::HostPassthrough
+            ) {
+                tags.push("exec_decision:denied_dangerous_requires_elevation".to_string());
+                return Err(NativeToolEngineError::policy_violation(format!(
+                    "dangerous command denied: {reason}. Set {SANDBOX_MODE_ENV_KEY}=danger-full-access (or host-passthrough) and request approval."
+                ))
+                .with_policy_tags(tags));
+            }
+            if matches!(
+                ctx.approval_policy.mode,
+                NativeApprovalMode::Never | NativeApprovalMode::OnFailure
+            ) {
+                tags.push("exec_decision:denied_dangerous_requires_preapproval".to_string());
+                return Err(NativeToolEngineError::policy_violation(format!(
+                    "dangerous command denied: {reason}. Set {APPROVAL_MODE_ENV_KEY} to on-request or unless-trusted."
+                ))
+                .with_policy_tags(tags));
+            }
+        }
+
+        if let Some(line) = command_line.as_deref() {
+            let cache = ctx.approval_cache.borrow();
+            if !ctx.exec_policy_manager.is_allowed(line, &cache)
+                || !ctx.command_policy.is_allowed(line)
+            {
+                tags.push("exec_decision:denied_exec_policy".to_string());
+                return Err(NativeToolEngineError::policy_violation(format!(
+                    "run_command blocked by execution policy: {line}"
+                ))
+                .with_policy_tags(tags));
+            }
+            tags.push("exec_decision:allowed_exec_policy".to_string());
+        }
+
+        Ok(tags)
+    }
+
+    fn execute_internal(
         &self,
         action: &NativeToolAction,
         ctx: &ToolExecutionContext<'_>,
-    ) -> Result<Value, NativeToolEngineError> {
+    ) -> Result<(Value, Vec<String>), NativeToolEngineError> {
         let tool_key = Self::tool_key(&action.name, &action.version);
         let Some(tool) = self.tools.get(&tool_key) else {
             return Err(NativeToolEngineError::unknown_tool(&action.name));
         };
 
         Self::validate_input(&tool.input_validator, &action.name, &action.input)?;
+        let policy_tags = Self::evaluate_tool_policies(action, tool, ctx)?;
         let started = Instant::now();
         let output = (tool.handler)(ctx, &action.input, tool.contract.timeout_ms)?;
         if started.elapsed() > Duration::from_millis(tool.contract.timeout_ms) {
@@ -441,7 +939,15 @@ impl NativeToolEngine {
             ));
         }
         Self::validate_output(&tool.output_validator, &action.name, &output)?;
-        Ok(output)
+        Ok((output, policy_tags))
+    }
+
+    pub fn execute(
+        &self,
+        action: &NativeToolAction,
+        ctx: &ToolExecutionContext<'_>,
+    ) -> Result<Value, NativeToolEngineError> {
+        self.execute_internal(action, ctx).map(|(output, _)| output)
     }
 
     pub fn execute_action_trace(
@@ -462,8 +968,8 @@ impl NativeToolEngine {
             )
         });
 
-        match self.execute(action, ctx) {
-            Ok(output) => {
+        match self.execute_internal(action, ctx) {
+            Ok((output, policy_tags)) => {
                 let response_payload = json!({
                     "ok": true,
                     "output": output,
@@ -476,6 +982,7 @@ impl NativeToolEngine {
                         |error| format!("{{\"ok\":false,\"encode_error\":\"{error}\"}}"),
                     )),
                     failure: None,
+                    policy_tags,
                 }
             }
             Err(error) => NativeToolCallTrace {
@@ -484,10 +991,11 @@ impl NativeToolEngine {
                 request,
                 response: None,
                 failure: Some(NativeToolCallFailure {
-                    code: error.code,
-                    message: error.message,
+                    code: error.code.clone(),
+                    message: error.message.clone(),
                     recoverable: error.recoverable,
                 }),
+                policy_tags: error.policy_tags,
             },
         }
     }
@@ -507,6 +1015,135 @@ fn parse_bool_with_default(raw: &str, default: bool) -> bool {
         "0" | "false" | "no" | "off" => false,
         _ => default,
     }
+}
+
+fn current_platform_tag() -> &'static str {
+    if cfg!(target_os = "linux") {
+        "linux"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "other"
+    }
+}
+
+fn default_sandbox_mode_for_platform() -> NativeSandboxMode {
+    if current_platform_tag() == "windows" {
+        NativeSandboxMode::HostPassthrough
+    } else {
+        NativeSandboxMode::WorkspaceWrite
+    }
+}
+
+fn parse_sandbox_mode(raw: &str) -> Option<NativeSandboxMode> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "read-only" | "read_only" => Some(NativeSandboxMode::ReadOnly),
+        "workspace-write" | "workspace_write" => Some(NativeSandboxMode::WorkspaceWrite),
+        "danger-full-access" | "danger_full_access" => Some(NativeSandboxMode::DangerFullAccess),
+        "host-passthrough" | "host_passthrough" | "host" => {
+            Some(NativeSandboxMode::HostPassthrough)
+        }
+        _ => None,
+    }
+}
+
+fn parse_approval_mode(raw: &str) -> Option<NativeApprovalMode> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "never" => Some(NativeApprovalMode::Never),
+        "on-failure" | "on_failure" => Some(NativeApprovalMode::OnFailure),
+        "on-request" | "on_request" => Some(NativeApprovalMode::OnRequest),
+        "unless-trusted" | "unless_trusted" => Some(NativeApprovalMode::UnlessTrusted),
+        _ => None,
+    }
+}
+
+fn sanitize_policy_tag_value(raw: &str) -> String {
+    raw.chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '.' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+}
+
+fn is_broad_prefix(prefix: &str) -> bool {
+    let normalized = prefix.trim().to_ascii_lowercase();
+    if normalized.is_empty()
+        || normalized == "*"
+        || normalized == "."
+        || normalized == "/"
+        || normalized == "\\"
+        || normalized == "~"
+        || normalized == "c:"
+        || normalized == "c:\\"
+    {
+        return true;
+    }
+    if normalized.contains('*') {
+        return true;
+    }
+    matches!(
+        normalized.as_str(),
+        "sh" | "bash" | "zsh" | "fish" | "cmd" | "cmd.exe" | "powershell" | "pwsh"
+    )
+}
+
+fn dangerous_command_reason(command: &str, args: &[String]) -> Option<String> {
+    let command = command.trim().to_ascii_lowercase();
+    let args_joined = args
+        .iter()
+        .map(|arg| arg.to_ascii_lowercase())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let has_arg = |target: &str| args.iter().any(|arg| arg.eq_ignore_ascii_case(target));
+
+    if command == "rm"
+        && (has_arg("-rf") || has_arg("-fr") || has_arg("-r") && has_arg("-f"))
+        && args
+            .iter()
+            .any(|arg| arg == "/" || arg == "~" || arg == "/*" || arg == "~/*")
+    {
+        return Some("rm recursive delete targeting root/home".to_string());
+    }
+    if matches!(
+        command.as_str(),
+        "sudo" | "dd" | "mkfs" | "shutdown" | "reboot"
+    ) {
+        return Some(format!("high-risk command '{command}'"));
+    }
+    if matches!(command.as_str(), "chmod" | "chown") && (has_arg("-r") || has_arg("-R")) {
+        return Some(format!("recursive permission mutation via '{command}'"));
+    }
+    if matches!(command.as_str(), "del" | "erase")
+        && (has_arg("/s") || has_arg("/f") || has_arg("/q"))
+    {
+        return Some("windows recursive delete flags detected".to_string());
+    }
+    if matches!(command.as_str(), "rmdir" | "rd") && has_arg("/s") && has_arg("/q") {
+        return Some("windows recursive directory removal detected".to_string());
+    }
+    if command == "format" {
+        return Some("disk format command detected".to_string());
+    }
+    if matches!(command.as_str(), "powershell" | "pwsh")
+        && args_joined.contains("remove-item")
+        && args_joined.contains("-recurse")
+        && args_joined.contains("-force")
+    {
+        return Some("powershell recursive forced delete detected".to_string());
+    }
+    if matches!(command.as_str(), "cmd" | "cmd.exe")
+        && (args_joined.contains("del /f /s /q") || args_joined.contains("rmdir /s /q"))
+    {
+        return Some("cmd destructive recursive delete detected".to_string());
+    }
+
+    None
 }
 
 fn matches_command_pattern(pattern: &str, command_line: &str) -> bool {
@@ -880,12 +1517,6 @@ fn handle_run_command(
             )));
         }
     }
-    if !ctx.command_policy.is_allowed(&command_line) {
-        return Err(NativeToolEngineError::policy_violation(format!(
-            "run_command blocked by native policy: {command_line}"
-        )));
-    }
-
     let timeout_ms = input
         .timeout_ms
         .unwrap_or(default_timeout_ms)
@@ -1547,6 +2178,47 @@ mod tests {
             .with_execution(ExecutionScope::new().allow("*"))
     }
 
+    fn test_tool_context<'a>(
+        worktree: &'a Path,
+        scope: Option<&'a Scope>,
+        policy: &NativeCommandPolicy,
+        env: &'a HashMap<String, String>,
+    ) -> ToolExecutionContext<'a> {
+        test_tool_context_with_policies(
+            worktree,
+            scope,
+            policy,
+            env,
+            NativeSandboxPolicy::default(),
+            NativeApprovalPolicy::default(),
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        )
+    }
+
+    fn test_tool_context_with_policies<'a>(
+        worktree: &'a Path,
+        scope: Option<&'a Scope>,
+        policy: &NativeCommandPolicy,
+        env: &'a HashMap<String, String>,
+        sandbox_policy: NativeSandboxPolicy,
+        approval_policy: NativeApprovalPolicy,
+        exec_policy_manager: NativeExecPolicyManager,
+    ) -> ToolExecutionContext<'a> {
+        ToolExecutionContext {
+            worktree,
+            scope,
+            sandbox_policy,
+            approval_policy,
+            command_policy: policy.clone(),
+            exec_policy_manager,
+            approval_cache: RefCell::new(NativeApprovalCache::default()),
+            env,
+        }
+    }
+
     #[test]
     fn rejects_unknown_tool_names() {
         let engine = NativeToolEngine::default();
@@ -1554,12 +2226,7 @@ mod tests {
         let policy = NativeCommandPolicy::default();
         let env = HashMap::new();
         let scope = allow_all_scope();
-        let ctx = ToolExecutionContext {
-            worktree: tmp.path(),
-            scope: Some(&scope),
-            command_policy: &policy,
-            env: &env,
-        };
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
         let action = NativeToolAction {
             name: "nope".to_string(),
             version: TOOL_VERSION_V1.to_string(),
@@ -1579,12 +2246,7 @@ mod tests {
         let policy = NativeCommandPolicy::default();
         let env = HashMap::new();
         let scope = allow_all_scope();
-        let ctx = ToolExecutionContext {
-            worktree: tmp.path(),
-            scope: Some(&scope),
-            command_policy: &policy,
-            env: &env,
-        };
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
         let action = NativeToolAction {
             name: "read_file".to_string(),
             version: TOOL_VERSION_V1.to_string(),
@@ -1606,12 +2268,7 @@ mod tests {
         let scope = Scope::new().with_filesystem(
             FilesystemScope::new().with_rule(PathRule::new("src/", FilePermission::Read)),
         );
-        let ctx = ToolExecutionContext {
-            worktree: tmp.path(),
-            scope: Some(&scope),
-            command_policy: &policy,
-            env: &env,
-        };
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
         let action = NativeToolAction {
             name: "write_file".to_string(),
             version: TOOL_VERSION_V1.to_string(),
@@ -1631,12 +2288,7 @@ mod tests {
         let policy = NativeCommandPolicy::default();
         let env = HashMap::new();
         let scope = allow_all_scope();
-        let ctx = ToolExecutionContext {
-            worktree: tmp.path(),
-            scope: Some(&scope),
-            command_policy: &policy,
-            env: &env,
-        };
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
         let action = NativeToolAction {
             name: "run_command".to_string(),
             version: TOOL_VERSION_V1.to_string(),
@@ -1660,12 +2312,7 @@ mod tests {
         };
         let env = HashMap::new();
         let scope = allow_all_scope();
-        let ctx = ToolExecutionContext {
-            worktree: tmp.path(),
-            scope: Some(&scope),
-            command_policy: &policy,
-            env: &env,
-        };
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
         let action = NativeToolAction {
             name: "run_command".to_string(),
             version: TOOL_VERSION_V1.to_string(),
@@ -1696,12 +2343,7 @@ mod tests {
         let mut env = HashMap::new();
         env.insert("ONLY_THIS".to_string(), "visible".to_string());
         let scope = allow_all_scope();
-        let ctx = ToolExecutionContext {
-            worktree: tmp.path(),
-            scope: Some(&scope),
-            command_policy: &policy,
-            env: &env,
-        };
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
         let action = NativeToolAction {
             name: "run_command".to_string(),
             version: TOOL_VERSION_V1.to_string(),
@@ -1724,6 +2366,267 @@ mod tests {
 
         assert_eq!(output.exit_code, 0);
         assert_eq!(output.stdout, "visible|");
+    }
+
+    #[test]
+    fn sandbox_read_only_denies_write_tool() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy::default();
+        let env = HashMap::new();
+        let scope = allow_all_scope();
+        let sandbox_policy = NativeSandboxPolicy {
+            mode: NativeSandboxMode::ReadOnly,
+            ..NativeSandboxPolicy::default()
+        };
+        let ctx = test_tool_context_with_policies(
+            tmp.path(),
+            Some(&scope),
+            &policy,
+            &env,
+            sandbox_policy,
+            NativeApprovalPolicy::default(),
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        );
+        let action = NativeToolAction {
+            name: "write_file".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({ "path": "src/blocked.txt", "content": "nope" }),
+        };
+
+        let error = engine
+            .execute(&action, &ctx)
+            .expect_err("read-only sandbox should deny writes");
+        assert_eq!(error.code, "native_policy_violation");
+        assert!(
+            error
+                .policy_tags
+                .iter()
+                .any(|tag| tag == "sandbox_mode:read-only"),
+            "{:?}",
+            error.policy_tags
+        );
+    }
+
+    #[test]
+    fn approval_on_request_denies_when_review_is_deny() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["echo".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let env = HashMap::new();
+        let scope = allow_all_scope();
+        let approval_policy = NativeApprovalPolicy {
+            mode: NativeApprovalMode::OnRequest,
+            review_decision: NativeApprovalReviewDecision::Deny,
+            trusted_prefixes: Vec::new(),
+            cache_max_entries: 8,
+        };
+        let ctx = test_tool_context_with_policies(
+            tmp.path(),
+            Some(&scope),
+            &policy,
+            &env,
+            NativeSandboxPolicy::default(),
+            approval_policy,
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        );
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({ "command": "echo", "args": ["hello"] }),
+        };
+
+        let error = engine
+            .execute(&action, &ctx)
+            .expect_err("on-request with deny decision should block");
+        assert_eq!(error.code, "native_policy_violation");
+        assert!(
+            error
+                .policy_tags
+                .iter()
+                .any(|tag| tag == "approval_review_decision:deny"),
+            "{:?}",
+            error.policy_tags
+        );
+    }
+
+    #[test]
+    fn approval_cache_marks_second_run_as_cached() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["echo".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let env = HashMap::new();
+        let scope = allow_all_scope();
+        let approval_policy = NativeApprovalPolicy {
+            mode: NativeApprovalMode::OnRequest,
+            review_decision: NativeApprovalReviewDecision::Approve,
+            trusted_prefixes: Vec::new(),
+            cache_max_entries: 8,
+        };
+        let ctx = test_tool_context_with_policies(
+            tmp.path(),
+            Some(&scope),
+            &policy,
+            &env,
+            NativeSandboxPolicy::default(),
+            approval_policy,
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        );
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({ "command": "echo", "args": ["hello"] }),
+        };
+
+        let first = engine.execute_action_trace("call-1".to_string(), &action, &ctx);
+        assert!(first.failure.is_none(), "{first:?}");
+        assert!(
+            first
+                .policy_tags
+                .iter()
+                .any(|tag| tag == "approval_review_decision:approve"),
+            "{:?}",
+            first.policy_tags
+        );
+
+        let second = engine.execute_action_trace("call-2".to_string(), &action, &ctx);
+        assert!(second.failure.is_none(), "{second:?}");
+        assert!(
+            second
+                .policy_tags
+                .iter()
+                .any(|tag| tag == "approval_review_decision:cached"),
+            "{:?}",
+            second.policy_tags
+        );
+    }
+
+    #[test]
+    fn dangerous_command_requires_danger_full_access_sandbox() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["rm".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let env = HashMap::new();
+        let scope = allow_all_scope();
+        let approval_policy = NativeApprovalPolicy {
+            mode: NativeApprovalMode::OnRequest,
+            review_decision: NativeApprovalReviewDecision::Approve,
+            trusted_prefixes: Vec::new(),
+            cache_max_entries: 8,
+        };
+        let sandbox_policy = NativeSandboxPolicy {
+            mode: NativeSandboxMode::WorkspaceWrite,
+            ..NativeSandboxPolicy::default()
+        };
+        let ctx = test_tool_context_with_policies(
+            tmp.path(),
+            Some(&scope),
+            &policy,
+            &env,
+            sandbox_policy,
+            approval_policy,
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        );
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({ "command": "rm", "args": ["-rf", "/"] }),
+        };
+
+        let error = engine
+            .execute(&action, &ctx)
+            .expect_err("dangerous command must require elevated sandbox");
+        assert_eq!(error.code, "native_policy_violation");
+        assert!(
+            error.message.contains("dangerous command denied"),
+            "{}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn approval_denies_broad_command_prefix_rules() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["sh".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let env = HashMap::new();
+        let scope = allow_all_scope();
+        let approval_policy = NativeApprovalPolicy {
+            mode: NativeApprovalMode::OnRequest,
+            review_decision: NativeApprovalReviewDecision::Approve,
+            trusted_prefixes: Vec::new(),
+            cache_max_entries: 8,
+        };
+        let ctx = test_tool_context_with_policies(
+            tmp.path(),
+            Some(&scope),
+            &policy,
+            &env,
+            NativeSandboxPolicy::default(),
+            approval_policy,
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        );
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "command": "sh",
+                "args": ["-c", "echo hello"]
+            }),
+        };
+
+        let error = engine
+            .execute(&action, &ctx)
+            .expect_err("broad shell prefix should be rejected");
+        assert_eq!(error.code, "native_policy_violation");
+        assert!(error.message.contains("broad prefix"), "{}", error.message);
+    }
+
+    #[test]
+    fn exec_prefix_amendments_are_bounded_and_filter_broad_prefixes() {
+        let mut env = HashMap::new();
+        env.insert(EXEC_PREFIX_RULE_MAX_ENV_KEY.to_string(), "2".to_string());
+        env.insert(
+            EXEC_PREFIX_AMENDMENTS_ENV_KEY.to_string(),
+            "echo,*,sh,git status".to_string(),
+        );
+        let manager = NativeExecPolicyManager::from_env(&env);
+        assert_eq!(manager.prefix_rule_max, 2);
+        assert_eq!(
+            manager.prefix_amendments,
+            vec!["echo".to_string(), "git status".to_string()]
+        );
     }
 
     #[test]
@@ -1758,12 +2661,7 @@ mod tests {
             GRAPH_QUERY_ENV_CONSTITUTION_PATH.to_string(),
             constitution_path.to_string_lossy().to_string(),
         );
-        let ctx = ToolExecutionContext {
-            worktree: repo.as_path(),
-            scope: Some(&scope),
-            command_policy: &policy,
-            env: &env,
-        };
+        let ctx = test_tool_context(repo.as_path(), Some(&scope), &policy, &env);
         let action = NativeToolAction {
             name: "graph_query".to_string(),
             version: TOOL_VERSION_V1.to_string(),
@@ -1815,12 +2713,7 @@ mod tests {
             GRAPH_QUERY_ENV_SNAPSHOT_PATH.to_string(),
             snapshot_path.to_string_lossy().to_string(),
         );
-        let ctx = ToolExecutionContext {
-            worktree: repo.as_path(),
-            scope: Some(&scope),
-            command_policy: &policy,
-            env: &env,
-        };
+        let ctx = test_tool_context(repo.as_path(), Some(&scope), &policy, &env);
         let action = NativeToolAction {
             name: "graph_query".to_string(),
             version: TOOL_VERSION_V1.to_string(),
@@ -1853,12 +2746,7 @@ mod tests {
 
             let run_once = |root: &Path| -> (Value, Value) {
                 let env = HashMap::new();
-                let ctx = ToolExecutionContext {
-                    worktree: root,
-                    scope: Some(&scope),
-                    command_policy: &policy,
-                    env: &env,
-                };
+                let ctx = test_tool_context(root, Some(&scope), &policy, &env);
                 let relative_path = format!("src/{file_name}.txt");
                 let write = NativeToolAction {
                     name: "write_file".to_string(),
@@ -1891,12 +2779,7 @@ mod tests {
         let policy = NativeCommandPolicy::default();
         let env = HashMap::new();
         let scope = allow_all_scope();
-        let ctx = ToolExecutionContext {
-            worktree: tmp.path(),
-            scope: Some(&scope),
-            command_policy: &policy,
-            env: &env,
-        };
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
         let action = NativeToolAction {
             name: "list_files".to_string(),
             version: TOOL_VERSION_V1.to_string(),
@@ -1924,12 +2807,7 @@ mod tests {
         let policy = NativeCommandPolicy::default();
         let env = HashMap::new();
         let scope = allow_all_scope();
-        let ctx = ToolExecutionContext {
-            worktree: tmp.path(),
-            scope: Some(&scope),
-            command_policy: &policy,
-            env: &env,
-        };
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
         let action = NativeToolAction {
             name: "read_file".to_string(),
             version: TOOL_VERSION_V1.to_string(),

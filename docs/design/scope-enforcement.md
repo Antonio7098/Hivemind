@@ -94,7 +94,9 @@ Scope violations are prevented before they occur.
 - All tool calls routed through Hivemind
 - Filesystem access mediated by Hivemind
 - Typed tool contracts with strict JSON-schema payload validation
-- Native command policy gates (`allowlist` / `denylist`, deny-by-default)
+- Native sandbox policy orchestration (`read-only`, `workspace-write`, `danger-full-access`, `host-passthrough`)
+- Native approval policy orchestration (`never`, `on-failure`, `on-request`, `unless-trusted`) with bounded `approved_for_session` cache
+- Native command policy gates (`allowlist` / `denylist`, deny-by-default) plus dangerous-command analyzers and bounded prefix-rule amendments
 - Task scope projection (`HIVEMIND_TASK_SCOPE_JSON`) enforced before tool side effects
 - Policy/scope violations emit explicit `ToolCallFailed` + `RuntimeErrorClassified` and fail attempts deterministically
 
