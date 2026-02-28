@@ -21,8 +21,12 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
+use std::net::{IpAddr, Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use ucp_api::{canonical_fingerprint, PortableDocument, CODEGRAPH_PROFILE_MARKER};
 
@@ -194,6 +198,411 @@ const APPROVAL_TRUSTED_PREFIXES_ENV_KEY: &str = "HIVEMIND_NATIVE_APPROVAL_TRUSTE
 const APPROVAL_CACHE_MAX_ENV_KEY: &str = "HIVEMIND_NATIVE_APPROVAL_CACHE_MAX";
 const EXEC_PREFIX_RULE_MAX_ENV_KEY: &str = "HIVEMIND_NATIVE_EXEC_PREFIX_RULE_MAX";
 const EXEC_PREFIX_AMENDMENTS_ENV_KEY: &str = "HIVEMIND_NATIVE_EXEC_PREFIX_AMENDMENTS";
+const NETWORK_PROXY_MODE_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_PROXY_MODE";
+const NETWORK_PROXY_HTTP_BIND_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_PROXY_HTTP_BIND";
+const NETWORK_PROXY_SOCKS5_BIND_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_PROXY_SOCKS5_BIND";
+const NETWORK_PROXY_SOCKS5_ENABLED_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_PROXY_SOCKS5_ENABLED";
+const NETWORK_PROXY_ADMIN_BIND_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_PROXY_ADMIN_BIND";
+const NETWORK_PROXY_ALLOW_NON_LOOPBACK_ENV_KEY: &str =
+    "HIVEMIND_NATIVE_NETWORK_PROXY_ALLOW_NON_LOOPBACK";
+const NETWORK_ALLOWLIST_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_ALLOWLIST";
+const NETWORK_DENYLIST_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_DENYLIST";
+const NETWORK_BLOCK_PRIVATE_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_BLOCK_PRIVATE";
+const NETWORK_MODE_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_MODE";
+const NETWORK_LIMITED_METHODS_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_LIMITED_METHODS";
+const NETWORK_APPROVAL_MODE_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_APPROVAL_MODE";
+const NETWORK_APPROVAL_DECISION_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_APPROVAL_DECISION";
+const NETWORK_APPROVAL_CACHE_MAX_ENV_KEY: &str = "HIVEMIND_NATIVE_NETWORK_APPROVAL_CACHE_MAX";
+const NETWORK_APPROVAL_DEFERRED_DECISIONS_FILE_ENV_KEY: &str =
+    "HIVEMIND_NATIVE_NETWORK_APPROVAL_DEFERRED_DECISIONS_FILE";
+
+/// Native managed network proxy mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeNetworkProxyMode {
+    Off,
+    Managed,
+}
+
+impl NativeNetworkProxyMode {
+    #[must_use]
+    pub const fn as_policy_value(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Managed => "managed",
+        }
+    }
+}
+
+/// Native network access envelope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeNetworkAccessMode {
+    Full,
+    Limited,
+    Disabled,
+}
+
+impl NativeNetworkAccessMode {
+    #[must_use]
+    pub const fn as_policy_value(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Limited => "limited",
+            Self::Disabled => "disabled",
+        }
+    }
+}
+
+/// Native network approval modes for host/protocol egress.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeNetworkApprovalMode {
+    None,
+    Immediate,
+    Deferred,
+}
+
+impl NativeNetworkApprovalMode {
+    #[must_use]
+    pub const fn as_policy_value(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Immediate => "immediate",
+            Self::Deferred => "deferred",
+        }
+    }
+}
+
+/// Deterministic review decision source for network approvals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeNetworkApprovalDecision {
+    Approve,
+    Deny,
+}
+
+impl NativeNetworkApprovalDecision {
+    #[must_use]
+    pub const fn as_policy_value(self) -> &'static str {
+        match self {
+            Self::Approve => "approve",
+            Self::Deny => "deny",
+        }
+    }
+}
+
+/// Native network policy contract for one runtime invocation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeNetworkPolicy {
+    pub proxy_mode: NativeNetworkProxyMode,
+    pub proxy_http_bind: String,
+    pub proxy_socks5_bind: String,
+    pub proxy_socks5_enabled: bool,
+    pub proxy_admin_bind: String,
+    pub proxy_allow_non_loopback: bool,
+    pub allowlist: Vec<String>,
+    pub denylist: Vec<String>,
+    pub block_private_addresses: bool,
+    pub access_mode: NativeNetworkAccessMode,
+    pub limited_methods: Vec<String>,
+    pub approval_mode: NativeNetworkApprovalMode,
+    pub approval_decision: NativeNetworkApprovalDecision,
+    pub approval_cache_max_entries: usize,
+    pub deferred_decisions_file: Option<String>,
+}
+
+impl Default for NativeNetworkPolicy {
+    fn default() -> Self {
+        Self {
+            proxy_mode: NativeNetworkProxyMode::Off,
+            proxy_http_bind: "127.0.0.1:0".to_string(),
+            proxy_socks5_bind: "127.0.0.1:0".to_string(),
+            proxy_socks5_enabled: false,
+            proxy_admin_bind: "127.0.0.1:0".to_string(),
+            proxy_allow_non_loopback: false,
+            allowlist: Vec::new(),
+            denylist: Vec::new(),
+            block_private_addresses: true,
+            access_mode: NativeNetworkAccessMode::Full,
+            limited_methods: vec!["GET".to_string(), "HEAD".to_string(), "CONNECT".to_string()],
+            approval_mode: NativeNetworkApprovalMode::None,
+            approval_decision: NativeNetworkApprovalDecision::Deny,
+            approval_cache_max_entries: 64,
+            deferred_decisions_file: None,
+        }
+    }
+}
+
+impl NativeNetworkPolicy {
+    #[must_use]
+    pub fn from_env(env: &HashMap<String, String>) -> Self {
+        let mut policy = Self::default();
+        if let Some(raw) = env.get(NETWORK_PROXY_MODE_ENV_KEY) {
+            if let Some(mode) = parse_network_proxy_mode(raw) {
+                policy.proxy_mode = mode;
+            }
+        }
+        if let Some(raw) = env.get(NETWORK_PROXY_HTTP_BIND_ENV_KEY) {
+            policy.proxy_http_bind = raw.trim().to_string();
+        }
+        if let Some(raw) = env.get(NETWORK_PROXY_SOCKS5_BIND_ENV_KEY) {
+            policy.proxy_socks5_bind = raw.trim().to_string();
+        }
+        if let Some(raw) = env.get(NETWORK_PROXY_SOCKS5_ENABLED_ENV_KEY) {
+            policy.proxy_socks5_enabled = parse_bool_with_default(raw, false);
+        }
+        if let Some(raw) = env.get(NETWORK_PROXY_ADMIN_BIND_ENV_KEY) {
+            policy.proxy_admin_bind = raw.trim().to_string();
+        }
+        if let Some(raw) = env.get(NETWORK_PROXY_ALLOW_NON_LOOPBACK_ENV_KEY) {
+            policy.proxy_allow_non_loopback = parse_bool_with_default(raw, false);
+        }
+        if let Some(raw) = env.get(NETWORK_ALLOWLIST_ENV_KEY) {
+            policy.allowlist = parse_csv_list(raw);
+        }
+        if let Some(raw) = env.get(NETWORK_DENYLIST_ENV_KEY) {
+            policy.denylist = parse_csv_list(raw);
+        }
+        if let Some(raw) = env.get(NETWORK_BLOCK_PRIVATE_ENV_KEY) {
+            policy.block_private_addresses = parse_bool_with_default(raw, true);
+        }
+        if let Some(raw) = env.get(NETWORK_MODE_ENV_KEY) {
+            if let Some(mode) = parse_network_access_mode(raw) {
+                policy.access_mode = mode;
+            }
+        }
+        if let Some(raw) = env.get(NETWORK_LIMITED_METHODS_ENV_KEY) {
+            let parsed = parse_csv_list(raw)
+                .into_iter()
+                .map(|method| method.to_ascii_uppercase())
+                .collect::<Vec<_>>();
+            if !parsed.is_empty() {
+                policy.limited_methods = parsed;
+            }
+        }
+        if let Some(raw) = env.get(NETWORK_APPROVAL_MODE_ENV_KEY) {
+            if let Some(mode) = parse_network_approval_mode(raw) {
+                policy.approval_mode = mode;
+            }
+        }
+        if let Some(raw) = env.get(NETWORK_APPROVAL_DECISION_ENV_KEY) {
+            policy.approval_decision = if raw.trim().eq_ignore_ascii_case("approve") {
+                NativeNetworkApprovalDecision::Approve
+            } else {
+                NativeNetworkApprovalDecision::Deny
+            };
+        }
+        if let Some(raw) = env.get(NETWORK_APPROVAL_CACHE_MAX_ENV_KEY) {
+            policy.approval_cache_max_entries = raw
+                .trim()
+                .parse::<usize>()
+                .ok()
+                .filter(|value| *value > 0)
+                .unwrap_or(64);
+        }
+        if let Some(raw) = env.get(NETWORK_APPROVAL_DEFERRED_DECISIONS_FILE_ENV_KEY) {
+            let path = raw.trim();
+            if !path.is_empty() {
+                policy.deferred_decisions_file = Some(path.to_string());
+            }
+        }
+        policy
+    }
+
+    fn base_policy_tags(&self) -> Vec<String> {
+        vec![
+            format!("network_proxy_mode:{}", self.proxy_mode.as_policy_value()),
+            format!("network_access_mode:{}", self.access_mode.as_policy_value()),
+            format!("network_block_private:{}", self.block_private_addresses),
+            format!(
+                "network_approval_mode:{}",
+                self.approval_mode.as_policy_value()
+            ),
+            format!(
+                "network_approval_decision:{}",
+                self.approval_decision.as_policy_value()
+            ),
+            format!("network_allowlist:{}", self.allowlist.join("|")),
+            format!("network_denylist:{}", self.denylist.join("|")),
+            format!("network_limited_methods:{}", self.limited_methods.join("|")),
+        ]
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NativeNetworkTarget {
+    protocol: String,
+    host: String,
+    port: u16,
+    method: String,
+}
+
+impl NativeNetworkTarget {
+    fn cache_key(&self) -> String {
+        format!(
+            "{}://{}:{}",
+            self.protocol.to_ascii_lowercase(),
+            self.host.to_ascii_lowercase(),
+            self.port
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NativeDeferredNetworkDecision {
+    target_key: String,
+    deny: bool,
+}
+
+#[derive(Debug, Default)]
+pub struct NativeNetworkApprovalCache {
+    approved_for_session: VecDeque<String>,
+}
+
+impl NativeNetworkApprovalCache {
+    fn contains(&self, key: &str) -> bool {
+        self.approved_for_session.iter().any(|item| item == key)
+    }
+
+    fn insert_bounded(&mut self, key: String, max_entries: usize) {
+        self.approved_for_session.retain(|item| item != &key);
+        self.approved_for_session.push_back(key);
+        while self.approved_for_session.len() > max_entries {
+            let _ = self.approved_for_session.pop_front();
+        }
+    }
+}
+
+struct ManagedProxyRuntime {
+    stop: Arc<AtomicBool>,
+    handles: Vec<JoinHandle<()>>,
+    http_addr: String,
+    socks5_addr: Option<String>,
+    admin_addr: String,
+}
+
+impl ManagedProxyRuntime {
+    fn start(policy: &NativeNetworkPolicy) -> Result<Self, NativeToolEngineError> {
+        let (http_bind, _http_clamped) = clamp_bind_address(
+            &policy.proxy_http_bind,
+            policy.proxy_allow_non_loopback,
+            "127.0.0.1:0",
+        );
+        let (admin_bind, _admin_clamped) = clamp_bind_address(
+            &policy.proxy_admin_bind,
+            policy.proxy_allow_non_loopback,
+            "127.0.0.1:0",
+        );
+        let (socks_bind, _socks_clamped) = clamp_bind_address(
+            &policy.proxy_socks5_bind,
+            policy.proxy_allow_non_loopback,
+            "127.0.0.1:0",
+        );
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let mut handles = Vec::new();
+
+        let http_listener = TcpListener::bind(&http_bind).map_err(|error| {
+            NativeToolEngineError::execution(format!(
+                "failed to bind managed HTTP proxy listener on '{http_bind}': {error}"
+            ))
+        })?;
+        http_listener.set_nonblocking(true).map_err(|error| {
+            NativeToolEngineError::execution(format!(
+                "failed to configure managed HTTP proxy listener nonblocking mode: {error}"
+            ))
+        })?;
+        let http_addr = http_listener.local_addr().map_err(|error| {
+            NativeToolEngineError::execution(format!(
+                "failed to read managed HTTP proxy listener address: {error}"
+            ))
+        })?;
+        handles.push(spawn_proxy_listener(
+            stop.clone(),
+            http_listener,
+            false,
+            format!("http://{http_addr}"),
+        ));
+
+        let mut socks5_addr = None;
+        if policy.proxy_socks5_enabled {
+            let socks_listener = TcpListener::bind(&socks_bind).map_err(|error| {
+                NativeToolEngineError::execution(format!(
+                    "failed to bind managed SOCKS5 listener on '{socks_bind}': {error}"
+                ))
+            })?;
+            socks_listener.set_nonblocking(true).map_err(|error| {
+                NativeToolEngineError::execution(format!(
+                    "failed to configure managed SOCKS5 listener nonblocking mode: {error}"
+                ))
+            })?;
+            let addr = socks_listener.local_addr().map_err(|error| {
+                NativeToolEngineError::execution(format!(
+                    "failed to read managed SOCKS5 listener address: {error}"
+                ))
+            })?;
+            let rendered = format!("socks5://{addr}");
+            socks5_addr = Some(rendered.clone());
+            handles.push(spawn_proxy_listener(
+                stop.clone(),
+                socks_listener,
+                true,
+                rendered,
+            ));
+        }
+
+        let admin_listener = TcpListener::bind(&admin_bind).map_err(|error| {
+            NativeToolEngineError::execution(format!(
+                "failed to bind managed proxy admin listener on '{admin_bind}': {error}"
+            ))
+        })?;
+        admin_listener.set_nonblocking(true).map_err(|error| {
+            NativeToolEngineError::execution(format!(
+                "failed to configure managed admin listener nonblocking mode: {error}"
+            ))
+        })?;
+        let admin_addr = admin_listener.local_addr().map_err(|error| {
+            NativeToolEngineError::execution(format!(
+                "failed to read managed proxy admin address: {error}"
+            ))
+        })?;
+        handles.push(spawn_admin_listener(
+            stop.clone(),
+            admin_listener,
+            format!("http://{admin_addr}"),
+            format!("http://{http_addr}"),
+            socks5_addr.clone(),
+        ));
+
+        Ok(Self {
+            stop,
+            handles,
+            http_addr: format!("http://{http_addr}"),
+            socks5_addr,
+            admin_addr: format!("http://{admin_addr}"),
+        })
+    }
+
+    fn apply_proxy_env(&self, cmd: &mut Command) {
+        cmd.env("HTTP_PROXY", &self.http_addr);
+        cmd.env("HTTPS_PROXY", &self.http_addr);
+        cmd.env("NO_PROXY", "localhost,127.0.0.1,::1");
+        cmd.env("HIVEMIND_NATIVE_NETWORK_PROXY_ADMIN", &self.admin_addr);
+        if let Some(socks5) = self.socks5_addr.as_ref() {
+            cmd.env("ALL_PROXY", socks5);
+        }
+    }
+}
+
+impl Drop for ManagedProxyRuntime {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        for handle in self.handles.drain(..) {
+            let _ = handle.join();
+        }
+    }
+}
 
 /// Explicit sandbox modes for native tool execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -543,9 +952,11 @@ pub struct ToolExecutionContext<'a> {
     pub scope: Option<&'a Scope>,
     pub sandbox_policy: NativeSandboxPolicy,
     pub approval_policy: NativeApprovalPolicy,
+    pub network_policy: NativeNetworkPolicy,
     pub command_policy: NativeCommandPolicy,
     pub exec_policy_manager: NativeExecPolicyManager,
     pub approval_cache: RefCell<NativeApprovalCache>,
+    pub network_approval_cache: RefCell<NativeNetworkApprovalCache>,
     pub env: &'a HashMap<String, String>,
 }
 
@@ -809,6 +1220,157 @@ impl NativeToolEngine {
             dangerous_reason = dangerous_command_reason(command, &run.args);
             approval_cache_key = command.to_ascii_lowercase();
             command_line = Some(joined);
+            let network_targets = extract_network_targets(command, &run.args);
+            tags.extend(ctx.network_policy.base_policy_tags());
+            let (_, http_clamped) = clamp_bind_address(
+                &ctx.network_policy.proxy_http_bind,
+                ctx.network_policy.proxy_allow_non_loopback,
+                "127.0.0.1:0",
+            );
+            let (_, admin_clamped) = clamp_bind_address(
+                &ctx.network_policy.proxy_admin_bind,
+                ctx.network_policy.proxy_allow_non_loopback,
+                "127.0.0.1:0",
+            );
+            let (_, socks_clamped) = clamp_bind_address(
+                &ctx.network_policy.proxy_socks5_bind,
+                ctx.network_policy.proxy_allow_non_loopback,
+                "127.0.0.1:0",
+            );
+            tags.push(format!(
+                "network_proxy_bind_clamped:{}",
+                http_clamped || admin_clamped || socks_clamped
+            ));
+            if network_targets.is_empty() {
+                tags.push("network_targets:none".to_string());
+            } else {
+                tags.push(format!("network_targets_count:{}", network_targets.len()));
+                for target in &network_targets {
+                    tags.push(format!(
+                        "network_target:{}",
+                        format_network_target_tag_value(target)
+                    ));
+
+                    if matches!(
+                        ctx.network_policy.access_mode,
+                        NativeNetworkAccessMode::Disabled
+                    ) {
+                        tags.push("network_decision:denied_mode_disabled".to_string());
+                        return Err(NativeToolEngineError::policy_violation(format!(
+                            "network policy denied '{}' because network mode is disabled",
+                            target.cache_key()
+                        ))
+                        .with_policy_tags(tags));
+                    }
+                    if ctx
+                        .network_policy
+                        .denylist
+                        .iter()
+                        .any(|pattern| matches_host_pattern(pattern, &target.host))
+                    {
+                        tags.push("network_decision:denied_denylist".to_string());
+                        return Err(NativeToolEngineError::policy_violation(format!(
+                            "network policy denied '{}' by denylist",
+                            target.cache_key()
+                        ))
+                        .with_policy_tags(tags));
+                    }
+                    if !ctx.network_policy.allowlist.is_empty()
+                        && !ctx
+                            .network_policy
+                            .allowlist
+                            .iter()
+                            .any(|pattern| matches_host_pattern(pattern, &target.host))
+                    {
+                        tags.push("network_decision:denied_not_allowlisted".to_string());
+                        return Err(NativeToolEngineError::policy_violation(format!(
+                            "network policy denied '{}': host is not in allowlist",
+                            target.cache_key()
+                        ))
+                        .with_policy_tags(tags));
+                    }
+                    if ctx.network_policy.block_private_addresses
+                        && is_private_or_local_host(&target.host)
+                    {
+                        tags.push("network_decision:denied_private_address".to_string());
+                        return Err(NativeToolEngineError::policy_violation(format!(
+                            "network policy denied '{}': private/local address blocked",
+                            target.cache_key()
+                        ))
+                        .with_policy_tags(tags));
+                    }
+                    if matches!(
+                        ctx.network_policy.access_mode,
+                        NativeNetworkAccessMode::Limited
+                    ) && !ctx
+                        .network_policy
+                        .limited_methods
+                        .iter()
+                        .any(|method| method.eq_ignore_ascii_case(&target.method))
+                    {
+                        tags.push("network_decision:denied_method_restricted".to_string());
+                        return Err(NativeToolEngineError::policy_violation(format!(
+                            "network policy denied '{}': method '{}' is not allowed in limited mode",
+                            target.cache_key(),
+                            target.method
+                        ))
+                        .with_policy_tags(tags));
+                    }
+
+                    let approval_key = target.cache_key();
+                    match ctx.network_policy.approval_mode {
+                        NativeNetworkApprovalMode::None => {
+                            tags.push("network_approval_required:false".to_string());
+                            tags.push("network_approval_outcome:not_required".to_string());
+                        }
+                        NativeNetworkApprovalMode::Immediate => {
+                            tags.push("network_approval_required:true".to_string());
+                            let mut cache = ctx.network_approval_cache.borrow_mut();
+                            if cache.contains(&approval_key) {
+                                tags.push("network_approval_outcome:approved_cached".to_string());
+                            } else if matches!(
+                                ctx.network_policy.approval_decision,
+                                NativeNetworkApprovalDecision::Approve
+                            ) {
+                                cache.insert_bounded(
+                                    approval_key,
+                                    ctx.network_policy.approval_cache_max_entries,
+                                );
+                                tags.push(
+                                    "network_approval_outcome:approved_for_session".to_string(),
+                                );
+                            } else {
+                                tags.push("network_approval_outcome:denied".to_string());
+                                return Err(NativeToolEngineError::policy_violation(format!(
+                                    "network approval denied '{}'",
+                                    target.cache_key()
+                                ))
+                                .with_policy_tags(tags));
+                            }
+                        }
+                        NativeNetworkApprovalMode::Deferred => {
+                            tags.push("network_approval_required:true".to_string());
+                            if ctx.network_policy.deferred_decisions_file.is_none() {
+                                tags.push("network_approval_outcome:denied_no_watcher".to_string());
+                                return Err(NativeToolEngineError::policy_violation(format!(
+                                    "network approval deferred mode requires {NETWORK_APPROVAL_DEFERRED_DECISIONS_FILE_ENV_KEY}"
+                                ))
+                                .with_policy_tags(tags));
+                            }
+                            tags.push("network_approval_outcome:deferred_pending".to_string());
+                        }
+                    }
+                }
+                tags.push("network_decision:preflight_allowed".to_string());
+            }
+            if matches!(
+                ctx.network_policy.proxy_mode,
+                NativeNetworkProxyMode::Managed
+            ) {
+                tags.push("network_proxy:managed".to_string());
+            } else {
+                tags.push("network_proxy:off".to_string());
+            }
         }
 
         let trusted = command_line.as_deref().is_some_and(|line| {
@@ -1057,6 +1619,283 @@ fn parse_approval_mode(raw: &str) -> Option<NativeApprovalMode> {
         "unless-trusted" | "unless_trusted" => Some(NativeApprovalMode::UnlessTrusted),
         _ => None,
     }
+}
+
+fn parse_network_proxy_mode(raw: &str) -> Option<NativeNetworkProxyMode> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "off" | "disabled" | "none" => Some(NativeNetworkProxyMode::Off),
+        "managed" => Some(NativeNetworkProxyMode::Managed),
+        _ => None,
+    }
+}
+
+fn parse_network_access_mode(raw: &str) -> Option<NativeNetworkAccessMode> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "full" => Some(NativeNetworkAccessMode::Full),
+        "limited" => Some(NativeNetworkAccessMode::Limited),
+        "disabled" | "none" | "deny-all" | "deny_all" => Some(NativeNetworkAccessMode::Disabled),
+        _ => None,
+    }
+}
+
+fn parse_network_approval_mode(raw: &str) -> Option<NativeNetworkApprovalMode> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "none" | "off" => Some(NativeNetworkApprovalMode::None),
+        "immediate" => Some(NativeNetworkApprovalMode::Immediate),
+        "deferred" => Some(NativeNetworkApprovalMode::Deferred),
+        _ => None,
+    }
+}
+
+fn spawn_proxy_listener(
+    stop: Arc<AtomicBool>,
+    listener: TcpListener,
+    is_socks5: bool,
+    endpoint: String,
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        while !stop.load(Ordering::SeqCst) {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    if is_socks5 {
+                        let _ = stream.write_all(&[0x05, 0xFF]);
+                    } else {
+                        let _ = respond_proxy_denied(&mut stream, &endpoint);
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(25));
+                }
+                Err(_) => break,
+            }
+        }
+    })
+}
+
+fn spawn_admin_listener(
+    stop: Arc<AtomicBool>,
+    listener: TcpListener,
+    endpoint: String,
+    http_proxy: String,
+    socks_proxy: Option<String>,
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        while !stop.load(Ordering::SeqCst) {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let body = serde_json::to_string(&json!({
+                        "ok": true,
+                        "admin_endpoint": endpoint,
+                        "http_proxy": http_proxy,
+                        "socks5_proxy": socks_proxy,
+                    }))
+                    .unwrap_or_else(|_| "{\"ok\":false}".to_string());
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(response.as_bytes());
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(25));
+                }
+                Err(_) => break,
+            }
+        }
+    })
+}
+
+fn respond_proxy_denied(stream: &mut TcpStream, endpoint: &str) -> std::io::Result<()> {
+    let body = format!(
+        "{{\"ok\":false,\"code\":\"network_proxy_denied\",\"message\":\"managed network proxy denied request\",\"admin\":\"{endpoint}\"}}"
+    );
+    let response = format!(
+        "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    stream.write_all(response.as_bytes())
+}
+
+fn clamp_bind_address(raw: &str, allow_non_loopback: bool, fallback: &str) -> (String, bool) {
+    let candidate = if raw.trim().is_empty() {
+        fallback.to_string()
+    } else {
+        raw.trim().to_string()
+    };
+    let mut parts = candidate.rsplitn(2, ':');
+    let port_raw = parts.next().unwrap_or("0");
+    let host_raw = parts.next().unwrap_or("127.0.0.1");
+    let port = port_raw.parse::<u16>().unwrap_or(0);
+    let mut host = host_raw.to_string();
+    let clamped = if !allow_non_loopback && !is_loopback_host(&host) {
+        host = "127.0.0.1".to_string();
+        true
+    } else {
+        false
+    };
+    (format!("{host}:{port}"), clamped)
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    let normalized = host.trim().trim_matches('[').trim_matches(']');
+    if normalized.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    normalized
+        .parse::<IpAddr>()
+        .is_ok_and(|ip| ip.is_loopback())
+}
+
+fn extract_network_targets(command: &str, args: &[String]) -> Vec<NativeNetworkTarget> {
+    let method = infer_network_method(command, args);
+    let mut targets = BTreeMap::<String, NativeNetworkTarget>::new();
+    for arg in args {
+        if let Some(url) = arg.strip_prefix("--url=") {
+            add_network_target_from_url(url, &method, &mut targets);
+            continue;
+        }
+        if let Some(url) = arg.strip_prefix("url=") {
+            add_network_target_from_url(url, &method, &mut targets);
+            continue;
+        }
+        add_network_target_from_url(arg, &method, &mut targets);
+    }
+    targets.into_values().collect()
+}
+
+fn add_network_target_from_url(
+    candidate: &str,
+    method: &str,
+    targets: &mut BTreeMap<String, NativeNetworkTarget>,
+) {
+    let Ok(parsed) = reqwest::Url::parse(candidate) else {
+        return;
+    };
+    let Some(host) = parsed.host_str() else {
+        return;
+    };
+    let protocol = parsed.scheme().to_ascii_lowercase();
+    let port = parsed.port_or_known_default().unwrap_or(443);
+    let target = NativeNetworkTarget {
+        protocol,
+        host: host.to_ascii_lowercase(),
+        port,
+        method: method.to_ascii_uppercase(),
+    };
+    targets.insert(target.cache_key(), target);
+}
+
+fn infer_network_method(command: &str, args: &[String]) -> String {
+    let lowered = command.trim().to_ascii_lowercase();
+    if lowered == "curl" {
+        if args.iter().any(|arg| arg.eq_ignore_ascii_case("-I")) {
+            return "HEAD".to_string();
+        }
+        for window in args.windows(2) {
+            if window.first().is_some_and(|flag| {
+                flag.eq_ignore_ascii_case("-X") || flag.eq_ignore_ascii_case("--request")
+            }) {
+                return window[1].to_ascii_uppercase();
+            }
+        }
+        return "GET".to_string();
+    }
+    if lowered == "wget" {
+        return "GET".to_string();
+    }
+    if lowered == "git" {
+        return "FETCH".to_string();
+    }
+    "CONNECT".to_string()
+}
+
+fn matches_host_pattern(pattern: &str, host: &str) -> bool {
+    let pattern = pattern.trim().to_ascii_lowercase();
+    let host = host.trim().to_ascii_lowercase();
+    if pattern.is_empty() {
+        return false;
+    }
+    if pattern == "*" {
+        return true;
+    }
+    if let Some(suffix) = pattern.strip_prefix("*.") {
+        return host == suffix || host.ends_with(&format!(".{suffix}"));
+    }
+    if let Some(suffix) = pattern.strip_prefix('.') {
+        return host.ends_with(&format!(".{suffix}"));
+    }
+    host == pattern
+}
+
+fn is_private_or_local_host(host: &str) -> bool {
+    let normalized = host.trim().to_ascii_lowercase();
+    if normalized == "localhost" {
+        return true;
+    }
+    if normalized
+        .rsplit('.')
+        .next()
+        .is_some_and(|suffix| suffix == "local" || suffix == "internal")
+    {
+        return true;
+    }
+    let Ok(ip) = normalized.parse::<IpAddr>() else {
+        return false;
+    };
+    match ip {
+        IpAddr::V4(v4) => {
+            v4.is_private()
+                || v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+                || v4 == Ipv4Addr::UNSPECIFIED
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unique_local()
+                || v6.is_unicast_link_local()
+                || v6.is_unspecified()
+        }
+    }
+}
+
+fn format_network_target_tag_value(target: &NativeNetworkTarget) -> String {
+    sanitize_policy_tag_value(&format!(
+        "{}://{}:{}@{}",
+        target.protocol, target.host, target.port, target.method
+    ))
+}
+
+fn read_deferred_network_decisions(path: &str) -> Vec<NativeDeferredNetworkDecision> {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    raw.lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+                let target = value.get("target")?.as_str()?.to_string();
+                let decision = value.get("decision")?.as_str()?.to_ascii_lowercase();
+                return Some(NativeDeferredNetworkDecision {
+                    target_key: target,
+                    deny: decision == "deny",
+                });
+            }
+            let mut parts = trimmed.splitn(2, ',');
+            let target = parts.next()?.trim().to_string();
+            let decision = parts.next()?.trim().to_ascii_lowercase();
+            Some(NativeDeferredNetworkDecision {
+                target_key: target,
+                deny: decision == "deny",
+            })
+        })
+        .collect()
 }
 
 fn sanitize_policy_tag_value(raw: &str) -> String {
@@ -1491,6 +2330,7 @@ struct RunCommandOutput {
     timed_out: bool,
 }
 
+#[allow(clippy::too_many_lines)]
 fn handle_run_command(
     ctx: &ToolExecutionContext<'_>,
     input: &Value,
@@ -1521,18 +2361,97 @@ fn handle_run_command(
         .timeout_ms
         .unwrap_or(default_timeout_ms)
         .min(default_timeout_ms);
-    let started = Instant::now();
+    let network_targets = extract_network_targets(command, &input.args);
+    let managed_proxy = if matches!(
+        ctx.network_policy.proxy_mode,
+        NativeNetworkProxyMode::Managed
+    ) {
+        Some(ManagedProxyRuntime::start(&ctx.network_policy)?)
+    } else {
+        None
+    };
+
     let mut cmd = Command::new(command);
-    cmd.args(&input.args).current_dir(ctx.worktree).env_clear();
+    cmd.args(&input.args)
+        .current_dir(ctx.worktree)
+        .env_clear()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     for (key, value) in deterministic_env_pairs(ctx.env) {
         cmd.env(key, value);
     }
-    let output = cmd.output().map_err(|error| {
+    if let Some(proxy) = managed_proxy.as_ref() {
+        proxy.apply_proxy_env(&mut cmd);
+    }
+    let mut child = cmd.spawn().map_err(|error| {
         NativeToolEngineError::execution(format!("failed to execute '{command_line}': {error}"))
     })?;
-    if started.elapsed() > Duration::from_millis(timeout_ms) {
-        return Err(NativeToolEngineError::timeout("run_command", timeout_ms));
+
+    let started = Instant::now();
+    loop {
+        if child
+            .try_wait()
+            .map_err(|error| {
+                NativeToolEngineError::execution(format!(
+                    "failed while waiting on '{command_line}': {error}"
+                ))
+            })?
+            .is_some()
+        {
+            break;
+        }
+        if started.elapsed() > Duration::from_millis(timeout_ms) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(NativeToolEngineError::timeout("run_command", timeout_ms));
+        }
+        if matches!(
+            ctx.network_policy.approval_mode,
+            NativeNetworkApprovalMode::Deferred
+        ) && !network_targets.is_empty()
+        {
+            if let Some(path) = ctx.network_policy.deferred_decisions_file.as_ref() {
+                let decisions = read_deferred_network_decisions(path);
+                let keys = network_targets
+                    .iter()
+                    .map(NativeNetworkTarget::cache_key)
+                    .collect::<Vec<_>>();
+
+                for decision in decisions {
+                    if !keys.iter().any(|key| key == &decision.target_key) {
+                        continue;
+                    }
+                    if decision.deny {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        let mut tags = ctx.network_policy.base_policy_tags();
+                        tags.push("network_approval_outcome:deferred_denied".to_string());
+                        tags.push(format!(
+                            "network_target:{}",
+                            sanitize_policy_tag_value(&decision.target_key)
+                        ));
+                        return Err(NativeToolEngineError::policy_violation(format!(
+                            "network deferred denial received for '{}'",
+                            decision.target_key
+                        ))
+                        .with_policy_tags(tags));
+                    }
+                    let mut cache = ctx.network_approval_cache.borrow_mut();
+                    cache.insert_bounded(
+                        decision.target_key,
+                        ctx.network_policy.approval_cache_max_entries,
+                    );
+                }
+            }
+        }
+        thread::sleep(Duration::from_millis(20));
     }
+    let output = child.wait_with_output().map_err(|error| {
+        NativeToolEngineError::execution(format!(
+            "failed to collect output for '{command_line}': {error}"
+        ))
+    })?;
 
     let status = output.status.code().unwrap_or(-1);
     let result = RunCommandOutput {
@@ -2207,14 +3126,39 @@ mod tests {
         approval_policy: NativeApprovalPolicy,
         exec_policy_manager: NativeExecPolicyManager,
     ) -> ToolExecutionContext<'a> {
+        test_tool_context_with_network_policy(
+            worktree,
+            scope,
+            policy,
+            env,
+            sandbox_policy,
+            approval_policy,
+            NativeNetworkPolicy::default(),
+            exec_policy_manager,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn test_tool_context_with_network_policy<'a>(
+        worktree: &'a Path,
+        scope: Option<&'a Scope>,
+        policy: &NativeCommandPolicy,
+        env: &'a HashMap<String, String>,
+        sandbox_policy: NativeSandboxPolicy,
+        approval_policy: NativeApprovalPolicy,
+        network_policy: NativeNetworkPolicy,
+        exec_policy_manager: NativeExecPolicyManager,
+    ) -> ToolExecutionContext<'a> {
         ToolExecutionContext {
             worktree,
             scope,
             sandbox_policy,
             approval_policy,
+            network_policy,
             command_policy: policy.clone(),
             exec_policy_manager,
             approval_cache: RefCell::new(NativeApprovalCache::default()),
+            network_approval_cache: RefCell::new(NativeNetworkApprovalCache::default()),
             env,
         }
     }
@@ -2626,6 +3570,334 @@ mod tests {
         assert_eq!(
             manager.prefix_amendments,
             vec!["echo".to_string(), "git status".to_string()]
+        );
+    }
+
+    #[test]
+    fn network_policy_denylist_precedes_allowlist() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["echo".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let scope = allow_all_scope();
+        let env = HashMap::new();
+        let network_policy = NativeNetworkPolicy {
+            allowlist: vec!["example.com".to_string()],
+            denylist: vec!["example.com".to_string()],
+            ..NativeNetworkPolicy::default()
+        };
+        let ctx = test_tool_context_with_network_policy(
+            tmp.path(),
+            Some(&scope),
+            &policy,
+            &env,
+            NativeSandboxPolicy::default(),
+            NativeApprovalPolicy::default(),
+            network_policy,
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        );
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "command": "echo",
+                "args": ["https://example.com/resource"]
+            }),
+        };
+
+        let error = engine
+            .execute(&action, &ctx)
+            .expect_err("denylist must win over allowlist");
+        assert_eq!(error.code, "native_policy_violation");
+        assert!(
+            error
+                .policy_tags
+                .iter()
+                .any(|tag| tag == "network_decision:denied_denylist"),
+            "{:?}",
+            error.policy_tags
+        );
+    }
+
+    #[test]
+    fn network_policy_blocks_private_host_addresses() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["echo".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let scope = allow_all_scope();
+        let env = HashMap::new();
+        let network_policy = NativeNetworkPolicy {
+            block_private_addresses: true,
+            ..NativeNetworkPolicy::default()
+        };
+        let ctx = test_tool_context_with_network_policy(
+            tmp.path(),
+            Some(&scope),
+            &policy,
+            &env,
+            NativeSandboxPolicy::default(),
+            NativeApprovalPolicy::default(),
+            network_policy,
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        );
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "command": "echo",
+                "args": ["http://127.0.0.1:8080/health"]
+            }),
+        };
+
+        let error = engine
+            .execute(&action, &ctx)
+            .expect_err("private host should be blocked");
+        assert_eq!(error.code, "native_policy_violation");
+        assert!(
+            error
+                .policy_tags
+                .iter()
+                .any(|tag| tag == "network_decision:denied_private_address"),
+            "{:?}",
+            error.policy_tags
+        );
+    }
+
+    #[test]
+    fn network_policy_limited_mode_restricts_methods() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["echo".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let scope = allow_all_scope();
+        let env = HashMap::new();
+        let network_policy = NativeNetworkPolicy {
+            access_mode: NativeNetworkAccessMode::Limited,
+            limited_methods: vec!["GET".to_string()],
+            ..NativeNetworkPolicy::default()
+        };
+        let ctx = test_tool_context_with_network_policy(
+            tmp.path(),
+            Some(&scope),
+            &policy,
+            &env,
+            NativeSandboxPolicy::default(),
+            NativeApprovalPolicy::default(),
+            network_policy,
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        );
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "command": "echo",
+                "args": ["-X", "POST", "https://example.com/resource"]
+            }),
+        };
+
+        let error = engine
+            .execute(&action, &ctx)
+            .expect_err("limited mode should deny unlisted methods");
+        assert_eq!(error.code, "native_policy_violation");
+        assert!(
+            error
+                .policy_tags
+                .iter()
+                .any(|tag| tag == "network_decision:denied_method_restricted"),
+            "{:?}",
+            error.policy_tags
+        );
+    }
+
+    #[test]
+    fn network_immediate_approval_is_cached_for_session() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["echo".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let scope = allow_all_scope();
+        let env = HashMap::new();
+        let network_policy = NativeNetworkPolicy {
+            approval_mode: NativeNetworkApprovalMode::Immediate,
+            approval_decision: NativeNetworkApprovalDecision::Approve,
+            ..NativeNetworkPolicy::default()
+        };
+        let ctx = test_tool_context_with_network_policy(
+            tmp.path(),
+            Some(&scope),
+            &policy,
+            &env,
+            NativeSandboxPolicy::default(),
+            NativeApprovalPolicy::default(),
+            network_policy,
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        );
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "command": "echo",
+                "args": ["https://example.com/resource"]
+            }),
+        };
+
+        let first = engine.execute_action_trace("network-immediate-1".to_string(), &action, &ctx);
+        assert!(first.failure.is_none(), "{first:?}");
+        assert!(
+            first
+                .policy_tags
+                .iter()
+                .any(|tag| tag == "network_approval_outcome:approved_for_session"),
+            "{:?}",
+            first.policy_tags
+        );
+
+        let second = engine.execute_action_trace("network-immediate-2".to_string(), &action, &ctx);
+        assert!(second.failure.is_none(), "{second:?}");
+        assert!(
+            second
+                .policy_tags
+                .iter()
+                .any(|tag| tag == "network_approval_outcome:approved_cached"),
+            "{:?}",
+            second.policy_tags
+        );
+    }
+
+    #[test]
+    fn deferred_network_denial_terminates_running_command() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let decisions_path = tmp.path().join("network-decisions.log");
+        fs::write(&decisions_path, "").expect("seed decisions file");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["sh".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let scope = allow_all_scope();
+        let env = HashMap::new();
+        let network_policy = NativeNetworkPolicy {
+            approval_mode: NativeNetworkApprovalMode::Deferred,
+            deferred_decisions_file: Some(decisions_path.to_string_lossy().to_string()),
+            ..NativeNetworkPolicy::default()
+        };
+        let ctx = test_tool_context_with_network_policy(
+            tmp.path(),
+            Some(&scope),
+            &policy,
+            &env,
+            NativeSandboxPolicy::default(),
+            NativeApprovalPolicy::default(),
+            network_policy,
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        );
+        let writer_path = decisions_path;
+        let writer = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(200));
+            fs::write(writer_path, "https://example.com:443,deny\n").expect("write denial");
+        });
+
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "command": "sh",
+                "args": ["-c", "sleep 5", "https://example.com"],
+                "timeout_ms": 5000
+            }),
+        };
+        let error = engine
+            .execute(&action, &ctx)
+            .expect_err("deferred denial should terminate command");
+        writer.join().expect("writer thread");
+        assert_eq!(error.code, "native_policy_violation");
+        assert!(
+            error
+                .policy_tags
+                .iter()
+                .any(|tag| tag == "network_approval_outcome:deferred_denied"),
+            "{:?}",
+            error.policy_tags
+        );
+    }
+
+    #[test]
+    fn managed_proxy_bind_is_clamped_without_dangerous_override() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["echo".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let scope = allow_all_scope();
+        let env = HashMap::new();
+        let network_policy = NativeNetworkPolicy {
+            proxy_mode: NativeNetworkProxyMode::Managed,
+            proxy_http_bind: "0.0.0.0:0".to_string(),
+            proxy_admin_bind: "0.0.0.0:0".to_string(),
+            ..NativeNetworkPolicy::default()
+        };
+        let ctx = test_tool_context_with_network_policy(
+            tmp.path(),
+            Some(&scope),
+            &policy,
+            &env,
+            NativeSandboxPolicy::default(),
+            NativeApprovalPolicy::default(),
+            network_policy,
+            NativeExecPolicyManager {
+                base: policy.clone(),
+                ..NativeExecPolicyManager::default()
+            },
+        );
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "command": "echo",
+                "args": ["https://example.com/resource"]
+            }),
+        };
+
+        let trace = engine.execute_action_trace("managed-proxy-check".to_string(), &action, &ctx);
+        assert!(trace.failure.is_none(), "{trace:?}");
+        assert!(
+            trace
+                .policy_tags
+                .iter()
+                .any(|tag| tag == "network_proxy_bind_clamped:true"),
+            "{:?}",
+            trace.policy_tags
         );
     }
 

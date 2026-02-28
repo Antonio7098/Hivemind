@@ -97,6 +97,11 @@ Scope violations are prevented before they occur.
 - Native sandbox policy orchestration (`read-only`, `workspace-write`, `danger-full-access`, `host-passthrough`)
 - Native approval policy orchestration (`never`, `on-failure`, `on-request`, `unless-trusted`) with bounded `approved_for_session` cache
 - Native command policy gates (`allowlist` / `denylist`, deny-by-default) plus dangerous-command analyzers and bounded prefix-rule amendments
+- Native network policy gates for command egress:
+  - managed proxy mode (`http` + optional `socks5` + local admin endpoint)
+  - loopback-safe bind clamping unless explicit dangerous override
+  - host allowlist/denylist (deny-wins), private/local address blocking, limited-mode method restrictions
+  - per-attempt host/protocol approvals (`immediate` and `deferred`) with deferred-denial watcher termination
 - Task scope projection (`HIVEMIND_TASK_SCOPE_JSON`) enforced before tool side effects
 - Policy/scope violations emit explicit `ToolCallFailed` + `RuntimeErrorClassified` and fail attempts deterministically
 

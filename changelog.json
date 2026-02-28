@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.47",
+      "date": "2026-02-28",
+      "phase": 54,
+      "changes": [
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Add managed native network policy contract in `src/native/tool_engine.rs` covering proxy mode (`off|managed`), host allowlist/denylist (deny-wins), private/local address blocking, limited access-mode method restrictions, and deterministic policy-tag emission"
+        },
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Introduce per-attempt host/protocol network approval lifecycle with immediate and deferred modes, bounded `approved_for_session` cache, explicit deny projection, and deferred-denial watcher termination for running `run_command` sessions"
+        },
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Introduce managed proxy runtime surfaces for native command execution with local HTTP listener, optional SOCKS5 listener, local admin endpoint, and safe loopback bind clamping unless explicit dangerous override is set"
+        },
+        {
+          "type": "changed",
+          "area": "native",
+          "description": "Refactor native `run_command` execution to child-process polling with enforced timeout/termination semantics, deferred network-decision polling, and managed proxy env injection (`HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`) when enabled"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Sprint 54 roadmap completion, update architecture/design docs for managed network policy + host approvals, and add Sprint 54 report/manual test artifacts under `ops/reports` and `hivemind-test/test-report`"
+        }
+      ]
+    },
+    {
       "version": "v0.1.46",
       "date": "2026-02-28",
       "phase": 53,
