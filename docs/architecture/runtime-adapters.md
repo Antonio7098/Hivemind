@@ -213,9 +213,9 @@ A native runtime foundation includes:
 
 ---
 
-### 8.2 Current Native Scope (Sprints 42-54)
+### 8.2 Current Native Scope (Sprints 42-55)
 
-Sprints 42-53 introduce a first native runtime adapter mode (`native`) while preserving existing
+Sprints 42-55 introduce a first native runtime adapter mode (`native`) while preserving existing
 external adapters as first-class execution backends.
 
 Current native mode includes:
@@ -247,6 +247,8 @@ Current native mode includes:
   - `list_files`
   - `write_file` (scope-gated)
   - `run_command` (sandbox + approval orchestrated, deny-by-default exec policy with dangerous-command analysis, managed network policy/host approvals, deferred network denial watcher termination)
+  - `exec_command` (persistent interactive command session spawn with stable session IDs)
+  - `write_stdin` (resume existing interactive command sessions with bounded output capture)
   - `git_status`
   - `git_diff`
   - `graph_query` (bounded query over UCP snapshot substrate)
@@ -262,6 +264,7 @@ Current native mode includes:
     - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_DENY_BY_DEFAULT`
     - `HIVEMIND_NATIVE_EXEC_PREFIX_RULE_MAX`
     - `HIVEMIND_NATIVE_EXEC_PREFIX_AMENDMENTS`
+    - `HIVEMIND_NATIVE_EXEC_SESSION_CAP`
   - sandbox policy controls:
     - `HIVEMIND_NATIVE_SANDBOX_MODE` (`read-only|workspace-write|danger-full-access|host-passthrough`)
     - `HIVEMIND_NATIVE_SANDBOX_WRITABLE_ROOTS`
