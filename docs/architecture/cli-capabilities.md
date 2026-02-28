@@ -340,6 +340,8 @@ Capabilities:
 - Configure native runtime provenance/capture policy with runtime env keys:
   - `HIVEMIND_NATIVE_PROVIDER`
   - `HIVEMIND_NATIVE_CAPTURE_FULL_PAYLOADS`
+- Configure runtime subprocess environment inheritance policy with:
+  - `HIVEMIND_RUNTIME_ENV_INHERIT` (`all|core|none`, default `core`)
 - Inspect native invocation event trails and blob references via `events list`
 
 ---

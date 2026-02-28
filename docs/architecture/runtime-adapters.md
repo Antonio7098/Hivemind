@@ -213,9 +213,9 @@ A native runtime foundation includes:
 
 ---
 
-### 8.2 Current Native Scope (Sprints 42-44)
+### 8.2 Current Native Scope (Sprints 42-52)
 
-Sprints 42-44 introduce a first native runtime adapter mode (`native`) while preserving existing
+Sprints 42-52 introduce a first native runtime adapter mode (`native`) while preserving existing
 external adapters as first-class execution backends.
 
 Current native mode includes:
@@ -260,6 +260,17 @@ Current native mode includes:
     - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_ALLOWLIST`
     - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_DENYLIST`
     - `HIVEMIND_NATIVE_TOOL_RUN_COMMAND_DENY_BY_DEFAULT`
+- host/process startup hardening for native binaries:
+  - disable core dumps on supported UNIX platforms before normal CLI/runtime startup
+  - deny debugger attach where supported (`linux`)
+  - clear dangerous loader env variables (`LD_*`, `DYLD_*`) before runtime initialization
+  - emit structured `startup_hardening_failed` payload to stderr and exit with code `70` on fail-fast startup hardening failure
+- protected runtime environment construction for runtime/tool subprocesses:
+  - `HIVEMIND_RUNTIME_ENV_INHERIT=all|core|none` (`core` by default)
+  - inherited env filtering for sensitive patterns (`*KEY*`, `*SECRET*`, `*TOKEN*`)
+  - inherited env filtering for reserved internal runtime keys/prefixes (`HIVEMIND_TASK_*`, `HIVEMIND_FLOW_*`, etc.)
+  - deterministic env overlays with explicit provenance
+  - additive `RuntimeEnvironmentPrepared` event emitted before `RuntimeStarted`
 
 Richer native execution internals (typed tool engine, policy-aware enforcement, and broader replay
 projection surfaces) continue in follow-on Phase 4 sprints.

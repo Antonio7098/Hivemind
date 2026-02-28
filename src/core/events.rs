@@ -1151,6 +1151,21 @@ pub enum EventPayload {
         #[serde(default)]
         flags: Vec<String>,
     },
+    RuntimeEnvironmentPrepared {
+        attempt_id: Uuid,
+        adapter_name: String,
+        inherit_mode: String,
+        #[serde(default)]
+        inherited_keys: Vec<String>,
+        #[serde(default)]
+        overlay_keys: Vec<String>,
+        #[serde(default)]
+        explicit_sensitive_overlay_keys: Vec<String>,
+        #[serde(default)]
+        dropped_sensitive_inherited_keys: Vec<String>,
+        #[serde(default)]
+        dropped_reserved_inherited_keys: Vec<String>,
+    },
     RuntimeCapabilitiesEvaluated {
         adapter_name: String,
         #[serde(default = "default_runtime_role_worker")]

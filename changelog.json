@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.45",
+      "date": "2026-02-28",
+      "phase": 52,
+      "changes": [
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Add pre-main startup hardening module (`src/native/startup_hardening.rs`) to disable core dumps on UNIX, deny debugger attach on Linux, clear dangerous loader env vars (`LD_*`, `DYLD_*`), and emit structured `startup_hardening_failed` failure payloads"
+        },
+        {
+          "type": "changed",
+          "area": "cli",
+          "description": "Enforce startup hardening gate in `src/main.rs` before normal CLI processing and return explicit startup hardening exit code `70` (`StartupHardeningFailed`)"
+        },
+        {
+          "type": "added",
+          "area": "core",
+          "description": "Add protected runtime environment policy in `src/adapters/runtime.rs` with inherit modes (`all|core|none`), sensitive inherited-key filtering, reserved internal inherited-key filtering, deterministic overlays, and provenance metadata"
+        },
+        {
+          "type": "changed",
+          "area": "adapters",
+          "description": "Apply hardened subprocess environment handling (`env_clear` + deterministic env overlays) across OpenCode adapter execution paths and native tool command/git execution paths"
+        },
+        {
+          "type": "added",
+          "area": "events",
+          "description": "Add and emit `RuntimeEnvironmentPrepared` event payload to make runtime env inheritance/overlay/drop provenance explicit before `RuntimeStarted`"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Sprint 52 roadmap completion and update architecture/design docs plus `hivemind-test` manual checklist/report artifacts for startup/runtime hardening behavior"
+        }
+      ]
+    },
+    {
       "version": "v0.1.44",
       "date": "2026-02-28",
       "phase": 42,

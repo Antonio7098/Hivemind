@@ -239,6 +239,7 @@ These events describe interactions with execution runtimes.
 
 Examples:
 - `RuntimeCapabilitiesEvaluated`
+- `RuntimeEnvironmentPrepared`
 - `RuntimeStarted`
 - `RuntimeOutputChunk`
 - `RuntimeInputProvided`
@@ -249,6 +250,10 @@ Examples:
 - `RuntimeRecoveryScheduled`
 
 Wrapper runtime events are intentionally coarse-grained.
+
+Runtime startup hardening failures occur before the event store is available.
+They are emitted as structured stderr JSON payloads (`startup_hardening_failed`)
+and terminate the process with exit code `70`.
 
 ### 12.1 Native Runtime Invocation Events
 

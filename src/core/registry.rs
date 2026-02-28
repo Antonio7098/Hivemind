@@ -56,8 +56,9 @@ use crate::adapters::codex::{CodexAdapter, CodexConfig};
 use crate::adapters::kilo::{KiloAdapter, KiloConfig};
 use crate::adapters::opencode::OpenCodeConfig;
 use crate::adapters::runtime::{
-    format_execution_prompt, AttemptSummary, ExecutionInput, InteractiveAdapterEvent,
-    InteractiveExecutionResult, NativeInvocationTrace, NativePayloadCaptureMode, RuntimeAdapter,
+    build_protected_runtime_environment, format_execution_prompt, AttemptSummary, ExecutionInput,
+    InteractiveAdapterEvent, InteractiveExecutionResult, NativeInvocationTrace,
+    NativePayloadCaptureMode, RuntimeAdapter, RuntimeEnvBuildError, RuntimeEnvironmentProvenance,
     RuntimeError,
 };
 use crate::adapters::{runtime_descriptors, SUPPORTED_ADAPTERS};
@@ -1177,6 +1178,20 @@ struct ClassifiedRuntimeError {
 }
 
 impl Registry {
+    fn runtime_env_build_error(error: RuntimeEnvBuildError, origin: &'static str) -> HivemindError {
+        HivemindError::runtime(error.code, error.message, origin).recoverable(false)
+    }
+
+    fn prepare_runtime_environment(
+        runtime: &mut ProjectRuntimeConfig,
+        origin: &'static str,
+    ) -> Result<RuntimeEnvironmentProvenance> {
+        let built = build_protected_runtime_environment(&runtime.env)
+            .map_err(|error| Self::runtime_env_build_error(error, origin))?;
+        runtime.env = built.env;
+        Ok(built.provenance)
+    }
+
     fn has_model_flag(args: &[String], short_alias: bool) -> bool {
         args.iter().any(|arg| {
             arg == "--model" || arg.starts_with("--model=") || (short_alias && arg == "-m")
@@ -7839,6 +7854,8 @@ impl Registry {
     }
 
     fn build_runtime_adapter(runtime: ProjectRuntimeConfig) -> Result<SelectedRuntimeAdapter> {
+        let mut runtime = runtime;
+        Self::prepare_runtime_environment(&mut runtime, "registry:build_runtime_adapter")?;
         let timeout = Duration::from_millis(runtime.timeout_ms);
         match runtime.adapter_name.as_str() {
             "opencode" => {
@@ -8450,23 +8467,7 @@ impl Registry {
             verifier_feedback: None,
         };
         let runtime_prompt = format_execution_prompt(&input);
-        let runtime_flags = Self::runtime_start_flags(&runtime);
-
-        self.store
-            .append(Event::new(
-                EventPayload::RuntimeStarted {
-                    adapter_name: runtime.adapter_name.clone(),
-                    role: RuntimeRole::Worker,
-                    task_id,
-                    attempt_id,
-                    prompt: runtime_prompt,
-                    flags: runtime_flags,
-                },
-                attempt_corr.clone(),
-            ))
-            .map_err(|e| {
-                HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
-            })?;
+        let mut runtime_flags = Self::runtime_start_flags(&runtime);
 
         let mut runtime_for_adapter = runtime;
 
@@ -8568,6 +8569,90 @@ impl Registry {
                 agent_path.to_string_lossy().to_string(),
             );
         }
+
+        let env_provenance =
+            match Self::prepare_runtime_environment(&mut runtime_for_adapter, "registry:tick_flow")
+            {
+                Ok(provenance) => provenance,
+                Err(err) => {
+                    self.handle_runtime_failure(
+                        &state,
+                        &flow,
+                        task_id,
+                        attempt_id,
+                        &runtime_for_adapter,
+                        next_attempt_number,
+                        max_attempts,
+                        &err.code,
+                        &err.message,
+                        err.recoverable,
+                        "",
+                        "",
+                        "registry:tick_flow",
+                    )?;
+                    return self.get_flow(flow_id);
+                }
+            };
+
+        runtime_flags.push(format!(
+            "env_inherit_mode={}",
+            env_provenance.inherit_mode.as_str()
+        ));
+        runtime_flags.push(format!(
+            "env_inherited={}",
+            env_provenance.inherited_keys.len()
+        ));
+        runtime_flags.push(format!("env_overlay={}", env_provenance.overlay_keys.len()));
+        runtime_flags.push(format!(
+            "env_dropped_sensitive_inherited={}",
+            env_provenance.dropped_sensitive_inherited_keys.len()
+        ));
+        runtime_flags.push(format!(
+            "env_dropped_reserved_inherited={}",
+            env_provenance.dropped_reserved_inherited_keys.len()
+        ));
+        let RuntimeEnvironmentProvenance {
+            inherit_mode,
+            inherited_keys,
+            overlay_keys,
+            explicit_sensitive_overlay_keys,
+            dropped_sensitive_inherited_keys,
+            dropped_reserved_inherited_keys,
+        } = env_provenance;
+
+        self.store
+            .append(Event::new(
+                EventPayload::RuntimeEnvironmentPrepared {
+                    attempt_id,
+                    adapter_name: runtime_for_adapter.adapter_name.clone(),
+                    inherit_mode: inherit_mode.as_str().to_string(),
+                    inherited_keys,
+                    overlay_keys,
+                    explicit_sensitive_overlay_keys,
+                    dropped_sensitive_inherited_keys,
+                    dropped_reserved_inherited_keys,
+                },
+                attempt_corr.clone(),
+            ))
+            .map_err(|e| {
+                HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
+            })?;
+
+        self.store
+            .append(Event::new(
+                EventPayload::RuntimeStarted {
+                    adapter_name: runtime_for_adapter.adapter_name.clone(),
+                    role: RuntimeRole::Worker,
+                    task_id,
+                    attempt_id,
+                    prompt: runtime_prompt,
+                    flags: runtime_flags,
+                },
+                attempt_corr.clone(),
+            ))
+            .map_err(|e| {
+                HivemindError::system("event_append_failed", e.to_string(), "registry:tick_flow")
+            })?;
 
         let mut adapter = Self::build_runtime_adapter(runtime_for_adapter.clone())?;
         if let Err(e) = adapter.initialize() {
@@ -18672,6 +18757,123 @@ rules:
                     | EventPayload::ToolCallFailed { .. }
                     | EventPayload::AgentTurnCompleted { .. }
                     | EventPayload::AgentInvocationCompleted { .. }
+            )
+        }));
+    }
+
+    #[test]
+    fn tick_flow_emits_runtime_environment_prepared_with_provenance() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &["sh".to_string(), "-c".to_string(), "echo hm".to_string()],
+                &[
+                    "HIVEMIND_RUNTIME_ENV_INHERIT=none".to_string(),
+                    "OPENROUTER_API_KEY=secret".to_string(),
+                ],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let _ = registry.tick_flow(&flow.id.to_string(), false, None);
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::RuntimeEnvironmentPrepared {
+                    attempt_id: _,
+                    adapter_name,
+                    inherit_mode,
+                    overlay_keys,
+                    explicit_sensitive_overlay_keys,
+                    ..
+                } if adapter_name == "opencode"
+                    && inherit_mode == "none"
+                    && overlay_keys.iter().any(|key| key == "OPENROUTER_API_KEY")
+                    && explicit_sensitive_overlay_keys.iter().any(|key| key == "OPENROUTER_API_KEY")
+            )
+        }));
+    }
+
+    #[test]
+    fn tick_flow_fails_fast_on_invalid_runtime_env_inherit_mode() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry.create_graph("proj", "g1", &[task.id]).unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        registry
+            .project_runtime_set(
+                "proj",
+                "opencode",
+                "/usr/bin/env",
+                None,
+                &[
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "echo should_not_run".to_string(),
+                ],
+                &["HIVEMIND_RUNTIME_ENV_INHERIT=bogus".to_string()],
+                1000,
+                1,
+            )
+            .unwrap();
+
+        let _ = registry
+            .tick_flow(&flow.id.to_string(), false, None)
+            .unwrap();
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::RuntimeErrorClassified { code, category, .. }
+                    if code == "runtime_env_inherit_mode_invalid" && category == "runtime_execution"
+            )
+        }));
+        assert!(!events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::RuntimeStarted { .. }
+                    if event.metadata.correlation.flow_id == Some(flow.id)
             )
         }));
     }

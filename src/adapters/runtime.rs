@@ -53,12 +53,221 @@
 //! - [`kilo`](super::kilo) - Kilo adapter
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;
+use std::hash::BuildHasher;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use uuid::Uuid;
+
+const ENV_POLICY_INHERIT_MODE_KEY: &str = "HIVEMIND_RUNTIME_ENV_INHERIT";
+const ENV_POLICY_INHERIT_ALL: &str = "all";
+const ENV_POLICY_INHERIT_CORE: &str = "core";
+const ENV_POLICY_INHERIT_NONE: &str = "none";
+const ENV_POLICY_INTERNAL_RESERVED_PREFIXES: [&str; 7] = [
+    "HIVEMIND_TASK_",
+    "HIVEMIND_ATTEMPT_",
+    "HIVEMIND_FLOW_",
+    "HIVEMIND_REPO_",
+    "HIVEMIND_GRAPH_",
+    "HIVEMIND_SCOPE_TRACE_",
+    "HIVEMIND_RUNTIME_INTERNAL_",
+];
+const ENV_POLICY_INTERNAL_RESERVED_KEYS: [&str; 6] = [
+    "HIVEMIND_PRIMARY_WORKTREE",
+    "HIVEMIND_ALL_WORKTREES",
+    "HIVEMIND_TASK_SCOPE_JSON",
+    "HIVEMIND_BIN",
+    "HIVEMIND_AGENT_BIN",
+    "HIVEMIND_PROJECT_CONSTITUTION_PATH",
+];
+const ENV_POLICY_CORE_INHERITED_KEYS: [&str; 18] = [
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "LANG",
+    "LANGUAGE",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TERM",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "SYSTEMROOT",
+    "COMSPEC",
+    "PATHEXT",
+    "WINDIR",
+    "NUMBER_OF_PROCESSORS",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeEnvInheritMode {
+    All,
+    Core,
+    None,
+}
+
+impl RuntimeEnvInheritMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::All => ENV_POLICY_INHERIT_ALL,
+            Self::Core => ENV_POLICY_INHERIT_CORE,
+            Self::None => ENV_POLICY_INHERIT_NONE,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeEnvBuildError {
+    pub code: String,
+    pub message: String,
+}
+
+impl RuntimeEnvBuildError {
+    #[must_use]
+    pub fn invalid_inherit_mode(raw: &str) -> Self {
+        Self {
+            code: "runtime_env_inherit_mode_invalid".to_string(),
+            message: format!(
+                "Invalid {ENV_POLICY_INHERIT_MODE_KEY} value '{raw}'. Expected one of: {ENV_POLICY_INHERIT_ALL}, {ENV_POLICY_INHERIT_CORE}, {ENV_POLICY_INHERIT_NONE}"
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeEnvironmentProvenance {
+    pub inherit_mode: RuntimeEnvInheritMode,
+    #[serde(default)]
+    pub inherited_keys: Vec<String>,
+    #[serde(default)]
+    pub overlay_keys: Vec<String>,
+    #[serde(default)]
+    pub explicit_sensitive_overlay_keys: Vec<String>,
+    #[serde(default)]
+    pub dropped_sensitive_inherited_keys: Vec<String>,
+    #[serde(default)]
+    pub dropped_reserved_inherited_keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProtectedRuntimeEnvironment {
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+    pub provenance: RuntimeEnvironmentProvenance,
+}
+
+fn parse_inherit_mode<S: BuildHasher>(
+    runtime_overlay: &HashMap<String, String, S>,
+) -> std::result::Result<RuntimeEnvInheritMode, RuntimeEnvBuildError> {
+    let Some(raw) = runtime_overlay.get(ENV_POLICY_INHERIT_MODE_KEY) else {
+        return Ok(RuntimeEnvInheritMode::Core);
+    };
+    let normalized = raw.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        ENV_POLICY_INHERIT_ALL => Ok(RuntimeEnvInheritMode::All),
+        ENV_POLICY_INHERIT_CORE => Ok(RuntimeEnvInheritMode::Core),
+        ENV_POLICY_INHERIT_NONE => Ok(RuntimeEnvInheritMode::None),
+        _ => Err(RuntimeEnvBuildError::invalid_inherit_mode(raw)),
+    }
+}
+
+fn is_core_inherited_key(key: &str) -> bool {
+    ENV_POLICY_CORE_INHERITED_KEYS
+        .iter()
+        .any(|candidate| candidate.eq_ignore_ascii_case(key))
+}
+
+fn is_sensitive_key(key: &str) -> bool {
+    let upper = key.to_ascii_uppercase();
+    upper.contains("KEY") || upper.contains("SECRET") || upper.contains("TOKEN")
+}
+
+fn is_reserved_internal_key(key: &str) -> bool {
+    ENV_POLICY_INTERNAL_RESERVED_KEYS
+        .iter()
+        .any(|candidate| candidate.eq_ignore_ascii_case(key))
+        || ENV_POLICY_INTERNAL_RESERVED_PREFIXES
+            .iter()
+            .any(|prefix| key.starts_with(prefix))
+}
+
+#[must_use]
+pub fn deterministic_env_pairs<S: BuildHasher>(
+    env: &HashMap<String, String, S>,
+) -> Vec<(String, String)> {
+    let mut ordered = BTreeMap::new();
+    for (key, value) in env {
+        ordered.insert(key.clone(), value.clone());
+    }
+    ordered.into_iter().collect()
+}
+
+pub fn build_protected_runtime_environment<S: BuildHasher>(
+    runtime_overlay: &HashMap<String, String, S>,
+) -> std::result::Result<ProtectedRuntimeEnvironment, RuntimeEnvBuildError> {
+    let inherit_mode = parse_inherit_mode(runtime_overlay)?;
+
+    let inherited_candidates: Vec<(String, String)> = match inherit_mode {
+        RuntimeEnvInheritMode::All => std::env::vars().collect(),
+        RuntimeEnvInheritMode::Core => std::env::vars()
+            .filter(|(key, _)| is_core_inherited_key(key))
+            .collect(),
+        RuntimeEnvInheritMode::None => Vec::new(),
+    };
+
+    let mut ordered_env = BTreeMap::new();
+    let mut inherited_keys = Vec::new();
+    let mut overlay_keys = Vec::new();
+    let mut explicit_sensitive_overlay_keys = Vec::new();
+    let mut dropped_sensitive_inherited_keys = Vec::new();
+    let mut dropped_reserved_inherited_keys = Vec::new();
+
+    let mut inherited_sorted = inherited_candidates;
+    inherited_sorted.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (key, value) in inherited_sorted {
+        if is_reserved_internal_key(&key) {
+            dropped_reserved_inherited_keys.push(key);
+            continue;
+        }
+        if is_sensitive_key(&key) {
+            dropped_sensitive_inherited_keys.push(key);
+            continue;
+        }
+        inherited_keys.push(key.clone());
+        ordered_env.insert(key, value);
+    }
+
+    for (key, value) in deterministic_env_pairs(runtime_overlay) {
+        if key.eq_ignore_ascii_case(ENV_POLICY_INHERIT_MODE_KEY) {
+            continue;
+        }
+        if is_sensitive_key(&key) {
+            explicit_sensitive_overlay_keys.push(key.clone());
+        }
+        overlay_keys.push(key.clone());
+        ordered_env.insert(key, value);
+    }
+
+    let env = ordered_env.into_iter().collect::<HashMap<_, _>>();
+    Ok(ProtectedRuntimeEnvironment {
+        env,
+        provenance: RuntimeEnvironmentProvenance {
+            inherit_mode,
+            inherited_keys,
+            overlay_keys,
+            explicit_sensitive_overlay_keys,
+            dropped_sensitive_inherited_keys,
+            dropped_reserved_inherited_keys,
+        },
+    })
+}
 
 /// Input for runtime execution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -537,6 +746,87 @@ mod tests {
         assert_eq!(config.timeout, Duration::from_secs(60));
         assert_eq!(config.args, vec!["--verbose"]);
         assert_eq!(config.env.get("DEBUG"), Some(&"true".to_string()));
+    }
+
+    #[test]
+    fn parse_env_inherit_mode_rejects_invalid_values() {
+        let mut overlay = HashMap::new();
+        overlay.insert(
+            ENV_POLICY_INHERIT_MODE_KEY.to_string(),
+            "mystery".to_string(),
+        );
+        let error = parse_inherit_mode(&overlay).expect_err("invalid mode should fail");
+        assert_eq!(error.code, "runtime_env_inherit_mode_invalid");
+    }
+
+    #[test]
+    fn protected_runtime_env_none_mode_uses_only_overlay() {
+        let mut overlay = HashMap::new();
+        overlay.insert(
+            ENV_POLICY_INHERIT_MODE_KEY.to_string(),
+            ENV_POLICY_INHERIT_NONE.to_string(),
+        );
+        overlay.insert("PATH".to_string(), "/overlay/bin".to_string());
+        overlay.insert("OPENROUTER_API_KEY".to_string(), "secret".to_string());
+
+        let built = build_protected_runtime_environment(&overlay).expect("env build should work");
+        assert_eq!(built.provenance.inherit_mode, RuntimeEnvInheritMode::None);
+        assert!(built.provenance.inherited_keys.is_empty());
+        assert_eq!(built.env.get("PATH"), Some(&"/overlay/bin".to_string()));
+        assert_eq!(
+            built.provenance.explicit_sensitive_overlay_keys,
+            vec!["OPENROUTER_API_KEY".to_string()]
+        );
+        assert!(!built.env.contains_key(ENV_POLICY_INHERIT_MODE_KEY));
+    }
+
+    #[test]
+    fn protected_runtime_env_filters_sensitive_and_reserved_inherited_vars() {
+        let mut overlay = HashMap::new();
+        overlay.insert(
+            ENV_POLICY_INHERIT_MODE_KEY.to_string(),
+            ENV_POLICY_INHERIT_ALL.to_string(),
+        );
+
+        let old_path = std::env::var("PATH").ok();
+        let old_token = std::env::var("PARENT_TOKEN").ok();
+        let old_reserved = std::env::var("HIVEMIND_TASK_ID").ok();
+        std::env::set_var("PATH", "/tmp/hardened-path");
+        std::env::set_var("PARENT_TOKEN", "super-secret");
+        std::env::set_var("HIVEMIND_TASK_ID", "injected");
+
+        let built = build_protected_runtime_environment(&overlay).expect("env build should work");
+
+        match old_path {
+            Some(value) => std::env::set_var("PATH", value),
+            None => std::env::remove_var("PATH"),
+        }
+        match old_token {
+            Some(value) => std::env::set_var("PARENT_TOKEN", value),
+            None => std::env::remove_var("PARENT_TOKEN"),
+        }
+        match old_reserved {
+            Some(value) => std::env::set_var("HIVEMIND_TASK_ID", value),
+            None => std::env::remove_var("HIVEMIND_TASK_ID"),
+        }
+
+        assert_eq!(built.provenance.inherit_mode, RuntimeEnvInheritMode::All);
+        assert!(built
+            .provenance
+            .dropped_sensitive_inherited_keys
+            .iter()
+            .any(|key| key == "PARENT_TOKEN"));
+        assert!(built
+            .provenance
+            .dropped_reserved_inherited_keys
+            .iter()
+            .any(|key| key == "HIVEMIND_TASK_ID"));
+        assert!(!built.env.contains_key("PARENT_TOKEN"));
+        assert!(!built.env.contains_key("HIVEMIND_TASK_ID"));
+        assert_eq!(
+            built.env.get("PATH"),
+            Some(&"/tmp/hardened-path".to_string())
+        );
     }
 
     #[test]

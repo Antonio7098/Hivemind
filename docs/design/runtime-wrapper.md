@@ -113,8 +113,13 @@ Set up the execution environment for a specific task attempt.
    HIVEMIND_PROJECT_ID=<project_id>
    HIVEMIND_WORKTREE=<worktree_path>
    ```
-   - Remove sensitive environment variables
-   - Set resource limits
+   - Build protected runtime env deterministically:
+     - `HIVEMIND_RUNTIME_ENV_INHERIT=all|core|none` (`core` default)
+     - `core` inherits only minimal host keys (`PATH`, `HOME`, locale/shell/temp keys, platform-safe equivalents)
+     - inherited sensitive keys matching `*KEY*`, `*SECRET*`, `*TOKEN*` are dropped
+     - inherited reserved internal runtime keys/prefixes are dropped (`HIVEMIND_TASK_*`, `HIVEMIND_FLOW_*`, etc.)
+     - explicit runtime overlay env always wins and is applied in deterministic key order
+   - Emit `RuntimeEnvironmentPrepared` with inherit/overlay/drop provenance
 
 3. **Record Baseline**
    - Snapshot filesystem state (file list + hashes)
@@ -497,6 +502,7 @@ No code changes required for basic support.
 | Event | When |
 |-------|------|
 | RuntimeStarted | Process launched |
+| RuntimeEnvironmentPrepared | Protected subprocess environment resolved before launch |
 | RuntimeOutputChunk | Periodically during execution |
 | RuntimeInputProvided | User input forwarded to runtime (interactive mode only) |
 | RuntimeInterrupted | User interrupted runtime (interactive mode only) |
@@ -530,11 +536,10 @@ For debugging failed attempts:
 ### 13.1 Environment Sanitization
 
 Remove from subprocess environment:
-- Hivemind internal secrets
-- Credentials for other services
-- Sensitive paths
-
-Passthrough only explicitly allowed variables.
+- everything by default (`Command::env_clear`)
+- then only deterministic protected env keys (inherited policy + explicit overlays)
+- inherited sensitive keys (`*KEY*`, `*SECRET*`, `*TOKEN*`) are denied unless reintroduced explicitly via runtime overlay
+- inherited reserved internal runtime keys are denied and rebuilt from current attempt context
 
 ### 13.2 Resource Limits
 

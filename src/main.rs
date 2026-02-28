@@ -28,6 +28,7 @@ use hivemind::core::scope::RepoAccessMode;
 use hivemind::core::scope::Scope;
 use hivemind::core::skill_registry;
 use hivemind::core::state::{AttemptState, Project, Task, TaskState};
+use hivemind::native::startup_hardening;
 use std::ffi::OsString;
 use std::fs;
 use std::process;
@@ -148,6 +149,11 @@ fn handle_clap_error(err: &clap::Error, format: OutputFormat) -> ExitCode {
 }
 
 fn main() {
+    if let Err(failure) = startup_hardening::apply_pre_main_hardening() {
+        startup_hardening::emit_startup_hardening_failure_event(&failure);
+        process::exit(i32::from(ExitCode::StartupHardeningFailed));
+    }
+
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let is_broken_pipe = info
@@ -2435,6 +2441,7 @@ fn event_type_label(payload: &hivemind::core::events::EventPayload) -> &'static 
         EventPayload::AgentTurnCompleted { .. } => "agent_turn_completed",
         EventPayload::AgentInvocationCompleted { .. } => "agent_invocation_completed",
         EventPayload::RuntimeStarted { .. } => "runtime_started",
+        EventPayload::RuntimeEnvironmentPrepared { .. } => "runtime_environment_prepared",
         EventPayload::RuntimeOutputChunk { .. } => "runtime_output_chunk",
         EventPayload::RuntimeInputProvided { .. } => "runtime_input_provided",
         EventPayload::RuntimeInterrupted { .. } => "runtime_interrupted",

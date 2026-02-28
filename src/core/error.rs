@@ -203,6 +203,7 @@ pub enum ExitCode {
     NotFound = 2,
     Conflict = 3,
     PermissionDenied = 4,
+    StartupHardeningFailed = 70,
 }
 
 impl From<ExitCode> for i32 {
