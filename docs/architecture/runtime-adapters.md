@@ -213,9 +213,9 @@ A native runtime foundation includes:
 
 ---
 
-### 8.2 Current Native Scope (Sprints 42-56)
+### 8.2 Current Native Scope (Sprints 42-57)
 
-Sprints 42-56 introduce a first native runtime adapter mode (`native`) while preserving existing
+Sprints 42-57 introduce a first native runtime adapter mode (`native`) while preserving existing
 external adapters as first-class execution backends.
 
 Current native mode includes:
