@@ -4701,7 +4701,7 @@ mod tests {
             let action = NativeToolAction {
                 name: "exec_command".to_string(),
                 version: TOOL_VERSION_V1.to_string(),
-                input: json!({"cmd":"sleep","args":["5"]}),
+                input: json!({"cmd":"sleep","args":["1"]}),
             };
             let out = engine.execute(&action, ctx).expect("spawn");
             let decoded: ExecSessionOutput = serde_json::from_value(out).expect("decode");
