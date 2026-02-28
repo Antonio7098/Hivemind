@@ -352,6 +352,8 @@ pub struct NativeInvocationTrace {
     pub final_summary: Option<String>,
     #[serde(default)]
     pub failure: Option<NativeInvocationFailure>,
+    #[serde(default)]
+    pub transport: NativeTransportTelemetry,
 }
 
 /// One native runtime turn trace.
@@ -398,6 +400,42 @@ pub struct NativeInvocationFailure {
     pub recoverable: bool,
     #[serde(default)]
     pub recovery_hint: Option<String>,
+}
+
+/// Native model transport telemetry for retries/fallbacks.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct NativeTransportTelemetry {
+    #[serde(default)]
+    pub attempts: Vec<NativeTransportAttemptTrace>,
+    #[serde(default)]
+    pub fallback_activations: Vec<NativeTransportFallbackTrace>,
+    #[serde(default)]
+    pub active_transport: Option<String>,
+}
+
+/// One transport attempt failure/retry decision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeTransportAttemptTrace {
+    pub turn_index: u32,
+    pub attempt: u32,
+    pub transport: String,
+    pub code: String,
+    pub message: String,
+    pub retryable: bool,
+    pub rate_limited: bool,
+    #[serde(default)]
+    pub status_code: Option<u16>,
+    #[serde(default)]
+    pub backoff_ms: Option<u64>,
+}
+
+/// One transport fallback activation record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeTransportFallbackTrace {
+    pub turn_index: u32,
+    pub from_transport: String,
+    pub to_transport: String,
+    pub reason: String,
 }
 
 /// Report from runtime execution.

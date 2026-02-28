@@ -129,26 +129,26 @@
 **Goal:** Harden model transport behavior under transient failures and degraded network conditions.
 
 ### 56.1 Retry policy framework
-- [ ] Add provider-level retry policy fields:
-  - [ ] max attempts (bounded)
-  - [ ] base delay
-  - [ ] retry on 429/5xx/transport toggles
-- [ ] Implement exponential backoff with jitter for retryable failures
+- [x] Add provider-level retry policy fields:
+  - [x] max attempts (bounded)
+  - [x] base delay
+  - [x] retry on 429/5xx/transport toggles
+- [x] Implement exponential backoff with jitter for retryable failures
 
 ### 56.2 Streaming robustness
-- [ ] Add streaming idle-timeout controls with explicit stream-failed classification
-- [ ] Add structured handling for incomplete/failed stream terminal events
-- [ ] Emit retry delay and retryable classification in runtime events
+- [x] Add streaming idle-timeout controls with explicit stream-failed classification
+- [x] Add structured handling for incomplete/failed stream terminal events
+- [x] Emit retry delay and retryable classification in runtime events
 
 ### 56.3 Fallback transport strategy
-- [ ] Add explicit fallback transport path (e.g., websocket to HTTP) when configured transport becomes unhealthy
-- [ ] Persist per-session fallback activation state and telemetry
-- [ ] Ensure fallback behavior is visible in runtime/report projections
+- [x] Add explicit fallback transport path (e.g., websocket to HTTP) when configured transport becomes unhealthy
+- [x] Persist per-session fallback activation state and telemetry
+- [x] Ensure fallback behavior is visible in runtime/report projections
 
 ### 56.4 Exit Criteria
-- [ ] Transient model transport failures recover under bounded retries
-- [ ] Idle/disconnect failures are explicit and attributable
-- [ ] Fallback transport activation is deterministic and observable
+- [x] Transient model transport failures recover under bounded retries
+- [x] Idle/disconnect failures are explicit and attributable
+- [x] Fallback transport activation is deterministic and observable
 
 ---
 

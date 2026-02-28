@@ -1303,6 +1303,10 @@ impl Registry {
 
         let category = if rate_limited {
             "rate_limit"
+        } else if code.starts_with("native_stream_") {
+            "transport_stream"
+        } else if code.starts_with("native_transport_") {
+            "transport"
         } else if code == "timeout" {
             "timeout"
         } else if code == "checkpoints_incomplete" {
@@ -1594,7 +1598,9 @@ impl Registry {
                 || matches!(
                     classified.code.as_str(),
                     "timeout" | "wait_failed" | "stdin_write_failed"
-                ));
+                )
+                || classified.code.starts_with("native_transport_")
+                || classified.code.starts_with("native_stream_"));
 
         if should_retry {
             self.schedule_runtime_recovery(
@@ -2065,6 +2071,69 @@ impl Registry {
                         turn_index: turn.turn_index,
                         to_state: turn.to_state.clone(),
                         summary: turn.turn_summary.clone(),
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+        }
+
+        for attempt in &invocation.transport.attempts {
+            let category = if attempt.rate_limited {
+                "rate_limit"
+            } else if attempt.code.starts_with("native_stream_") {
+                "transport_stream"
+            } else {
+                "transport"
+            };
+            self.append_event(
+                Event::new(
+                    EventPayload::RuntimeErrorClassified {
+                        attempt_id,
+                        adapter_name: adapter_name.to_string(),
+                        code: attempt.code.clone(),
+                        category: category.to_string(),
+                        message: attempt.message.clone(),
+                        recoverable: attempt.retryable,
+                        retryable: attempt.retryable,
+                        rate_limited: attempt.rate_limited,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+
+            if let Some(backoff_ms) = attempt.backoff_ms {
+                self.append_event(
+                    Event::new(
+                        EventPayload::RuntimeRecoveryScheduled {
+                            attempt_id,
+                            from_adapter: format!("{adapter_name}:{}", attempt.transport),
+                            to_adapter: format!("{adapter_name}:{}", attempt.transport),
+                            strategy: "native_transport_retry".to_string(),
+                            reason: format!(
+                                "turn={} code={} retryable={}",
+                                attempt.turn_index, attempt.code, attempt.retryable
+                            ),
+                            backoff_ms,
+                        },
+                        correlation.clone(),
+                    ),
+                    origin,
+                )?;
+            }
+        }
+
+        for fallback in &invocation.transport.fallback_activations {
+            self.append_event(
+                Event::new(
+                    EventPayload::RuntimeRecoveryScheduled {
+                        attempt_id,
+                        from_adapter: format!("{adapter_name}:{}", fallback.from_transport),
+                        to_adapter: format!("{adapter_name}:{}", fallback.to_transport),
+                        strategy: "native_transport_fallback".to_string(),
+                        reason: format!("turn={} reason={}", fallback.turn_index, fallback.reason),
+                        backoff_ms: 0,
                     },
                     correlation.clone(),
                 ),
@@ -19297,6 +19366,134 @@ rules:
                 .get(&task.id)
                 .map(|exec| exec.state)
         );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn native_transport_telemetry_is_projected_into_runtime_events() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo_dir = tmp.path().join("repo");
+        init_git_repo(&repo_dir);
+
+        let registry = test_registry();
+        registry.create_project("proj", None).unwrap();
+        registry
+            .attach_repo(
+                "proj",
+                &repo_dir.to_string_lossy(),
+                None,
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let task = registry.create_task("proj", "Task 1", None, None).unwrap();
+        let graph = registry
+            .create_graph("proj", "g-native-transport-telemetry", &[task.id])
+            .unwrap();
+        let flow = registry.create_flow(&graph.id.to_string(), None).unwrap();
+        let flow = registry.start_flow(&flow.id.to_string()).unwrap();
+
+        let attempt_id = Uuid::new_v4();
+        let correlation = CorrelationIds::for_graph_flow_task_attempt(
+            flow.project_id,
+            flow.graph_id,
+            flow.id,
+            task.id,
+            attempt_id,
+        );
+
+        let invocation = NativeInvocationTrace {
+            invocation_id: "native-invocation-transport".to_string(),
+            provider: "openrouter".to_string(),
+            model: "test-model".to_string(),
+            runtime_version: env!("CARGO_PKG_VERSION").to_string(),
+            capture_mode: NativePayloadCaptureMode::MetadataOnly,
+            turns: Vec::new(),
+            final_state: "done".to_string(),
+            final_summary: Some("ok".to_string()),
+            failure: None,
+            transport: crate::adapters::runtime::NativeTransportTelemetry {
+                attempts: vec![crate::adapters::runtime::NativeTransportAttemptTrace {
+                    turn_index: 0,
+                    attempt: 1,
+                    transport: "http_primary".to_string(),
+                    code: "native_transport_http_429".to_string(),
+                    message: "rate limited".to_string(),
+                    retryable: true,
+                    rate_limited: true,
+                    status_code: Some(429),
+                    backoff_ms: Some(17),
+                }],
+                fallback_activations: vec![
+                    crate::adapters::runtime::NativeTransportFallbackTrace {
+                        turn_index: 0,
+                        from_transport: "http_primary".to_string(),
+                        to_transport: "http_fallback".to_string(),
+                        reason: "native_transport_http_429".to_string(),
+                    },
+                ],
+                active_transport: Some("http_fallback".to_string()),
+            },
+        };
+
+        registry
+            .append_native_invocation_events(
+                &flow,
+                task.id,
+                attempt_id,
+                &correlation,
+                "native",
+                &invocation,
+                "registry:test",
+            )
+            .expect("native invocation telemetry projection should succeed");
+
+        let events = registry.read_events(&EventFilter::all()).unwrap();
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::RuntimeErrorClassified {
+                    code,
+                    category,
+                    retryable,
+                    rate_limited,
+                    ..
+                } if code == "native_transport_http_429"
+                    && category == "rate_limit"
+                    && *retryable
+                    && *rate_limited
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::RuntimeRecoveryScheduled {
+                    strategy,
+                    from_adapter,
+                    to_adapter,
+                    backoff_ms,
+                    ..
+                } if strategy == "native_transport_retry"
+                    && from_adapter == "native:http_primary"
+                    && to_adapter == "native:http_primary"
+                    && *backoff_ms == 17
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                &event.payload,
+                EventPayload::RuntimeRecoveryScheduled {
+                    strategy,
+                    from_adapter,
+                    to_adapter,
+                    backoff_ms,
+                    ..
+                } if strategy == "native_transport_fallback"
+                    && from_adapter == "native:http_primary"
+                    && to_adapter == "native:http_fallback"
+                    && *backoff_ms == 0
+            )
+        }));
     }
 
     #[test]

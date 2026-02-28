@@ -203,9 +203,34 @@ Monitor for:
 - RuntimeOutputChunk events (during execution)
 - RuntimeExited event (on completion)
 
+### 5.8 Provider Transport Resilience (Native OpenRouter)
+
+Native provider calls use explicit bounded recovery policy rather than unbounded retries.
+
+- Retry policy fields:
+  - `HIVEMIND_NATIVE_OPENROUTER_RETRY_MAX_ATTEMPTS`
+  - `HIVEMIND_NATIVE_OPENROUTER_RETRY_BASE_DELAY_MS`
+  - `HIVEMIND_NATIVE_OPENROUTER_RETRY_ON_429`
+  - `HIVEMIND_NATIVE_OPENROUTER_RETRY_ON_5XX`
+  - `HIVEMIND_NATIVE_OPENROUTER_RETRY_ON_TRANSPORT`
+- Backoff policy:
+  - exponential backoff per retry attempt
+  - deterministic jitter to avoid lockstep retry bursts while keeping event/replay stability
+- Streaming robustness:
+  - `HIVEMIND_NATIVE_OPENROUTER_STREAM_IDLE_TIMEOUT_MS` explicitly classifies idle failures (`native_stream_idle_timeout`)
+  - incomplete/failed terminal responses are explicitly classified (`native_stream_terminal_incomplete`, `native_stream_terminal_failed`)
+- Fallback path:
+  - `OPENROUTER_API_FALLBACK_BASE_URL` enables explicit primary-to-fallback transport switch when primary transport is unhealthy
+  - fallback activation is sticky for the invocation session and emitted as telemetry
+
+Runtime observability requirements:
+
+- retryable transport failures are emitted via `RuntimeErrorClassified`
+- retry backoff delays and fallback activation are emitted via `RuntimeRecoveryScheduled`
+- native invocation traces persist per-turn transport attempts and fallback activation state
 ---
 
-### 5.8 Interactive Execution (PTY-Backed Session Mode)
+### 5.9 Interactive Execution (PTY-Backed Session Mode)
 
 Some runtimes are inherently interactive: they prompt for follow-up input, confirmations, or iterative guidance while they run.
 
@@ -219,7 +244,7 @@ In interactive mode, the adapter:
 - Accepts user-provided input lines and forwards them to the PTY
 - Emits explicit events for every user input and interruption
 
-#### 5.8.1 Session Loop
+#### 5.9.1 Session Loop
 
 At a high level:
 
@@ -232,7 +257,7 @@ At a high level:
 
 Output labeling ("Agent:" vs "Tool:") is **best-effort presentation** only. Hivemind must not depend on parsing correctness.
 
-#### 5.8.2 Interrupt Semantics
+#### 5.9.2 Interrupt Semantics
 
 Ctrl+C is not a crash.
 

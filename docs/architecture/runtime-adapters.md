@@ -213,9 +213,9 @@ A native runtime foundation includes:
 
 ---
 
-### 8.2 Current Native Scope (Sprints 42-55)
+### 8.2 Current Native Scope (Sprints 42-56)
 
-Sprints 42-55 introduce a first native runtime adapter mode (`native`) while preserving existing
+Sprints 42-56 introduce a first native runtime adapter mode (`native`) while preserving existing
 external adapters as first-class execution backends.
 
 Current native mode includes:
@@ -302,6 +302,24 @@ Current native mode includes:
   - inherited env filtering for reserved internal runtime keys/prefixes (`HIVEMIND_TASK_*`, `HIVEMIND_FLOW_*`, etc.)
   - deterministic env overlays with explicit provenance
   - additive `RuntimeEnvironmentPrepared` event emitted before `RuntimeStarted`
+- provider transport resilience controls (`openrouter`):
+  - retry policy:
+    - `HIVEMIND_NATIVE_OPENROUTER_RETRY_MAX_ATTEMPTS` (bounded; default `3`)
+    - `HIVEMIND_NATIVE_OPENROUTER_RETRY_BASE_DELAY_MS` (bounded base delay for exponential backoff)
+    - `HIVEMIND_NATIVE_OPENROUTER_RETRY_ON_429`
+    - `HIVEMIND_NATIVE_OPENROUTER_RETRY_ON_5XX`
+    - `HIVEMIND_NATIVE_OPENROUTER_RETRY_ON_TRANSPORT`
+  - streaming robustness:
+    - `HIVEMIND_NATIVE_OPENROUTER_STREAM_IDLE_TIMEOUT_MS` for explicit idle timeout classification (`native_stream_idle_timeout`)
+    - explicit incomplete/failed stream terminal classification (`native_stream_terminal_incomplete`, `native_stream_terminal_failed`)
+  - fallback path:
+    - `OPENROUTER_API_FALLBACK_BASE_URL` enables transport fallback from primary to fallback endpoint when retryable transport failures occur
+    - fallback activation state and per-attempt retry/backoff telemetry are persisted in native invocation traces
+  - runtime event projection:
+    - retryable transport failures are emitted as `RuntimeErrorClassified` with explicit `retryable`/`rate_limited` flags
+    - retry delay and fallback activation are emitted as `RuntimeRecoveryScheduled` with strategies:
+      - `native_transport_retry`
+      - `native_transport_fallback`
 
 Richer native execution internals (typed tool engine, policy-aware enforcement, and broader replay
 projection surfaces) continue in follow-on Phase 4 sprints.
