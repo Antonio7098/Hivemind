@@ -8684,12 +8684,14 @@ impl Registry {
                 .insert(env_key, wt.path.to_string_lossy().to_string());
         }
         if runtime_for_adapter.adapter_name == "native" {
-            let native_state_dir = self.config.data_dir.join("native-runtime");
-            let _ = fs::create_dir_all(&native_state_dir);
-            runtime_for_adapter.env.insert(
-                "HIVEMIND_NATIVE_STATE_DIR".to_string(),
-                native_state_dir.to_string_lossy().to_string(),
-            );
+            runtime_for_adapter
+                .env
+                .entry("HIVEMIND_NATIVE_STATE_DIR".to_string())
+                .or_insert_with(|| {
+                    let native_state_dir = self.config.data_dir.join("native-runtime");
+                    let _ = fs::create_dir_all(&native_state_dir);
+                    native_state_dir.to_string_lossy().to_string()
+                });
             let project = state.projects.get(&flow.project_id).ok_or_else(|| {
                 HivemindError::system(
                     "project_not_found",
