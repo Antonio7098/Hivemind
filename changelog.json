@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.49",
+      "date": "2026-02-28",
+      "phase": 56,
+      "changes": [
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Add bounded OpenRouter provider retry policy in `src/native/mod.rs` with explicit controls for max attempts, base delay, and retry toggles across 429/5xx/transport failures"
+        },
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Implement exponential backoff with deterministic jitter plus streaming resilience classification (`native_stream_idle_timeout`, `native_stream_terminal_incomplete`, `native_stream_terminal_failed`) and structured per-attempt transport telemetry"
+        },
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Introduce explicit primary-to-fallback transport path via `OPENROUTER_API_FALLBACK_BASE_URL`, persist session fallback activation state, and project transport retry/fallback behavior through native invocation traces"
+        },
+        {
+          "type": "changed",
+          "area": "events",
+          "description": "Project native transport retry/fallback telemetry into runtime events (`RuntimeErrorClassified`, `RuntimeRecoveryScheduled`) with explicit retryable/rate-limited flags and retry delay visibility"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 56 coverage for OpenRouter retry/backoff, fallback activation, stream-terminal classification, idle timeout classification, and native transport telemetry event projection"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Sprint 56 roadmap completion, update runtime architecture/design docs for transport resilience controls, and add Sprint 56 report/manual test artifacts"
+        }
+      ]
+    },
+    {
       "version": "v0.1.48",
       "date": "2026-02-28",
       "phase": 55,

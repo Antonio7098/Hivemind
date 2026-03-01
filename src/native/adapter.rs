@@ -3,8 +3,8 @@
 use crate::adapters::runtime::{
     AdapterConfig, ExecutionInput, ExecutionReport, InteractiveAdapterEvent,
     InteractiveExecutionResult, NativeInvocationFailure, NativeInvocationTrace,
-    NativePayloadCaptureMode, NativeToolCallFailure, NativeToolCallTrace, NativeTurnTrace,
-    RuntimeAdapter, RuntimeError,
+    NativePayloadCaptureMode, NativeToolCallFailure, NativeToolCallTrace, NativeTransportTelemetry,
+    NativeTurnTrace, RuntimeAdapter, RuntimeError,
 };
 use crate::core::scope::Scope;
 use crate::native::tool_engine::{
@@ -127,6 +127,7 @@ impl NativeRuntimeAdapter {
         invocation_id: &str,
         config: &NativeAdapterConfig,
         result: &crate::native::AgentLoopResult,
+        transport: NativeTransportTelemetry,
         tool_engine: &NativeToolEngine,
         tool_context: &ToolExecutionContext<'_>,
     ) -> NativeInvocationTrace {
@@ -196,6 +197,7 @@ impl NativeRuntimeAdapter {
             final_state: result.final_state.as_str().to_string(),
             final_summary: result.final_summary.clone(),
             failure,
+            transport,
         }
     }
 
@@ -204,6 +206,7 @@ impl NativeRuntimeAdapter {
         config: &NativeAdapterConfig,
         final_state: crate::native::AgentLoopState,
         err: &crate::native::NativeRuntimeError,
+        transport: NativeTransportTelemetry,
     ) -> NativeInvocationTrace {
         NativeInvocationTrace {
             invocation_id: invocation_id.to_string(),
@@ -220,6 +223,7 @@ impl NativeRuntimeAdapter {
                 recoverable: err.recoverable(),
                 recovery_hint: err.recovery_hint(),
             }),
+            transport,
         }
     }
 
@@ -363,6 +367,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
             input.task_description, input.success_criteria
         );
         let run = loop_harness.run(prompt, input.context.as_deref());
+        let transport_telemetry = loop_harness.take_transport_telemetry();
         let duration = started_at.elapsed();
 
         match run {
@@ -371,6 +376,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
                     &invocation_id,
                     &self.config,
                     &result,
+                    transport_telemetry,
                     &tool_engine,
                     &tool_context,
                 );
@@ -395,6 +401,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
                     &self.config,
                     loop_harness.state(),
                     &err,
+                    transport_telemetry,
                 );
                 Ok(ExecutionReport::failure_with_output(
                     1,
