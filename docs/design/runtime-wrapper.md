@@ -230,7 +230,27 @@ Runtime observability requirements:
 - native invocation traces persist per-turn transport attempts and fallback activation state
 ---
 
-### 5.9 Interactive Execution (PTY-Backed Session Mode)
+### 5.9 Native Runtime Durability, Secrets, And Readiness
+
+Native runtime startup is now gated by explicit hardening services before model execution begins.
+
+- Durable runtime state DB:
+  - dedicated state DB path derived from `HIVEMIND_NATIVE_STATE_DIR` / `HIVEMIND_NATIVE_STATE_DB_PATH`
+  - startup applies `WAL` mode and explicit busy-timeout
+  - versioned migrations are tracked in `schema_migrations`
+  - background jobs use lease/heartbeat ownership (`native_runtime_log_ingestor`, `native_runtime_log_retention`)
+  - runtime logs are ingested asynchronously in batches with retention cleanup
+- Secrets hardening:
+  - secrets are persisted to encrypted local store (`HIVEMIND_NATIVE_SECRETS_STORE_PATH`)
+  - key material is resolved from keyring-backed path or explicit env override (`HIVEMIND_NATIVE_SECRETS_KEYRING_PATH`, `HIVEMIND_NATIVE_SECRETS_MASTER_KEY`)
+  - secret writes are atomic replace operations
+  - temporary plaintext buffers are wiped after encrypt/decrypt operations
+- Readiness sequencing:
+  - startup tracks tokenized readiness transitions for async dependencies
+  - runtime execution is blocked until required components transition to ready
+  - readiness/state bootstrap transitions are event-visible via `RuntimeRecoveryScheduled` (`native_component_readiness`, `native_runtime_state_bootstrap`)
+
+### 5.10 Interactive Execution (PTY-Backed Session Mode)
 
 Some runtimes are inherently interactive: they prompt for follow-up input, confirmations, or iterative guidance while they run.
 
@@ -244,7 +264,7 @@ In interactive mode, the adapter:
 - Accepts user-provided input lines and forwards them to the PTY
 - Emits explicit events for every user input and interruption
 
-#### 5.9.1 Session Loop
+#### 5.10.1 Session Loop
 
 At a high level:
 
@@ -257,7 +277,7 @@ At a high level:
 
 Output labeling ("Agent:" vs "Tool:") is **best-effort presentation** only. Hivemind must not depend on parsing correctness.
 
-#### 5.9.2 Interrupt Semantics
+#### 5.10.2 Interrupt Semantics
 
 Ctrl+C is not a crash.
 

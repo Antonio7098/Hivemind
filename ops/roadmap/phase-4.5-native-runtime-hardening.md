@@ -157,27 +157,27 @@
 **Goal:** Strengthen runtime durability and sensitive-data handling for native operations.
 
 ### 57.1 Runtime state durability
-- [ ] Introduce dedicated native runtime state DB with:
-  - [ ] WAL mode + busy timeout
-  - [ ] versioned migrations
-  - [ ] lease/heartbeat ownership for background jobs
-- [ ] Add batched async runtime log ingestion and retention cleanup
+- [x] Introduce dedicated native runtime state DB with:
+  - [x] WAL mode + busy timeout
+  - [x] versioned migrations
+  - [x] lease/heartbeat ownership for background jobs
+- [x] Add batched async runtime log ingestion and retention cleanup
 
 ### 57.2 Secret handling hardening
-- [ ] Add native secrets manager:
-  - [ ] encrypted local store
-  - [ ] keyring-backed key material
-  - [ ] atomic write/replace semantics
-  - [ ] in-memory wipe for temporary key buffers where applicable
+- [x] Add native secrets manager:
+  - [x] encrypted local store
+  - [x] keyring-backed key material
+  - [x] atomic write/replace semantics
+  - [x] in-memory wipe for temporary key buffers where applicable
 
 ### 57.3 Component readiness gates
-- [ ] Add tokenized readiness flags for asynchronous runtime dependencies (proxy/services/background workers)
-- [ ] Enforce startup sequencing on readiness before enabling task execution
+- [x] Add tokenized readiness flags for asynchronous runtime dependencies (proxy/services/background workers)
+- [x] Enforce startup sequencing on readiness before enabling task execution
 
 ### 57.4 Exit Criteria
-- [ ] Native runtime state and logs survive restart/replay with deterministic recovery behavior
-- [ ] Secret material handling is hardened at rest and during write/update operations
-- [ ] Runtime components expose explicit readiness transitions
+- [x] Native runtime state and logs survive restart/replay with deterministic recovery behavior
+- [x] Secret material handling is hardened at rest and during write/update operations
+- [x] Runtime components expose explicit readiness transitions
 
 ---
 

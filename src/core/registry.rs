@@ -2141,6 +2141,77 @@ impl Registry {
             )?;
         }
 
+        if let Some(runtime_state) = invocation.runtime_state.as_ref() {
+            self.append_event(
+                Event::new(
+                    EventPayload::RuntimeRecoveryScheduled {
+                        attempt_id,
+                        from_adapter: format!("{adapter_name}:runtime_state:init"),
+                        to_adapter: format!("{adapter_name}:runtime_state:ready"),
+                        strategy: "native_runtime_state_bootstrap".to_string(),
+                        reason: format!(
+                            "db_path={} busy_timeout_ms={} log_batch_size={} retention_days={}",
+                            runtime_state.db_path,
+                            runtime_state.busy_timeout_ms,
+                            runtime_state.log_batch_size,
+                            runtime_state.log_retention_days
+                        ),
+                        backoff_ms: 0,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+        }
+
+        for transition in &invocation.readiness_transitions {
+            self.append_event(
+                Event::new(
+                    EventPayload::RuntimeRecoveryScheduled {
+                        attempt_id,
+                        from_adapter: format!(
+                            "{adapter_name}:{}:{}",
+                            transition.component, transition.from_state
+                        ),
+                        to_adapter: format!(
+                            "{adapter_name}:{}:{}",
+                            transition.component, transition.to_state
+                        ),
+                        strategy: "native_component_readiness".to_string(),
+                        reason: format!(
+                            "token={} ts_ms={} reason={}",
+                            transition.token, transition.timestamp_ms, transition.reason
+                        ),
+                        backoff_ms: 0,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+
+            if transition.to_state == "failed" {
+                self.append_event(
+                    Event::new(
+                        EventPayload::RuntimeErrorClassified {
+                            attempt_id,
+                            adapter_name: adapter_name.to_string(),
+                            code: "native_component_not_ready".to_string(),
+                            category: "runtime_setup".to_string(),
+                            message: format!(
+                                "Native component '{}' failed readiness transition: {}",
+                                transition.component, transition.reason
+                            ),
+                            recoverable: false,
+                            retryable: false,
+                            rate_limited: false,
+                        },
+                        correlation.clone(),
+                    ),
+                    origin,
+                )?;
+            }
+        }
+
         let success = invocation.failure.is_none() && !saw_tool_failure;
         let (error_code, error_message, recoverable) = invocation.failure.as_ref().map_or_else(
             || {
@@ -8613,6 +8684,12 @@ impl Registry {
                 .insert(env_key, wt.path.to_string_lossy().to_string());
         }
         if runtime_for_adapter.adapter_name == "native" {
+            let native_state_dir = self.config.data_dir.join("native-runtime");
+            let _ = fs::create_dir_all(&native_state_dir);
+            runtime_for_adapter.env.insert(
+                "HIVEMIND_NATIVE_STATE_DIR".to_string(),
+                native_state_dir.to_string_lossy().to_string(),
+            );
             let project = state.projects.get(&flow.project_id).ok_or_else(|| {
                 HivemindError::system(
                     "project_not_found",
@@ -19434,6 +19511,8 @@ rules:
                 ],
                 active_transport: Some("http_fallback".to_string()),
             },
+            runtime_state: None,
+            readiness_transitions: Vec::new(),
         };
 
         registry

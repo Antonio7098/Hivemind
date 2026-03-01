@@ -9,6 +9,7 @@
 //! - scripted mock model client for deterministic harness tests
 
 pub mod adapter;
+pub mod runtime_hardening;
 pub mod startup_hardening;
 pub mod tool_engine;
 

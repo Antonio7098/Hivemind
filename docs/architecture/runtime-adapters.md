@@ -320,6 +320,21 @@ Current native mode includes:
     - retry delay and fallback activation are emitted as `RuntimeRecoveryScheduled` with strategies:
       - `native_transport_retry`
       - `native_transport_fallback`
+- runtime durability controls:
+  - dedicated native runtime state DB (`HIVEMIND_NATIVE_STATE_DIR` / `HIVEMIND_NATIVE_STATE_DB_PATH`)
+  - WAL + busy-timeout startup hardening
+  - versioned runtime-state migrations (`schema_migrations`)
+  - lease/heartbeat ownership for background jobs (`native_runtime_log_ingestor`, `native_runtime_log_retention`)
+  - batched async runtime-log ingestion and retention cleanup
+- native secret handling controls:
+  - encrypted local secrets store (`HIVEMIND_NATIVE_SECRETS_STORE_PATH`)
+  - keyring-backed key material path or explicit override (`HIVEMIND_NATIVE_SECRETS_KEYRING_PATH`, `HIVEMIND_NATIVE_SECRETS_MASTER_KEY`)
+  - atomic write/replace semantics for secrets store and key material
+  - in-memory wipe of temporary plaintext buffers after encryption/decryption
+- startup readiness gates:
+  - tokenized component readiness transitions for async runtime dependencies
+  - startup sequencing blocks task execution until required native components are ready
+  - readiness transitions and runtime-state bootstrap metadata are projected into `RuntimeRecoveryScheduled` (`native_component_readiness`, `native_runtime_state_bootstrap`)
 
 Richer native execution internals (typed tool engine, policy-aware enforcement, and broader replay
 projection surfaces) continue in follow-on Phase 4 sprints.

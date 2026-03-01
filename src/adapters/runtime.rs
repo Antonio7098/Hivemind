@@ -354,6 +354,10 @@ pub struct NativeInvocationTrace {
     pub failure: Option<NativeInvocationFailure>,
     #[serde(default)]
     pub transport: NativeTransportTelemetry,
+    #[serde(default)]
+    pub runtime_state: Option<NativeRuntimeStateTelemetry>,
+    #[serde(default)]
+    pub readiness_transitions: Vec<NativeReadinessTransition>,
 }
 
 /// One native runtime turn trace.
@@ -436,6 +440,27 @@ pub struct NativeTransportFallbackTrace {
     pub from_transport: String,
     pub to_transport: String,
     pub reason: String,
+}
+
+/// Native runtime state telemetry for durability controls.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeRuntimeStateTelemetry {
+    pub db_path: String,
+    pub busy_timeout_ms: u64,
+    pub log_batch_size: usize,
+    pub log_retention_days: u64,
+    pub lease_owner_token: String,
+}
+
+/// One component readiness transition emitted during native startup.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeReadinessTransition {
+    pub component: String,
+    pub token: String,
+    pub from_state: String,
+    pub to_state: String,
+    pub reason: String,
+    pub timestamp_ms: i64,
 }
 
 /// Report from runtime execution.
