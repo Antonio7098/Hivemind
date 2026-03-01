@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::env;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io::Read;
@@ -1440,20 +1441,32 @@ impl NativeToolEngine {
         let mut approval_required = false;
         let mut approval_cache_key = format!("tool:{}", action.name);
         let mut command_line = None;
+        let mut fallback_command_line = None;
         let mut dangerous_reason = None;
         if action.name == "run_command" || action.name == "exec_command" {
-            let (command, args) = if action.name == "run_command" {
+            let (raw_command, args) = if action.name == "run_command" {
                 let run = decode_input::<RunCommandInput>(&action.input)?;
                 (run.command.trim().to_string(), run.args)
             } else {
                 let run = decode_input::<ExecCommandInput>(&action.input)?;
                 (run.cmd.trim().to_string(), run.args)
             };
+            let command = normalize_exec_command(&raw_command, ctx.env);
             let joined = if args.is_empty() {
                 command.clone()
             } else {
                 format!("{command} {}", args.join(" "))
             };
+            if args.is_empty() {
+                if raw_command != command {
+                    fallback_command_line = Some(raw_command);
+                }
+            } else {
+                let raw_joined = format!("{raw_command} {}", args.join(" "));
+                if raw_joined != joined {
+                    fallback_command_line = Some(raw_joined);
+                }
+            }
             dangerous_reason = dangerous_command_reason(&command, &args);
             approval_cache_key = command.to_ascii_lowercase();
             command_line = Some(joined);
@@ -1615,6 +1628,11 @@ impl NativeToolEngine {
                 .trusted_prefixes
                 .iter()
                 .any(|prefix| matches_command_pattern(prefix, line))
+        }) || fallback_command_line.as_deref().is_some_and(|line| {
+            ctx.approval_policy
+                .trusted_prefixes
+                .iter()
+                .any(|prefix| matches_command_pattern(prefix, line))
         });
 
         match ctx.approval_policy.mode {
@@ -1702,7 +1720,11 @@ impl NativeToolEngine {
 
         if let Some(line) = command_line.as_deref() {
             let cache = ctx.approval_cache.borrow();
-            if !ctx.exec_policy_manager.is_allowed(line, &cache) {
+            let allowed_primary = ctx.exec_policy_manager.is_allowed(line, &cache);
+            let allowed_fallback = fallback_command_line
+                .as_deref()
+                .is_some_and(|fallback| ctx.exec_policy_manager.is_allowed(fallback, &cache));
+            if !(allowed_primary || allowed_fallback) {
                 tags.push("exec_decision:denied_exec_policy".to_string());
                 return Err(NativeToolEngineError::policy_violation(format!(
                     "run_command blocked by execution policy: {line}"
@@ -1981,6 +2003,119 @@ fn is_loopback_host(host: &str) -> bool {
     normalized
         .parse::<IpAddr>()
         .is_ok_and(|ip| ip.is_loopback())
+}
+
+fn normalize_exec_command(command: &str, env_map: &HashMap<String, String>) -> String {
+    let normalized = command.trim();
+    if !normalized.eq_ignore_ascii_case("python") {
+        return normalized.to_string();
+    }
+    if command_exists_in_path(normalized, env_map) {
+        return normalized.to_string();
+    }
+    if command_exists_in_path("python3", env_map) {
+        return "python3".to_string();
+    }
+    normalized.to_string()
+}
+
+fn command_exists_in_path(command: &str, env_map: &HashMap<String, String>) -> bool {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    let has_path_components = Path::new(trimmed).components().count() > 1;
+    if has_path_components || Path::new(trimmed).is_absolute() {
+        return resolve_command_path(trimmed, env_map).is_some();
+    }
+
+    let path_value = env_lookup(env_map, "PATH")
+        .map(str::to_string)
+        .or_else(|| env::var("PATH").ok())
+        .unwrap_or_default();
+    if path_value.trim().is_empty() {
+        return false;
+    }
+    let windows_exts = windows_command_extensions(env_map);
+
+    env::split_paths(&path_value).any(|dir| {
+        let candidate = dir.join(trimmed);
+        is_executable_path(&candidate)
+            || windows_exts
+                .iter()
+                .any(|ext| is_executable_path(&dir.join(format!("{trimmed}.{ext}"))))
+    })
+}
+
+fn resolve_command_path(command: &str, env_map: &HashMap<String, String>) -> Option<PathBuf> {
+    let candidate = PathBuf::from(command);
+    if is_executable_path(&candidate) {
+        return Some(candidate);
+    }
+
+    for ext in windows_command_extensions(env_map) {
+        let ext = ext.trim_start_matches('.');
+        let fallback = PathBuf::from(format!("{command}.{ext}"));
+        if is_executable_path(&fallback) {
+            return Some(fallback);
+        }
+    }
+
+    None
+}
+
+fn env_lookup<'a>(env_map: &'a HashMap<String, String>, key: &str) -> Option<&'a str> {
+    env_map.get(key).map(String::as_str).or_else(|| {
+        env_map
+            .iter()
+            .find(|(candidate, _)| candidate.eq_ignore_ascii_case(key))
+            .map(|(_, value)| value.as_str())
+    })
+}
+
+fn windows_command_extensions(env_map: &HashMap<String, String>) -> Vec<String> {
+    #[cfg(windows)]
+    {
+        let raw = env_lookup(env_map, "PATHEXT")
+            .map(str::to_string)
+            .or_else(|| env::var("PATHEXT").ok())
+            .unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".to_string());
+        return raw
+            .split(';')
+            .filter_map(|entry| {
+                let trimmed = entry.trim().trim_start_matches('.').to_ascii_lowercase();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed)
+                }
+            })
+            .collect();
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = env_map;
+        Vec::new()
+    }
+}
+
+fn is_executable_path(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        path.metadata()
+            .ok()
+            .is_some_and(|meta| (meta.permissions().mode() & 0o111) != 0)
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
 }
 
 fn extract_network_targets(command: &str, args: &[String]) -> Vec<NativeNetworkTarget> {
@@ -2572,21 +2707,29 @@ fn handle_run_command(
     default_timeout_ms: u64,
 ) -> Result<Value, NativeToolEngineError> {
     let input = decode_input::<RunCommandInput>(input)?;
-    let command = input.command.trim();
-    if command.is_empty() {
+    let raw_command = input.command.trim();
+    if raw_command.is_empty() {
         return Err(NativeToolEngineError::validation(
             "run_command requires a non-empty command",
         ));
     }
+    let command = normalize_exec_command(raw_command, ctx.env);
 
     let command_line = if input.args.is_empty() {
-        command.to_string()
+        command.clone()
     } else {
         format!("{command} {}", input.args.join(" "))
     };
+    let raw_command_line = if input.args.is_empty() {
+        raw_command.to_string()
+    } else {
+        format!("{raw_command} {}", input.args.join(" "))
+    };
 
     if let Some(scope) = ctx.scope {
-        if !scope.execution.is_allowed(&command_line) {
+        if !scope.execution.is_allowed(&command_line)
+            && (raw_command_line == command_line || !scope.execution.is_allowed(&raw_command_line))
+        {
             return Err(NativeToolEngineError::scope_violation(format!(
                 "run_command blocked by execution scope: {command_line}"
             )));
@@ -2596,7 +2739,7 @@ fn handle_run_command(
         .timeout_ms
         .unwrap_or(default_timeout_ms)
         .min(default_timeout_ms);
-    let network_targets = extract_network_targets(command, &input.args);
+    let network_targets = extract_network_targets(&command, &input.args);
     let managed_proxy = if matches!(
         ctx.network_policy.proxy_mode,
         NativeNetworkProxyMode::Managed
@@ -2606,7 +2749,7 @@ fn handle_run_command(
         None
     };
 
-    let mut cmd = Command::new(command);
+    let mut cmd = Command::new(&command);
     cmd.args(&input.args)
         .current_dir(ctx.worktree)
         .env_clear()
@@ -2807,19 +2950,27 @@ fn handle_exec_command(
 ) -> Result<Value, NativeToolEngineError> {
     let started = Instant::now();
     let input = decode_input::<ExecCommandInput>(input)?;
-    let command = input.cmd.trim();
-    if command.is_empty() {
+    let raw_command = input.cmd.trim();
+    if raw_command.is_empty() {
         return Err(NativeToolEngineError::validation(
             "exec_command requires a non-empty cmd",
         ));
     }
+    let command = normalize_exec_command(raw_command, ctx.env);
     let command_line = if input.args.is_empty() {
-        command.to_string()
+        command.clone()
     } else {
         format!("{command} {}", input.args.join(" "))
     };
+    let raw_command_line = if input.args.is_empty() {
+        raw_command.to_string()
+    } else {
+        format!("{raw_command} {}", input.args.join(" "))
+    };
     if let Some(scope) = ctx.scope {
-        if !scope.execution.is_allowed(&command_line) {
+        if !scope.execution.is_allowed(&command_line)
+            && (raw_command_line == command_line || !scope.execution.is_allowed(&raw_command_line))
+        {
             return Err(NativeToolEngineError::scope_violation(format!(
                 "exec_command blocked by execution scope: {command_line}"
             )));
@@ -2827,7 +2978,7 @@ fn handle_exec_command(
     }
 
     let cwd = resolve_session_cwd(ctx.worktree, input.cwd.as_deref())?;
-    let mut cmd = Command::new(command);
+    let mut cmd = Command::new(&command);
     cmd.args(&input.args)
         .current_dir(cwd)
         .env_clear()
@@ -3594,6 +3745,16 @@ mod tests {
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 
+    #[cfg(unix)]
+    fn write_executable(path: &Path, content: &str) {
+        use std::os::unix::fs::PermissionsExt;
+
+        fs::write(path, content).expect("write executable file");
+        let mut permissions = fs::metadata(path).expect("metadata").permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).expect("set executable permissions");
+    }
+
     fn write_snapshot_artifact(repo_path: &Path, snapshot_path: &Path) {
         let commit_hash = git_head(repo_path);
         let built = build_code_graph(&CodeGraphBuildInput {
@@ -3832,6 +3993,56 @@ mod tests {
             serde_json::from_value(value).expect("run_command output should decode");
         assert_eq!(output.exit_code, 0);
         assert!(output.stdout.contains("hello"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn normalize_exec_command_uses_python3_when_python_missing() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let bin = tmp.path().join("bin");
+        fs::create_dir_all(&bin).expect("create bin directory");
+        write_executable(&bin.join("python3"), "#!/bin/sh\nexit 0\n");
+
+        let mut env = HashMap::new();
+        env.insert("PATH".to_string(), bin.to_string_lossy().to_string());
+
+        assert_eq!(normalize_exec_command("python", &env), "python3");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn run_command_python_alias_falls_back_to_python3() {
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let bin = tmp.path().join("bin");
+        fs::create_dir_all(&bin).expect("create bin directory");
+        write_executable(
+            &bin.join("python3"),
+            "#!/bin/sh\nprintf 'python-alias-ok'\n",
+        );
+
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["python".to_string()],
+            denylist: Vec::new(),
+            deny_by_default: true,
+        };
+        let mut env = HashMap::new();
+        env.insert("PATH".to_string(), bin.to_string_lossy().to_string());
+        let scope = allow_all_scope();
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+        let action = NativeToolAction {
+            name: "run_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({ "command": "python", "args": [] }),
+        };
+
+        let output = engine
+            .execute(&action, &ctx)
+            .expect("python alias should resolve to python3");
+        let output: RunCommandOutput =
+            serde_json::from_value(output).expect("run_command output should decode");
+        assert_eq!(output.exit_code, 0);
+        assert_eq!(output.stdout, "python-alias-ok");
     }
 
     #[test]

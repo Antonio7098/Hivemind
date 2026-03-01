@@ -1983,6 +1983,7 @@ impl Registry {
                     Event::new(
                         EventPayload::ToolCallRequested {
                             native_correlation: native_correlation.clone(),
+                            task_id: Some(task_id),
                             invocation_id: invocation.invocation_id.clone(),
                             turn_index: turn.turn_index,
                             call_id: tool_call.call_id.clone(),
@@ -1999,6 +2000,7 @@ impl Registry {
                     Event::new(
                         EventPayload::ToolCallStarted {
                             native_correlation: native_correlation.clone(),
+                            task_id: Some(task_id),
                             invocation_id: invocation.invocation_id.clone(),
                             turn_index: turn.turn_index,
                             call_id: tool_call.call_id.clone(),
@@ -2016,6 +2018,7 @@ impl Registry {
                         Event::new(
                             EventPayload::ToolCallFailed {
                                 native_correlation: native_correlation.clone(),
+                                task_id: Some(task_id),
                                 invocation_id: invocation.invocation_id.clone(),
                                 turn_index: turn.turn_index,
                                 call_id: tool_call.call_id.clone(),
@@ -2040,6 +2043,7 @@ impl Registry {
                         Event::new(
                             EventPayload::ToolCallCompleted {
                                 native_correlation: native_correlation.clone(),
+                                task_id: Some(task_id),
                                 invocation_id: invocation.invocation_id.clone(),
                                 turn_index: turn.turn_index,
                                 call_id: tool_call.call_id.clone(),
@@ -19358,6 +19362,16 @@ rules:
                 }
                 EventPayload::ToolCallCompleted { response, .. } => {
                     tool_response_blob_refs.push(response.clone());
+                }
+                _ => {}
+            }
+
+            match &event.payload {
+                EventPayload::ToolCallRequested { task_id, .. }
+                | EventPayload::ToolCallStarted { task_id, .. }
+                | EventPayload::ToolCallCompleted { task_id, .. }
+                | EventPayload::ToolCallFailed { task_id, .. } => {
+                    assert_eq!(*task_id, Some(task.id));
                 }
                 _ => {}
             }
