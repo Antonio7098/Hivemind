@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -1062,7 +1063,23 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
             .unwrap_or("native"),
         Uuid::new_v4()
     ));
-    fs::write(&tmp_path, bytes).map_err(|error| {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut tmp_file = options.open(&tmp_path).map_err(|error| {
+        RuntimeHardeningError::new(
+            "native_atomic_write_failed",
+            format!(
+                "Failed to create temp file '{}': {error}",
+                tmp_path.display()
+            ),
+        )
+    })?;
+    tmp_file.write_all(bytes).map_err(|error| {
         RuntimeHardeningError::new(
             "native_atomic_write_failed",
             format!(
@@ -1071,6 +1088,7 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
             ),
         )
     })?;
+    drop(tmp_file);
     fs::rename(&tmp_path, path).map_err(|error| {
         let _ = fs::remove_file(&tmp_path);
         RuntimeHardeningError::new(
@@ -1503,5 +1521,18 @@ mod tests {
             .any(|transition| transition.component == "runtime_log_ingestor"
                 && transition.to_state == "ready"));
         support.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn atomic_write_restricts_secret_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().expect("temp dir");
+        let path = dir.path().join("secret.keyring");
+        atomic_write(&path, b"secret").expect("atomic write should pass");
+
+        let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
     }
 }

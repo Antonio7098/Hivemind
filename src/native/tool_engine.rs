@@ -1026,6 +1026,7 @@ struct StreamDelta {
 #[derive(Debug)]
 struct ExecSession {
     session_id: u64,
+    owner_worktree: PathBuf,
     command_line: String,
     child: Child,
     stdin: Option<ChildStdin>,
@@ -2756,6 +2757,25 @@ fn resolve_session_cwd(
     Ok(worktree.join(rel))
 }
 
+fn session_owner_worktree(worktree: &Path) -> PathBuf {
+    fs::canonicalize(worktree).unwrap_or_else(|_| worktree.to_path_buf())
+}
+
+fn clamp_exec_wait_ms(
+    requested: Option<u64>,
+    default_wait_ms: u64,
+    timeout_ms: u64,
+    started: Instant,
+) -> u64 {
+    let requested = requested.unwrap_or(default_wait_ms);
+    // Leave a small buffer for handler overhead so the outer tool timeout envelope is not exceeded.
+    let elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    let cap = timeout_ms
+        .saturating_sub(elapsed_ms.saturating_add(50))
+        .max(1);
+    requested.min(cap)
+}
+
 fn session_output(
     session_id: u64,
     exit_code: Option<i32>,
@@ -2783,8 +2803,9 @@ fn session_output(
 fn handle_exec_command(
     ctx: &ToolExecutionContext<'_>,
     input: &Value,
-    _default_timeout_ms: u64,
+    default_timeout_ms: u64,
 ) -> Result<Value, NativeToolEngineError> {
+    let started = Instant::now();
     let input = decode_input::<ExecCommandInput>(input)?;
     let command = input.cmd.trim();
     if command.is_empty() {
@@ -2850,6 +2871,7 @@ fn handle_exec_command(
 
     let session_id = EXEC_SESSION_NEXT_ID.fetch_add(1, Ordering::SeqCst);
     let cap = parse_session_cap(ctx.env);
+    let owner_worktree = session_owner_worktree(ctx.worktree);
     let mut warnings = Vec::new();
 
     let lock = exec_session_manager();
@@ -2860,6 +2882,7 @@ fn handle_exec_command(
         session_id,
         ExecSession {
             session_id,
+            owner_worktree,
             command_line,
             child,
             stdin,
@@ -2878,7 +2901,6 @@ fn handle_exec_command(
     }
     prune_sessions_if_needed(&mut manager, cap);
 
-    let wait_ms = input.capture_ms.unwrap_or(DEFAULT_EXEC_SESSION_CAPTURE_MS);
     let max_bytes = input
         .max_bytes_per_stream
         .unwrap_or(DEFAULT_EXEC_SESSION_STREAM_MAX_BYTES);
@@ -2886,8 +2908,20 @@ fn handle_exec_command(
         .sessions
         .get_mut(&session_id)
         .ok_or_else(|| NativeToolEngineError::execution("session disappeared after spawn"))?;
-    let stdout = collect_stream_delta(&session.stdout_rx, wait_ms, max_bytes);
-    let stderr = collect_stream_delta(&session.stderr_rx, wait_ms, max_bytes);
+    let stdout_wait_ms = clamp_exec_wait_ms(
+        input.capture_ms,
+        DEFAULT_EXEC_SESSION_CAPTURE_MS,
+        default_timeout_ms,
+        started,
+    );
+    let stdout = collect_stream_delta(&session.stdout_rx, stdout_wait_ms, max_bytes);
+    let stderr_wait_ms = clamp_exec_wait_ms(
+        input.capture_ms,
+        DEFAULT_EXEC_SESSION_CAPTURE_MS,
+        default_timeout_ms,
+        started,
+    );
+    let stderr = collect_stream_delta(&session.stderr_rx, stderr_wait_ms, max_bytes);
     let exit_code = session.exit_code()?;
     drop(manager);
 
@@ -2897,9 +2931,11 @@ fn handle_exec_command(
 fn handle_write_stdin(
     ctx: &ToolExecutionContext<'_>,
     input: &Value,
-    _default_timeout_ms: u64,
+    default_timeout_ms: u64,
 ) -> Result<Value, NativeToolEngineError> {
+    let started = Instant::now();
     let input = decode_input::<WriteStdinInput>(input)?;
+    let owner_worktree = session_owner_worktree(ctx.worktree);
     let lock = exec_session_manager();
     let mut manager = lock
         .lock()
@@ -2911,6 +2947,12 @@ fn handle_write_stdin(
                 input.session_id
             ))
         })?;
+        if session.owner_worktree != owner_worktree {
+            return Err(NativeToolEngineError::scope_violation(format!(
+                "exec session {} belongs to a different worktree",
+                input.session_id
+            )));
+        }
         if let Some(chars) = input.chars.as_ref() {
             if let Some(stdin) = session.stdin.as_mut() {
                 stdin.write_all(chars.as_bytes()).map_err(|error| {
@@ -2936,12 +2978,23 @@ fn handle_write_stdin(
             session.stdin = None;
         }
 
-        let wait_ms = input.wait_ms.unwrap_or(DEFAULT_EXEC_SESSION_WRITE_WAIT_MS);
         let max_bytes = input
             .max_bytes_per_stream
             .unwrap_or(DEFAULT_EXEC_SESSION_STREAM_MAX_BYTES);
-        let stdout = collect_stream_delta(&session.stdout_rx, wait_ms, max_bytes);
-        let stderr = collect_stream_delta(&session.stderr_rx, wait_ms, max_bytes);
+        let stdout_wait_ms = clamp_exec_wait_ms(
+            input.wait_ms,
+            DEFAULT_EXEC_SESSION_WRITE_WAIT_MS,
+            default_timeout_ms,
+            started,
+        );
+        let stdout = collect_stream_delta(&session.stdout_rx, stdout_wait_ms, max_bytes);
+        let stderr_wait_ms = clamp_exec_wait_ms(
+            input.wait_ms,
+            DEFAULT_EXEC_SESSION_WRITE_WAIT_MS,
+            default_timeout_ms,
+            started,
+        );
+        let stderr = collect_stream_delta(&session.stderr_rx, stderr_wait_ms, max_bytes);
         let exit_code = session.exit_code()?;
         if exit_code.is_some() {
             let _ = session.stdin.take();
@@ -4724,6 +4777,124 @@ mod tests {
             .execute(&write_first, &ctx)
             .expect_err("first session should be pruned");
         assert_eq!(err.code, "native_tool_input_invalid");
+        let _ = cleanup_exec_sessions();
+    }
+
+    #[test]
+    fn write_stdin_rejects_cross_worktree_session_access() {
+        let _guard = lock_exec_session_tests();
+        let _ = cleanup_exec_sessions();
+        let engine = NativeToolEngine::default();
+        let tmp_a = tempfile::tempdir().expect("tempdir");
+        let tmp_b = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["sh".to_string()],
+            denylist: vec![],
+            deny_by_default: true,
+        };
+        let env = HashMap::new();
+        let scope = allow_all_scope();
+        let ctx_a = test_tool_context(tmp_a.path(), Some(&scope), &policy, &env);
+        let ctx_b = test_tool_context(tmp_b.path(), Some(&scope), &policy, &env);
+
+        let spawn = NativeToolAction {
+            name: "exec_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({"cmd":"sh","args":["-c","sleep 1"]}),
+        };
+        let spawned = engine.execute(&spawn, &ctx_a).expect("spawn session");
+        let spawned: ExecSessionOutput = serde_json::from_value(spawned).expect("decode spawn");
+
+        let write = NativeToolAction {
+            name: "write_stdin".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({"session_id": spawned.session_id, "chars": "x"}),
+        };
+        let error = engine
+            .execute(&write, &ctx_b)
+            .expect_err("cross-worktree write_stdin should fail");
+        assert_eq!(error.code, "native_scope_violation");
+        let _ = cleanup_exec_sessions();
+    }
+
+    #[test]
+    fn exec_command_clamps_capture_wait_to_timeout_envelope() {
+        let _guard = lock_exec_session_tests();
+        let _ = cleanup_exec_sessions();
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["sh".to_string()],
+            denylist: vec![],
+            deny_by_default: true,
+        };
+        let env = HashMap::new();
+        let scope = allow_all_scope();
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+
+        let action = NativeToolAction {
+            name: "exec_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "cmd":"sh",
+                "args":["-c","sleep 6"],
+                "capture_ms": 5_200
+            }),
+        };
+        let started = Instant::now();
+        let output = engine
+            .execute(&action, &ctx)
+            .expect("capture wait should be clamped under timeout envelope");
+        let decoded: ExecSessionOutput = serde_json::from_value(output).expect("decode");
+        assert!(decoded.session_id > 0);
+        assert!(
+            started.elapsed() < Duration::from_secs(6),
+            "exec_command should return before the tool timeout envelope"
+        );
+        let _ = cleanup_exec_sessions();
+    }
+
+    #[test]
+    fn write_stdin_clamps_wait_to_timeout_envelope() {
+        let _guard = lock_exec_session_tests();
+        let _ = cleanup_exec_sessions();
+        let engine = NativeToolEngine::default();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let policy = NativeCommandPolicy {
+            allowlist: vec!["sh".to_string()],
+            denylist: vec![],
+            deny_by_default: true,
+        };
+        let env = HashMap::new();
+        let scope = allow_all_scope();
+        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+
+        let spawn = NativeToolAction {
+            name: "exec_command".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({"cmd":"sh","args":["-c","sleep 6"]}),
+        };
+        let spawned = engine.execute(&spawn, &ctx).expect("spawn session");
+        let spawned: ExecSessionOutput = serde_json::from_value(spawned).expect("decode");
+
+        let write = NativeToolAction {
+            name: "write_stdin".to_string(),
+            version: TOOL_VERSION_V1.to_string(),
+            input: json!({
+                "session_id": spawned.session_id,
+                "wait_ms": 5_200
+            }),
+        };
+        let started = Instant::now();
+        let output = engine
+            .execute(&write, &ctx)
+            .expect("write wait should be clamped under timeout envelope");
+        let decoded: ExecSessionOutput = serde_json::from_value(output).expect("decode");
+        assert_eq!(decoded.session_id, spawned.session_id);
+        assert!(
+            started.elapsed() < Duration::from_secs(6),
+            "write_stdin should return before the tool timeout envelope"
+        );
         let _ = cleanup_exec_sessions();
     }
 
