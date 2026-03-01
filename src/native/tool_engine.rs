@@ -1458,7 +1458,7 @@ impl NativeToolEngine {
                 format!("{command} {}", args.join(" "))
             };
             if args.is_empty() {
-                if raw_command != command {
+                if raw_command != joined {
                     fallback_command_line = Some(raw_command);
                 }
             } else {
