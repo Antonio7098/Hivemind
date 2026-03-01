@@ -4820,21 +4820,46 @@ mod tests {
     #[test]
     fn exec_command_clamps_capture_wait_to_timeout_envelope() {
         let started = Instant::now();
-        let wait_ms = clamp_exec_wait_ms(Some(5_200), DEFAULT_EXEC_SESSION_CAPTURE_MS, 5_000, started);
-        assert!((1..=4_950).contains(&wait_ms), "unexpected clamp value: {wait_ms}");
+        let wait_ms =
+            clamp_exec_wait_ms(Some(5_200), DEFAULT_EXEC_SESSION_CAPTURE_MS, 5_000, started);
+        assert!(
+            (1..=4_950).contains(&wait_ms),
+            "unexpected clamp value: {wait_ms}"
+        );
 
         let exhausted = Instant::now() - Duration::from_millis(6_000);
-        let wait_ms = clamp_exec_wait_ms(Some(5_200), DEFAULT_EXEC_SESSION_CAPTURE_MS, 5_000, exhausted);
-        assert_eq!(wait_ms, 1, "wait should clamp to floor when timeout is exhausted");
+        let wait_ms = clamp_exec_wait_ms(
+            Some(5_200),
+            DEFAULT_EXEC_SESSION_CAPTURE_MS,
+            5_000,
+            exhausted,
+        );
+        assert_eq!(
+            wait_ms, 1,
+            "wait should clamp to floor when timeout is exhausted"
+        );
     }
 
     #[test]
     fn write_stdin_clamps_wait_to_timeout_envelope() {
         let started = Instant::now();
-        let wait_ms = clamp_exec_wait_ms(Some(5_200), DEFAULT_EXEC_SESSION_WRITE_WAIT_MS, 5_000, started);
-        assert!((1..=4_950).contains(&wait_ms), "unexpected clamp value: {wait_ms}");
+        let wait_ms = clamp_exec_wait_ms(
+            Some(5_200),
+            DEFAULT_EXEC_SESSION_WRITE_WAIT_MS,
+            5_000,
+            started,
+        );
+        assert!(
+            (1..=4_950).contains(&wait_ms),
+            "unexpected clamp value: {wait_ms}"
+        );
 
-        let default_wait = clamp_exec_wait_ms(None, DEFAULT_EXEC_SESSION_WRITE_WAIT_MS, 5_000, Instant::now());
+        let default_wait = clamp_exec_wait_ms(
+            None,
+            DEFAULT_EXEC_SESSION_WRITE_WAIT_MS,
+            5_000,
+            Instant::now(),
+        );
         assert_eq!(
             default_wait, DEFAULT_EXEC_SESSION_WRITE_WAIT_MS,
             "default write wait should be used when request is omitted"
