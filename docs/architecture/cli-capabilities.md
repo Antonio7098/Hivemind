@@ -371,6 +371,7 @@ Capabilities:
   - `HIVEMIND_NATIVE_NETWORK_APPROVAL_CACHE_MAX`
   - `HIVEMIND_NATIVE_NETWORK_APPROVAL_DEFERRED_DECISIONS_FILE`
 - Inspect native invocation event trails and blob references via `events list`
+- Stream native/project/flow/task events with `events stream` and optionally mask sensitive payloads using `--redact-secrets`
 
 ---
 
