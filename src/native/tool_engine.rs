@@ -4827,7 +4827,9 @@ mod tests {
             "unexpected clamp value: {wait_ms}"
         );
 
-        let exhausted = Instant::now() - Duration::from_millis(6_000);
+        let exhausted = Instant::now()
+            .checked_sub(Duration::from_millis(6_000))
+            .expect("duration subtraction should succeed");
         let wait_ms = clamp_exec_wait_ms(
             Some(5_200),
             DEFAULT_EXEC_SESSION_CAPTURE_MS,
