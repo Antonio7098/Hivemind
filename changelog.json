@@ -42,6 +42,21 @@
           "type": "changed",
           "area": "docs",
           "description": "Mark Sprint 57 roadmap completion, update runtime architecture/design docs for durability+secrets+readiness controls, and add Sprint 57 report/manual test artifacts"
+        },
+        {
+          "type": "added",
+          "area": "cli",
+          "description": "Add `events stream --redact-secrets` so CLI streaming honors doc-approved secret filters and inline OpenRouter tokens are masked before rendering"
+        },
+        {
+          "type": "changed",
+          "area": "native",
+          "description": "Normalize `python` commands to `python3` when the interpreter exists, publish the task_id directly on native tool-call events, and keep tool coverage gating aligned with the native beta prompts"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Document the March 1 real OpenRouter native-runtime beta API run showing multi-flow completion, host validation, tool coverage, and artifact/CI gating"
         }
       ]
     },

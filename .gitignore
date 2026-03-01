@@ -5,3 +5,6 @@ hivemind-test/.hm_home_verify/
 lcov.info
 
 target-local/
+.env
+.env.*
+!.env.example

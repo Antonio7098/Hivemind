@@ -1203,6 +1203,8 @@ pub enum EventPayload {
     },
     ToolCallRequested {
         native_correlation: NativeEventCorrelation,
+        #[serde(default)]
+        task_id: Option<Uuid>,
         invocation_id: String,
         turn_index: u32,
         call_id: String,
@@ -1213,6 +1215,8 @@ pub enum EventPayload {
     },
     ToolCallStarted {
         native_correlation: NativeEventCorrelation,
+        #[serde(default)]
+        task_id: Option<Uuid>,
         invocation_id: String,
         turn_index: u32,
         call_id: String,
@@ -1222,6 +1226,8 @@ pub enum EventPayload {
     },
     ToolCallCompleted {
         native_correlation: NativeEventCorrelation,
+        #[serde(default)]
+        task_id: Option<Uuid>,
         invocation_id: String,
         turn_index: u32,
         call_id: String,
@@ -1232,6 +1238,8 @@ pub enum EventPayload {
     },
     ToolCallFailed {
         native_correlation: NativeEventCorrelation,
+        #[serde(default)]
+        task_id: Option<Uuid>,
         invocation_id: String,
         turn_index: u32,
         call_id: String,

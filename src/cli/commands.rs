@@ -1711,6 +1711,10 @@ pub struct EventStreamArgs {
     /// Maximum number of events
     #[arg(long, default_value = "100")]
     pub limit: usize,
+
+    /// Redact secrets from event payloads before printing
+    #[arg(long, default_value_t = false)]
+    pub redact_secrets: bool,
 }
 
 /// Arguments for event replay.
