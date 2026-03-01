@@ -1457,13 +1457,15 @@ impl NativeToolEngine {
             } else {
                 format!("{command} {}", args.join(" "))
             };
-            let raw_joined = if args.is_empty() {
-                raw_command.clone()
+            if args.is_empty() {
+                if raw_command != joined {
+                    fallback_command_line = Some(raw_command);
+                }
             } else {
-                format!("{raw_command} {}", args.join(" "))
-            };
-            if raw_joined != joined {
-                fallback_command_line = Some(raw_joined);
+                let raw_joined = format!("{raw_command} {}", args.join(" "));
+                if raw_joined != joined {
+                    fallback_command_line = Some(raw_joined);
+                }
             }
             dangerous_reason = dangerous_command_reason(&command, &args);
             approval_cache_key = command.to_ascii_lowercase();
@@ -2106,10 +2108,9 @@ fn is_executable_path(path: &Path) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        return path
-            .metadata()
+        path.metadata()
             .ok()
-            .is_some_and(|meta| (meta.permissions().mode() & 0o111) != 0);
+            .is_some_and(|meta| (meta.permissions().mode() & 0o111) != 0)
     }
     #[cfg(not(unix))]
     {
