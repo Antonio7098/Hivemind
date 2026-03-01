@@ -290,7 +290,8 @@ Current native mode includes:
     - `HIVEMIND_NATIVE_NETWORK_APPROVAL_DECISION` (`approve|deny`)
     - `HIVEMIND_NATIVE_NETWORK_APPROVAL_CACHE_MAX`
     - `HIVEMIND_NATIVE_NETWORK_APPROVAL_DEFERRED_DECISIONS_FILE`
-  - policy decisions are emitted as `policy_tags` on native tool-call events (`ToolCallRequested/Started/Completed/Failed`)
+- policy decisions are emitted as `policy_tags` on native tool-call events (`ToolCallRequested/Started/Completed/Failed`)
+- each native tool-call event now exposes the corresponding `task_id` next to `native_correlation`, so downstream tooling (events stream, verification dashboards) can relate tool usage directly to task artifacts and coverage assertions
 - host/process startup hardening for native binaries:
   - disable core dumps on supported UNIX platforms before normal CLI/runtime startup
   - deny debugger attach where supported (`linux`)

@@ -2478,6 +2478,112 @@ fn print_events_table(events: Vec<hivemind::core::events::Event>) {
     }
 }
 
+const REDACTED_SECRET: &str = "[REDACTED]";
+
+fn redact_events_for_stream(
+    events: Vec<hivemind::core::events::Event>,
+) -> Vec<hivemind::core::events::Event> {
+    events.into_iter().map(redact_stream_event).collect()
+}
+
+fn redact_stream_event(event: hivemind::core::events::Event) -> hivemind::core::events::Event {
+    let Ok(mut raw) = serde_json::to_value(&event) else {
+        return event;
+    };
+    redact_json_secrets(&mut raw, None);
+    serde_json::from_value(raw).unwrap_or(event)
+}
+
+fn redact_json_secrets(value: &mut serde_json::Value, parent_key: Option<&str>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, child) in map {
+                if is_sensitive_json_key(key) {
+                    *child = serde_json::Value::String(REDACTED_SECRET.to_string());
+                    continue;
+                }
+                redact_json_secrets(child, Some(key));
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for child in values {
+                redact_json_secrets(child, parent_key);
+            }
+        }
+        serde_json::Value::String(raw) => {
+            if parent_key.is_some_and(is_sensitive_json_key) {
+                *raw = REDACTED_SECRET.to_string();
+            } else {
+                *raw = redact_inline_secret_tokens(raw);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_sensitive_json_key(key: &str) -> bool {
+    let normalized = key.trim().to_ascii_lowercase();
+    [
+        "api_key",
+        "authorization",
+        "access_token",
+        "refresh_token",
+        "token",
+        "secret",
+        "password",
+        "credential",
+        "private_key",
+    ]
+    .iter()
+    .any(|needle| normalized.contains(needle))
+}
+
+fn redact_inline_secret_tokens(raw: &str) -> String {
+    let mut current = raw.to_string();
+    for (prefix, min_len) in [("sk-or-v1-", 12_usize), ("sk-proj-", 12), ("sk-", 20)] {
+        current = redact_prefixed_token(&current, prefix, min_len);
+    }
+    current
+}
+
+fn redact_prefixed_token(input: &str, prefix: &str, min_suffix_len: usize) -> String {
+    if !input.contains(prefix) {
+        return input.to_string();
+    }
+
+    let mut redacted = String::with_capacity(input.len());
+    let mut index = 0_usize;
+    while index < input.len() {
+        if input[index..].starts_with(prefix) {
+            let start = index;
+            let mut end = start + prefix.len();
+            while end < input.len() {
+                let ch = input[end..].chars().next().unwrap_or_default();
+                if ch.is_whitespace()
+                    || matches!(
+                        ch,
+                        '"' | '\'' | ',' | ';' | ')' | '(' | '[' | ']' | '{' | '}' | '<' | '>'
+                    )
+                {
+                    break;
+                }
+                end += ch.len_utf8();
+            }
+            if end.saturating_sub(start + prefix.len()) >= min_suffix_len {
+                redacted.push_str(REDACTED_SECRET);
+                index = end;
+                continue;
+            }
+        }
+
+        let ch = input[index..].chars().next().unwrap_or_default();
+        redacted.push(ch);
+        index += ch.len_utf8();
+    }
+
+    redacted
+}
+
 fn parse_event_uuid(
     raw: &str,
     code: &str,
@@ -2738,6 +2844,9 @@ fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
                 if events.len() >= args.limit {
                     break;
                 }
+            }
+            if args.redact_secrets {
+                events = redact_events_for_stream(events);
             }
 
             match format {
@@ -3782,4 +3891,69 @@ fn print_attempt_inspect_task_fallback(
     }
 
     ExitCode::Success
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hivemind::core::events::{CorrelationIds, Event, EventPayload, NativeEventCorrelation};
+
+    #[test]
+    fn inline_secret_redaction_replaces_openrouter_tokens() {
+        let token = "sk-or-v1-1234567890abcdef1234567890abcdef";
+        let value = redact_inline_secret_tokens(&format!("Authorization: Bearer {token}"));
+        assert!(value.contains(REDACTED_SECRET));
+        assert!(!value.contains(token));
+    }
+
+    #[test]
+    fn event_redaction_hides_sensitive_tool_call_message() {
+        let task_id = Uuid::new_v4();
+        let secret = "sk-or-v1-1234567890abcdef1234567890abcdef";
+        let event = Event::new(
+            EventPayload::ToolCallFailed {
+                native_correlation: NativeEventCorrelation {
+                    project_id: Uuid::new_v4(),
+                    graph_id: Uuid::new_v4(),
+                    flow_id: Uuid::new_v4(),
+                    task_id,
+                    attempt_id: Uuid::new_v4(),
+                },
+                task_id: Some(task_id),
+                invocation_id: "invocation-1".to_string(),
+                turn_index: 0,
+                call_id: "call-1".to_string(),
+                tool_name: "run_command".to_string(),
+                code: "native_tool_execution_failed".to_string(),
+                message: format!("failed to execute command with key {secret}"),
+                recoverable: false,
+                policy_tags: Vec::new(),
+            },
+            CorrelationIds::none(),
+        );
+
+        let redacted = redact_events_for_stream(vec![event]);
+        let serialized = serde_json::to_string(&redacted).expect("serialize redacted events");
+        assert!(!serialized.contains(secret));
+        assert!(serialized.contains(REDACTED_SECRET));
+    }
+
+    #[test]
+    fn json_key_redaction_replaces_sensitive_values() {
+        let mut payload = serde_json::json!({
+            "api_key": "sk-or-v1-1234567890abcdef1234567890abcdef",
+            "nested": {
+                "authorization": "Bearer sk-or-v1-1234567890abcdef1234567890abcdef"
+            }
+        });
+        redact_json_secrets(&mut payload, None);
+        assert_eq!(
+            payload["api_key"],
+            serde_json::Value::String(REDACTED_SECRET.to_string())
+        );
+        assert_eq!(
+            payload["nested"]["authorization"],
+            serde_json::Value::String(REDACTED_SECRET.to_string())
+        );
+    }
 }
