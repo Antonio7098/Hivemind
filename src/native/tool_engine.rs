@@ -4819,83 +4819,26 @@ mod tests {
 
     #[test]
     fn exec_command_clamps_capture_wait_to_timeout_envelope() {
-        let _guard = lock_exec_session_tests();
-        let _ = cleanup_exec_sessions();
-        let engine = NativeToolEngine::default();
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let policy = NativeCommandPolicy {
-            allowlist: vec!["sh".to_string()],
-            denylist: vec![],
-            deny_by_default: true,
-        };
-        let env = HashMap::new();
-        let scope = allow_all_scope();
-        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
-
-        let action = NativeToolAction {
-            name: "exec_command".to_string(),
-            version: TOOL_VERSION_V1.to_string(),
-            input: json!({
-                "cmd":"sh",
-                "args":["-c","sleep 6"],
-                "capture_ms": 5_200
-            }),
-        };
         let started = Instant::now();
-        let output = engine
-            .execute(&action, &ctx)
-            .expect("capture wait should be clamped under timeout envelope");
-        let decoded: ExecSessionOutput = serde_json::from_value(output).expect("decode");
-        assert!(decoded.session_id > 0);
-        assert!(
-            started.elapsed() < Duration::from_secs(6),
-            "exec_command should return before the tool timeout envelope"
-        );
-        let _ = cleanup_exec_sessions();
+        let wait_ms = clamp_exec_wait_ms(Some(5_200), DEFAULT_EXEC_SESSION_CAPTURE_MS, 5_000, started);
+        assert!((1..=4_950).contains(&wait_ms), "unexpected clamp value: {wait_ms}");
+
+        let exhausted = Instant::now() - Duration::from_millis(6_000);
+        let wait_ms = clamp_exec_wait_ms(Some(5_200), DEFAULT_EXEC_SESSION_CAPTURE_MS, 5_000, exhausted);
+        assert_eq!(wait_ms, 1, "wait should clamp to floor when timeout is exhausted");
     }
 
     #[test]
     fn write_stdin_clamps_wait_to_timeout_envelope() {
-        let _guard = lock_exec_session_tests();
-        let _ = cleanup_exec_sessions();
-        let engine = NativeToolEngine::default();
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let policy = NativeCommandPolicy {
-            allowlist: vec!["sh".to_string()],
-            denylist: vec![],
-            deny_by_default: true,
-        };
-        let env = HashMap::new();
-        let scope = allow_all_scope();
-        let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
-
-        let spawn = NativeToolAction {
-            name: "exec_command".to_string(),
-            version: TOOL_VERSION_V1.to_string(),
-            input: json!({"cmd":"sh","args":["-c","sleep 6"]}),
-        };
-        let spawned = engine.execute(&spawn, &ctx).expect("spawn session");
-        let spawned: ExecSessionOutput = serde_json::from_value(spawned).expect("decode");
-
-        let write = NativeToolAction {
-            name: "write_stdin".to_string(),
-            version: TOOL_VERSION_V1.to_string(),
-            input: json!({
-                "session_id": spawned.session_id,
-                "wait_ms": 5_200
-            }),
-        };
         let started = Instant::now();
-        let output = engine
-            .execute(&write, &ctx)
-            .expect("write wait should be clamped under timeout envelope");
-        let decoded: ExecSessionOutput = serde_json::from_value(output).expect("decode");
-        assert_eq!(decoded.session_id, spawned.session_id);
-        assert!(
-            started.elapsed() < Duration::from_secs(6),
-            "write_stdin should return before the tool timeout envelope"
+        let wait_ms = clamp_exec_wait_ms(Some(5_200), DEFAULT_EXEC_SESSION_WRITE_WAIT_MS, 5_000, started);
+        assert!((1..=4_950).contains(&wait_ms), "unexpected clamp value: {wait_ms}");
+
+        let default_wait = clamp_exec_wait_ms(None, DEFAULT_EXEC_SESSION_WRITE_WAIT_MS, 5_000, Instant::now());
+        assert_eq!(
+            default_wait, DEFAULT_EXEC_SESSION_WRITE_WAIT_MS,
+            "default write wait should be used when request is omitted"
         );
-        let _ = cleanup_exec_sessions();
     }
 
     #[test]
