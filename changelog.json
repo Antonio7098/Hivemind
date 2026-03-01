@@ -4,6 +4,48 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.50",
+      "date": "2026-03-01",
+      "phase": 57,
+      "changes": [
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Add Sprint 57 runtime hardening services in `src/native/runtime_hardening.rs`: dedicated native runtime state DB (WAL + busy timeout + versioned migrations), lease/heartbeat ownership for async background jobs, and batched async runtime log ingestion with retention cleanup"
+        },
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Introduce native secrets manager with encrypted local store, keyring-backed key material resolution (`HIVEMIND_NATIVE_SECRETS_KEYRING_PATH` or `HIVEMIND_NATIVE_SECRETS_MASTER_KEY`), atomic write/replace semantics, and temporary plaintext buffer wiping"
+        },
+        {
+          "type": "changed",
+          "area": "native",
+          "description": "Wire runtime durability/secrets/readiness startup sequencing into `src/native/adapter.rs`, including OpenRouter API-key secret hydration, runtime-state telemetry on native invocation traces, and explicit readiness transition capture"
+        },
+        {
+          "type": "changed",
+          "area": "events",
+          "description": "Project native readiness and runtime-state bootstrap transitions in `src/core/registry.rs` via `RuntimeRecoveryScheduled` (`native_component_readiness`, `native_runtime_state_bootstrap`) and classify readiness failures with explicit `runtime_error_classified` payloads"
+        },
+        {
+          "type": "changed",
+          "area": "core",
+          "description": "Set `HIVEMIND_NATIVE_STATE_DIR` from registry data-dir in native flow execution to keep runtime-state durability deterministic and test-isolated per Hivemind data root"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 57 unit coverage for runtime-state migration/WAL setup, batched log-ingestion restart durability, secrets encryption roundtrip, and readiness transition recording"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Sprint 57 roadmap completion, update runtime architecture/design docs for durability+secrets+readiness controls, and add Sprint 57 report/manual test artifacts"
+        }
+      ]
+    },
+    {
       "version": "v0.1.49",
       "date": "2026-02-28",
       "phase": 56,
