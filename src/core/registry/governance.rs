@@ -17,6 +17,7 @@ use crate::core::registry::{
 };
 
 mod constitution;
+mod global_templates;
 mod globals;
 mod introspection;
 mod project_artifacts;
