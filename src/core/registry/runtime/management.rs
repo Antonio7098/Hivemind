@@ -1,6 +1,30 @@
 use super::*;
 
 impl Registry {
+    fn supported_runtime_descriptors() -> Vec<crate::adapters::RuntimeDescriptor> {
+        let mut descriptors = runtime_descriptors().into_iter().collect::<Vec<_>>();
+        if descriptors
+            .iter()
+            .all(|descriptor| descriptor.adapter_name != "native")
+        {
+            descriptors.push(crate::adapters::RuntimeDescriptor {
+                adapter_name: "native",
+                default_binary: "builtin-native",
+                opencode_compatible: false,
+                requires_binary: false,
+                capabilities: &[
+                    "native_loop",
+                    "typed_tool_engine",
+                    "schema_validated_tools",
+                    "scope_policy_enforcement",
+                    "deterministic_harness",
+                    "provider_agnostic_contracts",
+                ],
+            });
+        }
+        descriptors
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn project_runtime_set(
         &self,
@@ -30,12 +54,20 @@ impl Registry {
         adapter: &str,
         origin: &'static str,
     ) -> Result<()> {
-        if !SUPPORTED_ADAPTERS.contains(&adapter) {
+        let supported = Self::supported_runtime_descriptors();
+        if !supported
+            .iter()
+            .any(|descriptor| descriptor.adapter_name == adapter)
+        {
             return Err(HivemindError::user(
                 "invalid_runtime_adapter",
                 format!(
                     "Unsupported runtime adapter '{adapter}'. Supported: {}",
-                    SUPPORTED_ADAPTERS.join(", ")
+                    supported
+                        .iter()
+                        .map(|descriptor| descriptor.adapter_name)
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ),
                 origin,
             ));
@@ -361,7 +393,7 @@ impl Registry {
 
     #[must_use]
     pub fn runtime_list(&self) -> Vec<RuntimeListEntry> {
-        runtime_descriptors()
+        Self::supported_runtime_descriptors()
             .into_iter()
             .map(|d| RuntimeListEntry {
                 adapter_name: d.adapter_name.to_string(),
@@ -851,5 +883,21 @@ mod tests {
     fn parse_global_parallel_limit_rejects_zero() {
         let err = Registry::parse_global_parallel_limit(Some("0".to_string())).unwrap_err();
         assert!(err.code.contains("invalid_global_parallel_limit"));
+    }
+
+    #[test]
+    fn ensure_supported_runtime_adapter_accepts_native() {
+        Registry::ensure_supported_runtime_adapter("native", "runtime:test")
+            .expect("native adapter should be supported");
+    }
+
+    #[test]
+    fn supported_runtime_descriptors_include_native() {
+        let descriptors = Registry::supported_runtime_descriptors();
+        assert!(descriptors.iter().any(|descriptor| {
+            descriptor.adapter_name == "native"
+                && descriptor.default_binary == "builtin-native"
+                && !descriptor.requires_binary
+        }));
     }
 }

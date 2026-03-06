@@ -46,6 +46,18 @@ impl RuntimeEventProjector {
         stream: RuntimeOutputStream,
         chunk: &str,
     ) -> Vec<ProjectedRuntimeObservation> {
+        let mut projected = Vec::new();
+        let trimmed_chunk = normalize_projection_line(chunk);
+        let trimmed_chunk = trimmed_chunk.trim();
+
+        if !trimmed_chunk.is_empty() && starts_new_projection_line(trimmed_chunk) {
+            let buffer = self.buffer_for_stream(stream);
+            if !buffer.trim().is_empty() {
+                let buffered = std::mem::take(buffer);
+                projected.extend(self.observe_line(stream, buffered.trim_end_matches('\r')));
+            }
+        }
+
         {
             let buffer = self.buffer_for_stream(stream);
             buffer.push_str(chunk);
@@ -59,7 +71,6 @@ impl RuntimeEventProjector {
             }
         }
 
-        let mut projected = Vec::new();
         for line in lines {
             projected.extend(self.observe_line(stream, &line));
         }
@@ -288,6 +299,7 @@ fn is_narrative_line(line: &str) -> bool {
     lower.starts_with("i ")
         || lower.starts_with("i'")
         || lower.starts_with("i\"")
+        || lower.starts_with("task:")
         || lower.starts_with("next ")
         || lower.starts_with("plan:")
         || lower.starts_with("because")
@@ -299,6 +311,13 @@ fn is_narrative_line(line: &str) -> bool {
         || lower.starts_with("checking")
         || lower.starts_with("analyzing")
         || lower.starts_with("investigating")
+}
+
+fn starts_new_projection_line(line: &str) -> bool {
+    parse_command(line).is_some()
+        || parse_tool_name(line).is_some()
+        || parse_todo_item(line).is_some()
+        || is_narrative_line(line)
 }
 
 fn normalize_projection_line(raw: &str) -> String {
@@ -473,6 +492,52 @@ mod tests {
                 obs,
                 ProjectedRuntimeObservation::NarrativeOutputObserved { content, .. }
                     if content == "Hello from runtime"
+            )
+        }));
+    }
+
+    #[test]
+    fn projects_narrative_from_task_prefixed_stdout_lines() {
+        let mut projector = RuntimeEventProjector::new();
+        let observed = projector.observe_chunk(
+            RuntimeOutputStream::Stdout,
+            "Task: Output exactly these five lines and nothing else:\n",
+        );
+
+        assert!(observed.iter().any(|obs| {
+            matches!(
+                obs,
+                ProjectedRuntimeObservation::NarrativeOutputObserved { content, .. }
+                    if content == "Task: Output exactly these five lines and nothing else:"
+            )
+        }));
+    }
+
+    #[test]
+    fn projects_separate_interactive_chunks_without_newlines() {
+        let mut projector = RuntimeEventProjector::new();
+
+        let first = projector.observe_chunk(
+            RuntimeOutputStream::Stdout,
+            "Task: Output exactly these five lines and nothing else:",
+        );
+        assert!(first.is_empty());
+
+        let second = projector.observe_chunk(RuntimeOutputStream::Stdout, "$ cargo test");
+        assert!(second.iter().any(|obs| {
+            matches!(
+                obs,
+                ProjectedRuntimeObservation::NarrativeOutputObserved { content, .. }
+                    if content == "Task: Output exactly these five lines and nothing else:"
+            )
+        }));
+
+        let third = projector.observe_chunk(RuntimeOutputStream::Stdout, "Tool: grep");
+        assert!(third.iter().any(|obs| {
+            matches!(
+                obs,
+                ProjectedRuntimeObservation::CommandObserved { command, .. }
+                    if command == "cargo test"
             )
         }));
     }
