@@ -1,0 +1,18 @@
+{
+  "source": "src/core/events.rs",
+  "function_count": 20,
+  "entry": [
+    "event_type",
+    "correlation_for_payload"
+  ],
+  "missing_entry": [
+    "event_type",
+    "correlation_for_payload"
+  ],
+  "selected_count": 2,
+  "selected": [
+    "correlation_for_payload",
+    "event_type"
+  ],
+  "graph": {}
+}

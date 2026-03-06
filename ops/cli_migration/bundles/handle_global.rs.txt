@@ -1,0 +1,207 @@
+// function: handle_global
+// target: src/cli/handlers/global.rs
+// unresolved helpers (main.rs-local):
+// - get_registry
+
+fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        GlobalCommands::Skill(cmd) => match cmd {
+            GlobalSkillCommands::Create(args) => {
+                match registry.global_skill_create(
+                    &args.skill_id,
+                    &args.name,
+                    &args.tags,
+                    &args.content,
+                ) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global skill create result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalSkillCommands::List => match registry.global_skill_list() {
+                Ok(result) => {
+                    print_structured(&result, format, "global skill list");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalSkillCommands::Inspect(args) => {
+                match registry.global_skill_inspect(&args.skill_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global skill inspect result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalSkillCommands::Update(args) => match registry.global_skill_update(
+                &args.skill_id,
+                args.name.as_deref(),
+                args.tags.as_deref(),
+                args.content.as_deref(),
+            ) {
+                Ok(result) => {
+                    print_structured(&result, format, "global skill update result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalSkillCommands::Delete(args) => match registry.global_skill_delete(&args.skill_id)
+            {
+                Ok(result) => {
+                    print_structured(&result, format, "global skill delete result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalSkillCommands::Registry(cmd) => handle_skill_registry(cmd, &registry, format),
+        },
+        GlobalCommands::SystemPrompt(cmd) => match cmd {
+            GlobalSystemPromptCommands::Create(args) => {
+                match registry.global_system_prompt_create(&args.prompt_id, &args.content) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global system prompt create result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalSystemPromptCommands::List => match registry.global_system_prompt_list() {
+                Ok(result) => {
+                    print_structured(&result, format, "global system prompt list");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalSystemPromptCommands::Inspect(args) => {
+                match registry.global_system_prompt_inspect(&args.prompt_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global system prompt inspect result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalSystemPromptCommands::Update(args) => {
+                match registry.global_system_prompt_update(&args.prompt_id, &args.content) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global system prompt update result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalSystemPromptCommands::Delete(args) => {
+                match registry.global_system_prompt_delete(&args.prompt_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global system prompt delete result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+        },
+        GlobalCommands::Template(cmd) => match cmd {
+            GlobalTemplateCommands::Create(args) => match registry.global_template_create(
+                &args.template_id,
+                &args.system_prompt_id,
+                &args.skill_ids,
+                &args.document_ids,
+                args.description.as_deref(),
+            ) {
+                Ok(result) => {
+                    print_structured(&result, format, "global template create result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalTemplateCommands::List => match registry.global_template_list() {
+                Ok(result) => {
+                    print_structured(&result, format, "global template list");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalTemplateCommands::Inspect(args) => {
+                match registry.global_template_inspect(&args.template_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global template inspect result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalTemplateCommands::Update(args) => match registry.global_template_update(
+                &args.template_id,
+                args.system_prompt_id.as_deref(),
+                args.skill_ids.as_deref(),
+                args.document_ids.as_deref(),
+                args.description.as_deref(),
+            ) {
+                Ok(result) => {
+                    print_structured(&result, format, "global template update result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalTemplateCommands::Delete(args) => {
+                match registry.global_template_delete(&args.template_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global template delete result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalTemplateCommands::Instantiate(args) => {
+                match registry.global_template_instantiate(&args.project, &args.template_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global template instantiate result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+        },
+        GlobalCommands::Notepad(cmd) => match cmd {
+            GlobalNotepadCommands::Create(args) => {
+                match registry.global_notepad_create(&args.content) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global notepad create result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalNotepadCommands::Show => match registry.global_notepad_show() {
+                Ok(result) => {
+                    print_structured(&result, format, "global notepad show result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+            GlobalNotepadCommands::Update(args) => {
+                match registry.global_notepad_update(&args.content) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global notepad update result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
+                }
+            }
+            GlobalNotepadCommands::Delete => match registry.global_notepad_delete() {
+                Ok(result) => {
+                    print_structured(&result, format, "global notepad delete result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            },
+        },
+    }
+}

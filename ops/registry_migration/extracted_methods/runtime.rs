@@ -1,0 +1,1792 @@
+// AUTO-GENERATED from src/core/registry_original.rs
+// Module bucket: runtime
+
+// runtime_env_build_error (1181-1183)
+    fn runtime_env_build_error(error: RuntimeEnvBuildError, origin: &'static str) -> HivemindError {
+        HivemindError::runtime(error.code, error.message, origin).recoverable(false)
+    }
+
+// runtime_start_flags (1201-1269)
+    fn runtime_start_flags(runtime: &ProjectRuntimeConfig) -> Vec<String> {
+        match runtime.adapter_name.as_str() {
+            "codex" => {
+                let mut flags = if runtime.args.is_empty() {
+                    CodexConfig::default().base.args
+                } else {
+                    runtime.args.clone()
+                };
+
+                if let Some(model) = runtime.model.as_ref() {
+                    if !Self::has_model_flag(&flags, false) {
+                        flags.extend(["--model".to_string(), model.clone()]);
+                    }
+                }
+
+                flags
+            }
+            "claude-code" => {
+                let mut flags = if runtime.args.is_empty() {
+                    ClaudeCodeConfig::default().base.args
+                } else {
+                    runtime.args.clone()
+                };
+
+                if let Some(model) = runtime.model.as_ref() {
+                    if !Self::has_model_flag(&flags, false) {
+                        flags.extend(["--model".to_string(), model.clone()]);
+                    }
+                }
+
+                flags
+            }
+            "opencode" | "kilo" => {
+                let mut flags = runtime.args.clone();
+                let is_opencode_binary = PathBuf::from(&runtime.binary_path)
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|s| {
+                        let lower = s.to_ascii_lowercase();
+                        lower.contains("opencode") || lower.contains("kilo")
+                    });
+
+                if is_opencode_binary {
+                    let mut with_start = vec!["run".to_string()];
+                    if let Some(model) = runtime.model.as_ref() {
+                        if !Self::has_model_flag(&flags, true) {
+                            with_start.extend(["--model".to_string(), model.clone()]);
+                        }
+                    }
+                    with_start.append(&mut flags);
+                    with_start
+                } else {
+                    flags
+                }
+            }
+            "native" => {
+                let mut flags = vec![
+                    format!("--max-turns={}", NativeRuntimeConfig::default().max_turns),
+                    format!(
+                        "--token-budget={}",
+                        NativeRuntimeConfig::default().token_budget
+                    ),
+                ];
+                flags.extend(runtime.args.clone());
+                flags
+            }
+            _ => runtime.args.clone(),
+        }
+    }
+
+// runtime_descriptor_for_adapter (1271-1275)
+    fn runtime_descriptor_for_adapter(adapter: &str) -> Option<crate::adapters::RuntimeDescriptor> {
+        runtime_descriptors()
+            .into_iter()
+            .find(|descriptor| descriptor.adapter_name == adapter)
+    }
+
+// runtime_capabilities_for_adapter (1277-1287)
+    fn runtime_capabilities_for_adapter(adapter: &str) -> Vec<String> {
+        Self::runtime_descriptor_for_adapter(adapter)
+            .map(|descriptor| {
+                descriptor
+                    .capabilities
+                    .iter()
+                    .map(|capability| (*capability).to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    }
+
+// classify_runtime_error (1289-1344)
+    fn classify_runtime_error(
+        code: &str,
+        message: &str,
+        recoverable: bool,
+        stdout: &str,
+        stderr: &str,
+    ) -> ClassifiedRuntimeError {
+        let combined = format!("{code} {message} {stdout} {stderr}").to_ascii_lowercase();
+        let rate_limited = combined.contains("rate limit")
+            || combined.contains("rate_limit")
+            || combined.contains("too many requests")
+            || combined.contains(" 429")
+            || combined.contains("status 429")
+            || combined.contains("http 429");
+
+        let category = if rate_limited {
+            "rate_limit"
+        } else if code.starts_with("native_stream_") {
+            "transport_stream"
+        } else if code.starts_with("native_transport_") {
+            "transport"
+        } else if code == "timeout" {
+            "timeout"
+        } else if code == "checkpoints_incomplete" {
+            "checkpoint_incomplete"
+        } else if matches!(
+            code,
+            "binary_not_found" | "health_check_failed" | "missing_args" | "worktree_not_found"
+        ) {
+            "configuration"
+        } else if code.contains("initialize") || code.contains("prepare") {
+            "runtime_setup"
+        } else {
+            "runtime_execution"
+        };
+
+        let effective_recoverable = recoverable || rate_limited || code == "checkpoints_incomplete";
+        let retryable = effective_recoverable
+            && !matches!(
+                code,
+                "binary_not_found"
+                    | "health_check_failed"
+                    | "missing_args"
+                    | "worktree_not_found"
+                    | "checkpoints_incomplete"
+            );
+
+        ClassifiedRuntimeError {
+            code: code.to_string(),
+            category: category.to_string(),
+            message: message.to_string(),
+            recoverable: effective_recoverable,
+            retryable,
+            rate_limited,
+        }
+    }
+
+// detect_runtime_output_failure (1346-1376)
+    fn detect_runtime_output_failure(stdout: &str, stderr: &str) -> Option<(String, String, bool)> {
+        let combined = format!("{stdout}\n{stderr}").to_ascii_lowercase();
+
+        if combined.contains("incorrect api key")
+            || combined.contains("invalid api key")
+            || combined.contains("authentication failed")
+            || combined.contains("unauthorized")
+            || combined.contains("forbidden")
+        {
+            return Some((
+                "runtime_auth_failed".to_string(),
+                "Runtime authentication failed; inspect runtime stderr for details".to_string(),
+                false,
+            ));
+        }
+
+        if combined.contains("rate limit")
+            || combined.contains("too many requests")
+            || combined.contains("http 429")
+            || combined.contains("status 429")
+            || combined.contains(" 429")
+        {
+            return Some((
+                "runtime_rate_limited".to_string(),
+                "Runtime reported rate limiting; retry recommended".to_string(),
+                true,
+            ));
+        }
+
+        None
+    }
+
+// emit_runtime_error_classified (1378-1430)
+    fn emit_runtime_error_classified(
+        &self,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        adapter_name: &str,
+        classified: &ClassifiedRuntimeError,
+        origin: &'static str,
+    ) -> Result<()> {
+        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
+            flow.project_id,
+            flow.graph_id,
+            flow.id,
+            task_id,
+            attempt_id,
+        );
+
+        self.append_event(
+            Event::new(
+                EventPayload::RuntimeErrorClassified {
+                    attempt_id,
+                    adapter_name: adapter_name.to_string(),
+                    code: classified.code.clone(),
+                    category: classified.category.clone(),
+                    message: classified.message.clone(),
+                    recoverable: classified.recoverable,
+                    retryable: classified.retryable,
+                    rate_limited: classified.rate_limited,
+                },
+                corr_attempt.clone(),
+            ),
+            origin,
+        )?;
+
+        let mut err = HivemindError::runtime(
+            format!("runtime_{}", classified.code),
+            classified.message.clone(),
+            origin,
+        )
+        .recoverable(classified.recoverable)
+        .with_context("adapter", adapter_name.to_string())
+        .with_context("runtime_error_code", classified.code.clone())
+        .with_context("runtime_error_category", classified.category.clone());
+
+        if classified.rate_limited {
+            err = err.with_hint(
+                "Rate limiting detected. Hivemind will schedule a retry and may switch to a backup runtime if configured.",
+            );
+        }
+
+        self.record_error_event(&err, corr_attempt);
+        Ok(())
+    }
+
+// select_runtime_backup (1432-1463)
+    fn select_runtime_backup(
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        primary: &ProjectRuntimeConfig,
+    ) -> Option<ProjectRuntimeConfig> {
+        if let Ok(candidate) = Self::effective_runtime_for_task(
+            state,
+            flow,
+            task_id,
+            RuntimeRole::Validator,
+            "registry:tick_flow",
+        ) {
+            if candidate != *primary {
+                return Some(candidate);
+            }
+        }
+
+        match primary.adapter_name.as_str() {
+            "opencode" => {
+                let mut fallback = primary.clone();
+                fallback.adapter_name = "kilo".to_string();
+                Some(fallback)
+            }
+            "kilo" => {
+                let mut fallback = primary.clone();
+                fallback.adapter_name = "opencode".to_string();
+                Some(fallback)
+            }
+            _ => None,
+        }
+    }
+
+// schedule_runtime_recovery (1465-1537)
+    #[allow(clippy::too_many_arguments)]
+    fn schedule_runtime_recovery(
+        &self,
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        from_runtime: &ProjectRuntimeConfig,
+        classified: &ClassifiedRuntimeError,
+        origin: &'static str,
+    ) -> Result<()> {
+        let backup = Self::select_runtime_backup(state, flow, task_id, from_runtime);
+        let target_runtime = if classified.rate_limited {
+            backup.unwrap_or_else(|| from_runtime.clone())
+        } else {
+            from_runtime.clone()
+        };
+
+        let strategy = if target_runtime.adapter_name == from_runtime.adapter_name {
+            "same_runtime_retry"
+        } else {
+            "fallback_runtime"
+        };
+        let backoff_ms = if classified.rate_limited { 1_000 } else { 250 };
+
+        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
+            flow.project_id,
+            flow.graph_id,
+            flow.id,
+            task_id,
+            attempt_id,
+        );
+        self.append_event(
+            Event::new(
+                EventPayload::RuntimeRecoveryScheduled {
+                    attempt_id,
+                    from_adapter: from_runtime.adapter_name.clone(),
+                    to_adapter: target_runtime.adapter_name.clone(),
+                    strategy: strategy.to_string(),
+                    reason: classified.code.clone(),
+                    backoff_ms,
+                },
+                corr_attempt,
+            ),
+            origin,
+        )?;
+
+        if target_runtime.adapter_name != from_runtime.adapter_name {
+            let corr_task = CorrelationIds::for_graph_flow_task(
+                flow.project_id,
+                flow.graph_id,
+                flow.id,
+                task_id,
+            );
+            self.append_event(
+                Event::new(
+                    EventPayload::TaskRuntimeRoleConfigured {
+                        task_id,
+                        role: RuntimeRole::Worker,
+                        adapter_name: target_runtime.adapter_name,
+                        binary_path: target_runtime.binary_path,
+                        model: target_runtime.model,
+                        args: target_runtime.args,
+                        env: target_runtime.env,
+                        timeout_ms: target_runtime.timeout_ms,
+                    },
+                    corr_task,
+                ),
+                origin,
+            )?;
+        }
+        Ok(())
+    }
+
+// handle_runtime_failure (1539-1621)
+    #[allow(clippy::too_many_arguments)]
+    fn handle_runtime_failure(
+        &self,
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        runtime: &ProjectRuntimeConfig,
+        next_attempt_number: u32,
+        max_attempts: u32,
+        failure_code: &str,
+        failure_message: &str,
+        recoverable: bool,
+        stdout: &str,
+        stderr: &str,
+        origin: &'static str,
+    ) -> Result<()> {
+        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
+            flow.project_id,
+            flow.graph_id,
+            flow.id,
+            task_id,
+            attempt_id,
+        );
+
+        let reason = format!("{failure_code}: {failure_message}");
+        self.append_event(
+            Event::new(
+                EventPayload::RuntimeTerminated { attempt_id, reason },
+                corr_attempt.clone(),
+            ),
+            origin,
+        )?;
+
+        let classified = Self::classify_runtime_error(
+            failure_code,
+            failure_message,
+            recoverable,
+            stdout,
+            stderr,
+        );
+        self.emit_runtime_error_classified(
+            flow,
+            task_id,
+            attempt_id,
+            &runtime.adapter_name,
+            &classified,
+            origin,
+        )?;
+
+        if failure_code == "checkpoints_incomplete" {
+            return Ok(());
+        }
+
+        self.fail_running_attempt(flow, task_id, attempt_id, failure_code, origin)?;
+
+        let should_retry = classified.retryable
+            && next_attempt_number < max_attempts
+            && (classified.rate_limited
+                || matches!(
+                    classified.code.as_str(),
+                    "timeout" | "wait_failed" | "stdin_write_failed"
+                )
+                || classified.code.starts_with("native_transport_")
+                || classified.code.starts_with("native_stream_"));
+
+        if should_retry {
+            self.schedule_runtime_recovery(
+                state,
+                flow,
+                task_id,
+                attempt_id,
+                runtime,
+                &classified,
+                origin,
+            )?;
+            if let Err(err) = self.retry_task(&task_id.to_string(), false, RetryMode::Continue) {
+                self.record_error_event(&err, corr_attempt);
+            }
+        }
+
+        Ok(())
+    }
+
+// projected_runtime_event_payload (1749-1786)
+    fn projected_runtime_event_payload(
+        attempt_id: Uuid,
+        observation: ProjectedRuntimeObservation,
+    ) -> EventPayload {
+        match observation {
+            ProjectedRuntimeObservation::CommandObserved { stream, command } => {
+                EventPayload::RuntimeCommandObserved {
+                    attempt_id,
+                    stream,
+                    command,
+                }
+            }
+            ProjectedRuntimeObservation::ToolCallObserved {
+                stream,
+                tool_name,
+                details,
+            } => EventPayload::RuntimeToolCallObserved {
+                attempt_id,
+                stream,
+                tool_name,
+                details,
+            },
+            ProjectedRuntimeObservation::TodoSnapshotUpdated { stream, items } => {
+                EventPayload::RuntimeTodoSnapshotUpdated {
+                    attempt_id,
+                    stream,
+                    items,
+                }
+            }
+            ProjectedRuntimeObservation::NarrativeOutputObserved { stream, content } => {
+                EventPayload::RuntimeNarrativeOutputObserved {
+                    attempt_id,
+                    stream,
+                    content,
+                }
+            }
+        }
+    }
+
+// append_projected_runtime_observations (1788-1805)
+    fn append_projected_runtime_observations(
+        &self,
+        attempt_id: Uuid,
+        correlation: &CorrelationIds,
+        observations: Vec<ProjectedRuntimeObservation>,
+        origin: &'static str,
+    ) -> Result<()> {
+        for observation in observations {
+            self.append_event(
+                Event::new(
+                    Self::projected_runtime_event_payload(attempt_id, observation),
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+        }
+        Ok(())
+    }
+
+// native_capture_mode_for_event (1807-1814)
+    fn native_capture_mode_for_event(
+        mode: NativePayloadCaptureMode,
+    ) -> NativeEventPayloadCaptureMode {
+        match mode {
+            NativePayloadCaptureMode::MetadataOnly => NativeEventPayloadCaptureMode::MetadataOnly,
+            NativePayloadCaptureMode::FullPayload => NativeEventPayloadCaptureMode::FullPayload,
+        }
+    }
+
+// native_event_correlation (1816-1828)
+    fn native_event_correlation(
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt_id: Uuid,
+    ) -> NativeEventCorrelation {
+        NativeEventCorrelation {
+            project_id: flow.project_id,
+            graph_id: flow.graph_id,
+            flow_id: flow.id,
+            task_id,
+            attempt_id,
+        }
+    }
+
+// native_blob_sha256 (1830-1839)
+    fn native_blob_sha256(payload: &[u8]) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(payload);
+        let digest = hasher.finalize();
+        let mut hex = String::with_capacity(digest.len() * 2);
+        for byte in digest {
+            let _ = write!(&mut hex, "{byte:02x}");
+        }
+        hex
+    }
+
+// persist_native_blob (1853-1889)
+    fn persist_native_blob(
+        &self,
+        media_type: &str,
+        payload: &str,
+        mode: NativePayloadCaptureMode,
+        origin: &'static str,
+    ) -> Result<NativeBlobRef> {
+        let payload_bytes = payload.as_bytes();
+        let digest = Self::native_blob_sha256(payload_bytes);
+        let blob_path = self.blob_path_for_digest(&digest);
+        if let Some(parent) = blob_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                HivemindError::system("blob_write_failed", e.to_string(), origin)
+                    .with_context("path", parent.display().to_string())
+            })?;
+        }
+        if !blob_path.exists() {
+            fs::write(&blob_path, payload_bytes).map_err(|e| {
+                HivemindError::system("blob_write_failed", e.to_string(), origin)
+                    .with_context("path", blob_path.display().to_string())
+            })?;
+        }
+
+        let byte_size = u64::try_from(payload_bytes.len()).unwrap_or(u64::MAX);
+
+        Ok(NativeBlobRef {
+            digest,
+            byte_size,
+            media_type: media_type.to_string(),
+            blob_path: blob_path.to_string_lossy().to_string(),
+            payload: if matches!(mode, NativePayloadCaptureMode::FullPayload) {
+                Some(payload.to_string())
+            } else {
+                None
+            },
+        })
+    }
+
+// append_native_invocation_events (1891-2260)
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    fn append_native_invocation_events(
+        &self,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        correlation: &CorrelationIds,
+        adapter_name: &str,
+        invocation: &NativeInvocationTrace,
+        origin: &'static str,
+    ) -> Result<()> {
+        let native_correlation = Self::native_event_correlation(flow, task_id, attempt_id);
+        let capture_mode = Self::native_capture_mode_for_event(invocation.capture_mode);
+
+        self.append_event(
+            Event::new(
+                EventPayload::AgentInvocationStarted {
+                    native_correlation: native_correlation.clone(),
+                    invocation_id: invocation.invocation_id.clone(),
+                    adapter_name: adapter_name.to_string(),
+                    provider: invocation.provider.clone(),
+                    model: invocation.model.clone(),
+                    runtime_version: invocation.runtime_version.clone(),
+                    capture_mode,
+                },
+                correlation.clone(),
+            ),
+            origin,
+        )?;
+
+        let mut saw_tool_failure = false;
+
+        for turn in &invocation.turns {
+            self.append_event(
+                Event::new(
+                    EventPayload::AgentTurnStarted {
+                        native_correlation: native_correlation.clone(),
+                        invocation_id: invocation.invocation_id.clone(),
+                        turn_index: turn.turn_index,
+                        from_state: turn.from_state.clone(),
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+
+            let request = self.persist_native_blob(
+                "application/json",
+                &turn.model_request,
+                invocation.capture_mode,
+                origin,
+            )?;
+            self.append_event(
+                Event::new(
+                    EventPayload::ModelRequestPrepared {
+                        native_correlation: native_correlation.clone(),
+                        invocation_id: invocation.invocation_id.clone(),
+                        turn_index: turn.turn_index,
+                        request,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+
+            let response = self.persist_native_blob(
+                "text/plain; charset=utf-8",
+                &turn.model_response,
+                invocation.capture_mode,
+                origin,
+            )?;
+            self.append_event(
+                Event::new(
+                    EventPayload::ModelResponseReceived {
+                        native_correlation: native_correlation.clone(),
+                        invocation_id: invocation.invocation_id.clone(),
+                        turn_index: turn.turn_index,
+                        response,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+
+            for tool_call in &turn.tool_calls {
+                let request = self.persist_native_blob(
+                    "text/plain; charset=utf-8",
+                    &tool_call.request,
+                    invocation.capture_mode,
+                    origin,
+                )?;
+                self.append_event(
+                    Event::new(
+                        EventPayload::ToolCallRequested {
+                            native_correlation: native_correlation.clone(),
+                            task_id: Some(task_id),
+                            invocation_id: invocation.invocation_id.clone(),
+                            turn_index: turn.turn_index,
+                            call_id: tool_call.call_id.clone(),
+                            tool_name: tool_call.tool_name.clone(),
+                            request,
+                            policy_tags: tool_call.policy_tags.clone(),
+                        },
+                        correlation.clone(),
+                    ),
+                    origin,
+                )?;
+
+                self.append_event(
+                    Event::new(
+                        EventPayload::ToolCallStarted {
+                            native_correlation: native_correlation.clone(),
+                            task_id: Some(task_id),
+                            invocation_id: invocation.invocation_id.clone(),
+                            turn_index: turn.turn_index,
+                            call_id: tool_call.call_id.clone(),
+                            tool_name: tool_call.tool_name.clone(),
+                            policy_tags: tool_call.policy_tags.clone(),
+                        },
+                        correlation.clone(),
+                    ),
+                    origin,
+                )?;
+
+                if let Some(failure) = &tool_call.failure {
+                    saw_tool_failure = true;
+                    self.append_event(
+                        Event::new(
+                            EventPayload::ToolCallFailed {
+                                native_correlation: native_correlation.clone(),
+                                task_id: Some(task_id),
+                                invocation_id: invocation.invocation_id.clone(),
+                                turn_index: turn.turn_index,
+                                call_id: tool_call.call_id.clone(),
+                                tool_name: tool_call.tool_name.clone(),
+                                code: failure.code.clone(),
+                                message: failure.message.clone(),
+                                recoverable: failure.recoverable,
+                                policy_tags: tool_call.policy_tags.clone(),
+                            },
+                            correlation.clone(),
+                        ),
+                        origin,
+                    )?;
+                } else if let Some(response_payload) = tool_call.response.as_deref() {
+                    let response = self.persist_native_blob(
+                        "text/plain; charset=utf-8",
+                        response_payload,
+                        invocation.capture_mode,
+                        origin,
+                    )?;
+                    self.append_event(
+                        Event::new(
+                            EventPayload::ToolCallCompleted {
+                                native_correlation: native_correlation.clone(),
+                                task_id: Some(task_id),
+                                invocation_id: invocation.invocation_id.clone(),
+                                turn_index: turn.turn_index,
+                                call_id: tool_call.call_id.clone(),
+                                tool_name: tool_call.tool_name.clone(),
+                                response,
+                                policy_tags: tool_call.policy_tags.clone(),
+                            },
+                            correlation.clone(),
+                        ),
+                        origin,
+                    )?;
+                    self.append_graph_query_event_for_native_tool_call(
+                        flow,
+                        task_id,
+                        attempt_id,
+                        &tool_call.tool_name,
+                        response_payload,
+                        correlation.clone(),
+                        origin,
+                    )?;
+                }
+            }
+
+            self.append_event(
+                Event::new(
+                    EventPayload::AgentTurnCompleted {
+                        native_correlation: native_correlation.clone(),
+                        invocation_id: invocation.invocation_id.clone(),
+                        turn_index: turn.turn_index,
+                        to_state: turn.to_state.clone(),
+                        summary: turn.turn_summary.clone(),
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+        }
+
+        for attempt in &invocation.transport.attempts {
+            let category = if attempt.rate_limited {
+                "rate_limit"
+            } else if attempt.code.starts_with("native_stream_") {
+                "transport_stream"
+            } else {
+                "transport"
+            };
+            self.append_event(
+                Event::new(
+                    EventPayload::RuntimeErrorClassified {
+                        attempt_id,
+                        adapter_name: adapter_name.to_string(),
+                        code: attempt.code.clone(),
+                        category: category.to_string(),
+                        message: attempt.message.clone(),
+                        recoverable: attempt.retryable,
+                        retryable: attempt.retryable,
+                        rate_limited: attempt.rate_limited,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+
+            if let Some(backoff_ms) = attempt.backoff_ms {
+                self.append_event(
+                    Event::new(
+                        EventPayload::RuntimeRecoveryScheduled {
+                            attempt_id,
+                            from_adapter: format!("{adapter_name}:{}", attempt.transport),
+                            to_adapter: format!("{adapter_name}:{}", attempt.transport),
+                            strategy: "native_transport_retry".to_string(),
+                            reason: format!(
+                                "turn={} code={} retryable={}",
+                                attempt.turn_index, attempt.code, attempt.retryable
+                            ),
+                            backoff_ms,
+                        },
+                        correlation.clone(),
+                    ),
+                    origin,
+                )?;
+            }
+        }
+
+        for fallback in &invocation.transport.fallback_activations {
+            self.append_event(
+                Event::new(
+                    EventPayload::RuntimeRecoveryScheduled {
+                        attempt_id,
+                        from_adapter: format!("{adapter_name}:{}", fallback.from_transport),
+                        to_adapter: format!("{adapter_name}:{}", fallback.to_transport),
+                        strategy: "native_transport_fallback".to_string(),
+                        reason: format!("turn={} reason={}", fallback.turn_index, fallback.reason),
+                        backoff_ms: 0,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+        }
+
+        if let Some(runtime_state) = invocation.runtime_state.as_ref() {
+            self.append_event(
+                Event::new(
+                    EventPayload::RuntimeRecoveryScheduled {
+                        attempt_id,
+                        from_adapter: format!("{adapter_name}:runtime_state:init"),
+                        to_adapter: format!("{adapter_name}:runtime_state:ready"),
+                        strategy: "native_runtime_state_bootstrap".to_string(),
+                        reason: format!(
+                            "db_path={} busy_timeout_ms={} log_batch_size={} retention_days={}",
+                            runtime_state.db_path,
+                            runtime_state.busy_timeout_ms,
+                            runtime_state.log_batch_size,
+                            runtime_state.log_retention_days
+                        ),
+                        backoff_ms: 0,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+        }
+
+        for transition in &invocation.readiness_transitions {
+            self.append_event(
+                Event::new(
+                    EventPayload::RuntimeRecoveryScheduled {
+                        attempt_id,
+                        from_adapter: format!(
+                            "{adapter_name}:{}:{}",
+                            transition.component, transition.from_state
+                        ),
+                        to_adapter: format!(
+                            "{adapter_name}:{}:{}",
+                            transition.component, transition.to_state
+                        ),
+                        strategy: "native_component_readiness".to_string(),
+                        reason: format!(
+                            "token={} ts_ms={} reason={}",
+                            transition.token, transition.timestamp_ms, transition.reason
+                        ),
+                        backoff_ms: 0,
+                    },
+                    correlation.clone(),
+                ),
+                origin,
+            )?;
+
+            if transition.to_state == "failed" {
+                self.append_event(
+                    Event::new(
+                        EventPayload::RuntimeErrorClassified {
+                            attempt_id,
+                            adapter_name: adapter_name.to_string(),
+                            code: "native_component_not_ready".to_string(),
+                            category: "runtime_setup".to_string(),
+                            message: format!(
+                                "Native component '{}' failed readiness transition: {}",
+                                transition.component, transition.reason
+                            ),
+                            recoverable: false,
+                            retryable: false,
+                            rate_limited: false,
+                        },
+                        correlation.clone(),
+                    ),
+                    origin,
+                )?;
+            }
+        }
+
+        let success = invocation.failure.is_none() && !saw_tool_failure;
+        let (error_code, error_message, recoverable) = invocation.failure.as_ref().map_or_else(
+            || {
+                if saw_tool_failure {
+                    (
+                        Some("native_tool_call_failed".to_string()),
+                        Some("One or more native tool calls failed".to_string()),
+                        Some(false),
+                    )
+                } else {
+                    (None, None, None)
+                }
+            },
+            |failure| {
+                (
+                    Some(failure.code.clone()),
+                    Some(failure.message.clone()),
+                    Some(failure.recoverable),
+                )
+            },
+        );
+
+        self.append_event(
+            Event::new(
+                EventPayload::AgentInvocationCompleted {
+                    native_correlation,
+                    invocation_id: invocation.invocation_id.clone(),
+                    total_turns: u32::try_from(invocation.turns.len()).unwrap_or(u32::MAX),
+                    final_state: invocation.final_state.clone(),
+                    success,
+                    final_summary: invocation.final_summary.clone(),
+                    error_code,
+                    error_message,
+                    recoverable,
+                },
+                correlation.clone(),
+            ),
+            origin,
+        )?;
+
+        Ok(())
+    }
+
+// project_runtime_set (7136-7159)
+    #[allow(clippy::too_many_arguments)]
+    pub fn project_runtime_set(
+        &self,
+        id_or_name: &str,
+        adapter: &str,
+        binary_path: &str,
+        model: Option<String>,
+        args: &[String],
+        env: &[String],
+        timeout_ms: u64,
+        max_parallel_tasks: u16,
+    ) -> Result<Project> {
+        self.project_runtime_set_role(
+            id_or_name,
+            RuntimeRole::Worker,
+            adapter,
+            binary_path,
+            model,
+            args,
+            env,
+            timeout_ms,
+            max_parallel_tasks,
+        )
+    }
+
+// ensure_supported_runtime_adapter (7161-7173)
+    fn ensure_supported_runtime_adapter(adapter: &str, origin: &'static str) -> Result<()> {
+        if !SUPPORTED_ADAPTERS.contains(&adapter) {
+            return Err(HivemindError::user(
+                "invalid_runtime_adapter",
+                format!(
+                    "Unsupported runtime adapter '{adapter}'. Supported: {}",
+                    SUPPORTED_ADAPTERS.join(", ")
+                ),
+                origin,
+            ));
+        }
+        Ok(())
+    }
+
+// parse_runtime_env_pairs (7175-7198)
+    fn parse_runtime_env_pairs(
+        env: &[String],
+        origin: &'static str,
+    ) -> Result<HashMap<String, String>> {
+        let mut env_map = HashMap::new();
+        for pair in env {
+            let Some((k, v)) = pair.split_once('=') else {
+                return Err(HivemindError::user(
+                    "invalid_env",
+                    format!("Invalid env var '{pair}'. Expected KEY=VALUE"),
+                    origin,
+                ));
+            };
+            if k.trim().is_empty() {
+                return Err(HivemindError::user(
+                    "invalid_env",
+                    format!("Invalid env var '{pair}'. KEY cannot be empty"),
+                    origin,
+                ));
+            }
+            env_map.insert(k.to_string(), v.to_string());
+        }
+        Ok(env_map)
+    }
+
+// project_runtime_for_role (7200-7205)
+    fn project_runtime_for_role(
+        project: &Project,
+        role: RuntimeRole,
+    ) -> Option<ProjectRuntimeConfig> {
+        Self::project_runtime_for_role_with_source(project, role).map(|(runtime, _)| runtime)
+    }
+
+// project_runtime_for_role_with_source (7207-7229)
+    fn project_runtime_for_role_with_source(
+        project: &Project,
+        role: RuntimeRole,
+    ) -> Option<(ProjectRuntimeConfig, RuntimeSelectionSource)> {
+        match role {
+            RuntimeRole::Worker => project
+                .runtime_defaults
+                .worker
+                .clone()
+                .map(|runtime| (runtime, RuntimeSelectionSource::ProjectDefault))
+                .or_else(|| {
+                    project
+                        .runtime
+                        .clone()
+                        .map(|runtime| (runtime, RuntimeSelectionSource::ProjectDefault))
+                }),
+            RuntimeRole::Validator => project
+                .runtime_defaults
+                .validator
+                .clone()
+                .map(|runtime| (runtime, RuntimeSelectionSource::ProjectDefault)),
+        }
+    }
+
+// task_runtime_override_for_role (7231-7240)
+    fn task_runtime_override_for_role(task: &Task, role: RuntimeRole) -> Option<TaskRuntimeConfig> {
+        match role {
+            RuntimeRole::Worker => task
+                .runtime_overrides
+                .worker
+                .clone()
+                .or_else(|| task.runtime_override.clone()),
+            RuntimeRole::Validator => task.runtime_overrides.validator.clone(),
+        }
+    }
+
+// task_runtime_to_project_runtime (7242-7255)
+    fn task_runtime_to_project_runtime(
+        runtime: TaskRuntimeConfig,
+        max_parallel_tasks: u16,
+    ) -> ProjectRuntimeConfig {
+        ProjectRuntimeConfig {
+            adapter_name: runtime.adapter_name,
+            binary_path: runtime.binary_path,
+            model: runtime.model,
+            args: runtime.args,
+            env: runtime.env,
+            timeout_ms: runtime.timeout_ms,
+            max_parallel_tasks,
+        }
+    }
+
+// max_parallel_from_defaults (7257-7259)
+    fn max_parallel_from_defaults(defaults: &RuntimeRoleDefaults) -> Option<u16> {
+        defaults.worker.as_ref().map(|cfg| cfg.max_parallel_tasks)
+    }
+
+// effective_runtime_for_task (7261-7270)
+    fn effective_runtime_for_task(
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        role: RuntimeRole,
+        origin: &'static str,
+    ) -> Result<ProjectRuntimeConfig> {
+        Self::effective_runtime_for_task_with_source(state, flow, task_id, role, origin)
+            .map(|(runtime, _)| runtime)
+    }
+
+// effective_runtime_for_task_with_source (7272-7347)
+    fn effective_runtime_for_task_with_source(
+        state: &AppState,
+        flow: &TaskFlow,
+        task_id: Uuid,
+        role: RuntimeRole,
+        origin: &'static str,
+    ) -> Result<(ProjectRuntimeConfig, RuntimeSelectionSource)> {
+        let task = state.tasks.get(&task_id).ok_or_else(|| {
+            HivemindError::system(
+                "task_not_found",
+                format!("Task '{task_id}' not found"),
+                origin,
+            )
+        })?;
+
+        let project = state.projects.get(&flow.project_id).ok_or_else(|| {
+            HivemindError::system(
+                "project_not_found",
+                format!("Project '{}' not found", flow.project_id),
+                origin,
+            )
+        })?;
+
+        let flow_defaults = state
+            .flow_runtime_defaults
+            .get(&flow.id)
+            .cloned()
+            .unwrap_or_default();
+
+        let project_defaults = project.runtime_defaults.clone();
+        let global_defaults = state.global_runtime_defaults.clone();
+
+        let max_parallel = match role {
+            RuntimeRole::Worker => Self::max_parallel_from_defaults(&flow_defaults)
+                .or_else(|| Self::max_parallel_from_defaults(&project_defaults))
+                .or_else(|| project.runtime.as_ref().map(|cfg| cfg.max_parallel_tasks))
+                .or_else(|| Self::max_parallel_from_defaults(&global_defaults))
+                .unwrap_or(1),
+            RuntimeRole::Validator => Self::max_parallel_from_defaults(&flow_defaults)
+                .or_else(|| Self::max_parallel_from_defaults(&project_defaults))
+                .or_else(|| project.runtime.as_ref().map(|cfg| cfg.max_parallel_tasks))
+                .or_else(|| Self::max_parallel_from_defaults(&global_defaults))
+                .unwrap_or(1),
+        };
+
+        if let Some(task_rt) = Self::task_runtime_override_for_role(task, role) {
+            return Ok((
+                Self::task_runtime_to_project_runtime(task_rt, max_parallel),
+                RuntimeSelectionSource::TaskOverride,
+            ));
+        }
+        if let Some(flow_rt) = match role {
+            RuntimeRole::Worker => flow_defaults.worker,
+            RuntimeRole::Validator => flow_defaults.validator,
+        } {
+            return Ok((flow_rt, RuntimeSelectionSource::FlowDefault));
+        }
+        if let Some((project_rt, source)) =
+            Self::project_runtime_for_role_with_source(project, role)
+        {
+            return Ok((project_rt, source));
+        }
+        if let Some(global_rt) = match role {
+            RuntimeRole::Worker => global_defaults.worker,
+            RuntimeRole::Validator => global_defaults.validator,
+        } {
+            return Ok((global_rt, RuntimeSelectionSource::GlobalDefault));
+        }
+
+        Err(HivemindError::new(
+            ErrorCategory::Runtime,
+            "runtime_not_configured",
+            format!("No runtime configured for role '{role:?}'"),
+            origin,
+        ))
+    }
+
+// project_runtime_set_role (7349-7445)
+    #[allow(clippy::too_many_arguments)]
+    pub fn project_runtime_set_role(
+        &self,
+        id_or_name: &str,
+        role: RuntimeRole,
+        adapter: &str,
+        binary_path: &str,
+        model: Option<String>,
+        args: &[String],
+        env: &[String],
+        timeout_ms: u64,
+        max_parallel_tasks: u16,
+    ) -> Result<Project> {
+        let project = self
+            .get_project(id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+
+        if max_parallel_tasks == 0 {
+            let err = HivemindError::user(
+                "invalid_max_parallel_tasks",
+                "max_parallel_tasks must be at least 1",
+                "registry:project_runtime_set",
+            )
+            .with_hint("Use --max-parallel-tasks 1 or higher");
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
+        }
+
+        if let Err(err) =
+            Self::ensure_supported_runtime_adapter(adapter, "registry:project_runtime_set")
+        {
+            self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            return Err(err);
+        }
+
+        let env_map = match Self::parse_runtime_env_pairs(env, "registry:project_runtime_set") {
+            Ok(parsed) => parsed,
+            Err(err) => {
+                self.record_error_event(&err, CorrelationIds::for_project(project.id));
+                return Err(err);
+            }
+        };
+
+        let desired = crate::core::state::ProjectRuntimeConfig {
+            adapter_name: adapter.to_string(),
+            binary_path: binary_path.to_string(),
+            model: model.clone(),
+            args: args.to_vec(),
+            env: env_map.clone(),
+            timeout_ms,
+            max_parallel_tasks,
+        };
+        let current = Self::project_runtime_for_role(&project, role);
+        if current.as_ref() == Some(&desired) {
+            return Ok(project);
+        }
+
+        let event = match role {
+            RuntimeRole::Worker => Event::new(
+                EventPayload::ProjectRuntimeConfigured {
+                    project_id: project.id,
+                    adapter_name: adapter.to_string(),
+                    binary_path: binary_path.to_string(),
+                    model,
+                    args: args.to_vec(),
+                    env: env_map,
+                    timeout_ms,
+                    max_parallel_tasks,
+                },
+                CorrelationIds::for_project(project.id),
+            ),
+            RuntimeRole::Validator => Event::new(
+                EventPayload::ProjectRuntimeRoleConfigured {
+                    project_id: project.id,
+                    role,
+                    adapter_name: adapter.to_string(),
+                    binary_path: binary_path.to_string(),
+                    model,
+                    args: args.to_vec(),
+                    env: env_map,
+                    timeout_ms,
+                    max_parallel_tasks,
+                },
+                CorrelationIds::for_project(project.id),
+            ),
+        };
+
+        self.store.append(event).map_err(|e| {
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:project_runtime_set",
+            )
+        })?;
+
+        self.get_project(&project.id.to_string())
+    }
+
+// runtime_defaults_set (7447-7486)
+    #[allow(clippy::too_many_arguments)]
+    pub fn runtime_defaults_set(
+        &self,
+        role: RuntimeRole,
+        adapter: &str,
+        binary_path: &str,
+        model: Option<String>,
+        args: &[String],
+        env: &[String],
+        timeout_ms: u64,
+        max_parallel_tasks: u16,
+    ) -> Result<()> {
+        if max_parallel_tasks == 0 {
+            return Err(HivemindError::user(
+                "invalid_max_parallel_tasks",
+                "max_parallel_tasks must be at least 1",
+                "registry:runtime_defaults_set",
+            )
+            .with_hint("Use --max-parallel-tasks 1 or higher"));
+        }
+        Self::ensure_supported_runtime_adapter(adapter, "registry:runtime_defaults_set")?;
+        let env_map = Self::parse_runtime_env_pairs(env, "registry:runtime_defaults_set")?;
+
+        self.append_event(
+            Event::new(
+                EventPayload::GlobalRuntimeConfigured {
+                    role,
+                    adapter_name: adapter.to_string(),
+                    binary_path: binary_path.to_string(),
+                    model,
+                    args: args.to_vec(),
+                    env: env_map,
+                    timeout_ms,
+                    max_parallel_tasks,
+                },
+                CorrelationIds::none(),
+            ),
+            "registry:runtime_defaults_set",
+        )
+    }
+
+// runtime_list (7488-7508)
+    #[must_use]
+    pub fn runtime_list(&self) -> Vec<RuntimeListEntry> {
+        runtime_descriptors()
+            .into_iter()
+            .map(|d| RuntimeListEntry {
+                adapter_name: d.adapter_name.to_string(),
+                default_binary: d.default_binary.to_string(),
+                available: if d.requires_binary {
+                    Self::binary_available(d.default_binary)
+                } else {
+                    true
+                },
+                opencode_compatible: d.opencode_compatible,
+                capabilities: d
+                    .capabilities
+                    .iter()
+                    .map(|capability| (*capability).to_string())
+                    .collect(),
+            })
+            .collect()
+    }
+
+// runtime_health (7510-7516)
+    pub fn runtime_health(
+        &self,
+        project: Option<&str>,
+        task_id: Option<&str>,
+    ) -> Result<RuntimeHealthStatus> {
+        self.runtime_health_with_role(project, task_id, None, RuntimeRole::Worker)
+    }
+
+// runtime_health_with_role (7518-7647)
+    #[allow(clippy::too_many_lines)]
+    pub fn runtime_health_with_role(
+        &self,
+        project: Option<&str>,
+        task_id: Option<&str>,
+        flow_id: Option<&str>,
+        role: RuntimeRole,
+    ) -> Result<RuntimeHealthStatus> {
+        if let Some(flow_id) = flow_id {
+            let flow = self.get_flow(flow_id)?;
+            let state = self.state()?;
+            let flow_defaults = state
+                .flow_runtime_defaults
+                .get(&flow.id)
+                .cloned()
+                .unwrap_or_default();
+            let runtime = match role {
+                RuntimeRole::Worker => flow_defaults.worker,
+                RuntimeRole::Validator => flow_defaults.validator,
+            }
+            .map(|runtime| (runtime, RuntimeSelectionSource::FlowDefault))
+            .or_else(|| {
+                state
+                    .projects
+                    .get(&flow.project_id)
+                    .and_then(|project| Self::project_runtime_for_role_with_source(project, role))
+            })
+            .or_else(|| match role {
+                RuntimeRole::Worker => state
+                    .global_runtime_defaults
+                    .worker
+                    .map(|runtime| (runtime, RuntimeSelectionSource::GlobalDefault)),
+                RuntimeRole::Validator => state
+                    .global_runtime_defaults
+                    .validator
+                    .map(|runtime| (runtime, RuntimeSelectionSource::GlobalDefault)),
+            })
+            .ok_or_else(|| {
+                HivemindError::new(
+                    ErrorCategory::Runtime,
+                    "runtime_not_configured",
+                    "Flow has no effective runtime configured for this role",
+                    "registry:runtime_health",
+                )
+            })?;
+            return Ok(Self::health_for_runtime(
+                &runtime.0,
+                Some(format!("flow:{flow_id}:{role:?}")),
+                Some(runtime.1),
+            ));
+        }
+
+        if let Some(task_id) = task_id {
+            let task_uuid = Uuid::parse_str(task_id).map_err(|_| {
+                HivemindError::user(
+                    "invalid_task_id",
+                    format!("'{task_id}' is not a valid task ID"),
+                    "registry:runtime_health",
+                )
+            })?;
+            let state = self.state()?;
+            let flow = state
+                .flows
+                .values()
+                .filter(|f| f.task_executions.contains_key(&task_uuid))
+                .max_by_key(|f| f.updated_at)
+                .cloned()
+                .ok_or_else(|| {
+                    HivemindError::user(
+                        "task_not_in_flow",
+                        "Task is not part of any flow",
+                        "registry:runtime_health",
+                    )
+                })?;
+            let runtime = Self::effective_runtime_for_task_with_source(
+                &state,
+                &flow,
+                task_uuid,
+                role,
+                "registry:runtime_health",
+            )?;
+
+            return Ok(Self::health_for_runtime(
+                &runtime.0,
+                Some(format!("task:{task_id}:{role:?}")),
+                Some(runtime.1),
+            ));
+        }
+
+        if let Some(project_id_or_name) = project {
+            let project = self.get_project(project_id_or_name)?;
+            let runtime =
+                Self::project_runtime_for_role_with_source(&project, role).ok_or_else(|| {
+                    HivemindError::new(
+                        ErrorCategory::Runtime,
+                        "runtime_not_configured",
+                        "Project has no runtime configured",
+                        "registry:runtime_health",
+                    )
+                })?;
+            return Ok(Self::health_for_runtime(
+                &runtime.0,
+                Some(format!("project:{project_id_or_name}:{role:?}")),
+                Some(runtime.1),
+            ));
+        }
+
+        Ok(RuntimeHealthStatus {
+            adapter_name: "all".to_string(),
+            binary_path: "builtin-defaults".to_string(),
+            healthy: self.runtime_list().iter().all(|r| r.available),
+            capabilities: vec!["catalog".to_string()],
+            selection_source: None,
+            target: None,
+            details: Some(
+                self.runtime_list()
+                    .into_iter()
+                    .map(|r| {
+                        format!(
+                            "{}={} ({})",
+                            r.adapter_name,
+                            if r.available { "ok" } else { "missing" },
+                            r.default_binary
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+        })
+    }
+
+// task_runtime_set (7649-7670)
+    #[allow(clippy::too_many_arguments)]
+    pub fn task_runtime_set(
+        &self,
+        task_id: &str,
+        adapter: &str,
+        binary_path: &str,
+        model: Option<String>,
+        args: &[String],
+        env: &[String],
+        timeout_ms: u64,
+    ) -> Result<Task> {
+        self.task_runtime_set_role(
+            task_id,
+            RuntimeRole::Worker,
+            adapter,
+            binary_path,
+            model,
+            args,
+            env,
+            timeout_ms,
+        )
+    }
+
+// task_runtime_set_role (7672-7723)
+    #[allow(clippy::too_many_arguments)]
+    pub fn task_runtime_set_role(
+        &self,
+        task_id: &str,
+        role: RuntimeRole,
+        adapter: &str,
+        binary_path: &str,
+        model: Option<String>,
+        args: &[String],
+        env: &[String],
+        timeout_ms: u64,
+    ) -> Result<Task> {
+        let task = self.get_task(task_id)?;
+        Self::ensure_supported_runtime_adapter(adapter, "registry:task_runtime_set")?;
+        let env_map = Self::parse_runtime_env_pairs(env, "registry:task_runtime_set")?;
+
+        let event = match role {
+            RuntimeRole::Worker => Event::new(
+                EventPayload::TaskRuntimeConfigured {
+                    task_id: task.id,
+                    adapter_name: adapter.to_string(),
+                    binary_path: binary_path.to_string(),
+                    model,
+                    args: args.to_vec(),
+                    env: env_map,
+                    timeout_ms,
+                },
+                CorrelationIds::for_task(task.project_id, task.id),
+            ),
+            RuntimeRole::Validator => Event::new(
+                EventPayload::TaskRuntimeRoleConfigured {
+                    task_id: task.id,
+                    role,
+                    adapter_name: adapter.to_string(),
+                    binary_path: binary_path.to_string(),
+                    model,
+                    args: args.to_vec(),
+                    env: env_map,
+                    timeout_ms,
+                },
+                CorrelationIds::for_task(task.project_id, task.id),
+            ),
+        };
+        self.store.append(event).map_err(|e| {
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:task_runtime_set",
+            )
+        })?;
+        self.get_task(task_id)
+    }
+
+// task_runtime_clear (7725-7727)
+    pub fn task_runtime_clear(&self, task_id: &str) -> Result<Task> {
+        self.task_runtime_clear_role(task_id, RuntimeRole::Worker)
+    }
+
+// task_runtime_clear_role (7729-7762)
+    pub fn task_runtime_clear_role(&self, task_id: &str, role: RuntimeRole) -> Result<Task> {
+        let task = self.get_task(task_id)?;
+        let already_cleared = match role {
+            RuntimeRole::Worker => {
+                task.runtime_override.is_none() && task.runtime_overrides.worker.is_none()
+            }
+            RuntimeRole::Validator => task.runtime_overrides.validator.is_none(),
+        };
+        if already_cleared {
+            return Ok(task);
+        }
+
+        let event = match role {
+            RuntimeRole::Worker => Event::new(
+                EventPayload::TaskRuntimeCleared { task_id: task.id },
+                CorrelationIds::for_task(task.project_id, task.id),
+            ),
+            RuntimeRole::Validator => Event::new(
+                EventPayload::TaskRuntimeRoleCleared {
+                    task_id: task.id,
+                    role,
+                },
+                CorrelationIds::for_task(task.project_id, task.id),
+            ),
+        };
+        self.store.append(event).map_err(|e| {
+            HivemindError::system(
+                "event_append_failed",
+                e.to_string(),
+                "registry:task_runtime_clear",
+            )
+        })?;
+        self.get_task(task_id)
+    }
+
+// task_set_run_mode (7764-7793)
+    pub fn task_set_run_mode(&self, task_id: &str, mode: RunMode) -> Result<Task> {
+        let task = self.get_task(task_id)?;
+        if task.run_mode == mode {
+            return Ok(task);
+        }
+
+        self.append_event(
+            Event::new(
+                EventPayload::TaskRunModeSet {
+                    task_id: task.id,
+                    mode,
+                },
+                CorrelationIds::for_task(task.project_id, task.id),
+            ),
+            "registry:task_set_run_mode",
+        )?;
+        if mode == RunMode::Auto {
+            let state = self.state()?;
+            if let Some(flow) = state
+                .flows
+                .values()
+                .filter(|flow| flow.task_executions.contains_key(&task.id))
+                .max_by_key(|flow| flow.updated_at)
+                .filter(|flow| flow.run_mode == RunMode::Auto && flow.state == FlowState::Running)
+            {
+                let _ = self.auto_progress_flow(&flow.id.to_string());
+            }
+        }
+        self.get_task(task_id)
+    }
+
+// binary_available (7952-7964)
+    fn binary_available(binary: &str) -> bool {
+        if binary.contains('/') {
+            let path = PathBuf::from(binary);
+            return path.exists();
+        }
+
+        std::env::var_os("PATH").is_some_and(|paths| {
+            std::env::split_paths(&paths).any(|dir| {
+                let candidate = dir.join(binary);
+                candidate.exists() && candidate.is_file()
+            })
+        })
+    }
+
+// health_for_runtime (7966-8002)
+    fn health_for_runtime(
+        runtime: &ProjectRuntimeConfig,
+        target: Option<String>,
+        selection_source: Option<RuntimeSelectionSource>,
+    ) -> RuntimeHealthStatus {
+        match Self::build_runtime_adapter(runtime.clone()) {
+            Ok(mut adapter) => match adapter.initialize() {
+                Ok(()) => RuntimeHealthStatus {
+                    adapter_name: runtime.adapter_name.clone(),
+                    binary_path: runtime.binary_path.clone(),
+                    healthy: true,
+                    capabilities: Self::runtime_capabilities_for_adapter(&runtime.adapter_name),
+                    selection_source,
+                    target,
+                    details: None,
+                },
+                Err(e) => RuntimeHealthStatus {
+                    adapter_name: runtime.adapter_name.clone(),
+                    binary_path: runtime.binary_path.clone(),
+                    healthy: false,
+                    capabilities: Self::runtime_capabilities_for_adapter(&runtime.adapter_name),
+                    selection_source,
+                    target,
+                    details: Some(format!("{}: {}", e.code, e.message)),
+                },
+            },
+            Err(e) => RuntimeHealthStatus {
+                adapter_name: runtime.adapter_name.clone(),
+                binary_path: runtime.binary_path.clone(),
+                healthy: false,
+                capabilities: Self::runtime_capabilities_for_adapter(&runtime.adapter_name),
+                selection_source,
+                target,
+                details: Some(format!("{}: {}", e.code, e.message)),
+            },
+        }
+    }
+
+// build_runtime_adapter (8004-8086)
+    fn build_runtime_adapter(runtime: ProjectRuntimeConfig) -> Result<SelectedRuntimeAdapter> {
+        let mut runtime = runtime;
+        Self::prepare_runtime_environment(&mut runtime, "registry:build_runtime_adapter")?;
+        let timeout = Duration::from_millis(runtime.timeout_ms);
+        match runtime.adapter_name.as_str() {
+            "opencode" => {
+                let mut cfg = OpenCodeConfig::new(PathBuf::from(runtime.binary_path));
+                cfg.model = runtime.model.clone().or(cfg.model);
+                cfg.base.args = runtime.args;
+                cfg.base.env = runtime.env;
+                cfg.base.timeout = timeout;
+                Ok(SelectedRuntimeAdapter::OpenCode(
+                    crate::adapters::opencode::OpenCodeAdapter::new(cfg),
+                ))
+            }
+            "codex" => {
+                let mut cfg = CodexConfig::new(PathBuf::from(runtime.binary_path));
+                cfg.model = runtime.model;
+                cfg.base.args = if runtime.args.is_empty() {
+                    CodexConfig::default().base.args
+                } else {
+                    runtime.args
+                };
+                cfg.base.env = runtime.env;
+                cfg.base.timeout = timeout;
+                Ok(SelectedRuntimeAdapter::Codex(CodexAdapter::new(cfg)))
+            }
+            "claude-code" => {
+                let mut cfg = ClaudeCodeConfig::new(PathBuf::from(runtime.binary_path));
+                cfg.model = runtime.model;
+                cfg.base.args = if runtime.args.is_empty() {
+                    ClaudeCodeConfig::default().base.args
+                } else {
+                    runtime.args
+                };
+                cfg.base.env = runtime.env;
+                cfg.base.timeout = timeout;
+                Ok(SelectedRuntimeAdapter::ClaudeCode(ClaudeCodeAdapter::new(
+                    cfg,
+                )))
+            }
+            "kilo" => {
+                let mut cfg = KiloConfig::new(PathBuf::from(runtime.binary_path));
+                cfg.model = runtime.model;
+                cfg.base.args = runtime.args;
+                cfg.base.env = runtime.env;
+                cfg.base.timeout = timeout;
+                Ok(SelectedRuntimeAdapter::Kilo(KiloAdapter::new(cfg)))
+            }
+            "native" => {
+                let mut cfg = NativeAdapterConfig::new();
+                cfg.model_name = runtime
+                    .model
+                    .clone()
+                    .unwrap_or_else(|| cfg.model_name.clone());
+                if let Some(provider) = runtime.env.get("HIVEMIND_NATIVE_PROVIDER") {
+                    cfg.provider_name.clone_from(provider);
+                }
+                if let Some(raw) = runtime.env.get("HIVEMIND_NATIVE_CAPTURE_FULL_PAYLOADS") {
+                    let normalized = raw.trim().to_ascii_lowercase();
+                    cfg.native.capture_full_payloads =
+                        matches!(normalized.as_str(), "1" | "true" | "yes" | "on");
+                }
+                cfg.base.binary_path = PathBuf::from(runtime.binary_path);
+                cfg.base.timeout = timeout;
+                cfg.base.env = runtime.env;
+                cfg.base.args = runtime.args;
+                cfg.scripted_directives = if cfg.base.args.is_empty() {
+                    cfg.scripted_directives.clone()
+                } else {
+                    cfg.base.args.clone()
+                };
+                Ok(SelectedRuntimeAdapter::Native(NativeRuntimeAdapter::new(
+                    cfg,
+                )))
+            }
+            _ => Err(HivemindError::user(
+                "unsupported_runtime",
+                format!("Unsupported runtime adapter '{}'", runtime.adapter_name),
+                "registry:build_runtime_adapter",
+            )),
+        }
+    }
+
+// parse_global_parallel_limit (9456-9480)
+    fn parse_global_parallel_limit(raw: Option<String>) -> Result<u16> {
+        let Some(raw) = raw else {
+            return Ok(u16::MAX);
+        };
+
+        let parsed = raw.parse::<u16>().map_err(|_| {
+            HivemindError::user(
+                "invalid_global_parallel_limit",
+                format!(
+                    "HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL must be a positive integer, got '{raw}'"
+                ),
+                "registry:tick_flow",
+            )
+        })?;
+
+        if parsed == 0 {
+            return Err(HivemindError::user(
+                "invalid_global_parallel_limit",
+                "HIVEMIND_MAX_PARALLEL_TASKS_GLOBAL must be at least 1",
+                "registry:tick_flow",
+            ));
+        }
+
+        Ok(parsed)
+    }
+

@@ -1,0 +1,81 @@
+{
+  "source": "src/core/registry/governance.rs",
+  "function_count": 99,
+  "entry": [
+    "project_governance_init",
+    "constitution_update"
+  ],
+  "missing_entry": [],
+  "selected_count": 18,
+  "selected": [
+    "append_governance_upsert_for_location",
+    "constitution_digest",
+    "constitution_path",
+    "constitution_update",
+    "ensure_governance_layout",
+    "governance_artifact_locations",
+    "governance_artifact_projection_key",
+    "governance_constitution_location",
+    "governance_default_file_contents",
+    "governance_global_root",
+    "governance_project_root",
+    "governance_projects_dir",
+    "next_governance_revision",
+    "parse_constitution_yaml",
+    "project_governance_init",
+    "resolve_actor",
+    "validate_constitution",
+    "write_constitution_artifact"
+  ],
+  "graph": {
+    "append_governance_upsert_for_location": [
+      "next_governance_revision"
+    ],
+    "constitution_digest": [],
+    "constitution_path": [
+      "governance_project_root"
+    ],
+    "constitution_update": [
+      "append_governance_upsert_for_location",
+      "ensure_governance_layout",
+      "governance_constitution_location",
+      "parse_constitution_yaml",
+      "resolve_actor",
+      "validate_constitution",
+      "write_constitution_artifact"
+    ],
+    "ensure_governance_layout": [
+      "governance_artifact_locations",
+      "governance_default_file_contents"
+    ],
+    "governance_artifact_locations": [
+      "governance_global_root",
+      "governance_project_root"
+    ],
+    "governance_artifact_projection_key": [],
+    "governance_constitution_location": [
+      "constitution_path"
+    ],
+    "governance_default_file_contents": [],
+    "governance_global_root": [],
+    "governance_project_root": [
+      "governance_projects_dir"
+    ],
+    "governance_projects_dir": [],
+    "next_governance_revision": [
+      "governance_artifact_projection_key"
+    ],
+    "parse_constitution_yaml": [],
+    "project_governance_init": [
+      "ensure_governance_layout",
+      "governance_artifact_locations",
+      "governance_project_root",
+      "next_governance_revision"
+    ],
+    "resolve_actor": [],
+    "validate_constitution": [],
+    "write_constitution_artifact": [
+      "constitution_digest"
+    ]
+  }
+}

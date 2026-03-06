@@ -1,0 +1,532 @@
+// AUTO-GENERATED from src/core/registry_original.rs
+// Module bucket: worktree
+
+// detect_git_operations (3378-3386)
+    fn detect_git_operations(
+        worktree_path: &Path,
+        baseline: &Baseline,
+        attempt_id: Uuid,
+    ) -> (bool, bool) {
+        let commits_created = Self::detect_commits_created(worktree_path, baseline, attempt_id);
+        let branches_created = Self::detect_branches_created(worktree_path, baseline);
+        (commits_created, branches_created)
+    }
+
+// detect_commits_created (3388-3413)
+    fn detect_commits_created(worktree_path: &Path, baseline: &Baseline, attempt_id: Uuid) -> bool {
+        let Some(base) = baseline.git_head.as_deref() else {
+            return false;
+        };
+
+        let output = std::process::Command::new("git")
+            .current_dir(worktree_path)
+            .args(["log", "--format=%s", &format!("{base}..HEAD")])
+            .output();
+
+        let Ok(output) = output else {
+            return false;
+        };
+        if !output.status.success() {
+            return false;
+        }
+
+        let mut subjects: Vec<String> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        subjects.retain(|s| s != &format!("hivemind checkpoint {attempt_id}"));
+        subjects.retain(|s| !s.starts_with("hivemind(checkpoint): "));
+        !subjects.is_empty()
+    }
+
+// detect_branches_created (3415-3436)
+    fn detect_branches_created(worktree_path: &Path, baseline: &Baseline) -> bool {
+        let output = std::process::Command::new("git")
+            .current_dir(worktree_path)
+            .args(["for-each-ref", "refs/heads", "--format=%(refname:short)"])
+            .output();
+
+        let Ok(output) = output else {
+            return false;
+        };
+        if !output.status.success() {
+            return false;
+        }
+
+        let current: std::collections::HashSet<String> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        let base: std::collections::HashSet<String> =
+            baseline.git_branches.iter().cloned().collect();
+        current.difference(&base).next().is_some()
+    }
+
+// parse_git_status_paths (3438-3463)
+    fn parse_git_status_paths(worktree_path: &Path) -> Vec<String> {
+        let output = std::process::Command::new("git")
+            .current_dir(worktree_path)
+            .args(["status", "--porcelain"])
+            .output();
+        let Ok(output) = output else {
+            return Vec::new();
+        };
+        if !output.status.success() {
+            return Vec::new();
+        }
+
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(|line| {
+                line.strip_prefix("?? ")
+                    .or_else(|| line.get(3..))
+                    .unwrap_or("")
+                    .trim()
+                    .to_string()
+            })
+            .filter(|path| !path.is_empty())
+            .collect()
+    }
+
+// repo_git_head (3515-3524)
+    fn repo_git_head(path: &Path) -> Option<String> {
+        std::process::Command::new("git")
+            .current_dir(path)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .ok()
+            .filter(|out| out.status.success())
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+            .filter(|head| !head.is_empty())
+    }
+
+// repo_status_lines (3526-3555)
+    fn repo_status_lines(path: &Path) -> Vec<String> {
+        let output = std::process::Command::new("git")
+            .current_dir(path)
+            .args(["status", "--porcelain"])
+            .output();
+        let Ok(output) = output else {
+            return Vec::new();
+        };
+        if !output.status.success() {
+            return Vec::new();
+        }
+
+        let mut lines: Vec<String> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_string)
+            .collect();
+        lines.retain(|line| {
+            let path = line
+                .strip_prefix("?? ")
+                .or_else(|| line.get(3..))
+                .unwrap_or("")
+                .trim();
+            !path.starts_with(".hivemind/")
+        });
+        lines.sort();
+        lines.dedup();
+        lines
+    }
+
+// list_tmp_entries (3557-3568)
+    fn list_tmp_entries() -> Vec<String> {
+        let Ok(entries) = fs::read_dir("/tmp") else {
+            return Vec::new();
+        };
+        let mut names: Vec<String> = entries
+            .filter_map(std::result::Result::ok)
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+    }
+
+// write_scope_baseline_artifact (3570-3593)
+    fn write_scope_baseline_artifact(&self, artifact: &ScopeBaselineArtifact) -> Result<()> {
+        fs::create_dir_all(self.scope_baselines_dir()).map_err(|e| {
+            HivemindError::system(
+                "artifact_write_failed",
+                e.to_string(),
+                "registry:write_scope_baseline_artifact",
+            )
+        })?;
+        let bytes = serde_json::to_vec_pretty(artifact).map_err(|e| {
+            HivemindError::system(
+                "artifact_serialize_failed",
+                e.to_string(),
+                "registry:write_scope_baseline_artifact",
+            )
+        })?;
+        fs::write(self.scope_baseline_path(artifact.attempt_id), bytes).map_err(|e| {
+            HivemindError::system(
+                "artifact_write_failed",
+                e.to_string(),
+                "registry:write_scope_baseline_artifact",
+            )
+        })?;
+        Ok(())
+    }
+
+// read_scope_baseline_artifact (3595-3610)
+    fn read_scope_baseline_artifact(&self, attempt_id: Uuid) -> Result<ScopeBaselineArtifact> {
+        let bytes = fs::read(self.scope_baseline_path(attempt_id)).map_err(|e| {
+            HivemindError::system(
+                "artifact_read_failed",
+                e.to_string(),
+                "registry:read_scope_baseline_artifact",
+            )
+        })?;
+        serde_json::from_slice(&bytes).map_err(|e| {
+            HivemindError::system(
+                "artifact_deserialize_failed",
+                e.to_string(),
+                "registry:read_scope_baseline_artifact",
+            )
+        })
+    }
+
+// capture_scope_baseline_for_attempt (3612-3640)
+    fn capture_scope_baseline_for_attempt(
+        &self,
+        flow: &TaskFlow,
+        state: &AppState,
+        attempt_id: Uuid,
+    ) -> Result<()> {
+        let repo_snapshots = state
+            .projects
+            .get(&flow.project_id)
+            .map(|project| {
+                project
+                    .repositories
+                    .iter()
+                    .map(|repo| ScopeRepoSnapshot {
+                        repo_path: repo.path.clone(),
+                        git_head: Self::repo_git_head(Path::new(&repo.path)),
+                        status_lines: Self::repo_status_lines(Path::new(&repo.path)),
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let artifact = ScopeBaselineArtifact {
+            attempt_id,
+            repo_snapshots,
+            tmp_entries: Self::list_tmp_entries(),
+        };
+        self.write_scope_baseline_artifact(&artifact)
+    }
+
+// parse_scope_trace_written_paths (3709-3752)
+    fn parse_scope_trace_written_paths(trace_contents: &str) -> Vec<PathBuf> {
+        fn first_quoted_segment(line: &str) -> Option<String> {
+            let start = line.find('"')?;
+            let mut escaped = false;
+            let mut out = String::new();
+            for ch in line[start + 1..].chars() {
+                if escaped {
+                    out.push(ch);
+                    escaped = false;
+                    continue;
+                }
+                match ch {
+                    '\\' => escaped = true,
+                    '"' => return Some(out),
+                    _ => out.push(ch),
+                }
+            }
+            None
+        }
+
+        let mut paths = Vec::new();
+        for line in trace_contents.lines() {
+            let is_open = line.contains("open(") || line.contains("openat(");
+            if !is_open {
+                continue;
+            }
+            let has_write_intent = line.contains("O_WRONLY")
+                || line.contains("O_RDWR")
+                || line.contains("O_CREAT")
+                || line.contains("O_TRUNC")
+                || line.contains("O_APPEND");
+            if !has_write_intent {
+                continue;
+            }
+            let Some(path) = first_quoted_segment(line).filter(|p| !p.is_empty()) else {
+                continue;
+            };
+            paths.push(PathBuf::from(path));
+        }
+
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
+// scope_trace_is_ignored (3754-3778)
+    fn scope_trace_is_ignored(path: &Path, home: Option<&Path>, data_dir: &Path) -> bool {
+        let ignored_roots = [
+            Path::new("/dev"),
+            Path::new("/proc"),
+            Path::new("/sys"),
+            Path::new("/run"),
+        ];
+        if ignored_roots.iter().any(|root| path.starts_with(root)) {
+            return true;
+        }
+        if path.starts_with(data_dir) {
+            return true;
+        }
+        if let Some(home_dir) = home {
+            if path.starts_with(home_dir.join(".config"))
+                || path.starts_with(home_dir.join(".cache"))
+                || path.starts_with(home_dir.join(".local/share"))
+                || path.starts_with(home_dir.join(".npm"))
+                || path.starts_with(home_dir.join(".bun"))
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+// artifacts_dir (3957-3959)
+    fn artifacts_dir(&self) -> PathBuf {
+        self.config.data_dir.join("artifacts")
+    }
+
+// baselines_dir (3961-3963)
+    fn baselines_dir(&self) -> PathBuf {
+        self.artifacts_dir().join("baselines")
+    }
+
+// baseline_dir (3965-3967)
+    fn baseline_dir(&self, baseline_id: Uuid) -> PathBuf {
+        self.baselines_dir().join(baseline_id.to_string())
+    }
+
+// baseline_json_path (3969-3971)
+    fn baseline_json_path(&self, baseline_id: Uuid) -> PathBuf {
+        self.baseline_dir(baseline_id).join("baseline.json")
+    }
+
+// baseline_files_dir (3973-3975)
+    fn baseline_files_dir(&self, baseline_id: Uuid) -> PathBuf {
+        self.baseline_dir(baseline_id).join("files")
+    }
+
+// diffs_dir (3977-3979)
+    fn diffs_dir(&self) -> PathBuf {
+        self.artifacts_dir().join("diffs")
+    }
+
+// diff_json_path (3981-3983)
+    fn diff_json_path(&self, diff_id: Uuid) -> PathBuf {
+        self.diffs_dir().join(format!("{diff_id}.json"))
+    }
+
+// scope_traces_dir (3985-3987)
+    fn scope_traces_dir(&self) -> PathBuf {
+        self.artifacts_dir().join("scope-traces")
+    }
+
+// scope_trace_path (3989-3991)
+    fn scope_trace_path(&self, attempt_id: Uuid) -> PathBuf {
+        self.scope_traces_dir().join(format!("{attempt_id}.log"))
+    }
+
+// scope_baselines_dir (3993-3995)
+    fn scope_baselines_dir(&self) -> PathBuf {
+        self.artifacts_dir().join("scope-baselines")
+    }
+
+// scope_baseline_path (3997-4000)
+    fn scope_baseline_path(&self, attempt_id: Uuid) -> PathBuf {
+        self.scope_baselines_dir()
+            .join(format!("{attempt_id}.json"))
+    }
+
+// worktree_error_to_hivemind (6091-6113)
+    fn worktree_error_to_hivemind(err: WorktreeError, origin: &'static str) -> HivemindError {
+        match err {
+            WorktreeError::InvalidRepo(path) => HivemindError::git(
+                "invalid_repo",
+                format!("Invalid git repository: {}", path.display()),
+                origin,
+            ),
+            WorktreeError::GitError(msg) => HivemindError::git("git_worktree_failed", msg, origin),
+            WorktreeError::AlreadyExists(task_id) => HivemindError::user(
+                "worktree_already_exists",
+                format!("Worktree already exists for task {task_id}"),
+                origin,
+            ),
+            WorktreeError::NotFound(id) => HivemindError::user(
+                "worktree_not_found",
+                format!("Worktree not found: {id}"),
+                origin,
+            ),
+            WorktreeError::IoError(e) => {
+                HivemindError::system("worktree_io_error", e.to_string(), origin)
+            }
+        }
+    }
+
+// worktree_managers_for_flow (6125-6150)
+    fn worktree_managers_for_flow(
+        flow: &TaskFlow,
+        state: &AppState,
+        origin: &'static str,
+    ) -> Result<Vec<(String, WorktreeManager)>> {
+        let project = Self::project_for_flow(flow, state)?;
+
+        if project.repositories.is_empty() {
+            return Err(HivemindError::user(
+                "project_has_no_repo",
+                "Project has no repository attached",
+                origin,
+            )
+            .with_hint("Attach a repo via 'hivemind project attach-repo <project> <path>'"));
+        }
+
+        project
+            .repositories
+            .iter()
+            .map(|repo| {
+                WorktreeManager::new(PathBuf::from(&repo.path), WorktreeConfig::default())
+                    .map(|manager| (repo.name.clone(), manager))
+                    .map_err(|e| Self::worktree_error_to_hivemind(e, origin))
+            })
+            .collect()
+    }
+
+// worktree_manager_for_flow (6152-6166)
+    fn worktree_manager_for_flow(flow: &TaskFlow, state: &AppState) -> Result<WorktreeManager> {
+        let managers =
+            Self::worktree_managers_for_flow(flow, state, "registry:worktree_manager_for_flow")?;
+        managers
+            .into_iter()
+            .next()
+            .map(|(_, manager)| manager)
+            .ok_or_else(|| {
+                HivemindError::user(
+                    "project_has_no_repo",
+                    "Project has no repository attached",
+                    "registry:worktree_manager_for_flow",
+                )
+            })
+    }
+
+// worktree_list (15254-15269)
+    pub fn worktree_list(&self, flow_id: &str) -> Result<Vec<WorktreeStatus>> {
+        let flow = self.get_flow(flow_id)?;
+        let state = self.state()?;
+        let managers = Self::worktree_managers_for_flow(&flow, &state, "registry:worktree_list")?;
+
+        let mut statuses = Vec::new();
+        for (_repo_name, manager) in managers {
+            for task_id in flow.task_executions.keys() {
+                let status = manager
+                    .inspect(flow.id, *task_id)
+                    .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_list"))?;
+                statuses.push(status);
+            }
+        }
+        Ok(statuses)
+    }
+
+// worktree_inspect (15271-15302)
+    pub fn worktree_inspect(&self, task_id: &str) -> Result<WorktreeStatus> {
+        let tid = Uuid::parse_str(task_id).map_err(|_| {
+            HivemindError::user(
+                "invalid_task_id",
+                format!("'{task_id}' is not a valid task ID"),
+                "registry:worktree_inspect",
+            )
+        })?;
+
+        let state = self.state()?;
+        let mut candidates: Vec<&TaskFlow> = state
+            .flows
+            .values()
+            .filter(|f| f.task_executions.contains_key(&tid))
+            .collect();
+
+        if candidates.is_empty() {
+            return Err(HivemindError::user(
+                "task_not_in_flow",
+                "Task is not part of any flow",
+                "registry:worktree_inspect",
+            ));
+        }
+
+        candidates.sort_by_key(|f| std::cmp::Reverse(f.updated_at));
+        let flow = candidates[0].clone();
+
+        let manager = Self::worktree_manager_for_flow(&flow, &state)?;
+        manager
+            .inspect(flow.id, tid)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_inspect"))
+    }
+
+// worktree_cleanup (15304-15355)
+    pub fn worktree_cleanup(
+        &self,
+        flow_id: &str,
+        force: bool,
+        dry_run: bool,
+    ) -> Result<WorktreeCleanupResult> {
+        let flow = self.get_flow(flow_id)?;
+        if flow.state == FlowState::Running && !force {
+            return Err(HivemindError::user(
+                "flow_running_cleanup_requires_force",
+                "Flow is running; pass --force to clean up active worktrees",
+                "registry:worktree_cleanup",
+            ));
+        }
+
+        let existing_worktrees = self
+            .worktree_list(flow_id)?
+            .iter()
+            .filter(|status| status.is_worktree)
+            .count();
+
+        let state = self.state()?;
+        let managers =
+            Self::worktree_managers_for_flow(&flow, &state, "registry:worktree_cleanup")?;
+        if !dry_run {
+            for (_repo_name, manager) in managers {
+                manager.cleanup_flow(flow.id).map_err(|e| {
+                    Self::worktree_error_to_hivemind(e, "registry:worktree_cleanup")
+                })?;
+            }
+        }
+
+        self.append_event(
+            Event::new(
+                EventPayload::WorktreeCleanupPerformed {
+                    flow_id: flow.id,
+                    cleaned_worktrees: existing_worktrees,
+                    forced: force,
+                    dry_run,
+                },
+                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            ),
+            "registry:worktree_cleanup",
+        )?;
+
+        Ok(WorktreeCleanupResult {
+            flow_id: flow.id,
+            cleaned_worktrees: existing_worktrees,
+            forced: force,
+            dry_run,
+        })
+    }
+

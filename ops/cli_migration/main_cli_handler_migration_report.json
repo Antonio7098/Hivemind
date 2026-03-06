@@ -1,0 +1,73 @@
+{
+  "migrations": [
+    {
+      "function": "handle_project",
+      "handler_file": "src/cli/handlers/project.rs",
+      "found_in_main": true,
+      "replaced": true,
+      "unresolved_helper_calls": [
+        "get_registry",
+        "parse_runtime_role",
+        "print_project",
+        "print_project_governance_init",
+        "print_project_governance_inspect",
+        "print_project_governance_migrate",
+        "print_project_id",
+        "print_projects",
+        "resolve_required_selector"
+      ]
+    },
+    {
+      "function": "handle_global",
+      "handler_file": "src/cli/handlers/global.rs",
+      "found_in_main": true,
+      "replaced": true,
+      "unresolved_helper_calls": [
+        "get_registry"
+      ]
+    },
+    {
+      "function": "handle_constitution",
+      "handler_file": "src/cli/handlers/governance.rs",
+      "found_in_main": true,
+      "replaced": true,
+      "unresolved_helper_calls": [
+        "get_registry",
+        "read_constitution_payload"
+      ]
+    },
+    {
+      "function": "handle_events",
+      "handler_file": "src/cli/handlers/events.rs",
+      "found_in_main": true,
+      "replaced": true,
+      "unresolved_helper_calls": [
+        "build_event_filter",
+        "get_registry",
+        "print_events_table",
+        "redact_events_for_stream"
+      ]
+    },
+    {
+      "function": "handle_attempt",
+      "handler_file": "src/cli/handlers/attempt.rs",
+      "found_in_main": true,
+      "replaced": true,
+      "unresolved_helper_calls": [
+        "get_registry"
+      ]
+    },
+    {
+      "function": "handle_task",
+      "handler_file": "src/cli/handlers/task.rs",
+      "found_in_main": true,
+      "replaced": true,
+      "unresolved_helper_calls": [
+        "get_registry",
+        "parse_run_mode",
+        "print_task",
+        "print_task_id"
+      ]
+    }
+  ]
+}

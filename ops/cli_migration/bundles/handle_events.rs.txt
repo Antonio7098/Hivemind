@@ -1,0 +1,230 @@
+// function: handle_events
+// target: src/cli/handlers/events.rs
+// unresolved helpers (main.rs-local):
+// - build_event_filter
+// - get_registry
+// - print_events_table
+// - redact_events_for_stream
+
+fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        EventCommands::List(args) => {
+            let filter = match build_event_filter(
+                &registry,
+                "cli:events:list",
+                args.project.as_deref(),
+                args.graph.as_deref(),
+                args.flow.as_deref(),
+                args.task.as_deref(),
+                args.attempt.as_deref(),
+                args.artifact_id.as_deref(),
+                args.template_id.as_deref(),
+                args.rule_id.as_deref(),
+                args.error_type.as_deref(),
+                args.since.as_deref(),
+                args.until.as_deref(),
+                args.limit,
+            ) {
+                Ok(f) => f,
+                Err(e) => return output_error(&e, format),
+            };
+
+            let events = match registry.read_events(&filter) {
+                Ok(evs) => evs,
+                Err(e) => return output_error(&e, format),
+            };
+
+            match format {
+                OutputFormat::Json => {
+                    let response = hivemind::cli::output::CliResponse::success(&events);
+                    if let Ok(json) = serde_json::to_string_pretty(&response) {
+                        println!("{json}");
+                    }
+                }
+                OutputFormat::Yaml => {
+                    let response = hivemind::cli::output::CliResponse::success(&events);
+                    if let Ok(yaml) = serde_yaml::to_string(&response) {
+                        print!("{yaml}");
+                    }
+                }
+                OutputFormat::Table => print_events_table(events),
+            }
+
+            ExitCode::Success
+        }
+        EventCommands::Inspect(args) => {
+            let event = match registry.get_event(&args.event_id) {
+                Ok(ev) => ev,
+                Err(e) => return output_error(&e, format),
+            };
+
+            match format {
+                OutputFormat::Json => {
+                    let response = hivemind::cli::output::CliResponse::success(&event);
+                    if let Ok(json) = serde_json::to_string_pretty(&response) {
+                        println!("{json}");
+                    }
+                }
+                OutputFormat::Yaml => {
+                    if let Ok(yaml) = serde_yaml::to_string(&event) {
+                        print!("{yaml}");
+                    }
+                }
+                OutputFormat::Table => {
+                    if let Ok(json) = serde_json::to_string_pretty(&event) {
+                        println!("{json}");
+                    }
+                }
+            }
+
+            ExitCode::Success
+        }
+        EventCommands::Stream(args) => {
+            let filter = match build_event_filter(
+                &registry,
+                "cli:events:stream",
+                args.project.as_deref(),
+                args.graph.as_deref(),
+                args.flow.as_deref(),
+                args.task.as_deref(),
+                args.attempt.as_deref(),
+                args.artifact_id.as_deref(),
+                args.template_id.as_deref(),
+                args.rule_id.as_deref(),
+                args.error_type.as_deref(),
+                args.since.as_deref(),
+                args.until.as_deref(),
+                args.limit,
+            ) {
+                Ok(f) => f,
+                Err(e) => return output_error(&e, format),
+            };
+
+            let rx = match registry.stream_events(&filter) {
+                Ok(r) => r,
+                Err(e) => return output_error(&e, format),
+            };
+
+            let mut events = Vec::new();
+            let idle_timeout = std::time::Duration::from_millis(1000);
+            while let Ok(ev) = rx.recv_timeout(idle_timeout) {
+                events.push(ev);
+                if events.len() >= args.limit {
+                    break;
+                }
+            }
+            if args.redact_secrets {
+                events = redact_events_for_stream(events);
+            }
+
+            match format {
+                OutputFormat::Json => {
+                    let response = hivemind::cli::output::CliResponse::success(&events);
+                    if let Ok(json) = serde_json::to_string_pretty(&response) {
+                        println!("{json}");
+                    }
+                }
+                OutputFormat::Yaml => {
+                    let response = hivemind::cli::output::CliResponse::success(&events);
+                    if let Ok(yaml) = serde_yaml::to_string(&response) {
+                        print!("{yaml}");
+                    }
+                }
+                OutputFormat::Table => print_events_table(events),
+            }
+
+            ExitCode::Success
+        }
+        EventCommands::Replay(args) => {
+            let replayed = match registry.replay_flow(&args.flow_id) {
+                Ok(f) => f,
+                Err(e) => return output_error(&e, format),
+            };
+
+            if args.verify {
+                let current = match registry.get_flow(&args.flow_id) {
+                    Ok(f) => f,
+                    Err(e) => return output_error(&e, format),
+                };
+
+                let match_ok = replayed.state == current.state
+                    && replayed.task_executions.len() == current.task_executions.len()
+                    && replayed.task_executions.iter().all(|(tid, exec)| {
+                        current
+                            .task_executions
+                            .get(tid)
+                            .is_some_and(|ce| ce.state == exec.state)
+                    });
+
+                if match_ok {
+                    println!("Verification passed: replayed state matches current state.");
+                } else {
+                    eprintln!("Verification FAILED: replayed state differs from current state.");
+                    return ExitCode::Error;
+                }
+            }
+
+            match format {
+                OutputFormat::Json => {
+                    if let Ok(json) = serde_json::to_string_pretty(&replayed) {
+                        println!("{json}");
+                    }
+                }
+                OutputFormat::Yaml => {
+                    if let Ok(yaml) = serde_yaml::to_string(&replayed) {
+                        print!("{yaml}");
+                    }
+                }
+                OutputFormat::Table => {
+                    println!("ID:      {}", replayed.id);
+                    println!("Graph:   {}", replayed.graph_id);
+                    println!("State:   {:?}", replayed.state);
+                    let mut counts = std::collections::HashMap::new();
+                    for exec in replayed.task_executions.values() {
+                        *counts.entry(exec.state).or_insert(0usize) += 1;
+                    }
+                    println!("Tasks:");
+                    let mut keys: Vec<_> = counts.keys().copied().collect();
+                    keys.sort_by_key(|k| format!("{k:?}"));
+                    for k in keys {
+                        println!("  - {:?}: {}", k, counts[&k]);
+                    }
+                }
+            }
+
+            ExitCode::Success
+        }
+        EventCommands::Verify(_args) => match registry.events_verify() {
+            Ok(result) => {
+                print_structured(&result, format, "events verify result");
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
+        EventCommands::Recover(args) => {
+            if !args.from_mirror {
+                return output_error(
+                    &hivemind::core::error::HivemindError::user(
+                        "events_recover_source_required",
+                        "Specify an explicit source for recovery",
+                        "cli:events:recover",
+                    )
+                    .with_hint("Use `hivemind events recover --from-mirror --confirm`"),
+                    format,
+                );
+            }
+
+            match registry.events_recover_from_mirror(args.confirm) {
+                Ok(result) => {
+                    print_structured(&result, format, "events recover result");
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
+    }
+}
