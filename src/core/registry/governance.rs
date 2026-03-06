@@ -17,6 +17,9 @@ use crate::core::registry::{
 };
 
 mod constitution;
+mod global_notepad;
+mod global_skills;
+mod global_system_prompts;
 mod global_templates;
 mod globals;
 mod introspection;
