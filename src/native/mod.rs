@@ -16,10 +16,7 @@ pub mod tool_engine;
 
 pub use openrouter::OpenRouterModelClient;
 
-use crate::adapters::runtime::{
-    NativeTransportAttemptTrace, NativeTransportFallbackTrace, NativeTransportTelemetry,
-    RuntimeError,
-};
+use crate::adapters::runtime::{NativeTransportTelemetry, RuntimeError};
 use crate::core::error::{ErrorCategory, HivemindError};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
