@@ -1,0 +1,3062 @@
+{
+  "success": true,
+  "data": [
+    {
+      "metadata": {
+        "id": "00000000-0000-01c2-87b5-8b619566f906",
+        "timestamp": "2026-03-06T17:28:22.642257518Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 450
+      },
+      "payload": {
+        "type": "task_flow_created",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+        "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+        "name": "phase45-native-flow-2",
+        "task_ids": [
+          "167a4330-5a07-417f-bffe-6ec4f6462137"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01c3-a48c-dabe6c50b48d",
+        "timestamp": "2026-03-06T17:28:23.286045075Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 451
+      },
+      "payload": {
+        "type": "task_flow_dependency_added",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "depends_on_flow_id": "9cb66ef6-5a76-401b-819e-8230d822b598"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01c4-8b36-ed00f4fdc3cb",
+        "timestamp": "2026-03-06T17:28:23.768358133Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 452
+      },
+      "payload": {
+        "type": "task_flow_started",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "base_revision": "6cffa92a07109ea0a5dfcbcae1ae6a36b56a9936"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01c5-9284-7a82991f50a6",
+        "timestamp": "2026-03-06T17:28:23.790193340Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": null
+        },
+        "sequence": 453
+      },
+      "payload": {
+        "type": "task_ready",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01c6-934d-3137c47f70f2",
+        "timestamp": "2026-03-06T17:28:25.483326111Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": null
+        },
+        "sequence": 454
+      },
+      "payload": {
+        "type": "task_execution_state_changed",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "from": "ready",
+        "to": "running"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01c7-b943-12f20270afa1",
+        "timestamp": "2026-03-06T17:28:25.505085556Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 455
+      },
+      "payload": {
+        "type": "attempt_started",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "attempt_number": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01c8-99de-70e7b5c887e9",
+        "timestamp": "2026-03-06T17:28:25.524110080Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 456
+      },
+      "payload": {
+        "type": "checkpoint_declared",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "checkpoint_id": "checkpoint-1",
+        "order": 1,
+        "total": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01c9-be82-1f74c98a8d58",
+        "timestamp": "2026-03-06T17:28:25.539891062Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 457
+      },
+      "payload": {
+        "type": "checkpoint_activated",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "checkpoint_id": "checkpoint-1",
+        "order": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01ca-86cd-0edf266f9320",
+        "timestamp": "2026-03-06T17:28:25.555143697Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 458
+      },
+      "payload": {
+        "type": "task_execution_started",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "attempt_number": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01cb-8297-38958080b3dd",
+        "timestamp": "2026-03-06T17:28:25.570783365Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 459
+      },
+      "payload": {
+        "type": "baseline_captured",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "baseline_id": "4187f76e-753e-4647-a5d9-85165b8a4673",
+        "git_head": "6cffa92a07109ea0a5dfcbcae1ae6a36b56a9936",
+        "file_count": 1
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01cc-b6d0-a09175ce99e3",
+        "timestamp": "2026-03-06T17:28:25.729788583Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 460
+      },
+      "payload": {
+        "type": "context_window_created",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "window_id": "attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "policy": "ordered_section_then_total_budget",
+        "state_hash": "c2957d36f57b20dc0492eb918e3692f7fad90766c5c6a1e1aa472f6f60e23735"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01cd-a20a-f1537a04ff3e",
+        "timestamp": "2026-03-06T17:28:25.753265929Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 461
+      },
+      "payload": {
+        "type": "context_op_applied",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "window_id": "attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "op": "add",
+        "actor": "flow_engine",
+        "runtime": "native",
+        "tool": null,
+        "reason": "seed_constitution",
+        "before_hash": "2b1b41c8de1371f2e8eed25e8765ad54d4f5af5c772cd4b7c707bbb69174931c",
+        "after_hash": "3aa8d7911ca8ef451440d10285e7bcdcf884b28ac9a7ddd1d5bcbf76fff6e8e8",
+        "added_ids": [
+          "constitution-primary"
+        ],
+        "removed_ids": [],
+        "truncated_sections": [],
+        "section_reasons": {}
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01ce-8179-40a41f70d4dd",
+        "timestamp": "2026-03-06T17:28:25.771012274Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 462
+      },
+      "payload": {
+        "type": "context_op_applied",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "window_id": "attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "op": "add",
+        "actor": "flow_engine",
+        "runtime": "native",
+        "tool": null,
+        "reason": "seed_system_prompt",
+        "before_hash": "3aa8d7911ca8ef451440d10285e7bcdcf884b28ac9a7ddd1d5bcbf76fff6e8e8",
+        "after_hash": "c14fc58ec87025fb6eb700b3ac8c4e7c4aad6fc6fd1d1574b59a4f0ec7daee98",
+        "added_ids": [
+          "system-prompt-primary"
+        ],
+        "removed_ids": [],
+        "truncated_sections": [],
+        "section_reasons": {}
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01cf-ac46-6ec3c4901bf7",
+        "timestamp": "2026-03-06T17:28:25.787497342Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 463
+      },
+      "payload": {
+        "type": "context_op_applied",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "window_id": "attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "op": "add",
+        "actor": "flow_engine",
+        "runtime": "native",
+        "tool": null,
+        "reason": "seed_skills_header",
+        "before_hash": "c14fc58ec87025fb6eb700b3ac8c4e7c4aad6fc6fd1d1574b59a4f0ec7daee98",
+        "after_hash": "51591d7ed8c8c5ad0c9a6d8429e8655bf7631236ca9c0812b2a39e2767f2390f",
+        "added_ids": [
+          "skills-header"
+        ],
+        "removed_ids": [],
+        "truncated_sections": [],
+        "section_reasons": {}
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01d0-ae53-9441fcc05370",
+        "timestamp": "2026-03-06T17:28:25.802031865Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 464
+      },
+      "payload": {
+        "type": "context_op_applied",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "window_id": "attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "op": "expand",
+        "actor": "flow_engine",
+        "runtime": "native",
+        "tool": null,
+        "reason": "expand_skills",
+        "before_hash": "51591d7ed8c8c5ad0c9a6d8429e8655bf7631236ca9c0812b2a39e2767f2390f",
+        "after_hash": "c4692129891bc015c023cebfdc7423bc946453e870052c2b3aa645c42fc04a01",
+        "added_ids": [
+          "skills-entry-000",
+          "skills-entry-001"
+        ],
+        "removed_ids": [],
+        "truncated_sections": [],
+        "section_reasons": {}
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01d1-86f2-1065420ac343",
+        "timestamp": "2026-03-06T17:28:25.817222364Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 465
+      },
+      "payload": {
+        "type": "context_op_applied",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "window_id": "attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "op": "add",
+        "actor": "flow_engine",
+        "runtime": "native",
+        "tool": null,
+        "reason": "seed_documents_header",
+        "before_hash": "c4692129891bc015c023cebfdc7423bc946453e870052c2b3aa645c42fc04a01",
+        "after_hash": "dd42b0b6c30ccccabac40e4574183cbed3f697629f642da7582696c869c1755a",
+        "added_ids": [
+          "documents-header"
+        ],
+        "removed_ids": [],
+        "truncated_sections": [],
+        "section_reasons": {}
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01d2-b14b-07baf432ff62",
+        "timestamp": "2026-03-06T17:28:25.833958401Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 466
+      },
+      "payload": {
+        "type": "context_op_applied",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "window_id": "attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "op": "expand",
+        "actor": "flow_engine",
+        "runtime": "native",
+        "tool": null,
+        "reason": "expand_documents",
+        "before_hash": "dd42b0b6c30ccccabac40e4574183cbed3f697629f642da7582696c869c1755a",
+        "after_hash": "7f445471575d0dcae163ba4a8753417b1eb36e8f98abb63807c7a0973f95f9fe",
+        "added_ids": [
+          "documents-entry-000",
+          "documents-entry-001",
+          "documents-entry-002"
+        ],
+        "removed_ids": [],
+        "truncated_sections": [],
+        "section_reasons": {}
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01d3-99e6-50b4dd4a8cb2",
+        "timestamp": "2026-03-06T17:28:25.849226174Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 467
+      },
+      "payload": {
+        "type": "context_op_applied",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "window_id": "attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "op": "add",
+        "actor": "flow_engine",
+        "runtime": "native",
+        "tool": null,
+        "reason": "seed_graph_summary",
+        "before_hash": "7f445471575d0dcae163ba4a8753417b1eb36e8f98abb63807c7a0973f95f9fe",
+        "after_hash": "c2957d36f57b20dc0492eb918e3692f7fad90766c5c6a1e1aa472f6f60e23735",
+        "added_ids": [
+          "graph-summary-primary"
+        ],
+        "removed_ids": [],
+        "truncated_sections": [],
+        "section_reasons": {}
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01d4-8ecb-d2e3f6ae6345",
+        "timestamp": "2026-03-06T17:28:25.864448152Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 468
+      },
+      "payload": {
+        "type": "context_op_applied",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "window_id": "attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "op": "prune",
+        "actor": "flow_engine",
+        "runtime": "native",
+        "tool": null,
+        "reason": "enforce_budget_policy",
+        "before_hash": "c2957d36f57b20dc0492eb918e3692f7fad90766c5c6a1e1aa472f6f60e23735",
+        "after_hash": "c2957d36f57b20dc0492eb918e3692f7fad90766c5c6a1e1aa472f6f60e23735",
+        "added_ids": [],
+        "removed_ids": [],
+        "truncated_sections": [],
+        "section_reasons": {}
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01d5-936b-473f5b8f631d",
+        "timestamp": "2026-03-06T17:28:25.881873838Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 469
+      },
+      "payload": {
+        "type": "context_op_applied",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "window_id": "attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "op": "snapshot",
+        "actor": "flow_engine",
+        "runtime": "native",
+        "tool": null,
+        "reason": "create_context_snapshot",
+        "before_hash": "c2957d36f57b20dc0492eb918e3692f7fad90766c5c6a1e1aa472f6f60e23735",
+        "after_hash": "c2957d36f57b20dc0492eb918e3692f7fad90766c5c6a1e1aa472f6f60e23735",
+        "added_ids": [],
+        "removed_ids": [],
+        "truncated_sections": [],
+        "section_reasons": {}
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01d6-979f-c08fb3a195e3",
+        "timestamp": "2026-03-06T17:28:25.898986258Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 470
+      },
+      "payload": {
+        "type": "attempt_context_assembled",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "attempt_number": 1,
+        "manifest_hash": "7ae1e57fce2c3d91",
+        "inputs_hash": "15159d423ee9cc47",
+        "context_hash": "943bd6341762b031",
+        "context_size_bytes": 1510,
+        "truncated_sections": [],
+        "manifest_json": "{\"schema_version\":\"attempt_context.v2\",\"manifest_version\":2,\"ordered_inputs\":[\"constitution\",\"system_prompt\",\"skills\",\"project_documents\",\"graph_summary\"],\"excluded_sources\":[\"project_notepad\",\"global_notepad\",\"implicit_memory\"],\"constitution\":{\"path\":\"/tmp/hm-phase45-native-runtime-beta/home/.hivemind/projects/06505cd6-3ede-451f-9b81-927f2583289c/constitution.yaml\",\"revision\":2,\"digest\":\"60406b76eba973f9\",\"content_hash\":\"60406b76eba973f9\"},\"template_id\":\"phase45-native-template\",\"template_event_id\":\"00000000-0000-0015-a44d-ad7aefe28862\",\"template_schema_version\":\"governance.v1\",\"template_projection_version\":1,\"system_prompt\":{\"prompt_id\":\"phase45-native-system\",\"content_hash\":\"2cf51487c8ec8aeb\"},\"skills\":[{\"skill_id\":\"phase45-python-skill\",\"content_hash\":\"c2ac899a29a39da1\"},{\"skill_id\":\"phase45-testing-skill\",\"content_hash\":\"eaf7364abcae690b\"}],\"documents\":[{\"document_id\":\"api-contract\",\"source\":\"template\",\"revision\":1,\"content_hash\":\"4999f9ae90be7e06\"},{\"document_id\":\"architecture-notes\",\"source\":\"template\",\"revision\":1,\"content_hash\":\"ab05c85a45d01b35\"},{\"document_id\":\"testing-policy\",\"source\":\"template\",\"revision\":1,\"content_hash\":\"f1c34195a9d820b1\"}],\"graph_summary\":{\"present\":true,\"canonical_fingerprint\":\"aded468d4f406d5c\",\"repository_count\":1,\"total_nodes\":1,\"total_edges\":0,\"languages\":{}},\"retry_links\":[],\"budget\":{\"total_budget_bytes\":24000,\"default_section_budget_bytes\":6000,\"per_section_budget_bytes\":{\"constitution\":6000,\"graph_summary\":6000,\"project_documents\":6000,\"skills\":6000,\"system_prompt\":6000},\"max_expand_depth\":2,\"deduplicate\":true,\"original_size_bytes\":1500,\"context_size_bytes\":1510,\"truncated_sections\":[],\"truncation_reasons\":{},\"policy\":\"ordered_section_then_total_budget\"}}"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01d7-9711-5de2606ad2ee",
+        "timestamp": "2026-03-06T17:28:25.917398869Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 471
+      },
+      "payload": {
+        "type": "context_window_snapshot_created",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "window_id": "attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "state_hash": "c2957d36f57b20dc0492eb918e3692f7fad90766c5c6a1e1aa472f6f60e23735",
+        "rendered_prompt_hash": "943bd6341762b031",
+        "delivered_input_hash": "64a7769b140ecfa4",
+        "snapshot_json": "{\"window_id\":\"attempt-context-b8589c4b-995e-4c2e-99d0-44e677f1a322\",\"state_hash\":\"c2957d36f57b20dc0492eb918e3692f7fad90766c5c6a1e1aa472f6f60e23735\",\"rendered_prompt_hash\":\"39a7997acaff2b82035a444df3e98032f44abbe18872fd06315c2cabbbfce384\",\"total_size_bytes\":1510,\"sections\":[{\"section\":\"constitution\",\"content\":\"Constitution:\\n- path: /tmp/hm-phase45-native-runtime-beta/home/.hivemind/projects/06505cd6-3ede-451f-9b81-927f2583289c/constitution.yaml\\n- digest: 60406b76eba973f9\\n- content:\\nversion: 1\\nschema_version: constitution.v1\\ncompatibility:\\n  minimum_hivemind_version: 0.1.32\\n  governance_schema_version: governance.v1\\npartitions: []\\nrules: []\\n\",\"size_bytes\":336,\"entry_ids\":[\"constitution-primary\"]},{\"section\":\"system_prompt\",\"content\":\"System Prompt:\\n- prompt_id: phase45-native-system\\n- content:\\nFollow numbered directives exactly. Emit one THINK/ACT/DONE directive per turn. Never call run_command unless the task prompt explicitly includes it. When running Python commands, always use python3.\",\"size_bytes\":260,\"entry_ids\":[\"system-prompt-primary\"]},{\"section\":\"skills\",\"content\":\"Skills:\\n\\n- skill_id: phase45-python-skill\\n  name: Python API Builder\\n  content:\\nKeep module boundaries explicit and deterministic.\\n\\n- skill_id: phase45-testing-skill\\n  name: Test Discipline\\n  content:\\nRun unit tests and inspect git status only when explicitly requested by the task prompt; use python3, never python.\",\"size_bytes\":316,\"entry_ids\":[\"skills-header\",\"skills-entry-000\",\"skills-entry-001\"]},{\"section\":\"project_documents\",\"content\":\"Documents:\\n\\n- document_id: api-contract\\n  source: template\\n  revision: 1\\n  title: API Contract\\n  owner: qa\\n  content:\\nGET /health, GET /items, POST /items.\\n\\n- document_id: architecture-notes\\n  source: template\\n  revision: 1\\n  title: Architecture Notes\\n  owner: qa\\n  content:\\nLayered API: models, store, service, router, server.\\n\\n- document_id: testing-policy\\n  source: template\\n  revision: 1\\n  title: Testing Policy\\n  owner: qa\\n  content:\\nRun unittest suite before DONE.\",\"size_bytes\":470,\"entry_ids\":[\"documents-header\",\"documents-entry-000\",\"documents-entry-001\",\"documents-entry-002\"]},{\"section\":\"graph_summary\",\"content\":\"Graph Summary:\\n- canonical_fingerprint: aded468d4f406d5c\\n- repositories: 1\\n- total_nodes: 1\\n- total_edges: 0\\n- languages: (none)\",\"size_bytes\":128,\"entry_ids\":[\"graph-summary-primary\"]}],\"rendered_prompt\":\"Constitution:\\n- path: /tmp/hm-phase45-native-runtime-beta/home/.hivemind/projects/06505cd6-3ede-451f-9b81-927f2583289c/constitution.yaml\\n- digest: 60406b76eba973f9\\n- content:\\nversion: 1\\nschema_version: constitution.v1\\ncompatibility:\\n  minimum_hivemind_version: 0.1.32\\n  governance_schema_version: governance.v1\\npartitions: []\\nrules: []\\n\\n\\nSystem Prompt:\\n- prompt_id: phase45-native-system\\n- content:\\nFollow numbered directives exactly. Emit one THINK/ACT/DONE directive per turn. Never call run_command unless the task prompt explicitly includes it. When running Python commands, always use python3.\\n\\nSkills:\\n\\n- skill_id: phase45-python-skill\\n  name: Python API Builder\\n  content:\\nKeep module boundaries explicit and deterministic.\\n\\n- skill_id: phase45-testing-skill\\n  name: Test Discipline\\n  content:\\nRun unit tests and inspect git status only when explicitly requested by the task prompt; use python3, never python.\\n\\nDocuments:\\n\\n- document_id: api-contract\\n  source: template\\n  revision: 1\\n  title: API Contract\\n  owner: qa\\n  content:\\nGET /health, GET /items, POST /items.\\n\\n- document_id: architecture-notes\\n  source: template\\n  revision: 1\\n  title: Architecture Notes\\n  owner: qa\\n  content:\\nLayered API: models, store, service, router, server.\\n\\n- document_id: testing-policy\\n  source: template\\n  revision: 1\\n  title: Testing Policy\\n  owner: qa\\n  content:\\nRun unittest suite before DONE.\\n\\nGraph Summary:\\n- canonical_fingerprint: aded468d4f406d5c\\n- repositories: 1\\n- total_nodes: 1\\n- total_edges: 0\\n- languages: (none)\"}"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01d8-a49e-8b9f8219af34",
+        "timestamp": "2026-03-06T17:28:25.934721062Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 472
+      },
+      "payload": {
+        "type": "attempt_context_delivered",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "manifest_hash": "7ae1e57fce2c3d91",
+        "inputs_hash": "15159d423ee9cc47",
+        "context_hash": "64a7769b140ecfa4",
+        "delivery_target": "runtime_execution_input",
+        "prior_attempt_ids": [],
+        "prior_manifest_hashes": []
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01d9-90c5-7d774dcaafdd",
+        "timestamp": "2026-03-06T17:28:25.949737485Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 473
+      },
+      "payload": {
+        "type": "runtime_capabilities_evaluated",
+        "adapter_name": "native",
+        "role": "worker",
+        "selection_source": "project_default",
+        "capabilities": [
+          "native_loop",
+          "typed_tool_engine",
+          "schema_validated_tools",
+          "scope_policy_enforcement",
+          "deterministic_harness",
+          "provider_agnostic_contracts"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01da-ac14-f57e18a8943a",
+        "timestamp": "2026-03-06T17:28:25.968604906Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 474
+      },
+      "payload": {
+        "type": "runtime_environment_prepared",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "adapter_name": "native",
+        "inherit_mode": "all",
+        "inherited_keys": [
+          "ANDROID_HOME",
+          "ANDROID_SDK_ROOT",
+          "AUGMENT_AGENT",
+          "CLUTTER_DISABLE_MIPMAPPED_TEXT",
+          "COLORTERM",
+          "DBUS_SESSION_BUS_ADDRESS",
+          "DEBUGINFOD_URLS",
+          "DESKTOP_SESSION",
+          "DISPLAY",
+          "DOCKER_HOST",
+          "DOTNET_BUNDLE_EXTRACT_BASE_DIR",
+          "DOTNET_ROOT",
+          "GDMSESSION",
+          "GNOME_DESKTOP_SESSION_ID",
+          "GNOME_SHELL_SESSION_MODE",
+          "GNOME_TERMINAL_SCREEN",
+          "GNOME_TERMINAL_SERVICE",
+          "GPG_AGENT_INFO",
+          "GSM_SKIP_SSH_AGENT_WORKAROUND",
+          "GTK_MODULES",
+          "HIVEMIND",
+          "HIVEMIND_DATA_DIR",
+          "HOME",
+          "LANG",
+          "LESSCLOSE",
+          "LESSOPEN",
+          "LIBVIRT_DEFAULT_URI",
+          "LOGNAME",
+          "LS_COLORS",
+          "MEMORY_PRESSURE_WATCH",
+          "MEMORY_PRESSURE_WRITE",
+          "NVM_DIR",
+          "OLDPWD",
+          "OPENROUTER_MODEL_ID",
+          "PATH",
+          "PWD",
+          "QT_ACCESSIBILITY",
+          "QT_IM_MODULE",
+          "SESSION_MANAGER",
+          "SHELL",
+          "SHLVL",
+          "SSH_AUTH_SOCK",
+          "SYSTEMD_EXEC_PID",
+          "TERM",
+          "USER",
+          "USERNAME",
+          "VTE_VERSION",
+          "WINDOWPATH",
+          "XAUTHORITY",
+          "XDG_CONFIG_DIRS",
+          "XDG_CURRENT_DESKTOP",
+          "XDG_DATA_DIRS",
+          "XDG_MENU_PREFIX",
+          "XDG_RUNTIME_DIR",
+          "XDG_SESSION_CLASS",
+          "XDG_SESSION_DESKTOP",
+          "XDG_SESSION_TYPE",
+          "XMODIFIERS",
+          "_"
+        ],
+        "overlay_keys": [
+          "CARGO_TARGET_DIR",
+          "HIVEMIND_AGENT_BIN",
+          "HIVEMIND_ALL_WORKTREES",
+          "HIVEMIND_ATTEMPT_ID",
+          "HIVEMIND_BIN",
+          "HIVEMIND_FLOW_ID",
+          "HIVEMIND_GRAPH_SNAPSHOT_PATH",
+          "HIVEMIND_NATIVE_APPROVAL_MODE",
+          "HIVEMIND_NATIVE_CAPTURE_FULL_PAYLOADS",
+          "HIVEMIND_NATIVE_EXEC_SESSION_CAP",
+          "HIVEMIND_NATIVE_NETWORK_MODE",
+          "HIVEMIND_NATIVE_NETWORK_PROXY_MODE",
+          "HIVEMIND_NATIVE_PROVIDER",
+          "HIVEMIND_NATIVE_SANDBOX_MODE",
+          "HIVEMIND_NATIVE_SECRETS_MASTER_KEY",
+          "HIVEMIND_NATIVE_STATE_DIR",
+          "HIVEMIND_NATIVE_TOOL_RUN_COMMAND_ALLOWLIST",
+          "HIVEMIND_PRIMARY_WORKTREE",
+          "HIVEMIND_PROJECT_CONSTITUTION_PATH",
+          "HIVEMIND_REPO_MAIN_WORKTREE",
+          "HIVEMIND_TASK_ID",
+          "OPENROUTER_API_KEY",
+          "PATH"
+        ],
+        "explicit_sensitive_overlay_keys": [
+          "HIVEMIND_NATIVE_SECRETS_MASTER_KEY",
+          "OPENROUTER_API_KEY"
+        ],
+        "dropped_sensitive_inherited_keys": [
+          "BETA_PHASE45_SECRET_TOKEN",
+          "OPENROUTER_API_KEY"
+        ],
+        "dropped_reserved_inherited_keys": [
+          "HIVEMIND_RUNTIME_INTERNAL_PHASE45_RESERVED"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01db-abb1-2cab84f66a5e",
+        "timestamp": "2026-03-06T17:28:25.986355348Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 475
+      },
+      "payload": {
+        "type": "runtime_started",
+        "adapter_name": "native",
+        "role": "worker",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "prompt": "Task: Run flow-2 verification checks and produce docs/verification.md. Follow steps exactly.\nEmit exactly one directive per turn.\n1) ACT:tool:read_file:{\"path\":\"README.md\"}\n2) ACT:tool:write_file:{\"path\":\"docs/verification.md\",\"content\":\"# Verification Notes\\n\\n- Runtime adapter: native (OpenRouter provider)\\n- Flow execution: two flows with inter-flow dependency\\n- Tool coverage: read_file, list_files, write_file, run_command, git_status, git_diff, graph_query\\n- Host validation command: `python3 -m unittest discover -s tests -v`\\n- Runtime hardening evidence: runtime state bootstrap + component readiness events\",\"append\":false}\n3) ACT:tool:run_command:{\"command\":\"python3\",\"args\":[\"-m\",\"unittest\",\"discover\",\"-s\",\"tests\",\"-v\"]}\n4) ACT:tool:git_status:{}\n5) ACT:tool:git_diff:{\"staged\":false}\n6) DONE:verification artifact and final checks completed\n\nSuccess Criteria: Done\n\nContext:\nMulti-repo worktrees for this attempt:\n- main: /tmp/hm-phase45-native-runtime-beta/home/hivemind/worktrees/3cf8f93f-56be-42c8-b132-c7b06c12e526/167a4330-5a07-417f-bffe-6ec4f6462137\n\nConstitution:\n- path: /tmp/hm-phase45-native-runtime-beta/home/.hivemind/projects/06505cd6-3ede-451f-9b81-927f2583289c/constitution.yaml\n- digest: 60406b76eba973f9\n- content:\nversion: 1\nschema_version: constitution.v1\ncompatibility:\n  minimum_hivemind_version: 0.1.32\n  governance_schema_version: governance.v1\npartitions: []\nrules: []\n\n\nSystem Prompt:\n- prompt_id: phase45-native-system\n- content:\nFollow numbered directives exactly. Emit one THINK/ACT/DONE directive per turn. Never call run_command unless the task prompt explicitly includes it. When running Python commands, always use python3.\n\nSkills:\n\n- skill_id: phase45-python-skill\n  name: Python API Builder\n  content:\nKeep module boundaries explicit and deterministic.\n\n- skill_id: phase45-testing-skill\n  name: Test Discipline\n  content:\nRun unit tests and inspect git status only when explicitly requested by the task prompt; use python3, never python.\n\nDocuments:\n\n- document_id: api-contract\n  source: template\n  revision: 1\n  title: API Contract\n  owner: qa\n  content:\nGET /health, GET /items, POST /items.\n\n- document_id: architecture-notes\n  source: template\n  revision: 1\n  title: Architecture Notes\n  owner: qa\n  content:\nLayered API: models, store, service, router, server.\n\n- document_id: testing-policy\n  source: template\n  revision: 1\n  title: Testing Policy\n  owner: qa\n  content:\nRun unittest suite before DONE.\n\nGraph Summary:\n- canonical_fingerprint: aded468d4f406d5c\n- repositories: 1\n- total_nodes: 1\n- total_edges: 0\n- languages: (none)\n\nExecution checkpoints (in order): checkpoint-1\nComplete checkpoints from the runtime using: \"$HIVEMIND_BIN\" checkpoint complete --id <checkpoint-id> [--summary \"...\"]\n(If available, \"$HIVEMIND_AGENT_BIN\" may be used equivalently.)\nAttempt ID for this run: b8589c4b-995e-4c2e-99d0-44e677f1a322\n\n",
+        "flags": [
+          "--max-turns=8",
+          "--token-budget=32000",
+          "--max-turns=16",
+          "env_inherit_mode=all",
+          "env_inherited=59",
+          "env_overlay=23",
+          "env_dropped_sensitive_inherited=2",
+          "env_dropped_reserved_inherited=1"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01dc-a24f-120268fb2238",
+        "timestamp": "2026-03-06T17:28:46.298910259Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 476
+      },
+      "payload": {
+        "type": "agent_invocation_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "adapter_name": "native",
+        "provider": "openrouter",
+        "model": "nvidia/nemotron-3-nano-30b-a3b:free",
+        "runtime_version": "0.1.50",
+        "capture_mode": "full_payload"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01dd-9d7e-99ca16d10f0f",
+        "timestamp": "2026-03-06T17:28:46.317566937Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 477
+      },
+      "payload": {
+        "type": "agent_turn_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 0,
+        "from_state": "think"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01de-9614-2179b724034c",
+        "timestamp": "2026-03-06T17:28:46.332200356Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 478
+      },
+      "payload": {
+        "type": "model_request_prepared",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 0,
+        "request": {
+          "digest": "cad6b345c18c54c1e9cc39d228b2abe52d625bd9c8130ac2e22a0783a630f2b7",
+          "byte_size": 3055,
+          "media_type": "application/json",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/ca/cad6b345c18c54c1e9cc39d228b2abe52d625bd9c8130ac2e22a0783a630f2b7.blob",
+          "payload": "{\"turn_index\":0,\"state\":\"think\",\"prompt\":\"Task: Run flow-2 verification checks and produce docs/verification.md. Follow steps exactly.\\nEmit exactly one directive per turn.\\n1) ACT:tool:read_file:{\\\"path\\\":\\\"README.md\\\"}\\n2) ACT:tool:write_file:{\\\"path\\\":\\\"docs/verification.md\\\",\\\"content\\\":\\\"# Verification Notes\\\\n\\\\n- Runtime adapter: native (OpenRouter provider)\\\\n- Flow execution: two flows with inter-flow dependency\\\\n- Tool coverage: read_file, list_files, write_file, run_command, git_status, git_diff, graph_query\\\\n- Host validation command: `python3 -m unittest discover -s tests -v`\\\\n- Runtime hardening evidence: runtime state bootstrap + component readiness events\\\",\\\"append\\\":false}\\n3) ACT:tool:run_command:{\\\"command\\\":\\\"python3\\\",\\\"args\\\":[\\\"-m\\\",\\\"unittest\\\",\\\"discover\\\",\\\"-s\\\",\\\"tests\\\",\\\"-v\\\"]}\\n4) ACT:tool:git_status:{}\\n5) ACT:tool:git_diff:{\\\"staged\\\":false}\\n6) DONE:verification artifact and final checks completed\\nSuccess Criteria: Done\",\"context\":\"Multi-repo worktrees for this attempt:\\n- main: /tmp/hm-phase45-native-runtime-beta/home/hivemind/worktrees/3cf8f93f-56be-42c8-b132-c7b06c12e526/167a4330-5a07-417f-bffe-6ec4f6462137\\n\\nConstitution:\\n- path: /tmp/hm-phase45-native-runtime-beta/home/.hivemind/projects/06505cd6-3ede-451f-9b81-927f2583289c/constitution.yaml\\n- digest: 60406b76eba973f9\\n- content:\\nversion: 1\\nschema_version: constitution.v1\\ncompatibility:\\n  minimum_hivemind_version: 0.1.32\\n  governance_schema_version: governance.v1\\npartitions: []\\nrules: []\\n\\n\\nSystem Prompt:\\n- prompt_id: phase45-native-system\\n- content:\\nFollow numbered directives exactly. Emit one THINK/ACT/DONE directive per turn. Never call run_command unless the task prompt explicitly includes it. When running Python commands, always use python3.\\n\\nSkills:\\n\\n- skill_id: phase45-python-skill\\n  name: Python API Builder\\n  content:\\nKeep module boundaries explicit and deterministic.\\n\\n- skill_id: phase45-testing-skill\\n  name: Test Discipline\\n  content:\\nRun unit tests and inspect git status only when explicitly requested by the task prompt; use python3, never python.\\n\\nDocuments:\\n\\n- document_id: api-contract\\n  source: template\\n  revision: 1\\n  title: API Contract\\n  owner: qa\\n  content:\\nGET /health, GET /items, POST /items.\\n\\n- document_id: architecture-notes\\n  source: template\\n  revision: 1\\n  title: Architecture Notes\\n  owner: qa\\n  content:\\nLayered API: models, store, service, router, server.\\n\\n- document_id: testing-policy\\n  source: template\\n  revision: 1\\n  title: Testing Policy\\n  owner: qa\\n  content:\\nRun unittest suite before DONE.\\n\\nGraph Summary:\\n- canonical_fingerprint: aded468d4f406d5c\\n- repositories: 1\\n- total_nodes: 1\\n- total_edges: 0\\n- languages: (none)\\n\\nExecution checkpoints (in order): checkpoint-1\\nComplete checkpoints from the runtime using: \\\"$HIVEMIND_BIN\\\" checkpoint complete --id <checkpoint-id> [--summary \\\"...\\\"]\\n(If available, \\\"$HIVEMIND_AGENT_BIN\\\" may be used equivalently.)\\nAttempt ID for this run: b8589c4b-995e-4c2e-99d0-44e677f1a322\"}"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01df-9849-52521e57d630",
+        "timestamp": "2026-03-06T17:28:46.349697036Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 479
+      },
+      "payload": {
+        "type": "model_response_received",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 0,
+        "response": {
+          "digest": "8447917c4fc4dbfb2a69d6471808dfe4e2289fdf73358445c07a789c58968877",
+          "byte_size": 39,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/84/8447917c4fc4dbfb2a69d6471808dfe4e2289fdf73358445c07a789c58968877.blob",
+          "payload": "ACT:tool:read_file:{\"path\":\"README.md\"}"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01e0-8545-55775cc7593c",
+        "timestamp": "2026-03-06T17:28:46.367767759Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 480
+      },
+      "payload": {
+        "type": "tool_call_requested",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 0,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:0:tool:0",
+        "tool_name": "read_file",
+        "request": {
+          "digest": "0f9123634d30561c994f3ff479137fde0c608a12e33e1117da10e6156689598f",
+          "byte_size": 67,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/0f/0f9123634d30561c994f3ff479137fde0c608a12e33e1117da10e6156689598f.blob",
+          "payload": "{\"input\":{\"path\":\"README.md\"},\"tool\":\"read_file\",\"version\":\"1.0.0\"}"
+        },
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01e1-b158-afae02995aba",
+        "timestamp": "2026-03-06T17:28:46.384184341Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 481
+      },
+      "payload": {
+        "type": "tool_call_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 0,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:0:tool:0",
+        "tool_name": "read_file",
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01e2-b69f-82b199c4cc84",
+        "timestamp": "2026-03-06T17:28:46.403325986Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 482
+      },
+      "payload": {
+        "type": "tool_call_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 0,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:0:tool:0",
+        "tool_name": "read_file",
+        "response": {
+          "digest": "0b560d3ebaa88946b8fa035a237add14a81112b2674360eb9a2a716bf52adc96",
+          "byte_size": 105,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/0b/0b560d3ebaa88946b8fa035a237add14a81112b2674360eb9a2a716bf52adc96.blob",
+          "payload": "{\"ok\":true,\"output\":{\"byte_size\":35,\"content\":\"# Hivemind Native Runtime Beta API\\n\",\"path\":\"README.md\"}}"
+        },
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01e3-9b76-e04de0209c38",
+        "timestamp": "2026-03-06T17:28:46.418870117Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 483
+      },
+      "payload": {
+        "type": "agent_turn_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 0,
+        "to_state": "act",
+        "summary": null
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01e4-8531-9f66393c65af",
+        "timestamp": "2026-03-06T17:28:46.436972228Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 484
+      },
+      "payload": {
+        "type": "agent_turn_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 1,
+        "from_state": "act"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01e5-939c-287012625788",
+        "timestamp": "2026-03-06T17:28:46.452879488Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 485
+      },
+      "payload": {
+        "type": "model_request_prepared",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 1,
+        "request": {
+          "digest": "e8d83b76bc406bb383594f37b7805e939c2eb69a1eafe90644699dcd08cf4aed",
+          "byte_size": 3053,
+          "media_type": "application/json",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/e8/e8d83b76bc406bb383594f37b7805e939c2eb69a1eafe90644699dcd08cf4aed.blob",
+          "payload": "{\"turn_index\":1,\"state\":\"act\",\"prompt\":\"Task: Run flow-2 verification checks and produce docs/verification.md. Follow steps exactly.\\nEmit exactly one directive per turn.\\n1) ACT:tool:read_file:{\\\"path\\\":\\\"README.md\\\"}\\n2) ACT:tool:write_file:{\\\"path\\\":\\\"docs/verification.md\\\",\\\"content\\\":\\\"# Verification Notes\\\\n\\\\n- Runtime adapter: native (OpenRouter provider)\\\\n- Flow execution: two flows with inter-flow dependency\\\\n- Tool coverage: read_file, list_files, write_file, run_command, git_status, git_diff, graph_query\\\\n- Host validation command: `python3 -m unittest discover -s tests -v`\\\\n- Runtime hardening evidence: runtime state bootstrap + component readiness events\\\",\\\"append\\\":false}\\n3) ACT:tool:run_command:{\\\"command\\\":\\\"python3\\\",\\\"args\\\":[\\\"-m\\\",\\\"unittest\\\",\\\"discover\\\",\\\"-s\\\",\\\"tests\\\",\\\"-v\\\"]}\\n4) ACT:tool:git_status:{}\\n5) ACT:tool:git_diff:{\\\"staged\\\":false}\\n6) DONE:verification artifact and final checks completed\\nSuccess Criteria: Done\",\"context\":\"Multi-repo worktrees for this attempt:\\n- main: /tmp/hm-phase45-native-runtime-beta/home/hivemind/worktrees/3cf8f93f-56be-42c8-b132-c7b06c12e526/167a4330-5a07-417f-bffe-6ec4f6462137\\n\\nConstitution:\\n- path: /tmp/hm-phase45-native-runtime-beta/home/.hivemind/projects/06505cd6-3ede-451f-9b81-927f2583289c/constitution.yaml\\n- digest: 60406b76eba973f9\\n- content:\\nversion: 1\\nschema_version: constitution.v1\\ncompatibility:\\n  minimum_hivemind_version: 0.1.32\\n  governance_schema_version: governance.v1\\npartitions: []\\nrules: []\\n\\n\\nSystem Prompt:\\n- prompt_id: phase45-native-system\\n- content:\\nFollow numbered directives exactly. Emit one THINK/ACT/DONE directive per turn. Never call run_command unless the task prompt explicitly includes it. When running Python commands, always use python3.\\n\\nSkills:\\n\\n- skill_id: phase45-python-skill\\n  name: Python API Builder\\n  content:\\nKeep module boundaries explicit and deterministic.\\n\\n- skill_id: phase45-testing-skill\\n  name: Test Discipline\\n  content:\\nRun unit tests and inspect git status only when explicitly requested by the task prompt; use python3, never python.\\n\\nDocuments:\\n\\n- document_id: api-contract\\n  source: template\\n  revision: 1\\n  title: API Contract\\n  owner: qa\\n  content:\\nGET /health, GET /items, POST /items.\\n\\n- document_id: architecture-notes\\n  source: template\\n  revision: 1\\n  title: Architecture Notes\\n  owner: qa\\n  content:\\nLayered API: models, store, service, router, server.\\n\\n- document_id: testing-policy\\n  source: template\\n  revision: 1\\n  title: Testing Policy\\n  owner: qa\\n  content:\\nRun unittest suite before DONE.\\n\\nGraph Summary:\\n- canonical_fingerprint: aded468d4f406d5c\\n- repositories: 1\\n- total_nodes: 1\\n- total_edges: 0\\n- languages: (none)\\n\\nExecution checkpoints (in order): checkpoint-1\\nComplete checkpoints from the runtime using: \\\"$HIVEMIND_BIN\\\" checkpoint complete --id <checkpoint-id> [--summary \\\"...\\\"]\\n(If available, \\\"$HIVEMIND_AGENT_BIN\\\" may be used equivalently.)\\nAttempt ID for this run: b8589c4b-995e-4c2e-99d0-44e677f1a322\"}"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01e6-9f93-27391ca7f0e5",
+        "timestamp": "2026-03-06T17:28:46.470280169Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 486
+      },
+      "payload": {
+        "type": "model_response_received",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 1,
+        "response": {
+          "digest": "1cc33a3c7e20b139182862b3ebb8820e2c27ab36af11e0d809564221c4e4eef7",
+          "byte_size": 461,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/1c/1cc33a3c7e20b139182862b3ebb8820e2c27ab36af11e0d809564221c4e4eef7.blob",
+          "payload": "ACT:tool:write_file:{\"path\":\"docs/verification.md\",\"content\":\"# Verification Notes\\n\\n- Runtime adapter: native (OpenRouter provider)\\n- Flow execution: two flows with inter-flow dependency\\n- Tool coverage: read_file, list_files, write_file, run_command, git_status, git_diff, graph_query\\n- Host validation command: `python3 -m unittest discover -s tests -v`\\n- Runtime hardening evidence: runtime state bootstrap + component readiness events\",\"append\":false}"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01e7-af97-d1e8fc1e4529",
+        "timestamp": "2026-03-06T17:28:46.488190963Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 487
+      },
+      "payload": {
+        "type": "tool_call_requested",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 1,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:1:tool:0",
+        "tool_name": "write_file",
+        "request": {
+          "digest": "5d087921033a269fba0962e2fe82eb0bcb0d601f45cbcc782069f40f7e15ce8a",
+          "byte_size": 489,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/5d/5d087921033a269fba0962e2fe82eb0bcb0d601f45cbcc782069f40f7e15ce8a.blob",
+          "payload": "{\"input\":{\"append\":false,\"content\":\"# Verification Notes\\n\\n- Runtime adapter: native (OpenRouter provider)\\n- Flow execution: two flows with inter-flow dependency\\n- Tool coverage: read_file, list_files, write_file, run_command, git_status, git_diff, graph_query\\n- Host validation command: `python3 -m unittest discover -s tests -v`\\n- Runtime hardening evidence: runtime state bootstrap + component readiness events\",\"path\":\"docs/verification.md\"},\"tool\":\"write_file\",\"version\":\"1.0.0\"}"
+        },
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:workspace_write_allow",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01e8-98d7-f421da59f114",
+        "timestamp": "2026-03-06T17:28:46.506382943Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 488
+      },
+      "payload": {
+        "type": "tool_call_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 1,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:1:tool:0",
+        "tool_name": "write_file",
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:workspace_write_allow",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01e9-bf4f-1bf172a17966",
+        "timestamp": "2026-03-06T17:28:46.522545500Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 489
+      },
+      "payload": {
+        "type": "tool_call_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 1,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:1:tool:0",
+        "tool_name": "write_file",
+        "response": {
+          "digest": "50ee6d4be8e872f572fce4a758956f296534eba97c337866491ffd371a730ca4",
+          "byte_size": 87,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/50/50ee6d4be8e872f572fce4a758956f296534eba97c337866491ffd371a730ca4.blob",
+          "payload": "{\"ok\":true,\"output\":{\"append\":false,\"bytes_written\":376,\"path\":\"docs/verification.md\"}}"
+        },
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:workspace_write_allow",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01ea-bc8d-e5b16d532d9d",
+        "timestamp": "2026-03-06T17:28:46.540438441Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 490
+      },
+      "payload": {
+        "type": "agent_turn_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 1,
+        "to_state": "act",
+        "summary": null
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01eb-a7ef-3968b9a31496",
+        "timestamp": "2026-03-06T17:28:46.556185501Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 491
+      },
+      "payload": {
+        "type": "agent_turn_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 2,
+        "from_state": "act"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01ec-aa73-344b2f7fa131",
+        "timestamp": "2026-03-06T17:28:46.571179854Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 492
+      },
+      "payload": {
+        "type": "model_request_prepared",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 2,
+        "request": {
+          "digest": "9eb91d7c92b766ed8ebe7549eb349fde0d18e0a78e51b1b7477df0a955a1a4d7",
+          "byte_size": 3053,
+          "media_type": "application/json",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/9e/9eb91d7c92b766ed8ebe7549eb349fde0d18e0a78e51b1b7477df0a955a1a4d7.blob",
+          "payload": "{\"turn_index\":2,\"state\":\"act\",\"prompt\":\"Task: Run flow-2 verification checks and produce docs/verification.md. Follow steps exactly.\\nEmit exactly one directive per turn.\\n1) ACT:tool:read_file:{\\\"path\\\":\\\"README.md\\\"}\\n2) ACT:tool:write_file:{\\\"path\\\":\\\"docs/verification.md\\\",\\\"content\\\":\\\"# Verification Notes\\\\n\\\\n- Runtime adapter: native (OpenRouter provider)\\\\n- Flow execution: two flows with inter-flow dependency\\\\n- Tool coverage: read_file, list_files, write_file, run_command, git_status, git_diff, graph_query\\\\n- Host validation command: `python3 -m unittest discover -s tests -v`\\\\n- Runtime hardening evidence: runtime state bootstrap + component readiness events\\\",\\\"append\\\":false}\\n3) ACT:tool:run_command:{\\\"command\\\":\\\"python3\\\",\\\"args\\\":[\\\"-m\\\",\\\"unittest\\\",\\\"discover\\\",\\\"-s\\\",\\\"tests\\\",\\\"-v\\\"]}\\n4) ACT:tool:git_status:{}\\n5) ACT:tool:git_diff:{\\\"staged\\\":false}\\n6) DONE:verification artifact and final checks completed\\nSuccess Criteria: Done\",\"context\":\"Multi-repo worktrees for this attempt:\\n- main: /tmp/hm-phase45-native-runtime-beta/home/hivemind/worktrees/3cf8f93f-56be-42c8-b132-c7b06c12e526/167a4330-5a07-417f-bffe-6ec4f6462137\\n\\nConstitution:\\n- path: /tmp/hm-phase45-native-runtime-beta/home/.hivemind/projects/06505cd6-3ede-451f-9b81-927f2583289c/constitution.yaml\\n- digest: 60406b76eba973f9\\n- content:\\nversion: 1\\nschema_version: constitution.v1\\ncompatibility:\\n  minimum_hivemind_version: 0.1.32\\n  governance_schema_version: governance.v1\\npartitions: []\\nrules: []\\n\\n\\nSystem Prompt:\\n- prompt_id: phase45-native-system\\n- content:\\nFollow numbered directives exactly. Emit one THINK/ACT/DONE directive per turn. Never call run_command unless the task prompt explicitly includes it. When running Python commands, always use python3.\\n\\nSkills:\\n\\n- skill_id: phase45-python-skill\\n  name: Python API Builder\\n  content:\\nKeep module boundaries explicit and deterministic.\\n\\n- skill_id: phase45-testing-skill\\n  name: Test Discipline\\n  content:\\nRun unit tests and inspect git status only when explicitly requested by the task prompt; use python3, never python.\\n\\nDocuments:\\n\\n- document_id: api-contract\\n  source: template\\n  revision: 1\\n  title: API Contract\\n  owner: qa\\n  content:\\nGET /health, GET /items, POST /items.\\n\\n- document_id: architecture-notes\\n  source: template\\n  revision: 1\\n  title: Architecture Notes\\n  owner: qa\\n  content:\\nLayered API: models, store, service, router, server.\\n\\n- document_id: testing-policy\\n  source: template\\n  revision: 1\\n  title: Testing Policy\\n  owner: qa\\n  content:\\nRun unittest suite before DONE.\\n\\nGraph Summary:\\n- canonical_fingerprint: aded468d4f406d5c\\n- repositories: 1\\n- total_nodes: 1\\n- total_edges: 0\\n- languages: (none)\\n\\nExecution checkpoints (in order): checkpoint-1\\nComplete checkpoints from the runtime using: \\\"$HIVEMIND_BIN\\\" checkpoint complete --id <checkpoint-id> [--summary \\\"...\\\"]\\n(If available, \\\"$HIVEMIND_AGENT_BIN\\\" may be used equivalently.)\\nAttempt ID for this run: b8589c4b-995e-4c2e-99d0-44e677f1a322\"}"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01ed-bc85-bced03b62149",
+        "timestamp": "2026-03-06T17:28:46.590079968Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 493
+      },
+      "payload": {
+        "type": "model_response_received",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 2,
+        "response": {
+          "digest": "cc3e06eb0660f041628cdf99403febbabd92eca183d6cd1e349ae0a338a0b578",
+          "byte_size": 96,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/cc/cc3e06eb0660f041628cdf99403febbabd92eca183d6cd1e349ae0a338a0b578.blob",
+          "payload": "ACT:tool:run_command:{\"command\":\"python3\",\"args\":[\"-m\",\"unittest\",\"discover\",\"-s\",\"tests\",\"-v\"]}"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01ee-901f-615b6924da07",
+        "timestamp": "2026-03-06T17:28:46.606305813Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 494
+      },
+      "payload": {
+        "type": "tool_call_requested",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 2,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:2:tool:0",
+        "tool_name": "run_command",
+        "request": {
+          "digest": "98196dc040962330e78a8adaa3b5a6cbe6ed008a1d89d11295aae11496b42932",
+          "byte_size": 124,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/98/98196dc040962330e78a8adaa3b5a6cbe6ed008a1d89d11295aae11496b42932.blob",
+          "payload": "{\"input\":{\"args\":[\"-m\",\"unittest\",\"discover\",\"-s\",\"tests\",\"-v\"],\"command\":\"python3\"},\"tool\":\"run_command\",\"version\":\"1.0.0\"}"
+        },
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "network_proxy_mode:off",
+          "network_access_mode:full",
+          "network_block_private:true",
+          "network_approval_mode:none",
+          "network_approval_decision:deny",
+          "network_allowlist:",
+          "network_denylist:",
+          "network_limited_methods:GET|HEAD|CONNECT",
+          "network_proxy_bind_clamped:false",
+          "network_targets:none",
+          "network_proxy:off",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false",
+          "exec_decision:allowed_exec_policy"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01ef-b84d-18a88a06f1c6",
+        "timestamp": "2026-03-06T17:28:46.624717022Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 495
+      },
+      "payload": {
+        "type": "tool_call_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 2,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:2:tool:0",
+        "tool_name": "run_command",
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "network_proxy_mode:off",
+          "network_access_mode:full",
+          "network_block_private:true",
+          "network_approval_mode:none",
+          "network_approval_decision:deny",
+          "network_allowlist:",
+          "network_denylist:",
+          "network_limited_methods:GET|HEAD|CONNECT",
+          "network_proxy_bind_clamped:false",
+          "network_targets:none",
+          "network_proxy:off",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false",
+          "exec_decision:allowed_exec_policy"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01f0-a439-2959b3c0564c",
+        "timestamp": "2026-03-06T17:28:46.642874848Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 496
+      },
+      "payload": {
+        "type": "tool_call_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 2,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:2:tool:0",
+        "tool_name": "run_command",
+        "response": {
+          "digest": "c4d530df5630d2c8f7158658333dea50c9ec8d75c50dbf547b711302391e4f28",
+          "byte_size": 1083,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/c4/c4d530df5630d2c8f7158658333dea50c9ec8d75c50dbf547b711302391e4f28.blob",
+          "payload": "{\"ok\":true,\"output\":{\"exit_code\":1,\"stderr\":\"Traceback (most recent call last):\\n  File \\\"<frozen runpy>\\\", line 198, in _run_module_as_main\\n  File \\\"<frozen runpy>\\\", line 88, in _run_code\\n  File \\\"/usr/lib/python3.12/unittest/__main__.py\\\", line 18, in <module>\\n    main(module=None)\\n  File \\\"/usr/lib/python3.12/unittest/main.py\\\", line 104, in __init__\\n    self.parseArgs(argv)\\n  File \\\"/usr/lib/python3.12/unittest/main.py\\\", line 130, in parseArgs\\n    self._do_discovery(argv[2:])\\n  File \\\"/usr/lib/python3.12/unittest/main.py\\\", line 253, in _do_discovery\\n    self.createTests(from_discovery=True, Loader=Loader)\\n  File \\\"/usr/lib/python3.12/unittest/main.py\\\", line 160, in createTests\\n    self.test = loader.discover(self.start, self.pattern, self.top)\\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \\\"/usr/lib/python3.12/unittest/loader.py\\\", line 307, in discover\\n    raise ImportError('Start directory is not importable: %r' % start_dir)\\nImportError: Start directory is not importable: 'tests'\\n\",\"stdout\":\"\",\"timed_out\":false}}"
+        },
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "network_proxy_mode:off",
+          "network_access_mode:full",
+          "network_block_private:true",
+          "network_approval_mode:none",
+          "network_approval_decision:deny",
+          "network_allowlist:",
+          "network_denylist:",
+          "network_limited_methods:GET|HEAD|CONNECT",
+          "network_proxy_bind_clamped:false",
+          "network_targets:none",
+          "network_proxy:off",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false",
+          "exec_decision:allowed_exec_policy"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01f1-bd62-2425c8db7a06",
+        "timestamp": "2026-03-06T17:28:46.660598633Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 497
+      },
+      "payload": {
+        "type": "agent_turn_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 2,
+        "to_state": "act",
+        "summary": null
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01f2-a7cd-4f4881c073ac",
+        "timestamp": "2026-03-06T17:28:46.678769703Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 498
+      },
+      "payload": {
+        "type": "agent_turn_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 3,
+        "from_state": "act"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01f3-825b-0cee5b4e2af9",
+        "timestamp": "2026-03-06T17:28:46.694328722Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 499
+      },
+      "payload": {
+        "type": "model_request_prepared",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 3,
+        "request": {
+          "digest": "94d906817d88e36a94c08737d2b2f7937c0ba0a5ec9964b7599b434daa89700e",
+          "byte_size": 3053,
+          "media_type": "application/json",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/94/94d906817d88e36a94c08737d2b2f7937c0ba0a5ec9964b7599b434daa89700e.blob",
+          "payload": "{\"turn_index\":3,\"state\":\"act\",\"prompt\":\"Task: Run flow-2 verification checks and produce docs/verification.md. Follow steps exactly.\\nEmit exactly one directive per turn.\\n1) ACT:tool:read_file:{\\\"path\\\":\\\"README.md\\\"}\\n2) ACT:tool:write_file:{\\\"path\\\":\\\"docs/verification.md\\\",\\\"content\\\":\\\"# Verification Notes\\\\n\\\\n- Runtime adapter: native (OpenRouter provider)\\\\n- Flow execution: two flows with inter-flow dependency\\\\n- Tool coverage: read_file, list_files, write_file, run_command, git_status, git_diff, graph_query\\\\n- Host validation command: `python3 -m unittest discover -s tests -v`\\\\n- Runtime hardening evidence: runtime state bootstrap + component readiness events\\\",\\\"append\\\":false}\\n3) ACT:tool:run_command:{\\\"command\\\":\\\"python3\\\",\\\"args\\\":[\\\"-m\\\",\\\"unittest\\\",\\\"discover\\\",\\\"-s\\\",\\\"tests\\\",\\\"-v\\\"]}\\n4) ACT:tool:git_status:{}\\n5) ACT:tool:git_diff:{\\\"staged\\\":false}\\n6) DONE:verification artifact and final checks completed\\nSuccess Criteria: Done\",\"context\":\"Multi-repo worktrees for this attempt:\\n- main: /tmp/hm-phase45-native-runtime-beta/home/hivemind/worktrees/3cf8f93f-56be-42c8-b132-c7b06c12e526/167a4330-5a07-417f-bffe-6ec4f6462137\\n\\nConstitution:\\n- path: /tmp/hm-phase45-native-runtime-beta/home/.hivemind/projects/06505cd6-3ede-451f-9b81-927f2583289c/constitution.yaml\\n- digest: 60406b76eba973f9\\n- content:\\nversion: 1\\nschema_version: constitution.v1\\ncompatibility:\\n  minimum_hivemind_version: 0.1.32\\n  governance_schema_version: governance.v1\\npartitions: []\\nrules: []\\n\\n\\nSystem Prompt:\\n- prompt_id: phase45-native-system\\n- content:\\nFollow numbered directives exactly. Emit one THINK/ACT/DONE directive per turn. Never call run_command unless the task prompt explicitly includes it. When running Python commands, always use python3.\\n\\nSkills:\\n\\n- skill_id: phase45-python-skill\\n  name: Python API Builder\\n  content:\\nKeep module boundaries explicit and deterministic.\\n\\n- skill_id: phase45-testing-skill\\n  name: Test Discipline\\n  content:\\nRun unit tests and inspect git status only when explicitly requested by the task prompt; use python3, never python.\\n\\nDocuments:\\n\\n- document_id: api-contract\\n  source: template\\n  revision: 1\\n  title: API Contract\\n  owner: qa\\n  content:\\nGET /health, GET /items, POST /items.\\n\\n- document_id: architecture-notes\\n  source: template\\n  revision: 1\\n  title: Architecture Notes\\n  owner: qa\\n  content:\\nLayered API: models, store, service, router, server.\\n\\n- document_id: testing-policy\\n  source: template\\n  revision: 1\\n  title: Testing Policy\\n  owner: qa\\n  content:\\nRun unittest suite before DONE.\\n\\nGraph Summary:\\n- canonical_fingerprint: aded468d4f406d5c\\n- repositories: 1\\n- total_nodes: 1\\n- total_edges: 0\\n- languages: (none)\\n\\nExecution checkpoints (in order): checkpoint-1\\nComplete checkpoints from the runtime using: \\\"$HIVEMIND_BIN\\\" checkpoint complete --id <checkpoint-id> [--summary \\\"...\\\"]\\n(If available, \\\"$HIVEMIND_AGENT_BIN\\\" may be used equivalently.)\\nAttempt ID for this run: b8589c4b-995e-4c2e-99d0-44e677f1a322\"}"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01f4-a2b7-0d86914e3ec1",
+        "timestamp": "2026-03-06T17:28:46.711976575Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 500
+      },
+      "payload": {
+        "type": "model_response_received",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 3,
+        "response": {
+          "digest": "7a1bfcefcc1659da3df9336946dc5d7d7609cd2507dd504260cb5941c0c70d22",
+          "byte_size": 22,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/7a/7a1bfcefcc1659da3df9336946dc5d7d7609cd2507dd504260cb5941c0c70d22.blob",
+          "payload": "ACT:tool:git_status:{}"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01f5-a21e-8eb3a91b0614",
+        "timestamp": "2026-03-06T17:28:46.727453080Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 501
+      },
+      "payload": {
+        "type": "tool_call_requested",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 3,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:3:tool:0",
+        "tool_name": "git_status",
+        "request": {
+          "digest": "94debd092750772a4c55ed1c70bdd13c27bc0e48d89a066f2418da3b3bca2632",
+          "byte_size": 50,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/94/94debd092750772a4c55ed1c70bdd13c27bc0e48d89a066f2418da3b3bca2632.blob",
+          "payload": "{\"input\":{},\"tool\":\"git_status\",\"version\":\"1.0.0\"}"
+        },
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01f6-8342-91f7dca852c3",
+        "timestamp": "2026-03-06T17:28:46.744196863Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 502
+      },
+      "payload": {
+        "type": "tool_call_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 3,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:3:tool:0",
+        "tool_name": "git_status",
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01f7-85eb-b30b528276f6",
+        "timestamp": "2026-03-06T17:28:46.760383475Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 503
+      },
+      "payload": {
+        "type": "tool_call_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 3,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:3:tool:0",
+        "tool_name": "git_status",
+        "response": {
+          "digest": "0c7cdc8633dac1ef411c7020fa0f518bfda335216d650f6dc60b775fb25491f6",
+          "byte_size": 127,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/0c/0c7cdc8633dac1ef411c7020fa0f518bfda335216d650f6dc60b775fb25491f6.blob",
+          "payload": "{\"ok\":true,\"output\":{\"output\":\"## exec/3cf8f93f-56be-42c8-b132-c7b06c12e526/167a4330-5a07-417f-bffe-6ec4f6462137\\n?? docs/\\n\"}}"
+        },
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01f8-acd4-8d9a77d693cb",
+        "timestamp": "2026-03-06T17:28:46.778115385Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 504
+      },
+      "payload": {
+        "type": "agent_turn_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 3,
+        "to_state": "act",
+        "summary": null
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01f9-8037-53afd97d76d3",
+        "timestamp": "2026-03-06T17:28:46.793319370Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 505
+      },
+      "payload": {
+        "type": "agent_turn_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 4,
+        "from_state": "act"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01fa-b92d-52fe1520f6d7",
+        "timestamp": "2026-03-06T17:28:46.810134486Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 506
+      },
+      "payload": {
+        "type": "model_request_prepared",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 4,
+        "request": {
+          "digest": "95b6f24153f3e4eece329e62b0469fb3e680e17281ec83bf912da3767bab1304",
+          "byte_size": 3053,
+          "media_type": "application/json",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/95/95b6f24153f3e4eece329e62b0469fb3e680e17281ec83bf912da3767bab1304.blob",
+          "payload": "{\"turn_index\":4,\"state\":\"act\",\"prompt\":\"Task: Run flow-2 verification checks and produce docs/verification.md. Follow steps exactly.\\nEmit exactly one directive per turn.\\n1) ACT:tool:read_file:{\\\"path\\\":\\\"README.md\\\"}\\n2) ACT:tool:write_file:{\\\"path\\\":\\\"docs/verification.md\\\",\\\"content\\\":\\\"# Verification Notes\\\\n\\\\n- Runtime adapter: native (OpenRouter provider)\\\\n- Flow execution: two flows with inter-flow dependency\\\\n- Tool coverage: read_file, list_files, write_file, run_command, git_status, git_diff, graph_query\\\\n- Host validation command: `python3 -m unittest discover -s tests -v`\\\\n- Runtime hardening evidence: runtime state bootstrap + component readiness events\\\",\\\"append\\\":false}\\n3) ACT:tool:run_command:{\\\"command\\\":\\\"python3\\\",\\\"args\\\":[\\\"-m\\\",\\\"unittest\\\",\\\"discover\\\",\\\"-s\\\",\\\"tests\\\",\\\"-v\\\"]}\\n4) ACT:tool:git_status:{}\\n5) ACT:tool:git_diff:{\\\"staged\\\":false}\\n6) DONE:verification artifact and final checks completed\\nSuccess Criteria: Done\",\"context\":\"Multi-repo worktrees for this attempt:\\n- main: /tmp/hm-phase45-native-runtime-beta/home/hivemind/worktrees/3cf8f93f-56be-42c8-b132-c7b06c12e526/167a4330-5a07-417f-bffe-6ec4f6462137\\n\\nConstitution:\\n- path: /tmp/hm-phase45-native-runtime-beta/home/.hivemind/projects/06505cd6-3ede-451f-9b81-927f2583289c/constitution.yaml\\n- digest: 60406b76eba973f9\\n- content:\\nversion: 1\\nschema_version: constitution.v1\\ncompatibility:\\n  minimum_hivemind_version: 0.1.32\\n  governance_schema_version: governance.v1\\npartitions: []\\nrules: []\\n\\n\\nSystem Prompt:\\n- prompt_id: phase45-native-system\\n- content:\\nFollow numbered directives exactly. Emit one THINK/ACT/DONE directive per turn. Never call run_command unless the task prompt explicitly includes it. When running Python commands, always use python3.\\n\\nSkills:\\n\\n- skill_id: phase45-python-skill\\n  name: Python API Builder\\n  content:\\nKeep module boundaries explicit and deterministic.\\n\\n- skill_id: phase45-testing-skill\\n  name: Test Discipline\\n  content:\\nRun unit tests and inspect git status only when explicitly requested by the task prompt; use python3, never python.\\n\\nDocuments:\\n\\n- document_id: api-contract\\n  source: template\\n  revision: 1\\n  title: API Contract\\n  owner: qa\\n  content:\\nGET /health, GET /items, POST /items.\\n\\n- document_id: architecture-notes\\n  source: template\\n  revision: 1\\n  title: Architecture Notes\\n  owner: qa\\n  content:\\nLayered API: models, store, service, router, server.\\n\\n- document_id: testing-policy\\n  source: template\\n  revision: 1\\n  title: Testing Policy\\n  owner: qa\\n  content:\\nRun unittest suite before DONE.\\n\\nGraph Summary:\\n- canonical_fingerprint: aded468d4f406d5c\\n- repositories: 1\\n- total_nodes: 1\\n- total_edges: 0\\n- languages: (none)\\n\\nExecution checkpoints (in order): checkpoint-1\\nComplete checkpoints from the runtime using: \\\"$HIVEMIND_BIN\\\" checkpoint complete --id <checkpoint-id> [--summary \\\"...\\\"]\\n(If available, \\\"$HIVEMIND_AGENT_BIN\\\" may be used equivalently.)\\nAttempt ID for this run: b8589c4b-995e-4c2e-99d0-44e677f1a322\"}"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01fb-a0a4-5acb7ad09613",
+        "timestamp": "2026-03-06T17:28:46.828364006Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 507
+      },
+      "payload": {
+        "type": "model_response_received",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 4,
+        "response": {
+          "digest": "d2a91b5b9aabb00504a3d73c986555bb89c6361ccc05171a6b80ae25c5761831",
+          "byte_size": 34,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/d2/d2a91b5b9aabb00504a3d73c986555bb89c6361ccc05171a6b80ae25c5761831.blob",
+          "payload": "ACT:tool:git_diff:{\"staged\":false}"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01fc-96bf-718b3801c6c9",
+        "timestamp": "2026-03-06T17:28:46.846883779Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 508
+      },
+      "payload": {
+        "type": "tool_call_requested",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 4,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:4:tool:0",
+        "tool_name": "git_diff",
+        "request": {
+          "digest": "2231ae55b3f10be8d5826d53d0b2f0e4350eacfb7b5aba37ef14dd8a56571ef4",
+          "byte_size": 62,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/22/2231ae55b3f10be8d5826d53d0b2f0e4350eacfb7b5aba37ef14dd8a56571ef4.blob",
+          "payload": "{\"input\":{\"staged\":false},\"tool\":\"git_diff\",\"version\":\"1.0.0\"}"
+        },
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01fd-9874-d8ddfb6eb20d",
+        "timestamp": "2026-03-06T17:28:46.862741957Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 509
+      },
+      "payload": {
+        "type": "tool_call_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 4,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:4:tool:0",
+        "tool_name": "git_diff",
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01fe-865d-788e93db0e30",
+        "timestamp": "2026-03-06T17:28:46.880961368Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 510
+      },
+      "payload": {
+        "type": "tool_call_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 4,
+        "call_id": "2909a87e-d541-4f6f-a057-2618331a6308:turn:4:tool:0",
+        "tool_name": "git_diff",
+        "response": {
+          "digest": "0d83ac87bd74023c6c67d141bc3c1bbb4dc719d5a3be7f8660006c91a30e9e8b",
+          "byte_size": 34,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/0d/0d83ac87bd74023c6c67d141bc3c1bbb4dc719d5a3be7f8660006c91a30e9e8b.blob",
+          "payload": "{\"ok\":true,\"output\":{\"output\":\"\"}}"
+        },
+        "policy_tags": [
+          "sandbox_mode:workspace-write",
+          "sandbox_platform:linux",
+          "sandbox_selection:env_override",
+          "sandbox_writable_roots:.",
+          "sandbox_read_only_overlays:",
+          "approval_mode:never",
+          "sandbox_decision:allowed",
+          "approval_required:false",
+          "approval_outcome:not_required",
+          "exec_dangerous:false"
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-01ff-9fcb-05cc5564fa47",
+        "timestamp": "2026-03-06T17:28:46.896945160Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 511
+      },
+      "payload": {
+        "type": "agent_turn_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 4,
+        "to_state": "act",
+        "summary": null
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0200-925a-a970d43954bb",
+        "timestamp": "2026-03-06T17:28:46.914826840Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 512
+      },
+      "payload": {
+        "type": "agent_turn_started",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 5,
+        "from_state": "act"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0201-a6ca-d2a19120f1a1",
+        "timestamp": "2026-03-06T17:28:46.929995369Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 513
+      },
+      "payload": {
+        "type": "model_request_prepared",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 5,
+        "request": {
+          "digest": "ef8612e66e3594d84248a099539a11a6e962a3c6e7d13b12cb414606286fb5d6",
+          "byte_size": 3053,
+          "media_type": "application/json",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/ef/ef8612e66e3594d84248a099539a11a6e962a3c6e7d13b12cb414606286fb5d6.blob",
+          "payload": "{\"turn_index\":5,\"state\":\"act\",\"prompt\":\"Task: Run flow-2 verification checks and produce docs/verification.md. Follow steps exactly.\\nEmit exactly one directive per turn.\\n1) ACT:tool:read_file:{\\\"path\\\":\\\"README.md\\\"}\\n2) ACT:tool:write_file:{\\\"path\\\":\\\"docs/verification.md\\\",\\\"content\\\":\\\"# Verification Notes\\\\n\\\\n- Runtime adapter: native (OpenRouter provider)\\\\n- Flow execution: two flows with inter-flow dependency\\\\n- Tool coverage: read_file, list_files, write_file, run_command, git_status, git_diff, graph_query\\\\n- Host validation command: `python3 -m unittest discover -s tests -v`\\\\n- Runtime hardening evidence: runtime state bootstrap + component readiness events\\\",\\\"append\\\":false}\\n3) ACT:tool:run_command:{\\\"command\\\":\\\"python3\\\",\\\"args\\\":[\\\"-m\\\",\\\"unittest\\\",\\\"discover\\\",\\\"-s\\\",\\\"tests\\\",\\\"-v\\\"]}\\n4) ACT:tool:git_status:{}\\n5) ACT:tool:git_diff:{\\\"staged\\\":false}\\n6) DONE:verification artifact and final checks completed\\nSuccess Criteria: Done\",\"context\":\"Multi-repo worktrees for this attempt:\\n- main: /tmp/hm-phase45-native-runtime-beta/home/hivemind/worktrees/3cf8f93f-56be-42c8-b132-c7b06c12e526/167a4330-5a07-417f-bffe-6ec4f6462137\\n\\nConstitution:\\n- path: /tmp/hm-phase45-native-runtime-beta/home/.hivemind/projects/06505cd6-3ede-451f-9b81-927f2583289c/constitution.yaml\\n- digest: 60406b76eba973f9\\n- content:\\nversion: 1\\nschema_version: constitution.v1\\ncompatibility:\\n  minimum_hivemind_version: 0.1.32\\n  governance_schema_version: governance.v1\\npartitions: []\\nrules: []\\n\\n\\nSystem Prompt:\\n- prompt_id: phase45-native-system\\n- content:\\nFollow numbered directives exactly. Emit one THINK/ACT/DONE directive per turn. Never call run_command unless the task prompt explicitly includes it. When running Python commands, always use python3.\\n\\nSkills:\\n\\n- skill_id: phase45-python-skill\\n  name: Python API Builder\\n  content:\\nKeep module boundaries explicit and deterministic.\\n\\n- skill_id: phase45-testing-skill\\n  name: Test Discipline\\n  content:\\nRun unit tests and inspect git status only when explicitly requested by the task prompt; use python3, never python.\\n\\nDocuments:\\n\\n- document_id: api-contract\\n  source: template\\n  revision: 1\\n  title: API Contract\\n  owner: qa\\n  content:\\nGET /health, GET /items, POST /items.\\n\\n- document_id: architecture-notes\\n  source: template\\n  revision: 1\\n  title: Architecture Notes\\n  owner: qa\\n  content:\\nLayered API: models, store, service, router, server.\\n\\n- document_id: testing-policy\\n  source: template\\n  revision: 1\\n  title: Testing Policy\\n  owner: qa\\n  content:\\nRun unittest suite before DONE.\\n\\nGraph Summary:\\n- canonical_fingerprint: aded468d4f406d5c\\n- repositories: 1\\n- total_nodes: 1\\n- total_edges: 0\\n- languages: (none)\\n\\nExecution checkpoints (in order): checkpoint-1\\nComplete checkpoints from the runtime using: \\\"$HIVEMIND_BIN\\\" checkpoint complete --id <checkpoint-id> [--summary \\\"...\\\"]\\n(If available, \\\"$HIVEMIND_AGENT_BIN\\\" may be used equivalently.)\\nAttempt ID for this run: b8589c4b-995e-4c2e-99d0-44e677f1a322\"}"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0202-8482-5a2260c94bf4",
+        "timestamp": "2026-03-06T17:28:46.948852783Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 514
+      },
+      "payload": {
+        "type": "model_response_received",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 5,
+        "response": {
+          "digest": "65adbf975d29c207b5aa3444224bc6dda3232745cb7c1efc47d9c6b7205767d0",
+          "byte_size": 53,
+          "media_type": "text/plain; charset=utf-8",
+          "blob_path": "/tmp/hm-phase45-native-runtime-beta/home/.hivemind/blobs/sha256/65/65adbf975d29c207b5aa3444224bc6dda3232745cb7c1efc47d9c6b7205767d0.blob",
+          "payload": "DONE:verification artifact and final checks completed"
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0203-9e9f-37670eb4e1a0",
+        "timestamp": "2026-03-06T17:28:46.963810959Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 515
+      },
+      "payload": {
+        "type": "agent_turn_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "turn_index": 5,
+        "to_state": "done",
+        "summary": "verification artifact and final checks completed"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0204-979d-4a6145959a54",
+        "timestamp": "2026-03-06T17:28:46.980294726Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 516
+      },
+      "payload": {
+        "type": "runtime_recovery_scheduled",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "from_adapter": "native:runtime_state:init",
+        "to_adapter": "native:runtime_state:ready",
+        "strategy": "native_runtime_state_bootstrap",
+        "reason": "db_path=/tmp/hm-phase45-native-runtime-beta/native-state/native/runtime-state.sqlite busy_timeout_ms=5000 log_batch_size=32 retention_days=14",
+        "backoff_ms": 0
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0205-98ba-90cedc99c5b4",
+        "timestamp": "2026-03-06T17:28:46.995323854Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 517
+      },
+      "payload": {
+        "type": "runtime_recovery_scheduled",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "from_adapter": "native:runtime_state_db:pending",
+        "to_adapter": "native:runtime_state_db:ready",
+        "strategy": "native_component_readiness",
+        "reason": "token=runtime_state_db:05e059e9-1e56-4511-9881-06753dff33a2 ts_ms=1772818106012 reason=state_db_initialized",
+        "backoff_ms": 0
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0206-938b-8498283bafba",
+        "timestamp": "2026-03-06T17:28:47.011326312Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 518
+      },
+      "payload": {
+        "type": "runtime_recovery_scheduled",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "from_adapter": "native:secrets_manager:pending",
+        "to_adapter": "native:secrets_manager:ready",
+        "strategy": "native_component_readiness",
+        "reason": "token=secrets_manager:4823b77d-1887-4015-81ea-90e4b8433c04 ts_ms=1772818106012 reason=secrets_manager_initialized",
+        "backoff_ms": 0
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0207-b4e7-081337695235",
+        "timestamp": "2026-03-06T17:28:47.030575558Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 519
+      },
+      "payload": {
+        "type": "runtime_recovery_scheduled",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "from_adapter": "native:runtime_log_ingestor:pending",
+        "to_adapter": "native:runtime_log_ingestor:ready",
+        "strategy": "native_component_readiness",
+        "reason": "token=runtime_log_ingestor:243914eb-b5dc-474c-b8e0-8fd207fb702f ts_ms=1772818106028 reason=runtime_log_ingestor_started",
+        "backoff_ms": 0
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0208-b7df-6cb8b25d29da",
+        "timestamp": "2026-03-06T17:28:47.048733674Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 520
+      },
+      "payload": {
+        "type": "agent_invocation_completed",
+        "native_correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "invocation_id": "2909a87e-d541-4f6f-a057-2618331a6308",
+        "total_turns": 6,
+        "final_state": "done",
+        "success": true,
+        "final_summary": "verification artifact and final checks completed",
+        "error_code": null,
+        "error_message": null,
+        "recoverable": null
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0209-a957-be5aad51c805",
+        "timestamp": "2026-03-06T17:28:47.215783601Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 521
+      },
+      "payload": {
+        "type": "runtime_filesystem_observed",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "files_created": [
+          "docs",
+          "docs/verification.md"
+        ],
+        "files_modified": [],
+        "files_deleted": []
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-020a-826e-ace6eb0ee3b9",
+        "timestamp": "2026-03-06T17:28:47.242884802Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 522
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "stream": "stdout",
+        "content": "native turn 0: think -> act | ACT tool:read_file:{\"path\":\"README.md\"}"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-020b-8304-67cffd7459bc",
+        "timestamp": "2026-03-06T17:28:47.257541625Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 523
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "stream": "stdout",
+        "content": "native turn 1: act -> act | ACT tool:write_file:{\"path\":\"docs/verification.md\",\"content\":\"# Verification Notes\\n\\n- Runtime adapter: native (OpenRouter provider)\\n- Flow execution: two flows with inter-flow dependency\\n- Tool coverage: read_file, list_files, write_file, run_command, git_status, git_diff, graph_query\\n- Host validation command: `python3 -m unittest discover -s tests -v`\\n- Runtime hardening evidence: runtime state bootstrap + component readiness events\",\"append\":false}"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-020c-9986-b0b2c44c6f08",
+        "timestamp": "2026-03-06T17:28:47.273343938Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 524
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "stream": "stdout",
+        "content": "native turn 2: act -> act | ACT tool:run_command:{\"command\":\"python3\",\"args\":[\"-m\",\"unittest\",\"discover\",\"-s\",\"tests\",\"-v\"]}"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-020d-aa03-6d369895b2f1",
+        "timestamp": "2026-03-06T17:28:47.290975851Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 525
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "stream": "stdout",
+        "content": "native turn 3: act -> act | ACT tool:git_status:{}"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-020e-9f00-9e8ef82128c6",
+        "timestamp": "2026-03-06T17:28:47.308706198Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 526
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "stream": "stdout",
+        "content": "native turn 4: act -> act | ACT tool:git_diff:{\"staged\":false}"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-020f-bd95-683923cb6c94",
+        "timestamp": "2026-03-06T17:28:47.323570880Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 527
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "stream": "stdout",
+        "content": "native turn 5: act -> done | DONE verification artifact and final checks completed"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0210-86f6-666bedcc9511",
+        "timestamp": "2026-03-06T17:28:47.342495449Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 528
+      },
+      "payload": {
+        "type": "runtime_output_chunk",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "stream": "stdout",
+        "content": "native summary: verification artifact and final checks completed"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0211-8979-2d71351b420c",
+        "timestamp": "2026-03-06T17:28:47.358023600Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 529
+      },
+      "payload": {
+        "type": "runtime_exited",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "exit_code": 0,
+        "duration_ms": 20034
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0212-8b05-dcac58e87a14",
+        "timestamp": "2026-03-06T17:28:47.529325464Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 530
+      },
+      "payload": {
+        "type": "error_occurred",
+        "error": {
+          "category": "user",
+          "code": "checkpoints_incomplete",
+          "message": "All checkpoints must be completed before task completion",
+          "origin": "registry:complete_task_execution",
+          "recoverable": true,
+          "recovery_hint": "Complete the active checkpoint via `hivemind checkpoint complete --attempt-id b8589c4b-995e-4c2e-99d0-44e677f1a322 --id <checkpoint-id>` before finishing the task attempt",
+          "context": {}
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0213-87fa-e9430e5935e4",
+        "timestamp": "2026-03-06T17:28:47.552134803Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 531
+      },
+      "payload": {
+        "type": "runtime_terminated",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "reason": "checkpoints_incomplete: All checkpoints must be completed before task completion"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0214-917c-98fd2155bc31",
+        "timestamp": "2026-03-06T17:28:47.568949819Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 532
+      },
+      "payload": {
+        "type": "runtime_error_classified",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "adapter_name": "native",
+        "code": "checkpoints_incomplete",
+        "category": "checkpoint_incomplete",
+        "message": "All checkpoints must be completed before task completion",
+        "recoverable": true,
+        "retryable": false,
+        "rate_limited": false
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0215-8992-4aad577ad2de",
+        "timestamp": "2026-03-06T17:28:47.584491315Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 533
+      },
+      "payload": {
+        "type": "error_occurred",
+        "error": {
+          "category": "runtime",
+          "code": "runtime_checkpoints_incomplete",
+          "message": "All checkpoints must be completed before task completion",
+          "origin": "registry:tick_flow",
+          "recoverable": true,
+          "recovery_hint": null,
+          "context": {
+            "runtime_error_category": "checkpoint_incomplete",
+            "runtime_error_code": "checkpoints_incomplete",
+            "adapter": "native"
+          }
+        }
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0216-92eb-143206ce277b",
+        "timestamp": "2026-03-06T17:28:47.967732822Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 534
+      },
+      "payload": {
+        "type": "checkpoint_completed",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "checkpoint_id": "checkpoint-1",
+        "order": 1,
+        "commit_hash": "4f937f2293652f4818f3ab7169765e09d30d0dd0",
+        "timestamp": "2026-03-06T17:28:47.967714689Z",
+        "summary": "phase45-native-runtime checkpoint"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0217-9ca9-3a71cba07e36",
+        "timestamp": "2026-03-06T17:28:47.985206690Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 535
+      },
+      "payload": {
+        "type": "checkpoint_commit_created",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "commit_sha": "4f937f2293652f4818f3ab7169765e09d30d0dd0"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0218-b8c8-61ee9ef870fb",
+        "timestamp": "2026-03-06T17:28:48.003627498Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 536
+      },
+      "payload": {
+        "type": "all_checkpoints_completed",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-021c-920d-7723c47fcc26",
+        "timestamp": "2026-03-06T17:28:50.217217419Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": null
+        },
+        "sequence": 540
+      },
+      "payload": {
+        "type": "task_execution_state_changed",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "from": "running",
+        "to": "verifying"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-021d-b6a8-a2a00ed72e8c",
+        "timestamp": "2026-03-06T17:28:50.238928867Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 541
+      },
+      "payload": {
+        "type": "file_modified",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "path": "docs",
+        "change_type": "created",
+        "old_hash": null,
+        "new_hash": null
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-021e-abfd-f27622b3b9a2",
+        "timestamp": "2026-03-06T17:28:50.254183547Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 542
+      },
+      "payload": {
+        "type": "file_modified",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "path": "docs/verification.md",
+        "change_type": "created",
+        "old_hash": null,
+        "new_hash": "302c225bf89fde67"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-021f-add9-fcb61cb43a9b",
+        "timestamp": "2026-03-06T17:28:50.272429728Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 543
+      },
+      "payload": {
+        "type": "diff_computed",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "diff_id": "79dcf381-84a3-4ad5-8cff-5363c93f9037",
+        "baseline_id": "4187f76e-753e-4647-a5d9-85165b8a4673",
+        "change_count": 2
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0220-8d92-f57dfd0edc88",
+        "timestamp": "2026-03-06T17:28:52.744554662Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": null
+        },
+        "sequence": 544
+      },
+      "payload": {
+        "type": "task_execution_state_changed",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322",
+        "from": "verifying",
+        "to": "success"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0221-9ea0-b029ea79a3ea",
+        "timestamp": "2026-03-06T17:28:52.768543997Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+        },
+        "sequence": 545
+      },
+      "payload": {
+        "type": "task_execution_succeeded",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "attempt_id": "b8589c4b-995e-4c2e-99d0-44e677f1a322"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0222-88fd-a823be6e1cd0",
+        "timestamp": "2026-03-06T17:28:52.790129310Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": null
+        },
+        "sequence": 546
+      },
+      "payload": {
+        "type": "task_execution_frozen",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "commit_sha": "4f937f2293652f4818f3ab7169765e09d30d0dd0"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0223-8eca-708136caac5c",
+        "timestamp": "2026-03-06T17:28:52.968710351Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 547
+      },
+      "payload": {
+        "type": "task_flow_completed",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0231-a0ad-d4ef678ba905",
+        "timestamp": "2026-03-06T17:28:58.170646319Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 561
+      },
+      "payload": {
+        "type": "flow_integration_lock_acquired",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "operation": "merge_prepare"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0232-8f94-7e51b344fd0d",
+        "timestamp": "2026-03-06T17:28:58.194140920Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 562
+      },
+      "payload": {
+        "type": "flow_frozen_for_merge",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0233-9913-b5bfc137f9f0",
+        "timestamp": "2026-03-06T17:28:58.584275597Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+          "attempt_id": null
+        },
+        "sequence": 563
+      },
+      "payload": {
+        "type": "task_integrated_into_flow",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "task_id": "167a4330-5a07-417f-bffe-6ec4f6462137",
+        "commit_sha": "a33b928e95469b542eb84e6950dfa29fc0ce7efc"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0234-9502-35071e7744f6",
+        "timestamp": "2026-03-06T17:28:58.598770117Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 564
+      },
+      "payload": {
+        "type": "merge_prepared",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "target_branch": "main",
+        "conflicts": []
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0235-854a-ed91d10f2f63",
+        "timestamp": "2026-03-06T17:28:59.427771623Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 565
+      },
+      "payload": {
+        "type": "merge_approved",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "user": "antonio"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0236-a2c9-11718b4e3ba4",
+        "timestamp": "2026-03-06T17:29:00.240031432Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 566
+      },
+      "payload": {
+        "type": "flow_integration_lock_acquired",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "operation": "merge_execute"
+      }
+    },
+    {
+      "metadata": {
+        "id": "00000000-0000-0237-8e63-0751a3acedd2",
+        "timestamp": "2026-03-06T17:29:00.301754722Z",
+        "correlation": {
+          "project_id": "06505cd6-3ede-451f-9b81-927f2583289c",
+          "graph_id": "8560c0ac-6e65-4bb9-bbad-d9b726cabba4",
+          "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+          "task_id": null,
+          "attempt_id": null
+        },
+        "sequence": 567
+      },
+      "payload": {
+        "type": "merge_completed",
+        "flow_id": "3cf8f93f-56be-42c8-b132-c7b06c12e526",
+        "commits": [
+          "4f937f2293652f4818f3ab7169765e09d30d0dd0",
+          "a33b928e95469b542eb84e6950dfa29fc0ce7efc"
+        ]
+      }
+    }
+  ]
+}
