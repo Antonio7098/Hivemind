@@ -15,12 +15,13 @@
 
 ## CodeGraph Implementation Rule (Mandatory)
 
-- [ ] Before implementing any Phase 4.7 CodeGraph behavior, read the existing Hivemind CodeGraph contracts and docs first:
+- [ ] Before implementing any Phase 4.7 CodeGraph behavior, read both the Hivemind integration docs **and** the actual UCP CodeGraph docs first:
   - [ ] `ops/roadmap/phase-3.md` Sprint 37 (`UCP Graph Integration and Snapshot Projection`)
   - [ ] `docs/architecture/cli-capabilities.md` graph snapshot/query sections
   - [ ] `docs/design/cli-semantics.md` graph snapshot + graph query sections
   - [ ] `docs/design/codegraph-db-schema.md`
-  - [ ] local UCP CodeGraph docs in the sibling repository before extending usage or API shape
+  - [ ] `../unified-content-protocol/docs/ucp-cli/codegraph.md`
+  - [ ] `../unified-content-protocol/docs/ucp-api/README.md`
 - [ ] Import/use CodeGraph locally from the existing UCP integration; do **not** create a second parser/extractor/query engine inside Hivemind
 - [ ] Hivemind must **not** implement a new CodeGraph engine from scratch; the local UCP CodeGraph implementation is the sole extraction/query backend for Phase 4.7 work
 - [ ] Treat CodeGraph as a runtime-managed substrate whose lifecycle stays in Hivemind, while extraction/query semantics continue to come from the locally imported UCP implementation

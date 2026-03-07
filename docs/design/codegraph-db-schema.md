@@ -28,6 +28,13 @@ This schema does **not** reimplement CodeGraph extraction, validation, or traver
 
 Use the existing native runtime state SQLite DB and migration mechanism described in `docs/design/runtime-wrapper.md` and implemented under `src/native/runtime_hardening/storage/`.
 
+## Required Upstream Docs
+
+Before implementing this schema against runtime code, read the actual UCP CodeGraph docs that define the imported backend surface:
+
+- `../unified-content-protocol/docs/ucp-cli/codegraph.md`
+- `../unified-content-protocol/docs/ucp-api/README.md`
+
 ## Tables
 
 ### `codegraph_snapshots`
