@@ -12,8 +12,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
+mod app;
 mod apply;
 mod catalog;
+mod runtime;
 
 const fn default_max_parallel_tasks() -> u16 {
     1
@@ -94,15 +96,6 @@ pub struct RuntimeRoleDefaults {
     pub validator: Option<ProjectRuntimeConfig>,
 }
 
-impl RuntimeRoleDefaults {
-    pub fn set(&mut self, role: RuntimeRole, config: Option<ProjectRuntimeConfig>) {
-        match role {
-            RuntimeRole::Worker => self.worker = config,
-            RuntimeRole::Validator => self.validator = config,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GovernanceProjectStorage {
     pub project_id: Uuid,
@@ -159,15 +152,6 @@ pub struct TaskRuntimeRoleOverrides {
     pub worker: Option<TaskRuntimeConfig>,
     #[serde(default)]
     pub validator: Option<TaskRuntimeConfig>,
-}
-
-impl TaskRuntimeRoleOverrides {
-    pub fn set(&mut self, role: RuntimeRole, config: Option<TaskRuntimeConfig>) {
-        match role {
-            RuntimeRole::Worker => self.worker = config,
-            RuntimeRole::Validator => self.validator = config,
-        }
-    }
 }
 
 /// A project in the system.
@@ -265,21 +249,6 @@ pub struct AppState {
     pub flow_runtime_defaults: HashMap<Uuid, RuntimeRoleDefaults>,
     pub merge_states: HashMap<Uuid, MergeState>,
     pub attempts: HashMap<Uuid, AttemptState>,
-}
-
-impl AppState {
-    /// Creates a new empty state.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Applies an event to the state, returning a new state.
-    #[must_use]
-    pub fn apply(mut self, event: &Event) -> Self {
-        self.apply_mut(event);
-        self
-    }
 }
 
 #[cfg(test)]
