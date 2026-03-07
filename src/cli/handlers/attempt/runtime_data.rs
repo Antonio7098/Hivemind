@@ -152,7 +152,7 @@ pub(crate) fn attempt_context_from_events(
         match event.payload {
             EventPayload::RetryContextAssembled { context, .. } => retry_context = Some(context),
             EventPayload::ContextWindowCreated { state_hash, .. } => {
-                context_window_hash = Some(state_hash)
+                context_window_hash = Some(state_hash);
             }
             EventPayload::ContextWindowSnapshotCreated {
                 rendered_prompt_hash: hash,

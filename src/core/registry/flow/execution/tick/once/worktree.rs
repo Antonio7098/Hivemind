@@ -10,7 +10,6 @@ pub(super) struct TickLaunchPrereqs {
 
 impl Registry {
     pub(super) fn prepare_tick_launch_prereqs(
-        &self,
         state: &AppState,
         flow: &TaskFlow,
         task_id: Uuid,
@@ -51,7 +50,6 @@ impl Registry {
     }
 
     pub(super) fn merge_task_dependency_branches(
-        &self,
         _state: &AppState,
         flow: &TaskFlow,
         graph: &TaskGraph,

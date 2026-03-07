@@ -29,7 +29,7 @@ fn pull_skill_writes_skill_md() {
 
 #[test]
 fn parse_skill_md_extracts_metadata_and_body() {
-    let raw = r#"---
+    let raw = r"---
 name: sample
 description: Sample skill
 license: MIT
@@ -37,7 +37,7 @@ compatibility: Rust
 ---
 
 hello body
-"#;
+";
     let parsed = parse_skill_md(raw).expect("parse should succeed");
     assert_eq!(parsed.name, "sample");
     assert_eq!(parsed.description, "Sample skill");

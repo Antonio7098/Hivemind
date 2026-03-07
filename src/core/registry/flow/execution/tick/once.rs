@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines)]
+
 use super::*;
 mod attempt;
 mod readiness;
@@ -44,8 +46,8 @@ impl Registry {
             return Ok(flow);
         };
 
-        let launch_prereqs = self.prepare_tick_launch_prereqs(&state, &flow, task_id, origin)?;
-        self.merge_task_dependency_branches(
+        let launch_prereqs = Self::prepare_tick_launch_prereqs(&state, &flow, task_id, origin)?;
+        Self::merge_task_dependency_branches(
             &state,
             &flow,
             graph,

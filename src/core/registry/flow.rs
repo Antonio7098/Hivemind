@@ -24,6 +24,7 @@ mod support;
 mod verification;
 
 impl Registry {
+    #[allow(clippy::too_many_arguments)]
     pub fn flow_runtime_set(
         &self,
         flow_id: &str,

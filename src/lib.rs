@@ -28,6 +28,7 @@
 //! - [`core`] - Domain types: events, state, graphs, flows, errors, and scope enforcement
 //! - [`adapters`] - Runtime adapters for execution backends (`OpenCode`, Claude Code, etc.)
 //! - [`native`] - Native runtime contracts and deterministic harness
+#![allow(clippy::wildcard_imports, clippy::redundant_pub_crate)]
 //! - [`storage`] - Event persistence layer (SQLite-backed event store)
 //! - [`cli`] - Command-line interface commands and output formatting
 //! - [`server`] - HTTP API server for UI integration

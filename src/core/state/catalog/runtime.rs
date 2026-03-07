@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines)]
+
 use super::*;
 
 impl AppState {
@@ -21,7 +23,7 @@ impl AppState {
                     let configured = project_runtime_config(
                         adapter_name,
                         binary_path,
-                        model,
+                        model.as_ref(),
                         args,
                         env,
                         *timeout_ms,
@@ -48,7 +50,7 @@ impl AppState {
                     let configured = project_runtime_config(
                         adapter_name,
                         binary_path,
-                        model,
+                        model.as_ref(),
                         args,
                         env,
                         *timeout_ms,
@@ -79,7 +81,7 @@ impl AppState {
                     Some(project_runtime_config(
                         adapter_name,
                         binary_path,
-                        model,
+                        model.as_ref(),
                         args,
                         env,
                         *timeout_ms,
@@ -101,7 +103,7 @@ impl AppState {
                     let configured = task_runtime_config(
                         adapter_name,
                         binary_path,
-                        model,
+                        model.as_ref(),
                         args,
                         env,
                         *timeout_ms,
@@ -126,7 +128,7 @@ impl AppState {
                     let configured = task_runtime_config(
                         adapter_name,
                         binary_path,
-                        model,
+                        model.as_ref(),
                         args,
                         env,
                         *timeout_ms,

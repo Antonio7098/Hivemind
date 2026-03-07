@@ -1,6 +1,11 @@
 use super::*;
 
 impl Registry {
+    #[allow(
+        clippy::too_many_lines,
+        clippy::type_complexity,
+        clippy::unnecessary_wraps
+    )]
     pub(crate) fn build_retry_context(
         &self,
         state: &AppState,

@@ -37,7 +37,7 @@ pub(crate) fn governance_artifact_key(
 pub(crate) fn project_runtime_config(
     adapter_name: &str,
     binary_path: &str,
-    model: &Option<String>,
+    model: Option<&String>,
     args: &[String],
     env: &HashMap<String, String>,
     timeout_ms: u64,
@@ -46,7 +46,7 @@ pub(crate) fn project_runtime_config(
     ProjectRuntimeConfig {
         adapter_name: adapter_name.to_string(),
         binary_path: binary_path.to_string(),
-        model: model.clone(),
+        model: model.cloned(),
         args: args.to_vec(),
         env: env.clone(),
         timeout_ms,
@@ -57,7 +57,7 @@ pub(crate) fn project_runtime_config(
 pub(crate) fn task_runtime_config(
     adapter_name: &str,
     binary_path: &str,
-    model: &Option<String>,
+    model: Option<&String>,
     args: &[String],
     env: &HashMap<String, String>,
     timeout_ms: u64,
@@ -65,7 +65,7 @@ pub(crate) fn task_runtime_config(
     TaskRuntimeConfig {
         adapter_name: adapter_name.to_string(),
         binary_path: binary_path.to_string(),
-        model: model.clone(),
+        model: model.cloned(),
         args: args.to_vec(),
         env: env.clone(),
         timeout_ms,

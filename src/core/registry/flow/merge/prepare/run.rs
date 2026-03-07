@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines)]
+
 use super::*;
 mod checks;
 mod common;
@@ -103,7 +105,7 @@ impl Registry {
         }
 
         if conflicts.is_empty() {
-            self.publish_primary_prepare_branch(&manager, flow.id, &primary.merge_branch, origin)?;
+            Self::publish_primary_prepare_branch(&manager, flow.id, &primary.merge_branch, origin)?;
             for (task_id, commit_sha) in &primary.integrated_tasks {
                 self.append_event(
                     Event::new(

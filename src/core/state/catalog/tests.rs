@@ -8,7 +8,7 @@ fn project_deleted_cascades_related_runtime_and_flow_state() {
     let graph_id = Uuid::new_v4();
     let flow_id = Uuid::new_v4();
     let attempt_id = Uuid::new_v4();
-    let state = AppState::replay(&vec![
+    let state = AppState::replay(&[
         Event::new(
             EventPayload::ProjectCreated {
                 id: project_id,
@@ -96,7 +96,7 @@ fn project_deleted_cascades_related_runtime_and_flow_state() {
 fn task_runtime_role_and_repository_events_are_projected() {
     let project_id = Uuid::new_v4();
     let task_id = Uuid::new_v4();
-    let state = AppState::replay(&vec![
+    let state = AppState::replay(&[
         Event::new(
             EventPayload::ProjectCreated {
                 id: project_id,
@@ -179,7 +179,7 @@ fn task_runtime_role_and_repository_events_are_projected() {
 fn governance_and_constitution_events_update_projections() {
     let project_id = Uuid::new_v4();
     let artifact_key = governance_artifact_key(Some(project_id), "project", "constitution", "main");
-    let state = AppState::replay(&vec![
+    let state = AppState::replay(&[
         Event::new(
             EventPayload::ProjectCreated {
                 id: project_id,

@@ -17,9 +17,7 @@ impl AppState {
             || self.apply_attempt_event(&event.payload, timestamp)
             || self.apply_merge_event(&event.payload, timestamp)
             || Self::is_ignored_event(&event.payload)
-        {
-            return;
-        }
+        {}
     }
 
     /// Replays a sequence of events to produce state.

@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines)]
+
 use super::*;
 
 pub(super) struct PrimaryPrepareOutcome {
@@ -217,7 +219,6 @@ impl Registry {
     }
 
     pub(super) fn publish_primary_prepare_branch(
-        &self,
         manager: &WorktreeManager,
         flow_id: Uuid,
         merge_branch: &str,

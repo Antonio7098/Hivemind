@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines)]
+
 use super::*;
 
 pub(super) fn payload_pascal_type(payload: &EventPayload) -> &'static str {
