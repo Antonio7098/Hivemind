@@ -6,21 +6,8 @@ use signal_hook::consts::SIGINT;
 use signal_hook::iterator::Signals;
 use std::io::Write;
 use std::sync::mpsc;
-
-struct RawModeGuard;
-
-impl RawModeGuard {
-    fn new() -> std::io::Result<Self> {
-        terminal::enable_raw_mode()?;
-        Ok(Self)
-    }
-}
-
-impl Drop for RawModeGuard {
-    fn drop(&mut self) {
-        let _ = terminal::disable_raw_mode();
-    }
-}
+mod raw_mode;
+use raw_mode::*;
 
 impl OpenCodeAdapter {
     #[allow(clippy::too_many_lines)]

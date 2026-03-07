@@ -172,7 +172,12 @@ pub use exec_sessions::cleanup_exec_sessions;
 use exec_sessions::*;
 
 mod graph_query_tool;
-use graph_query_tool::*;
+#[cfg(test)]
+pub(crate) use graph_query_tool::{
+    aggregate_snapshot_fingerprint_registry_style, RuntimeGraphSnapshotArtifact,
+    RuntimeGraphSnapshotCommit, RuntimeGraphSnapshotProvenance, RuntimeGraphSnapshotRepository,
+};
+use graph_query_tool::{handle_graph_query, GraphQueryInput};
 
 mod policy_eval;
 use policy_eval::evaluate_tool_policies_impl;

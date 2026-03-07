@@ -1,0 +1,180 @@
+use super::*;
+
+impl Registry {
+    pub(crate) fn graph_snapshot_path(&self, project_id: Uuid) -> PathBuf {
+        self.governance_project_root(project_id)
+            .join("graph_snapshot.json")
+    }
+
+    pub(crate) fn read_graph_snapshot_artifact(
+        &self,
+        project_id: Uuid,
+        origin: &'static str,
+    ) -> Result<Option<GraphSnapshotArtifact>> {
+        let path = self.graph_snapshot_path(project_id);
+        if !path.is_file() {
+            return Ok(None);
+        }
+        let raw = fs::read_to_string(&path).map_err(|e| {
+            HivemindError::system("governance_artifact_read_failed", e.to_string(), origin)
+        })?;
+        let trimmed = raw.trim();
+        if trimmed.is_empty() || trimmed == "{}" {
+            return Ok(None);
+        }
+        let artifact = Self::read_governance_json::<GraphSnapshotArtifact>(
+            &path,
+            "graph_snapshot",
+            "graph_snapshot.json",
+            origin,
+        )?;
+        Ok(Some(artifact))
+    }
+
+    pub(crate) fn resolve_repo_head_commit(
+        repo_path: &Path,
+        origin: &'static str,
+    ) -> Result<String> {
+        let output = std::process::Command::new("git")
+            .current_dir(repo_path)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .map_err(|e| HivemindError::git("git_rev_parse_failed", e.to_string(), origin))?;
+        if !output.status.success() {
+            return Err(HivemindError::git(
+                "git_rev_parse_failed",
+                String::from_utf8_lossy(&output.stderr).to_string(),
+                origin,
+            ));
+        }
+        let head = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if head.is_empty() {
+            return Err(HivemindError::git(
+                "git_head_missing",
+                "Failed to resolve repository HEAD commit".to_string(),
+                origin,
+            ));
+        }
+        Ok(head)
+    }
+
+    pub(crate) fn aggregate_codegraph_stats(
+        stats: &[ucp_api::CodeGraphStats],
+    ) -> GraphSnapshotSummary {
+        let mut summary = GraphSnapshotSummary::default();
+        for item in stats {
+            summary.total_nodes += item.total_nodes;
+            summary.repository_nodes += item.repository_nodes;
+            summary.directory_nodes += item.directory_nodes;
+            summary.file_nodes += item.file_nodes;
+            summary.symbol_nodes += item.symbol_nodes;
+            summary.total_edges += item.total_edges;
+            summary.reference_edges += item.reference_edges;
+            summary.export_edges += item.export_edges;
+            for (lang, count) in &item.languages {
+                *summary.languages.entry(lang.clone()).or_insert(0) += *count;
+            }
+        }
+        summary
+    }
+
+    pub(crate) fn compute_snapshot_fingerprint(
+        repositories: &[GraphSnapshotRepositoryArtifact],
+    ) -> String {
+        let mut entries: Vec<String> = repositories
+            .iter()
+            .map(|repo| {
+                format!(
+                    "{}|{}|{}|{}",
+                    repo.repo_name, repo.repo_path, repo.commit_hash, repo.canonical_fingerprint
+                )
+            })
+            .collect();
+        entries.sort();
+        let joined = entries.join("\n");
+        Self::constitution_digest(joined.as_bytes())
+    }
+
+    pub(crate) fn ensure_codegraph_scope_contract(
+        document: &PortableDocument,
+        origin: &'static str,
+    ) -> Result<()> {
+        let allowed_classes = ["repository", "directory", "file", "symbol"];
+        for (block_id, block) in &document.blocks {
+            if block_id == &document.root {
+                continue;
+            }
+            let Some(class) = block
+                .metadata
+                .custom
+                .get("node_class")
+                .and_then(serde_json::Value::as_str)
+            else {
+                return Err(HivemindError::system(
+                    "graph_snapshot_missing_node_class",
+                    "UCP codegraph node is missing required node_class metadata",
+                    origin,
+                ));
+            };
+            if !allowed_classes.contains(&class) {
+                return Err(HivemindError::system(
+                        "graph_snapshot_scope_unsupported",
+                        format!("Unsupported codegraph node class '{class}'"),
+                        origin,
+                    )
+                    .with_hint(
+                        "Refresh with a UCP CodeGraphProfile v1 extractor that emits repository/directory/file/symbol nodes only",
+                    ));
+            }
+            if block
+                .metadata
+                .custom
+                .get("logical_key")
+                .and_then(serde_json::Value::as_str)
+                .is_none_or(str::is_empty)
+            {
+                return Err(HivemindError::system(
+                    "graph_snapshot_logical_key_missing",
+                    "UCP codegraph block is missing required logical_key metadata",
+                    origin,
+                ));
+            }
+
+            for edge in &block.edges {
+                let edge_type = edge.edge_type.as_str();
+                if edge_type != "references" && edge_type != "custom:exports" {
+                    return Err(HivemindError::system(
+                            "graph_snapshot_scope_unsupported",
+                            format!("Unsupported codegraph edge type '{edge_type}'"),
+                            origin,
+                        )
+                        .with_hint(
+                            "Refresh with a UCP CodeGraphProfile v1 extractor that only emits references/exports edges",
+                        ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn append_graph_snapshot_failed_event(
+        &self,
+        project_id: Uuid,
+        trigger: &str,
+        err: &HivemindError,
+        origin: &'static str,
+    ) {
+        let _ = self.append_event(
+            Event::new(
+                EventPayload::GraphSnapshotFailed {
+                    project_id,
+                    trigger: trigger.to_string(),
+                    reason: err.message.clone(),
+                    hint: err.recovery_hint.clone(),
+                },
+                CorrelationIds::for_project(project_id),
+            ),
+            origin,
+        );
+    }
+}

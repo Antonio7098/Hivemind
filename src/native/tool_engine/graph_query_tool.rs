@@ -1,114 +1,15 @@
 use super::*;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-enum GraphQueryKindInput {
-    Neighbors,
-    Dependents,
-    Subgraph,
-    Filter,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub(super) struct GraphQueryInput {
-    kind: GraphQueryKindInput,
-    #[serde(default)]
-    node: Option<String>,
-    #[serde(default)]
-    seed: Option<String>,
-    #[serde(default)]
-    depth: Option<usize>,
-    #[serde(default)]
-    edge_types: Vec<String>,
-    #[serde(default)]
-    node_type: Option<String>,
-    #[serde(default)]
-    path_prefix: Option<String>,
-    #[serde(default)]
-    partition: Option<String>,
-    #[serde(default)]
-    max_results: Option<usize>,
-}
-
-impl GraphQueryInput {
-    fn into_request(self) -> Result<GraphQueryRequest, NativeToolEngineError> {
-        match self.kind {
-            GraphQueryKindInput::Neighbors => Ok(GraphQueryRequest::Neighbors {
-                node: self.node.ok_or_else(|| {
-                    NativeToolEngineError::validation("graph_query.neighbors requires 'node'")
-                })?,
-                edge_types: self.edge_types,
-                max_results: self.max_results,
-            }),
-            GraphQueryKindInput::Dependents => Ok(GraphQueryRequest::Dependents {
-                node: self.node.ok_or_else(|| {
-                    NativeToolEngineError::validation("graph_query.dependents requires 'node'")
-                })?,
-                edge_types: self.edge_types,
-                max_results: self.max_results,
-            }),
-            GraphQueryKindInput::Subgraph => Ok(GraphQueryRequest::Subgraph {
-                seed: self.seed.ok_or_else(|| {
-                    NativeToolEngineError::validation("graph_query.subgraph requires 'seed'")
-                })?,
-                depth: self.depth.ok_or_else(|| {
-                    NativeToolEngineError::validation("graph_query.subgraph requires 'depth'")
-                })?,
-                edge_types: self.edge_types,
-                max_results: self.max_results,
-            }),
-            GraphQueryKindInput::Filter => Ok(GraphQueryRequest::Filter {
-                node_type: self.node_type,
-                path_prefix: self.path_prefix,
-                partition: self.partition,
-                max_results: self.max_results,
-            }),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct RuntimeGraphQueryGateError {
-    code: String,
-    message: String,
-    #[serde(default)]
-    hint: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct RuntimeGraphSnapshotCommit {
-    pub(super) repo_name: String,
-    pub(super) repo_path: String,
-    pub(super) commit_hash: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct RuntimeGraphSnapshotProvenance {
-    pub(super) head_commits: Vec<RuntimeGraphSnapshotCommit>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct RuntimeGraphSnapshotRepository {
-    pub(super) repo_name: String,
-    pub(super) repo_path: String,
-    pub(super) commit_hash: String,
-    pub(super) canonical_fingerprint: String,
-    pub(super) document: PortableDocument,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct RuntimeGraphSnapshotArtifact {
-    pub(super) profile_version: String,
-    pub(super) canonical_fingerprint: String,
-    pub(super) provenance: RuntimeGraphSnapshotProvenance,
-    pub(super) repositories: Vec<RuntimeGraphSnapshotRepository>,
-}
+mod types;
+use types::*;
+pub(crate) use types::{
+    GraphQueryInput, RuntimeGraphSnapshotArtifact, RuntimeGraphSnapshotRepository,
+};
+#[cfg(test)]
+pub(crate) use types::{RuntimeGraphSnapshotCommit, RuntimeGraphSnapshotProvenance};
 
 fn graph_query_runtime_error(code: &str, message: impl Into<String>) -> NativeToolEngineError {
     NativeToolEngineError::new(code, message, false)
 }
-
 fn graph_query_runtime_error_with_refresh_hint(
     code: &str,
     message: impl Into<String>,
@@ -118,7 +19,6 @@ fn graph_query_runtime_error_with_refresh_hint(
         format!("{}. Hint: {GRAPH_QUERY_REFRESH_HINT}", message.into()),
     )
 }
-
 fn resolve_repo_head_commit(
     repo_path: &Path,
     env: &HashMap<String, String>,
@@ -158,7 +58,6 @@ fn resolve_repo_head_commit(
     }
     Ok(head)
 }
-
 fn graph_query_bounds_from_env(
     env: &HashMap<String, String>,
 ) -> Result<GraphQueryBounds, NativeToolEngineError> {
@@ -200,7 +99,6 @@ fn graph_query_bounds_from_env(
     }
     Ok(bounds)
 }
-
 fn load_runtime_graph_snapshot(
     env: &HashMap<String, String>,
 ) -> Result<RuntimeGraphSnapshotArtifact, NativeToolEngineError> {
@@ -246,7 +144,6 @@ fn load_runtime_graph_snapshot(
         )
     })
 }
-
 fn validate_runtime_graph_snapshot(
     artifact: &RuntimeGraphSnapshotArtifact,
     env: &HashMap<String, String>,
@@ -341,8 +238,7 @@ fn validate_runtime_graph_snapshot(
 
     Ok(())
 }
-
-pub(super) fn aggregate_snapshot_fingerprint_registry_style(
+pub(crate) fn aggregate_snapshot_fingerprint_registry_style(
     repositories: &[RuntimeGraphSnapshotRepository],
 ) -> String {
     let mut entries = repositories
@@ -360,14 +256,12 @@ pub(super) fn aggregate_snapshot_fingerprint_registry_style(
     joined.as_bytes().hash(&mut hasher);
     format!("{:016x}", hasher.finish())
 }
-
 fn map_graph_query_error(
     error: crate::core::graph_query::GraphQueryError,
 ) -> NativeToolEngineError {
     NativeToolEngineError::new(error.code, error.message, false)
 }
-
-pub(super) fn handle_graph_query(
+pub(crate) fn handle_graph_query(
     ctx: &ToolExecutionContext<'_>,
     input: &Value,
     _timeout_ms: u64,
