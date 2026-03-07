@@ -39,6 +39,12 @@
 //!
 //! - [`commands`] - Command implementations
 //! - [`output`] - Output formatting and table rendering
+//! - [`handlers`] - Command handler functions split by feature
+//! - [`output_helpers`] - Output format parsing utilities
+//! - [`error`] - CLI error handling utilities
 
 pub mod commands;
+pub mod error;
+pub mod handlers;
 pub mod output;
+pub mod output_helpers;

@@ -58,10 +58,17 @@ fi
 
 EVENTS_JSON="$($HIVEMIND -f json events stream --flow "$FLOW_ID" --limit 500)"
 
-if echo "$EVENTS_JSON" | grep -q '"type": "checkpoint_completed"'; then
+if [[ "$EVENTS_JSON" == *'"type": "checkpoint_completed"'* ]]; then
   echo "checkpoint already completed by runtime"
 else
-  ATTEMPT_ID="$(echo "$EVENTS_JSON" | sed -n 's/.*"attempt_id": "\([0-9a-f-]\{36\}\)".*/\1/p' | head -n1)"
+  ATTEMPT_ID="$(EVENTS_JSON="$EVENTS_JSON" python3 - <<'PY'
+import os
+import re
+
+match = re.search(r'"attempt_id": "([0-9a-f-]{36})"', os.environ.get("EVENTS_JSON", ""))
+print(match.group(1) if match else "")
+PY
+)"
 
   if [ -z "$ATTEMPT_ID" ]; then
     echo "failed to discover attempt_id from events"
@@ -81,12 +88,31 @@ EVENTS_JSON="$($HIVEMIND -f json events stream --flow "$FLOW_ID" --limit 500)"
 [[ "$EVENTS_JSON" == *"runtime_started"* ]]
 [[ "$EVENTS_JSON" == *"runtime_output_chunk"* ]]
 [[ "$EVENTS_JSON" == *"runtime_exited"* ]]
-[[ "$EVENTS_JSON" == *"runtime_command_observed"* ]]
-[[ "$EVENTS_JSON" == *"runtime_tool_call_observed"* ]]
-[[ "$EVENTS_JSON" == *"runtime_todo_snapshot_updated"* ]]
-[[ "$EVENTS_JSON" == *"runtime_narrative_output_observed"* ]]
+
+PROJECTED_COUNT=0
+for EVENT_TYPE in \
+  runtime_command_observed \
+  runtime_tool_call_observed \
+  runtime_todo_snapshot_updated \
+  runtime_narrative_output_observed
+do
+  if [[ "$EVENTS_JSON" == *"\"type\": \"$EVENT_TYPE\""* ]]; then
+    echo "observed projection: $EVENT_TYPE"
+    PROJECTED_COUNT=$((PROJECTED_COUNT + 1))
+  fi
+done
+
+if [[ "$EVENTS_JSON" != *"runtime_command_observed"* ]]; then
+  echo "expected at least one runtime_command_observed event from real opencode output"
+  exit 1
+fi
+
+if [ "$PROJECTED_COUNT" -eq 0 ]; then
+  echo "expected at least one projected runtime observation from real opencode output"
+  exit 1
+fi
 
 echo "=== Runtime projection event excerpt ==="
-echo "$EVENTS_JSON" | awk '/runtime_(command_observed|tool_call_observed|todo_snapshot_updated|narrative_output_observed)/ {print; c++; if (c>=8) exit}'
+awk '/runtime_(command_observed|tool_call_observed|todo_snapshot_updated|narrative_output_observed)/ {print; c++; if (c>=8) exit}' <<<"$EVENTS_JSON"
 
 echo "Real opencode projection events found."

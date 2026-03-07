@@ -1,0 +1,122 @@
+{
+  "source": "src/server.rs",
+  "function_count": 31,
+  "entry": [],
+  "missing_entry": [],
+  "selected_count": 31,
+  "selected": [
+    "api_catalog",
+    "api_post_project_create_ok",
+    "api_post_project_delete_ok",
+    "api_state_ok_empty",
+    "api_unknown_endpoint_404",
+    "api_version_ok",
+    "build_ui_state",
+    "cors_headers",
+    "default",
+    "env_pairs_from_map",
+    "from_http",
+    "handle_api_request",
+    "handle_api_request_inner",
+    "json_value",
+    "list_flows",
+    "list_graphs",
+    "list_merge_states",
+    "list_tasks",
+    "list_ui_events",
+    "method_not_allowed",
+    "parse_merge_mode",
+    "parse_query",
+    "parse_run_mode",
+    "parse_runtime_role",
+    "payload_category",
+    "payload_map",
+    "payload_pascal_type",
+    "serve",
+    "test_registry",
+    "text",
+    "ui_event"
+  ],
+  "graph": {
+    "api_catalog": [],
+    "api_post_project_create_ok": [
+      "handle_api_request_inner",
+      "json_value",
+      "test_registry"
+    ],
+    "api_post_project_delete_ok": [
+      "handle_api_request_inner",
+      "json_value",
+      "test_registry"
+    ],
+    "api_state_ok_empty": [
+      "handle_api_request_inner",
+      "json_value",
+      "test_registry"
+    ],
+    "api_unknown_endpoint_404": [
+      "handle_api_request_inner",
+      "json_value",
+      "test_registry"
+    ],
+    "api_version_ok": [
+      "handle_api_request_inner",
+      "json_value",
+      "test_registry"
+    ],
+    "build_ui_state": [],
+    "cors_headers": [],
+    "default": [],
+    "env_pairs_from_map": [],
+    "from_http": [],
+    "handle_api_request": [
+      "handle_api_request_inner"
+    ],
+    "handle_api_request_inner": [
+      "api_catalog",
+      "build_ui_state",
+      "cors_headers",
+      "env_pairs_from_map",
+      "list_flows",
+      "list_graphs",
+      "list_merge_states",
+      "list_tasks",
+      "list_ui_events",
+      "method_not_allowed",
+      "parse_merge_mode",
+      "parse_query",
+      "parse_run_mode",
+      "parse_runtime_role",
+      "text"
+    ],
+    "json_value": [],
+    "list_flows": [],
+    "list_graphs": [],
+    "list_merge_states": [],
+    "list_tasks": [],
+    "list_ui_events": [],
+    "method_not_allowed": [
+      "cors_headers"
+    ],
+    "parse_merge_mode": [],
+    "parse_query": [],
+    "parse_run_mode": [],
+    "parse_runtime_role": [],
+    "payload_category": [],
+    "payload_map": [],
+    "payload_pascal_type": [],
+    "serve": [
+      "cors_headers",
+      "from_http",
+      "handle_api_request",
+      "text"
+    ],
+    "test_registry": [],
+    "text": [],
+    "ui_event": [
+      "payload_category",
+      "payload_map",
+      "payload_pascal_type"
+    ]
+  }
+}

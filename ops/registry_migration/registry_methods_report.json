@@ -1,0 +1,1948 @@
+{
+  "summary": {
+    "total_methods": 317,
+    "modules": {
+      "context": 1,
+      "events": 17,
+      "flow": 68,
+      "governance": 102,
+      "graph": 31,
+      "registry": 20,
+      "runtime": 41,
+      "tasks": 7,
+      "unmapped": 1,
+      "worktree": 29
+    },
+    "unmapped": [
+      {
+        "name": "project_for_flow",
+        "line": 6115,
+        "visibility": "private"
+      }
+    ]
+  },
+  "methods": {
+    "runtime": [
+      {
+        "name": "runtime_env_build_error",
+        "start_line": 1181,
+        "end_line": 1183,
+        "visibility": "private"
+      },
+      {
+        "name": "runtime_start_flags",
+        "start_line": 1201,
+        "end_line": 1269,
+        "visibility": "private"
+      },
+      {
+        "name": "runtime_descriptor_for_adapter",
+        "start_line": 1271,
+        "end_line": 1275,
+        "visibility": "private"
+      },
+      {
+        "name": "runtime_capabilities_for_adapter",
+        "start_line": 1277,
+        "end_line": 1287,
+        "visibility": "private"
+      },
+      {
+        "name": "classify_runtime_error",
+        "start_line": 1289,
+        "end_line": 1344,
+        "visibility": "private"
+      },
+      {
+        "name": "detect_runtime_output_failure",
+        "start_line": 1346,
+        "end_line": 1376,
+        "visibility": "private"
+      },
+      {
+        "name": "emit_runtime_error_classified",
+        "start_line": 1378,
+        "end_line": 1430,
+        "visibility": "private"
+      },
+      {
+        "name": "select_runtime_backup",
+        "start_line": 1432,
+        "end_line": 1463,
+        "visibility": "private"
+      },
+      {
+        "name": "schedule_runtime_recovery",
+        "start_line": 1465,
+        "end_line": 1537,
+        "visibility": "private"
+      },
+      {
+        "name": "handle_runtime_failure",
+        "start_line": 1539,
+        "end_line": 1621,
+        "visibility": "private"
+      },
+      {
+        "name": "projected_runtime_event_payload",
+        "start_line": 1749,
+        "end_line": 1786,
+        "visibility": "private"
+      },
+      {
+        "name": "append_projected_runtime_observations",
+        "start_line": 1788,
+        "end_line": 1805,
+        "visibility": "private"
+      },
+      {
+        "name": "native_capture_mode_for_event",
+        "start_line": 1807,
+        "end_line": 1814,
+        "visibility": "private"
+      },
+      {
+        "name": "native_event_correlation",
+        "start_line": 1816,
+        "end_line": 1828,
+        "visibility": "private"
+      },
+      {
+        "name": "native_blob_sha256",
+        "start_line": 1830,
+        "end_line": 1839,
+        "visibility": "private"
+      },
+      {
+        "name": "persist_native_blob",
+        "start_line": 1853,
+        "end_line": 1889,
+        "visibility": "private"
+      },
+      {
+        "name": "append_native_invocation_events",
+        "start_line": 1891,
+        "end_line": 2260,
+        "visibility": "private"
+      },
+      {
+        "name": "project_runtime_set",
+        "start_line": 7136,
+        "end_line": 7159,
+        "visibility": "pub"
+      },
+      {
+        "name": "ensure_supported_runtime_adapter",
+        "start_line": 7161,
+        "end_line": 7173,
+        "visibility": "private"
+      },
+      {
+        "name": "parse_runtime_env_pairs",
+        "start_line": 7175,
+        "end_line": 7198,
+        "visibility": "private"
+      },
+      {
+        "name": "project_runtime_for_role",
+        "start_line": 7200,
+        "end_line": 7205,
+        "visibility": "private"
+      },
+      {
+        "name": "project_runtime_for_role_with_source",
+        "start_line": 7207,
+        "end_line": 7229,
+        "visibility": "private"
+      },
+      {
+        "name": "task_runtime_override_for_role",
+        "start_line": 7231,
+        "end_line": 7240,
+        "visibility": "private"
+      },
+      {
+        "name": "task_runtime_to_project_runtime",
+        "start_line": 7242,
+        "end_line": 7255,
+        "visibility": "private"
+      },
+      {
+        "name": "max_parallel_from_defaults",
+        "start_line": 7257,
+        "end_line": 7259,
+        "visibility": "private"
+      },
+      {
+        "name": "effective_runtime_for_task",
+        "start_line": 7261,
+        "end_line": 7270,
+        "visibility": "private"
+      },
+      {
+        "name": "effective_runtime_for_task_with_source",
+        "start_line": 7272,
+        "end_line": 7347,
+        "visibility": "private"
+      },
+      {
+        "name": "project_runtime_set_role",
+        "start_line": 7349,
+        "end_line": 7445,
+        "visibility": "pub"
+      },
+      {
+        "name": "runtime_defaults_set",
+        "start_line": 7447,
+        "end_line": 7486,
+        "visibility": "pub"
+      },
+      {
+        "name": "runtime_list",
+        "start_line": 7488,
+        "end_line": 7508,
+        "visibility": "pub"
+      },
+      {
+        "name": "runtime_health",
+        "start_line": 7510,
+        "end_line": 7516,
+        "visibility": "pub"
+      },
+      {
+        "name": "runtime_health_with_role",
+        "start_line": 7518,
+        "end_line": 7647,
+        "visibility": "pub"
+      },
+      {
+        "name": "task_runtime_set",
+        "start_line": 7649,
+        "end_line": 7670,
+        "visibility": "pub"
+      },
+      {
+        "name": "task_runtime_set_role",
+        "start_line": 7672,
+        "end_line": 7723,
+        "visibility": "pub"
+      },
+      {
+        "name": "task_runtime_clear",
+        "start_line": 7725,
+        "end_line": 7727,
+        "visibility": "pub"
+      },
+      {
+        "name": "task_runtime_clear_role",
+        "start_line": 7729,
+        "end_line": 7762,
+        "visibility": "pub"
+      },
+      {
+        "name": "task_set_run_mode",
+        "start_line": 7764,
+        "end_line": 7793,
+        "visibility": "pub"
+      },
+      {
+        "name": "binary_available",
+        "start_line": 7952,
+        "end_line": 7964,
+        "visibility": "private"
+      },
+      {
+        "name": "health_for_runtime",
+        "start_line": 7966,
+        "end_line": 8002,
+        "visibility": "private"
+      },
+      {
+        "name": "build_runtime_adapter",
+        "start_line": 8004,
+        "end_line": 8086,
+        "visibility": "private"
+      },
+      {
+        "name": "parse_global_parallel_limit",
+        "start_line": 9456,
+        "end_line": 9480,
+        "visibility": "private"
+      }
+    ],
+    "registry": [
+      {
+        "name": "prepare_runtime_environment",
+        "start_line": 1185,
+        "end_line": 1193,
+        "visibility": "private"
+      },
+      {
+        "name": "has_model_flag",
+        "start_line": 1195,
+        "end_line": 1199,
+        "visibility": "private"
+      },
+      {
+        "name": "blobs_dir",
+        "start_line": 1841,
+        "end_line": 1843,
+        "visibility": "private"
+      },
+      {
+        "name": "blob_path_for_digest",
+        "start_line": 1845,
+        "end_line": 1851,
+        "visibility": "private"
+      },
+      {
+        "name": "write_baseline_artifact",
+        "start_line": 5965,
+        "end_line": 6013,
+        "visibility": "private"
+      },
+      {
+        "name": "read_baseline_artifact",
+        "start_line": 6015,
+        "end_line": 6030,
+        "visibility": "private"
+      },
+      {
+        "name": "write_diff_artifact",
+        "start_line": 6032,
+        "end_line": 6055,
+        "visibility": "private"
+      },
+      {
+        "name": "read_diff_artifact",
+        "start_line": 6057,
+        "end_line": 6072,
+        "visibility": "private"
+      },
+      {
+        "name": "unified_diff_for_change",
+        "start_line": 6074,
+        "end_line": 6089,
+        "visibility": "private"
+      },
+      {
+        "name": "open",
+        "start_line": 6277,
+        "end_line": 6283,
+        "visibility": "pub"
+      },
+      {
+        "name": "open_with_config",
+        "start_line": 6285,
+        "end_line": 6298,
+        "visibility": "pub"
+      },
+      {
+        "name": "with_store",
+        "start_line": 6300,
+        "end_line": 6304,
+        "visibility": "pub"
+      },
+      {
+        "name": "state",
+        "start_line": 6306,
+        "end_line": 6315,
+        "visibility": "pub"
+      },
+      {
+        "name": "list_events",
+        "start_line": 6317,
+        "end_line": 6329,
+        "visibility": "pub"
+      },
+      {
+        "name": "create_project",
+        "start_line": 6877,
+        "end_line": 6934,
+        "visibility": "pub"
+      },
+      {
+        "name": "list_projects",
+        "start_line": 6936,
+        "end_line": 6945,
+        "visibility": "pub"
+      },
+      {
+        "name": "get_project",
+        "start_line": 6947,
+        "end_line": 6975,
+        "visibility": "pub"
+      },
+      {
+        "name": "update_project",
+        "start_line": 6977,
+        "end_line": 7047,
+        "visibility": "pub"
+      },
+      {
+        "name": "delete_project",
+        "start_line": 7049,
+        "end_line": 7134,
+        "visibility": "pub"
+      },
+      {
+        "name": "config",
+        "start_line": 9482,
+        "end_line": 9486,
+        "visibility": "pub"
+      }
+    ],
+    "flow": [
+      {
+        "name": "format_checkpoint_commit_message",
+        "start_line": 1623,
+        "end_line": 1645,
+        "visibility": "private"
+      },
+      {
+        "name": "create_checkpoint_commit",
+        "start_line": 1647,
+        "end_line": 1701,
+        "visibility": "private"
+      },
+      {
+        "name": "checkout_and_clean_worktree",
+        "start_line": 1703,
+        "end_line": 1740,
+        "visibility": "private"
+      },
+      {
+        "name": "acquire_flow_integration_lock",
+        "start_line": 2262,
+        "end_line": 2306,
+        "visibility": "private"
+      },
+      {
+        "name": "resolve_git_ref",
+        "start_line": 2308,
+        "end_line": 2323,
+        "visibility": "private"
+      },
+      {
+        "name": "resolve_task_frozen_commit_sha",
+        "start_line": 2325,
+        "end_line": 2341,
+        "visibility": "private"
+      },
+      {
+        "name": "emit_task_execution_frozen",
+        "start_line": 2360,
+        "end_line": 2383,
+        "visibility": "private"
+      },
+      {
+        "name": "emit_integration_lock_acquired",
+        "start_line": 2385,
+        "end_line": 2401,
+        "visibility": "private"
+      },
+      {
+        "name": "emit_merge_conflict",
+        "start_line": 2403,
+        "end_line": 2421,
+        "visibility": "private"
+      },
+      {
+        "name": "attempt_runtime_outcome",
+        "start_line": 2423,
+        "end_line": 2448,
+        "visibility": "private"
+      },
+      {
+        "name": "build_retry_context",
+        "start_line": 2455,
+        "end_line": 2729,
+        "visibility": "private"
+      },
+      {
+        "name": "flow_for_task",
+        "start_line": 2738,
+        "end_line": 2748,
+        "visibility": "private"
+      },
+      {
+        "name": "inspect_task_worktree",
+        "start_line": 2750,
+        "end_line": 2768,
+        "visibility": "private"
+      },
+      {
+        "name": "resolve_latest_attempt_without_diff",
+        "start_line": 2770,
+        "end_line": 2790,
+        "visibility": "private"
+      },
+      {
+        "name": "normalized_checkpoint_ids",
+        "start_line": 2792,
+        "end_line": 2811,
+        "visibility": "private"
+      },
+      {
+        "name": "checkpoint_order",
+        "start_line": 2813,
+        "end_line": 2818,
+        "visibility": "private"
+      },
+      {
+        "name": "fail_running_attempt",
+        "start_line": 2820,
+        "end_line": 2864,
+        "visibility": "private"
+      },
+      {
+        "name": "resolve_latest_attempt_with_diff",
+        "start_line": 2866,
+        "end_line": 2886,
+        "visibility": "private"
+      },
+      {
+        "name": "process_verifying_task",
+        "start_line": 2888,
+        "end_line": 3266,
+        "visibility": "private"
+      },
+      {
+        "name": "verify_run",
+        "start_line": 3268,
+        "end_line": 3295,
+        "visibility": "pub"
+      },
+      {
+        "name": "run_check_command",
+        "start_line": 3297,
+        "end_line": 3376,
+        "visibility": "private"
+      },
+      {
+        "name": "verify_repository_scope",
+        "start_line": 3465,
+        "end_line": 3513,
+        "visibility": "private"
+      },
+      {
+        "name": "verify_scope_environment_baseline",
+        "start_line": 3642,
+        "end_line": 3707,
+        "visibility": "private"
+      },
+      {
+        "name": "verify_scope_trace_writes",
+        "start_line": 3780,
+        "end_line": 3832,
+        "visibility": "private"
+      },
+      {
+        "name": "emit_task_execution_completion_events",
+        "start_line": 3834,
+        "end_line": 3915,
+        "visibility": "private"
+      },
+      {
+        "name": "capture_and_store_baseline",
+        "start_line": 3917,
+        "end_line": 3926,
+        "visibility": "private"
+      },
+      {
+        "name": "compute_and_store_diff",
+        "start_line": 3928,
+        "end_line": 3955,
+        "visibility": "private"
+      },
+      {
+        "name": "git_ref_exists",
+        "start_line": 6168,
+        "end_line": 6175,
+        "visibility": "private"
+      },
+      {
+        "name": "default_base_ref_for_repo",
+        "start_line": 6177,
+        "end_line": 6193,
+        "visibility": "private"
+      },
+      {
+        "name": "ensure_task_worktree_status",
+        "start_line": 6195,
+        "end_line": 6226,
+        "visibility": "private"
+      },
+      {
+        "name": "ensure_task_worktree",
+        "start_line": 6228,
+        "end_line": 6251,
+        "visibility": "private"
+      },
+      {
+        "name": "inspect_task_worktrees",
+        "start_line": 6253,
+        "end_line": 6275,
+        "visibility": "private"
+      },
+      {
+        "name": "flow_runtime_set",
+        "start_line": 7795,
+        "end_line": 7837,
+        "visibility": "pub"
+      },
+      {
+        "name": "flow_runtime_clear",
+        "start_line": 7839,
+        "end_line": 7852,
+        "visibility": "pub"
+      },
+      {
+        "name": "flow_set_run_mode",
+        "start_line": 7854,
+        "end_line": 7882,
+        "visibility": "pub"
+      },
+      {
+        "name": "flow_add_dependency",
+        "start_line": 7884,
+        "end_line": 7950,
+        "visibility": "pub"
+      },
+      {
+        "name": "tick_flow_once",
+        "start_line": 8088,
+        "end_line": 9158,
+        "visibility": "private"
+      },
+      {
+        "name": "tick_flow",
+        "start_line": 9160,
+        "end_line": 9407,
+        "visibility": "pub"
+      },
+      {
+        "name": "auto_progress_flow",
+        "start_line": 9409,
+        "end_line": 9454,
+        "visibility": "private"
+      },
+      {
+        "name": "close_task",
+        "start_line": 14192,
+        "end_line": 14237,
+        "visibility": "pub"
+      },
+      {
+        "name": "list_flows",
+        "start_line": 14702,
+        "end_line": 14717,
+        "visibility": "pub"
+      },
+      {
+        "name": "get_flow",
+        "start_line": 14719,
+        "end_line": 14736,
+        "visibility": "pub"
+      },
+      {
+        "name": "delete_flow",
+        "start_line": 14738,
+        "end_line": 14777,
+        "visibility": "pub"
+      },
+      {
+        "name": "list_attempts",
+        "start_line": 14779,
+        "end_line": 14829,
+        "visibility": "pub"
+      },
+      {
+        "name": "list_checkpoints",
+        "start_line": 14831,
+        "end_line": 14854,
+        "visibility": "pub"
+      },
+      {
+        "name": "unmet_flow_dependencies",
+        "start_line": 14856,
+        "end_line": 14869,
+        "visibility": "private"
+      },
+      {
+        "name": "can_auto_run_task",
+        "start_line": 14871,
+        "end_line": 14876,
+        "visibility": "private"
+      },
+      {
+        "name": "maybe_autostart_dependent_flows",
+        "start_line": 14878,
+        "end_line": 14897,
+        "visibility": "private"
+      },
+      {
+        "name": "create_flow",
+        "start_line": 14899,
+        "end_line": 14986,
+        "visibility": "pub"
+      },
+      {
+        "name": "start_flow",
+        "start_line": 14988,
+        "end_line": 15173,
+        "visibility": "pub"
+      },
+      {
+        "name": "restart_flow",
+        "start_line": 15175,
+        "end_line": 15252,
+        "visibility": "pub"
+      },
+      {
+        "name": "pause_flow",
+        "start_line": 15357,
+        "end_line": 15386,
+        "visibility": "pub"
+      },
+      {
+        "name": "resume_flow",
+        "start_line": 15388,
+        "end_line": 15411,
+        "visibility": "pub"
+      },
+      {
+        "name": "abort_flow",
+        "start_line": 15413,
+        "end_line": 15517,
+        "visibility": "pub"
+      },
+      {
+        "name": "retry_task",
+        "start_line": 15519,
+        "end_line": 15642,
+        "visibility": "pub"
+      },
+      {
+        "name": "start_task_execution",
+        "start_line": 15644,
+        "end_line": 15819,
+        "visibility": "pub"
+      },
+      {
+        "name": "checkpoint_complete",
+        "start_line": 15821,
+        "end_line": 16073,
+        "visibility": "pub"
+      },
+      {
+        "name": "complete_task_execution",
+        "start_line": 16075,
+        "end_line": 16152,
+        "visibility": "pub"
+      },
+      {
+        "name": "get_attempt",
+        "start_line": 16154,
+        "end_line": 16171,
+        "visibility": "pub"
+      },
+      {
+        "name": "get_attempt_diff",
+        "start_line": 16173,
+        "end_line": 16180,
+        "visibility": "pub"
+      },
+      {
+        "name": "abort_task",
+        "start_line": 16182,
+        "end_line": 16256,
+        "visibility": "pub"
+      },
+      {
+        "name": "verify_override",
+        "start_line": 16258,
+        "end_line": 16383,
+        "visibility": "pub"
+      },
+      {
+        "name": "merge_prepare",
+        "start_line": 16385,
+        "end_line": 17167,
+        "visibility": "pub"
+      },
+      {
+        "name": "merge_approve",
+        "start_line": 17169,
+        "end_line": 17226,
+        "visibility": "pub"
+      },
+      {
+        "name": "merge_execute",
+        "start_line": 17228,
+        "end_line": 17541,
+        "visibility": "pub"
+      },
+      {
+        "name": "merge_execute_with_options",
+        "start_line": 17543,
+        "end_line": 17552,
+        "visibility": "pub"
+      },
+      {
+        "name": "merge_execute_via_pr",
+        "start_line": 17554,
+        "end_line": 17851,
+        "visibility": "private"
+      },
+      {
+        "name": "replay_flow",
+        "start_line": 17853,
+        "end_line": 17897,
+        "visibility": "pub"
+      }
+    ],
+    "events": [
+      {
+        "name": "append_event",
+        "start_line": 1742,
+        "end_line": 1747,
+        "visibility": "private"
+      },
+      {
+        "name": "record_error_event",
+        "start_line": 2731,
+        "end_line": 2736,
+        "visibility": "private"
+      },
+      {
+        "name": "read_events",
+        "start_line": 6331,
+        "end_line": 6335,
+        "visibility": "pub"
+      },
+      {
+        "name": "stream_events",
+        "start_line": 6337,
+        "end_line": 6345,
+        "visibility": "pub"
+      },
+      {
+        "name": "get_event",
+        "start_line": 6347,
+        "end_line": 6374,
+        "visibility": "pub"
+      },
+      {
+        "name": "normalize_concatenated_json_objects",
+        "start_line": 6376,
+        "end_line": 6403,
+        "visibility": "private"
+      },
+      {
+        "name": "read_mirror_events",
+        "start_line": 6405,
+        "end_line": 6442,
+        "visibility": "private"
+      },
+      {
+        "name": "summarize_event_log",
+        "start_line": 6444,
+        "end_line": 6481,
+        "visibility": "private"
+      },
+      {
+        "name": "first_event_mismatch",
+        "start_line": 6483,
+        "end_line": 6502,
+        "visibility": "private"
+      },
+      {
+        "name": "validate_mirror_recovery_source",
+        "start_line": 6504,
+        "end_line": 6547,
+        "visibility": "private"
+      },
+      {
+        "name": "timestamp_to_nanos",
+        "start_line": 6549,
+        "end_line": 6553,
+        "visibility": "private"
+      },
+      {
+        "name": "sql_text_expr",
+        "start_line": 6555,
+        "end_line": 6561,
+        "visibility": "private"
+      },
+      {
+        "name": "sql_optional_uuid_expr",
+        "start_line": 6563,
+        "end_line": 6568,
+        "visibility": "private"
+      },
+      {
+        "name": "sqlite_exec",
+        "start_line": 6570,
+        "end_line": 6629,
+        "visibility": "private"
+      },
+      {
+        "name": "build_sqlite_recovery_sql",
+        "start_line": 6631,
+        "end_line": 6688,
+        "visibility": "private"
+      },
+      {
+        "name": "events_verify",
+        "start_line": 6690,
+        "end_line": 6720,
+        "visibility": "pub"
+      },
+      {
+        "name": "events_recover_from_mirror",
+        "start_line": 6722,
+        "end_line": 6875,
+        "visibility": "pub"
+      }
+    ],
+    "graph": [
+      {
+        "name": "list_graphs",
+        "start_line": 2343,
+        "end_line": 2358,
+        "visibility": "pub"
+      },
+      {
+        "name": "graph_snapshot_path",
+        "start_line": 4458,
+        "end_line": 4461,
+        "visibility": "private"
+      },
+      {
+        "name": "read_graph_snapshot_artifact",
+        "start_line": 4474,
+        "end_line": 4499,
+        "visibility": "private"
+      },
+      {
+        "name": "resolve_repo_head_commit",
+        "start_line": 4501,
+        "end_line": 4523,
+        "visibility": "private"
+      },
+      {
+        "name": "aggregate_codegraph_stats",
+        "start_line": 4525,
+        "end_line": 4541,
+        "visibility": "private"
+      },
+      {
+        "name": "compute_snapshot_fingerprint",
+        "start_line": 4543,
+        "end_line": 4556,
+        "visibility": "private"
+      },
+      {
+        "name": "ensure_codegraph_scope_contract",
+        "start_line": 4558,
+        "end_line": 4618,
+        "visibility": "private"
+      },
+      {
+        "name": "append_graph_snapshot_failed_event",
+        "start_line": 11120,
+        "end_line": 11139,
+        "visibility": "private"
+      },
+      {
+        "name": "trigger_graph_snapshot_refresh",
+        "start_line": 11141,
+        "end_line": 11151,
+        "visibility": "private"
+      },
+      {
+        "name": "graph_snapshot_refresh",
+        "start_line": 11153,
+        "end_line": 11451,
+        "visibility": "pub"
+      },
+      {
+        "name": "append_graph_query_executed_event",
+        "start_line": 11453,
+        "end_line": 11488,
+        "visibility": "private"
+      },
+      {
+        "name": "append_graph_query_event_for_native_tool_call",
+        "start_line": 11490,
+        "end_line": 11527,
+        "visibility": "private"
+      },
+      {
+        "name": "map_graph_query_error",
+        "start_line": 11529,
+        "end_line": 11549,
+        "visibility": "private"
+      },
+      {
+        "name": "encode_runtime_graph_query_gate_error",
+        "start_line": 11551,
+        "end_line": 11567,
+        "visibility": "private"
+      },
+      {
+        "name": "set_native_graph_query_runtime_env",
+        "start_line": 11569,
+        "end_line": 11605,
+        "visibility": "private"
+      },
+      {
+        "name": "graph_query_execute",
+        "start_line": 11607,
+        "end_line": 11663,
+        "visibility": "pub"
+      },
+      {
+        "name": "ensure_graph_snapshot_current_for_constitution",
+        "start_line": 11665,
+        "end_line": 11789,
+        "visibility": "private"
+      },
+      {
+        "name": "normalize_graph_path",
+        "start_line": 11791,
+        "end_line": 11797,
+        "visibility": "private"
+      },
+      {
+        "name": "path_in_partition",
+        "start_line": 11799,
+        "end_line": 11807,
+        "visibility": "private"
+      },
+      {
+        "name": "graph_facts_from_snapshot",
+        "start_line": 11809,
+        "end_line": 11911,
+        "visibility": "private"
+      },
+      {
+        "name": "evaluate_constitution_rules",
+        "start_line": 11913,
+        "end_line": 12098,
+        "visibility": "private"
+      },
+      {
+        "name": "append_constitution_violation_events",
+        "start_line": 12100,
+        "end_line": 12131,
+        "visibility": "private"
+      },
+      {
+        "name": "run_constitution_check",
+        "start_line": 12133,
+        "end_line": 12243,
+        "visibility": "private"
+      },
+      {
+        "name": "enforce_constitution_gate",
+        "start_line": 12245,
+        "end_line": 12285,
+        "visibility": "private"
+      },
+      {
+        "name": "get_graph",
+        "start_line": 14293,
+        "end_line": 14310,
+        "visibility": "pub"
+      },
+      {
+        "name": "create_graph",
+        "start_line": 14312,
+        "end_line": 14392,
+        "visibility": "pub"
+      },
+      {
+        "name": "add_graph_dependency",
+        "start_line": 14394,
+        "end_line": 14516,
+        "visibility": "pub"
+      },
+      {
+        "name": "add_graph_task_check",
+        "start_line": 14518,
+        "end_line": 14587,
+        "visibility": "pub"
+      },
+      {
+        "name": "validate_graph_issues",
+        "start_line": 14589,
+        "end_line": 14651,
+        "visibility": "private"
+      },
+      {
+        "name": "validate_graph",
+        "start_line": 14653,
+        "end_line": 14661,
+        "visibility": "pub"
+      },
+      {
+        "name": "delete_graph",
+        "start_line": 14663,
+        "end_line": 14700,
+        "visibility": "pub"
+      }
+    ],
+    "worktree": [
+      {
+        "name": "detect_git_operations",
+        "start_line": 3378,
+        "end_line": 3386,
+        "visibility": "private"
+      },
+      {
+        "name": "detect_commits_created",
+        "start_line": 3388,
+        "end_line": 3413,
+        "visibility": "private"
+      },
+      {
+        "name": "detect_branches_created",
+        "start_line": 3415,
+        "end_line": 3436,
+        "visibility": "private"
+      },
+      {
+        "name": "parse_git_status_paths",
+        "start_line": 3438,
+        "end_line": 3463,
+        "visibility": "private"
+      },
+      {
+        "name": "repo_git_head",
+        "start_line": 3515,
+        "end_line": 3524,
+        "visibility": "private"
+      },
+      {
+        "name": "repo_status_lines",
+        "start_line": 3526,
+        "end_line": 3555,
+        "visibility": "private"
+      },
+      {
+        "name": "list_tmp_entries",
+        "start_line": 3557,
+        "end_line": 3568,
+        "visibility": "private"
+      },
+      {
+        "name": "write_scope_baseline_artifact",
+        "start_line": 3570,
+        "end_line": 3593,
+        "visibility": "private"
+      },
+      {
+        "name": "read_scope_baseline_artifact",
+        "start_line": 3595,
+        "end_line": 3610,
+        "visibility": "private"
+      },
+      {
+        "name": "capture_scope_baseline_for_attempt",
+        "start_line": 3612,
+        "end_line": 3640,
+        "visibility": "private"
+      },
+      {
+        "name": "parse_scope_trace_written_paths",
+        "start_line": 3709,
+        "end_line": 3752,
+        "visibility": "private"
+      },
+      {
+        "name": "scope_trace_is_ignored",
+        "start_line": 3754,
+        "end_line": 3778,
+        "visibility": "private"
+      },
+      {
+        "name": "artifacts_dir",
+        "start_line": 3957,
+        "end_line": 3959,
+        "visibility": "private"
+      },
+      {
+        "name": "baselines_dir",
+        "start_line": 3961,
+        "end_line": 3963,
+        "visibility": "private"
+      },
+      {
+        "name": "baseline_dir",
+        "start_line": 3965,
+        "end_line": 3967,
+        "visibility": "private"
+      },
+      {
+        "name": "baseline_json_path",
+        "start_line": 3969,
+        "end_line": 3971,
+        "visibility": "private"
+      },
+      {
+        "name": "baseline_files_dir",
+        "start_line": 3973,
+        "end_line": 3975,
+        "visibility": "private"
+      },
+      {
+        "name": "diffs_dir",
+        "start_line": 3977,
+        "end_line": 3979,
+        "visibility": "private"
+      },
+      {
+        "name": "diff_json_path",
+        "start_line": 3981,
+        "end_line": 3983,
+        "visibility": "private"
+      },
+      {
+        "name": "scope_traces_dir",
+        "start_line": 3985,
+        "end_line": 3987,
+        "visibility": "private"
+      },
+      {
+        "name": "scope_trace_path",
+        "start_line": 3989,
+        "end_line": 3991,
+        "visibility": "private"
+      },
+      {
+        "name": "scope_baselines_dir",
+        "start_line": 3993,
+        "end_line": 3995,
+        "visibility": "private"
+      },
+      {
+        "name": "scope_baseline_path",
+        "start_line": 3997,
+        "end_line": 4000,
+        "visibility": "private"
+      },
+      {
+        "name": "worktree_error_to_hivemind",
+        "start_line": 6091,
+        "end_line": 6113,
+        "visibility": "private"
+      },
+      {
+        "name": "worktree_managers_for_flow",
+        "start_line": 6125,
+        "end_line": 6150,
+        "visibility": "private"
+      },
+      {
+        "name": "worktree_manager_for_flow",
+        "start_line": 6152,
+        "end_line": 6166,
+        "visibility": "private"
+      },
+      {
+        "name": "worktree_list",
+        "start_line": 15254,
+        "end_line": 15269,
+        "visibility": "pub"
+      },
+      {
+        "name": "worktree_inspect",
+        "start_line": 15271,
+        "end_line": 15302,
+        "visibility": "pub"
+      },
+      {
+        "name": "worktree_cleanup",
+        "start_line": 15304,
+        "end_line": 15355,
+        "visibility": "pub"
+      }
+    ],
+    "governance": [
+      {
+        "name": "governance_projects_dir",
+        "start_line": 4002,
+        "end_line": 4004,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_project_root",
+        "start_line": 4006,
+        "end_line": 4008,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_global_root",
+        "start_line": 4010,
+        "end_line": 4012,
+        "visibility": "pub"
+      },
+      {
+        "name": "governance_artifact_locations",
+        "start_line": 4014,
+        "end_line": 4083,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_default_file_contents",
+        "start_line": 4085,
+        "end_line": 4091,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_artifact_projection_key",
+        "start_line": 4093,
+        "end_line": 4103,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_projection_for_location",
+        "start_line": 4105,
+        "end_line": 4112,
+        "visibility": "private"
+      },
+      {
+        "name": "next_governance_revision",
+        "start_line": 4114,
+        "end_line": 4128,
+        "visibility": "private"
+      },
+      {
+        "name": "ensure_governance_layout",
+        "start_line": 4130,
+        "end_line": 4191,
+        "visibility": "private"
+      },
+      {
+        "name": "legacy_governance_mappings",
+        "start_line": 4193,
+        "end_line": 4216,
+        "visibility": "private"
+      },
+      {
+        "name": "copy_dir_if_missing",
+        "start_line": 4218,
+        "end_line": 4264,
+        "visibility": "private"
+      },
+      {
+        "name": "copy_file_if_missing",
+        "start_line": 4266,
+        "end_line": 4310,
+        "visibility": "private"
+      },
+      {
+        "name": "validate_governance_identifier",
+        "start_line": 4312,
+        "end_line": 4342,
+        "visibility": "private"
+      },
+      {
+        "name": "normalized_string_list",
+        "start_line": 4344,
+        "end_line": 4358,
+        "visibility": "private"
+      },
+      {
+        "name": "read_governance_json",
+        "start_line": 4360,
+        "end_line": 4385,
+        "visibility": "private"
+      },
+      {
+        "name": "write_governance_json",
+        "start_line": 4387,
+        "end_line": 4407,
+        "visibility": "private"
+      },
+      {
+        "name": "ensure_global_governance_layout",
+        "start_line": 4409,
+        "end_line": 4427,
+        "visibility": "private"
+      },
+      {
+        "name": "default_constitution_artifact",
+        "start_line": 4429,
+        "end_line": 4440,
+        "visibility": "private"
+      },
+      {
+        "name": "constitution_path",
+        "start_line": 4442,
+        "end_line": 4445,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_constitution_location",
+        "start_line": 4447,
+        "end_line": 4456,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_graph_snapshot_location",
+        "start_line": 4463,
+        "end_line": 4472,
+        "visibility": "private"
+      },
+      {
+        "name": "validate_constitution",
+        "start_line": 4620,
+        "end_line": 4776,
+        "visibility": "private"
+      },
+      {
+        "name": "read_constitution_artifact",
+        "start_line": 4778,
+        "end_line": 4799,
+        "visibility": "private"
+      },
+      {
+        "name": "parse_constitution_yaml",
+        "start_line": 4801,
+        "end_line": 4812,
+        "visibility": "private"
+      },
+      {
+        "name": "write_constitution_artifact",
+        "start_line": 4814,
+        "end_line": 4830,
+        "visibility": "private"
+      },
+      {
+        "name": "constitution_digest",
+        "start_line": 4832,
+        "end_line": 4836,
+        "visibility": "private"
+      },
+      {
+        "name": "resolve_actor",
+        "start_line": 4838,
+        "end_line": 4857,
+        "visibility": "private"
+      },
+      {
+        "name": "project_document_path",
+        "start_line": 4859,
+        "end_line": 4863,
+        "visibility": "private"
+      },
+      {
+        "name": "global_skill_path",
+        "start_line": 4865,
+        "end_line": 4869,
+        "visibility": "private"
+      },
+      {
+        "name": "global_system_prompt_path",
+        "start_line": 4871,
+        "end_line": 4875,
+        "visibility": "private"
+      },
+      {
+        "name": "global_template_path",
+        "start_line": 4877,
+        "end_line": 4881,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_document_location",
+        "start_line": 4883,
+        "end_line": 4896,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_global_location",
+        "start_line": 4898,
+        "end_line": 4911,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_notepad_location",
+        "start_line": 4913,
+        "end_line": 4932,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_snapshot_root",
+        "start_line": 4934,
+        "end_line": 4938,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_snapshot_path",
+        "start_line": 4940,
+        "end_line": 4943,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_projection_key_from_parts",
+        "start_line": 4945,
+        "end_line": 4953,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_location_for_path",
+        "start_line": 4955,
+        "end_line": 5013,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_managed_file_locations",
+        "start_line": 5015,
+        "end_line": 5070,
+        "visibility": "private"
+      },
+      {
+        "name": "load_snapshot_manifest",
+        "start_line": 5072,
+        "end_line": 5100,
+        "visibility": "private"
+      },
+      {
+        "name": "list_snapshot_manifests",
+        "start_line": 5102,
+        "end_line": 5142,
+        "visibility": "private"
+      },
+      {
+        "name": "append_governance_upsert_for_location",
+        "start_line": 5144,
+        "end_line": 5170,
+        "visibility": "private"
+      },
+      {
+        "name": "append_governance_delete_for_location",
+        "start_line": 5172,
+        "end_line": 5193,
+        "visibility": "private"
+      },
+      {
+        "name": "read_project_document_artifact",
+        "start_line": 5195,
+        "end_line": 5236,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_document_attachment_states",
+        "start_line": 5238,
+        "end_line": 5261,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_artifact_revision",
+        "start_line": 5263,
+        "end_line": 5280,
+        "visibility": "private"
+      },
+      {
+        "name": "latest_template_instantiation_snapshot",
+        "start_line": 5282,
+        "end_line": 5315,
+        "visibility": "private"
+      },
+      {
+        "name": "attempt_manifest_hash_for_attempt",
+        "start_line": 5317,
+        "end_line": 5334,
+        "visibility": "private"
+      },
+      {
+        "name": "read_global_skill_artifact",
+        "start_line": 5817,
+        "end_line": 5849,
+        "visibility": "private"
+      },
+      {
+        "name": "read_global_system_prompt_artifact",
+        "start_line": 5851,
+        "end_line": 5885,
+        "visibility": "private"
+      },
+      {
+        "name": "read_global_template_artifact",
+        "start_line": 5887,
+        "end_line": 5919,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_json_paths",
+        "start_line": 5921,
+        "end_line": 5945,
+        "visibility": "private"
+      },
+      {
+        "name": "project_document_summary_from_artifact",
+        "start_line": 5947,
+        "end_line": 5963,
+        "visibility": "private"
+      },
+      {
+        "name": "project_governance_init",
+        "start_line": 9673,
+        "end_line": 9761,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_migrate",
+        "start_line": 9763,
+        "end_line": 9833,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_inspect",
+        "start_line": 9835,
+        "end_line": 9928,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_diagnose",
+        "start_line": 9930,
+        "end_line": 10249,
+        "visibility": "pub"
+      },
+      {
+        "name": "governance_projection_map_for_project",
+        "start_line": 10251,
+        "end_line": 10263,
+        "visibility": "private"
+      },
+      {
+        "name": "governance_snapshot_summary",
+        "start_line": 10265,
+        "end_line": 10277,
+        "visibility": "private"
+      },
+      {
+        "name": "project_governance_replay",
+        "start_line": 10279,
+        "end_line": 10347,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_snapshot_create",
+        "start_line": 10349,
+        "end_line": 10482,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_snapshot_list",
+        "start_line": 10484,
+        "end_line": 10510,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_snapshot_restore",
+        "start_line": 10512,
+        "end_line": 10648,
+        "visibility": "pub"
+      },
+      {
+        "name": "build_governance_repair_plan",
+        "start_line": 10650,
+        "end_line": 10928,
+        "visibility": "private"
+      },
+      {
+        "name": "project_governance_repair_detect",
+        "start_line": 10930,
+        "end_line": 10956,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_repair_preview",
+        "start_line": 10958,
+        "end_line": 10989,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_repair_apply",
+        "start_line": 10991,
+        "end_line": 11118,
+        "visibility": "pub"
+      },
+      {
+        "name": "constitution_check",
+        "start_line": 12287,
+        "end_line": 12299,
+        "visibility": "pub"
+      },
+      {
+        "name": "constitution_init",
+        "start_line": 12301,
+        "end_line": 12422,
+        "visibility": "pub"
+      },
+      {
+        "name": "constitution_show",
+        "start_line": 12424,
+        "end_line": 12455,
+        "visibility": "pub"
+      },
+      {
+        "name": "constitution_validate",
+        "start_line": 12457,
+        "end_line": 12513,
+        "visibility": "pub"
+      },
+      {
+        "name": "constitution_update",
+        "start_line": 12515,
+        "end_line": 12644,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_document_create",
+        "start_line": 12646,
+        "end_line": 12734,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_document_list",
+        "start_line": 12736,
+        "end_line": 12768,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_document_inspect",
+        "start_line": 12770,
+        "end_line": 12794,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_document_update",
+        "start_line": 12796,
+        "end_line": 12909,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_document_delete",
+        "start_line": 12911,
+        "end_line": 12953,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_attachment_set_document",
+        "start_line": 12955,
+        "end_line": 13009,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_notepad_create",
+        "start_line": 13011,
+        "end_line": 13068,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_notepad_show",
+        "start_line": 13070,
+        "end_line": 13104,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_notepad_update",
+        "start_line": 13106,
+        "end_line": 13150,
+        "visibility": "pub"
+      },
+      {
+        "name": "project_governance_notepad_delete",
+        "start_line": 13152,
+        "end_line": 13183,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_skill_create",
+        "start_line": 13185,
+        "end_line": 13249,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_skill_list",
+        "start_line": 13251,
+        "end_line": 13279,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_skill_inspect",
+        "start_line": 13281,
+        "end_line": 13297,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_skill_update",
+        "start_line": 13299,
+        "end_line": 13369,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_skill_delete",
+        "start_line": 13371,
+        "end_line": 13399,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_system_prompt_create",
+        "start_line": 13401,
+        "end_line": 13453,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_system_prompt_list",
+        "start_line": 13455,
+        "end_line": 13482,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_system_prompt_inspect",
+        "start_line": 13484,
+        "end_line": 13501,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_system_prompt_update",
+        "start_line": 13503,
+        "end_line": 13543,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_system_prompt_delete",
+        "start_line": 13545,
+        "end_line": 13575,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_template_create",
+        "start_line": 13577,
+        "end_line": 13657,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_template_list",
+        "start_line": 13659,
+        "end_line": 13688,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_template_inspect",
+        "start_line": 13690,
+        "end_line": 13711,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_template_update",
+        "start_line": 13713,
+        "end_line": 13808,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_template_delete",
+        "start_line": 13810,
+        "end_line": 13840,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_template_instantiate",
+        "start_line": 13842,
+        "end_line": 13906,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_notepad_create",
+        "start_line": 13908,
+        "end_line": 13955,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_notepad_show",
+        "start_line": 13957,
+        "end_line": 13985,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_notepad_update",
+        "start_line": 13987,
+        "end_line": 14023,
+        "visibility": "pub"
+      },
+      {
+        "name": "global_notepad_delete",
+        "start_line": 14025,
+        "end_line": 14046,
+        "visibility": "pub"
+      }
+    ],
+    "context": [
+      {
+        "name": "assemble_attempt_context",
+        "start_line": 5336,
+        "end_line": 5815,
+        "visibility": "private"
+      }
+    ],
+    "unmapped": [
+      {
+        "name": "project_for_flow",
+        "start_line": 6115,
+        "end_line": 6123,
+        "visibility": "private"
+      }
+    ],
+    "tasks": [
+      {
+        "name": "attach_repo",
+        "start_line": 9488,
+        "end_line": 9613,
+        "visibility": "pub"
+      },
+      {
+        "name": "detach_repo",
+        "start_line": 9615,
+        "end_line": 9671,
+        "visibility": "pub"
+      },
+      {
+        "name": "create_task",
+        "start_line": 14050,
+        "end_line": 14093,
+        "visibility": "pub"
+      },
+      {
+        "name": "list_tasks",
+        "start_line": 14095,
+        "end_line": 14116,
+        "visibility": "pub"
+      },
+      {
+        "name": "get_task",
+        "start_line": 14118,
+        "end_line": 14140,
+        "visibility": "pub"
+      },
+      {
+        "name": "update_task",
+        "start_line": 14142,
+        "end_line": 14190,
+        "visibility": "pub"
+      },
+      {
+        "name": "delete_task",
+        "start_line": 14239,
+        "end_line": 14291,
+        "visibility": "pub"
+      }
+    ]
+  }
+}

@@ -179,37 +179,9 @@
 - [x] Secret material handling is hardened at rest and during write/update operations
 - [x] Runtime components expose explicit readiness transitions
 
----
-
-## Sprint 58: Native Feature Parity Lift (`request_user_input`, `update_plan`, dynamic tools)
-
-**Goal:** Import high-value native runtime capabilities required for robust operator workflows.
-
-### 58.1 `request_user_input` native flow
-- [ ] Add structured native `request_user_input` tool contract
-- [ ] Add CLI/app-server interaction flow for multi-question response capture
-- [ ] Persist answers and link them to invocation/turn provenance
-
-### 58.2 `update_plan` native flow
-- [ ] Add `update_plan` native tool contract with explicit step/status model
-- [ ] Add projection/report support for plan timeline state across attempts
-- [ ] Enforce deterministic plan mutation rules (single in-progress item guard)
-
-### 58.3 Dynamic tools lifecycle
-- [ ] Add dynamic tool registration contract and per-thread/attempt association
-- [ ] Add dynamic tool call request/response event family with schema validation
-- [ ] Add replay-safe storage/reconstruction for dynamic tool definitions and outputs
-
-### 58.4 Exit Criteria
-- [ ] Native runtime supports structured human input and plan updates with full provenance
-- [ ] Dynamic tools are typed, validated, and replay-safe
-- [ ] Capability lift does not regress existing Phase 4 native invariants
-
----
-
 ## Phase 4.5 Completion Gates
 
-- [ ] Sprint 52-58 implementation and manual test reports are present under `@hivemind-test`
+- [ ] Sprint 52-57 implementation and manual test reports are present under `@hivemind-test`
 - [ ] Native runtime hardening controls are represented in config/docs/runbooks
 - [ ] Event/replay determinism remains intact with new hardening events
 - [ ] Compatibility with external adapter fallback paths remains non-regressed

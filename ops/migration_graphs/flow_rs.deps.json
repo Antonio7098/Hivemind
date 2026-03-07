@@ -1,0 +1,157 @@
+{
+  "source": "src/core/registry/flow.rs",
+  "function_count": 69,
+  "entry": [
+    "create_flow",
+    "tick_flow"
+  ],
+  "missing_entry": [],
+  "selected_count": 36,
+  "selected": [
+    "attempt_runtime_outcome",
+    "auto_progress_flow",
+    "build_retry_context",
+    "can_auto_run_task",
+    "capture_and_store_baseline",
+    "checkout_and_clean_worktree",
+    "complete_task_execution",
+    "compute_and_store_diff",
+    "create_flow",
+    "default_base_ref_for_repo",
+    "emit_task_execution_completion_events",
+    "emit_task_execution_frozen",
+    "ensure_task_worktree",
+    "ensure_task_worktree_status",
+    "flow_for_task",
+    "get_flow",
+    "git_ref_exists",
+    "inspect_task_worktree",
+    "inspect_task_worktrees",
+    "maybe_autostart_dependent_flows",
+    "normalized_checkpoint_ids",
+    "process_verifying_task",
+    "resolve_git_ref",
+    "resolve_latest_attempt_with_diff",
+    "resolve_latest_attempt_without_diff",
+    "resolve_task_frozen_commit_sha",
+    "run_check_command",
+    "start_flow",
+    "start_task_execution",
+    "tick_flow",
+    "tick_flow_once",
+    "truncate",
+    "unmet_flow_dependencies",
+    "verify_repository_scope",
+    "verify_scope_environment_baseline",
+    "verify_scope_trace_writes"
+  ],
+  "graph": {
+    "attempt_runtime_outcome": [],
+    "auto_progress_flow": [
+      "can_auto_run_task",
+      "get_flow",
+      "tick_flow"
+    ],
+    "build_retry_context": [
+      "attempt_runtime_outcome",
+      "truncate"
+    ],
+    "can_auto_run_task": [],
+    "capture_and_store_baseline": [],
+    "checkout_and_clean_worktree": [],
+    "complete_task_execution": [
+      "auto_progress_flow",
+      "compute_and_store_diff",
+      "emit_task_execution_completion_events",
+      "flow_for_task",
+      "get_flow",
+      "inspect_task_worktree",
+      "resolve_latest_attempt_without_diff"
+    ],
+    "compute_and_store_diff": [],
+    "create_flow": [
+      "get_flow"
+    ],
+    "default_base_ref_for_repo": [
+      "git_ref_exists"
+    ],
+    "emit_task_execution_completion_events": [],
+    "emit_task_execution_frozen": [],
+    "ensure_task_worktree": [
+      "default_base_ref_for_repo",
+      "ensure_task_worktree_status"
+    ],
+    "ensure_task_worktree_status": [],
+    "flow_for_task": [],
+    "get_flow": [],
+    "git_ref_exists": [],
+    "inspect_task_worktree": [],
+    "inspect_task_worktrees": [],
+    "maybe_autostart_dependent_flows": [
+      "start_flow",
+      "unmet_flow_dependencies"
+    ],
+    "normalized_checkpoint_ids": [],
+    "process_verifying_task": [
+      "emit_task_execution_frozen",
+      "get_flow",
+      "inspect_task_worktree",
+      "maybe_autostart_dependent_flows",
+      "resolve_latest_attempt_with_diff",
+      "resolve_task_frozen_commit_sha",
+      "run_check_command",
+      "verify_repository_scope",
+      "verify_scope_environment_baseline",
+      "verify_scope_trace_writes"
+    ],
+    "resolve_git_ref": [],
+    "resolve_latest_attempt_with_diff": [],
+    "resolve_latest_attempt_without_diff": [],
+    "resolve_task_frozen_commit_sha": [
+      "resolve_git_ref"
+    ],
+    "run_check_command": [],
+    "start_flow": [
+      "auto_progress_flow",
+      "get_flow",
+      "unmet_flow_dependencies"
+    ],
+    "start_task_execution": [
+      "capture_and_store_baseline",
+      "ensure_task_worktree",
+      "flow_for_task",
+      "normalized_checkpoint_ids"
+    ],
+    "tick_flow": [
+      "can_auto_run_task",
+      "get_flow",
+      "process_verifying_task",
+      "tick_flow_once"
+    ],
+    "tick_flow_once": [
+      "build_retry_context",
+      "can_auto_run_task",
+      "checkout_and_clean_worktree",
+      "complete_task_execution",
+      "default_base_ref_for_repo",
+      "ensure_task_worktree",
+      "get_flow",
+      "inspect_task_worktrees",
+      "maybe_autostart_dependent_flows",
+      "normalized_checkpoint_ids",
+      "process_verifying_task",
+      "start_task_execution"
+    ],
+    "truncate": [],
+    "unmet_flow_dependencies": [],
+    "verify_repository_scope": [
+      "inspect_task_worktrees"
+    ],
+    "verify_scope_environment_baseline": [
+      "inspect_task_worktrees"
+    ],
+    "verify_scope_trace_writes": [
+      "inspect_task_worktrees"
+    ]
+  }
+}

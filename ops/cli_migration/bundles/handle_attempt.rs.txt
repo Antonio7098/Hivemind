@@ -1,0 +1,50 @@
+// function: handle_attempt
+// target: src/cli/handlers/attempt.rs
+// unresolved helpers (main.rs-local):
+// - get_registry
+
+fn handle_attempt(cmd: AttemptCommands, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(format) else {
+        return ExitCode::Error;
+    };
+
+    match cmd {
+        AttemptCommands::List(args) => {
+            match registry.list_attempts(args.flow.as_deref(), args.task.as_deref(), args.limit) {
+                Ok(attempts) => match format {
+                    OutputFormat::Table => {
+                        if attempts.is_empty() {
+                            println!("No attempts found.");
+                        } else {
+                            println!(
+                                "{:<36}  {:<36}  {:<36}  {:<8}  CHECKPOINTS",
+                                "ATTEMPT", "FLOW", "TASK", "NUMBER"
+                            );
+                            println!("{}", "-".repeat(170));
+                            for attempt in attempts {
+                                println!(
+                                    "{:<36}  {:<36}  {:<36}  {:<8}  {}",
+                                    attempt.attempt_id,
+                                    attempt.flow_id,
+                                    attempt.task_id,
+                                    attempt.attempt_number,
+                                    if attempt.all_checkpoints_completed {
+                                        "all_completed"
+                                    } else {
+                                        "incomplete"
+                                    }
+                                );
+                            }
+                        }
+                        ExitCode::Success
+                    }
+                    _ => output(&attempts, format)
+                        .map(|()| ExitCode::Success)
+                        .unwrap_or(ExitCode::Error),
+                },
+                Err(e) => output_error(&e, format),
+            }
+        }
+        AttemptCommands::Inspect(args) => handle_attempt_inspect(&registry, &args, format),
+    }
+}
