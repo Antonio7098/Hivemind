@@ -333,11 +333,28 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":7,"cached_input_
     assert!(report.stderr.contains("[codex.json]"));
     assert_eq!(
         report.structured_runtime_observations,
-        vec![StructuredRuntimeObservation::CommandCompleted {
-            stream: RuntimeOutputStream::Stdout,
-            command: "/bin/bash -lc pwd".to_string(),
-            exit_code: Some(0),
-            output: Some("/tmp/runtime\n".to_string()),
-        }]
+        vec![
+            StructuredRuntimeObservation::SessionObserved {
+                stream: RuntimeOutputStream::Stdout,
+                adapter_name: "codex".to_string(),
+                session_id: "thread-1".to_string(),
+            },
+            StructuredRuntimeObservation::TurnCompleted {
+                stream: RuntimeOutputStream::Stdout,
+                adapter_name: "codex".to_string(),
+                ordinal: 1,
+                provider_session_id: Some("thread-1".to_string()),
+                provider_turn_id: None,
+                git_ref: None,
+                commit_sha: None,
+                summary: None,
+            },
+            StructuredRuntimeObservation::CommandCompleted {
+                stream: RuntimeOutputStream::Stdout,
+                command: "/bin/bash -lc pwd".to_string(),
+                exit_code: Some(0),
+                output: Some("/tmp/runtime\n".to_string()),
+            },
+        ]
     );
 }
