@@ -80,8 +80,8 @@ pub(crate) fn transform_json_output(
     }
 
     ParsedJsonAdapterOutput {
-        stdout: join_lines(stdout_lines),
-        stderr: combine_outputs(raw_stderr, &join_lines(stderr_lines)),
+        stdout: join_lines(&stdout_lines),
+        stderr: combine_outputs(raw_stderr, &join_lines(&stderr_lines)),
         parsed_event_count,
         structured_runtime_observations,
     }
@@ -356,7 +356,7 @@ fn extract_command_lines(value: &str) -> Vec<String> {
         .collect()
 }
 
-fn join_lines(lines: Vec<String>) -> String {
+fn join_lines(lines: &[String]) -> String {
     if lines.is_empty() {
         String::new()
     } else {

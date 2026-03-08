@@ -66,7 +66,7 @@ impl Registry {
                 cfg.model = runtime.model.clone().or(cfg.model);
                 cfg.base.args = runtime.args;
                 cfg.base.env = runtime.env;
-                cfg.base.resume_session_id = resume_session_id.clone();
+                cfg.base.resume_session_id.clone_from(&resume_session_id);
                 cfg.base.timeout = timeout;
                 Ok(SelectedRuntimeAdapter::OpenCode(
                     crate::adapters::opencode::OpenCodeAdapter::new(cfg),
@@ -81,7 +81,7 @@ impl Registry {
                     runtime.args
                 };
                 cfg.base.env = runtime.env;
-                cfg.base.resume_session_id = resume_session_id.clone();
+                cfg.base.resume_session_id.clone_from(&resume_session_id);
                 cfg.base.timeout = timeout;
                 Ok(SelectedRuntimeAdapter::Codex(CodexAdapter::new(cfg)))
             }
@@ -104,7 +104,7 @@ impl Registry {
                 cfg.model = runtime.model;
                 cfg.base.args = runtime.args;
                 cfg.base.env = runtime.env;
-                cfg.base.resume_session_id = resume_session_id.clone();
+                cfg.base.resume_session_id.clone_from(&resume_session_id);
                 cfg.base.timeout = timeout;
                 Ok(SelectedRuntimeAdapter::Kilo(KiloAdapter::new(cfg)))
             }

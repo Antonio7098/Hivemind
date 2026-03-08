@@ -267,7 +267,14 @@ impl WorktreeManager {
     pub fn restore_hidden_snapshot_ref(&self, worktree_path: &Path, reference: &str) -> Result<()> {
         let restore = Command::new("git")
             .current_dir(worktree_path)
-            .args(["restore", "--source", reference, "--staged", "--worktree", ":/"])
+            .args([
+                "restore",
+                "--source",
+                reference,
+                "--staged",
+                "--worktree",
+                ":/",
+            ])
             .output()?;
         if !restore.status.success() {
             return Err(WorktreeError::GitError(

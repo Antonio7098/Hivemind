@@ -201,7 +201,9 @@ impl ChannelReader {
 impl Read for ChannelReader {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         loop {
-            let pos = self.current.position() as usize;
+            let pos = usize::try_from(self.current.position()).map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "cursor position overflow")
+            })?;
             let backing = self.current.get_ref();
             if pos < backing.len() {
                 return self.current.read(buf);
@@ -231,14 +233,17 @@ pub fn serve(config: &ServeConfig) -> Result<()> {
         };
 
         if method == ApiMethod::Get && url.starts_with("/api/runtime-stream/stream") {
-            match Registry::open().and_then(|registry| build_runtime_stream_sse_response(&url, &registry)) {
+            match Registry::open()
+                .and_then(|registry| build_runtime_stream_sse_response(&url, &registry))
+            {
                 Ok(response) => {
                     let _ = req.respond(response);
                 }
                 Err(e) => {
                     let wrapped = CliResponse::<()>::error(&e);
-                    let mut response = ApiResponse::json(500, &wrapped)
-                        .unwrap_or_else(|_| ApiResponse::text(500, "text/plain", "internal error\n"));
+                    let mut response = ApiResponse::json(500, &wrapped).unwrap_or_else(|_| {
+                        ApiResponse::text(500, "text/plain", "internal error\n")
+                    });
                     response.extra_headers.extend(cors_headers());
                     let _ = req.respond(api_response_to_tiny(response));
                 }

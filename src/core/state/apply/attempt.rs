@@ -174,7 +174,10 @@ impl AppState {
                 summary,
             } => {
                 if let Some(attempt) = self.attempts.get_mut(attempt_id) {
-                    let exists = attempt.turn_refs.iter().any(|turn| turn.ordinal == *ordinal);
+                    let exists = attempt
+                        .turn_refs
+                        .iter()
+                        .any(|turn| turn.ordinal == *ordinal);
                     if !exists {
                         attempt.turn_refs.push(AttemptTurnRef {
                             ordinal: *ordinal,

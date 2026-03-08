@@ -165,7 +165,7 @@ impl Registry {
         let reference = turn_ref
             .git_ref
             .clone()
-            .or(turn_ref.commit_sha.clone())
+            .or_else(|| turn_ref.commit_sha.clone())
             .ok_or_else(|| {
                 HivemindError::user(
                     "turn_ref_missing_reference",
@@ -176,9 +176,9 @@ impl Registry {
 
         let state = self.state()?;
         let manager = Self::worktree_manager_for_flow(&flow, &state)?;
-        let status = manager
-            .inspect(flow.id, attempt.task_id)
-            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref"))?;
+        let status = manager.inspect(flow.id, attempt.task_id).map_err(|e| {
+            Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref")
+        })?;
         if !status.is_worktree {
             return Err(HivemindError::user(
                 "worktree_not_found",
@@ -187,18 +187,20 @@ impl Registry {
             ));
         }
 
-        let had_local_changes = manager
-            .has_uncommitted_changes(&status.path)
-            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref"))?;
-        let head_before = manager
-            .worktree_head(&status.path)
-            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref"))?;
+        let had_local_changes = manager.has_uncommitted_changes(&status.path).map_err(|e| {
+            Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref")
+        })?;
+        let head_before = manager.worktree_head(&status.path).map_err(|e| {
+            Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref")
+        })?;
         manager
             .restore_hidden_snapshot_ref(&status.path, &reference)
-            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref"))?;
-        let head_after = manager
-            .worktree_head(&status.path)
-            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref"))?;
+            .map_err(|e| {
+                Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref")
+            })?;
+        let head_after = manager.worktree_head(&status.path).map_err(|e| {
+            Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref")
+        })?;
 
         self.append_event(
             Event::new(

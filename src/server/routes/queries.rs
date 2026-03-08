@@ -95,7 +95,9 @@ pub(super) fn handle_get(
                     })
                 })
                 .transpose()?;
-            super::json_ok(list_runtime_stream_items(registry, flow_id, attempt_id, limit)?)?
+            super::json_ok(list_runtime_stream_items(
+                registry, flow_id, attempt_id, limit,
+            )?)?
         }
         "/api/verify/results" => {
             let query = parse_query(url);
@@ -157,14 +159,13 @@ pub(super) fn handle_get(
                 started_at: attempt.started_at,
                 baseline_id: attempt.baseline_id.map(|v| v.to_string()),
                 diff_id: attempt.diff_id.map(|v| v.to_string()),
-                runtime_session: attempt
-                    .runtime_session
-                    .as_ref()
-                    .map(|session| AttemptRuntimeSessionView {
+                runtime_session: attempt.runtime_session.as_ref().map(|session| {
+                    AttemptRuntimeSessionView {
                         adapter_name: session.adapter_name.clone(),
                         session_id: session.session_id.clone(),
                         discovered_at: session.discovered_at,
-                    }),
+                    }
+                }),
                 turn_refs: attempt
                     .turn_refs
                     .iter()

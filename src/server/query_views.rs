@@ -62,6 +62,7 @@ pub(super) fn list_runtime_stream_items(
     Ok(items)
 }
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn runtime_stream_item(event: Event) -> Option<RuntimeStreamItemView> {
     let sequence = event.metadata.sequence.unwrap_or(0);
     let flow_id = event
@@ -104,9 +105,7 @@ pub(super) fn runtime_stream_item(event: Event) -> Option<RuntimeStreamItemView>
 
     match event.payload {
         EventPayload::RuntimeOutputChunk {
-            stream,
-            content,
-            ..
+            stream, content, ..
         } => mk(
             "output_chunk",
             Some(stream),
@@ -114,7 +113,9 @@ pub(super) fn runtime_stream_item(event: Event) -> Option<RuntimeStreamItemView>
             Some(content.clone()),
             json!({"content": content}),
         ),
-        EventPayload::RuntimeNarrativeOutputObserved { stream, content, .. } => mk(
+        EventPayload::RuntimeNarrativeOutputObserved {
+            stream, content, ..
+        } => mk(
             "narrative",
             Some(stream),
             Some("Narrative".to_string()),
@@ -194,7 +195,7 @@ pub(super) fn runtime_stream_item(event: Event) -> Option<RuntimeStreamItemView>
         } => mk(
             "turn",
             Some(stream),
-            Some(format!("{} turn {}", adapter_name, ordinal)),
+            Some(format!("{adapter_name} turn {ordinal}")),
             summary.clone(),
             json!({
                 "adapter_name": adapter_name,
@@ -299,8 +300,14 @@ mod tests {
         assert_eq!(item.kind, "turn");
         assert_eq!(item.sequence, 42);
         assert_eq!(item.flow_id.as_deref(), Some(flow_id.to_string().as_str()));
-        assert_eq!(item.attempt_id.as_deref(), Some(attempt_id.to_string().as_str()));
+        assert_eq!(
+            item.attempt_id.as_deref(),
+            Some(attempt_id.to_string().as_str())
+        );
         assert_eq!(item.data["ordinal"], 2);
-        assert_eq!(item.data["git_ref"], "refs/hivemind/transient/turns/task/attempt/turn-0002");
+        assert_eq!(
+            item.data["git_ref"],
+            "refs/hivemind/transient/turns/task/attempt/turn-0002"
+        );
     }
 }

@@ -64,7 +64,13 @@ impl Registry {
         runtime_for_adapter
             .env
             .insert("HIVEMIND_FLOW_ID".to_string(), flow.id.to_string());
-        attach_resume_session_if_supported(state, flow, task_id, attempt_id, &mut runtime_for_adapter);
+        attach_resume_session_if_supported(
+            state,
+            flow,
+            task_id,
+            attempt_id,
+            &mut runtime_for_adapter,
+        );
         runtime_for_adapter.env.insert(
             "HIVEMIND_PRIMARY_WORKTREE".to_string(),
             worktree_status.path.to_string_lossy().to_string(),
@@ -561,7 +567,10 @@ fn attach_resume_session_if_supported(
     attempt_id: Uuid,
     runtime_for_adapter: &mut ProjectRuntimeConfig,
 ) {
-    if !matches!(runtime_for_adapter.adapter_name.as_str(), "opencode" | "codex" | "kilo") {
+    if !matches!(
+        runtime_for_adapter.adapter_name.as_str(),
+        "opencode" | "codex" | "kilo"
+    ) {
         return;
     }
 
@@ -586,7 +595,8 @@ fn attach_resume_session_if_supported(
         })
         .filter_map(|attempt| {
             attempt.runtime_session.as_ref().and_then(|session| {
-                (session.adapter_name == runtime_for_adapter.adapter_name).then_some((attempt, session))
+                (session.adapter_name == runtime_for_adapter.adapter_name)
+                    .then_some((attempt, session))
             })
         })
         .max_by_key(|(attempt, _)| attempt.attempt_number);

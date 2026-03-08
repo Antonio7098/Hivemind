@@ -35,7 +35,11 @@ impl LiveJsonRuntimeTracker {
         worktree: PathBuf,
         env: &std::collections::HashMap<String, String>,
     ) -> Option<Self> {
-        matches!(flavor, CliCommandFlavor::OpenCodeFamily | CliCommandFlavor::Codex).then(|| Self {
+        matches!(
+            flavor,
+            CliCommandFlavor::OpenCodeFamily | CliCommandFlavor::Codex
+        )
+        .then(|| Self {
             flavor,
             adapter_name,
             worktree,
@@ -106,11 +110,7 @@ impl LiveJsonRuntimeTracker {
         }
     }
 
-    fn record_turn_completed(
-        &mut self,
-        provider_turn_id: Option<String>,
-        summary: Option<String>,
-    ) {
+    fn record_turn_completed(&mut self, provider_turn_id: Option<String>, summary: Option<String>) {
         self.next_turn_ordinal += 1;
         let ordinal = self.next_turn_ordinal;
         let (git_ref, commit_sha) = self.create_turn_ref(ordinal);
@@ -136,15 +136,15 @@ impl LiveJsonRuntimeTracker {
             .as_deref()
             .unwrap_or("unknown-task")
             .replace('/', "_");
-        let ref_name = format!(
-            "refs/hivemind/transient/turns/{task_segment}/{attempt_id}/turn-{ordinal:04}"
-        );
+        let ref_name =
+            format!("refs/hivemind/transient/turns/{task_segment}/{attempt_id}/turn-{ordinal:04}");
 
         let manager = match WorktreeManager::new(self.worktree.clone(), WorktreeConfig::default()) {
             Ok(manager) => manager,
             Err(error) => {
-                self.warnings
-                    .push(format!("turn ref initialization failed for turn {ordinal}: {error}"));
+                self.warnings.push(format!(
+                    "turn ref initialization failed for turn {ordinal}: {error}"
+                ));
                 return (None, None);
             }
         };
@@ -153,8 +153,9 @@ impl LiveJsonRuntimeTracker {
         match manager.create_hidden_snapshot_ref(&self.worktree, &ref_name, &message) {
             Ok(commit_sha) => (Some(ref_name), Some(commit_sha)),
             Err(error) => {
-                self.warnings
-                    .push(format!("turn ref snapshot failed for turn {ordinal}: {error}"));
+                self.warnings.push(format!(
+                    "turn ref snapshot failed for turn {ordinal}: {error}"
+                ));
                 (None, None)
             }
         }
@@ -179,14 +180,13 @@ fn read_stream_to_string(
     loop {
         line.clear();
         match reader.read_line(&mut line) {
-            Ok(0) => break,
+            Ok(0) | Err(_) => break,
             Ok(_) => {
                 if let Some(tracker) = tracker.as_mut() {
                     tracker.observe_stdout_line(&line);
                 }
                 out.push_str(&line);
             }
-            Err(_) => break,
         }
     }
     (out, tracker)
@@ -238,7 +238,7 @@ fn strip_codex_wrapper_args(args: &[String]) -> (Vec<String>, bool) {
 
     for arg in args {
         match arg.as_str() {
-            "exec" | "--json" => continue,
+            "exec" | "--json" => {}
             "-" | "--prompt" | "-p" => {
                 has_prompt_source = true;
                 filtered.push(arg.clone());
@@ -467,9 +467,8 @@ impl RuntimeAdapter for OpenCodeAdapter {
                 &self.config.base.env,
             );
 
-            let stdout_handle = std::thread::spawn(move || {
-                read_stream_to_string(stdout, stdout_tracker)
-            });
+            let stdout_handle =
+                std::thread::spawn(move || read_stream_to_string(stdout, stdout_tracker));
             let stderr_handle = std::thread::spawn(move || {
                 let (out, _) = read_stream_to_string(stderr, None);
                 out
@@ -608,7 +607,7 @@ mod tests {
                 .args(args)
                 .output()
                 .expect("run git command");
-            assert!(output.status.success(), "git {:?} failed", args);
+            assert!(output.status.success(), "git {args:?} failed");
         };
 
         run(&["init", "--initial-branch=main"]);
@@ -627,7 +626,10 @@ mod tests {
         std::fs::write(repo.join("turn.txt"), "turn one\n").expect("write turn file");
 
         let env = std::collections::HashMap::from([
-            ("HIVEMIND_ATTEMPT_ID".to_string(), Uuid::new_v4().to_string()),
+            (
+                "HIVEMIND_ATTEMPT_ID".to_string(),
+                Uuid::new_v4().to_string(),
+            ),
             ("HIVEMIND_TASK_ID".to_string(), Uuid::new_v4().to_string()),
         ]);
         let mut tracker = LiveJsonRuntimeTracker::new(
@@ -639,7 +641,9 @@ mod tests {
         .expect("tracker");
 
         tracker.observe_stdout_line(r#"{"type":"message_part_updated","sessionID":"sess-123"}"#);
-        tracker.observe_stdout_line(r#"{"type":"step_finish","sessionID":"sess-123","snapshot":"snap-1"}"#);
+        tracker.observe_stdout_line(
+            r#"{"type":"step_finish","sessionID":"sess-123","snapshot":"snap-1"}"#,
+        );
 
         let (observations, warnings) = tracker.finish();
         assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");

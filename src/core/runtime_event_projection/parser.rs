@@ -134,5 +134,7 @@ fn is_raw_provider_json_mirror_line(line: &str) -> bool {
         return false;
     };
     let label = &trimmed[1..end_bracket];
-    label.ends_with(".json")
+    std::path::Path::new(label)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
 }
