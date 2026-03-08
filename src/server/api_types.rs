@@ -21,7 +21,7 @@ pub(crate) use graphs::{
 };
 pub(crate) use operations::{
     CheckpointCompleteRequest, MergeApproveRequest, MergeExecuteRequest, MergePrepareRequest,
-    VerifyOverrideRequest, VerifyRunRequest, WorktreeCleanupRequest,
+    VerifyOverrideRequest, VerifyRunRequest, WorktreeCleanupRequest, WorktreeRestoreTurnRequest,
 };
 pub(crate) use projects::{
     ProjectAttachRepoRequest, ProjectCreateRequest, ProjectDeleteRequest, ProjectDetachRepoRequest,
@@ -31,4 +31,7 @@ pub(crate) use tasks::{
     TaskAbortRequest, TaskCloseRequest, TaskCreateRequest, TaskDeleteRequest, TaskIdRequest,
     TaskRetryRequest, TaskRuntimeSetRequest, TaskSetRunModeRequest, TaskUpdateRequest,
 };
-pub(crate) use views::{AttemptInspectView, VerifyResultsView};
+pub(crate) use views::{
+    AttemptInspectView, AttemptRuntimeSessionView, AttemptTurnRefView, RuntimeStreamEnvelope,
+    RuntimeStreamItemView, VerifyResultsView,
+};

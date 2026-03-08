@@ -1,4 +1,7 @@
 pub(super) fn parse_command(line: &str) -> Option<String> {
+    if is_raw_provider_json_mirror_line(line) {
+        return None;
+    }
     if let Some(rest) = line.find("Command: ").map(|idx| &line[idx..]) {
         let cmd = rest.trim_start_matches("Command: ").trim();
         if !cmd.is_empty() {
@@ -32,6 +35,9 @@ pub(super) fn parse_command(line: &str) -> Option<String> {
 }
 
 pub(super) fn parse_tool_name(line: &str) -> Option<String> {
+    if is_raw_provider_json_mirror_line(line) {
+        return None;
+    }
     if let Some(rest) = line.find("Tool: ").map(|idx| &line[idx..]) {
         let name = rest
             .trim_start_matches("Tool: ")
@@ -63,6 +69,9 @@ pub(super) fn parse_tool_name(line: &str) -> Option<String> {
 }
 
 pub(super) fn parse_todo_item(line: &str) -> Option<(String, bool)> {
+    if is_raw_provider_json_mirror_line(line) {
+        return None;
+    }
     for (prefix, completed) in [
         ("- [ ] ", false),
         ("* [ ] ", false),
@@ -95,6 +104,9 @@ pub(super) fn parse_todo_item(line: &str) -> Option<(String, bool)> {
 }
 
 pub(super) fn is_narrative_line(line: &str) -> bool {
+    if is_raw_provider_json_mirror_line(line) {
+        return false;
+    }
     let lower = line.to_lowercase();
     lower.starts_with("i ")
         || lower.starts_with("i'")
@@ -111,4 +123,18 @@ pub(super) fn is_narrative_line(line: &str) -> bool {
         || lower.starts_with("checking")
         || lower.starts_with("analyzing")
         || lower.starts_with("investigating")
+}
+
+fn is_raw_provider_json_mirror_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    if !trimmed.starts_with('[') {
+        return false;
+    }
+    let Some(end_bracket) = trimmed.find(']') else {
+        return false;
+    };
+    let label = &trimmed[1..end_bracket];
+    std::path::Path::new(label)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
 }

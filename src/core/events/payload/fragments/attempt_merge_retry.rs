@@ -225,3 +225,14 @@
         forced: bool,
         dry_run: bool,
     },
+    WorktreeTurnRefRestored {
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+        ordinal: u32,
+        #[serde(default)]
+        git_ref: Option<String>,
+        #[serde(default)]
+        commit_sha: Option<String>,
+        forced: bool,
+    },

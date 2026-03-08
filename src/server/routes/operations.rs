@@ -47,6 +47,16 @@ pub(super) fn handle_post(
             let req: WorktreeCleanupRequest = parse_json_body(body, "server:worktrees:cleanup")?;
             super::json_ok(registry.worktree_cleanup(&req.flow_id, req.force, req.dry_run)?)?
         }
+        "/api/worktrees/restore-turn" => {
+            let req: WorktreeRestoreTurnRequest =
+                parse_json_body(body, "server:worktrees:restore-turn")?;
+            super::json_ok(registry.worktree_restore_turn_ref(
+                &req.attempt_id,
+                req.ordinal,
+                req.confirm,
+                req.force,
+            )?)?
+        }
         _ => return Ok(None),
     };
 

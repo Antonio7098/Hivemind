@@ -118,5 +118,53 @@ pub fn handle_worktree(cmd: WorktreeCommands, format: OutputFormat) -> ExitCode 
                 Err(e) => output_error(&e, format),
             }
         }
+        WorktreeCommands::RestoreTurn(args) => {
+            match registry.worktree_restore_turn_ref(
+                &args.attempt_id,
+                args.ordinal,
+                args.confirm,
+                args.force,
+            ) {
+                Ok(result) => {
+                    match format {
+                        OutputFormat::Json => {
+                            let response = crate::cli::output::CliResponse::success(&result);
+                            if let Ok(json) = serde_json::to_string_pretty(&response) {
+                                println!("{json}");
+                            }
+                        }
+                        OutputFormat::Yaml => {
+                            let response = crate::cli::output::CliResponse::success(&result);
+                            if let Ok(yaml) = serde_yaml::to_string(&response) {
+                                print!("{yaml}");
+                            }
+                        }
+                        OutputFormat::Table => {
+                            println!(
+                                "Restored attempt {} turn {} into {}",
+                                result.attempt_id,
+                                result.ordinal,
+                                result.worktree_path.display()
+                            );
+                            println!("Task:     {}", result.task_id);
+                            println!("Flow:     {}", result.flow_id);
+                            if let Some(branch) = result.branch.as_deref() {
+                                println!("Branch:   {branch}");
+                            }
+                            if let Some(git_ref) = result.git_ref.as_deref() {
+                                println!("Ref:      {git_ref}");
+                            }
+                            if let Some(commit_sha) = result.commit_sha.as_deref() {
+                                println!("Commit:   {commit_sha}");
+                            }
+                            println!("HEAD:     {}", result.head_after);
+                            println!("Dirty:    {}", result.had_local_changes);
+                        }
+                    }
+                    ExitCode::Success
+                }
+                Err(e) => output_error(&e, format),
+            }
+        }
     }
 }

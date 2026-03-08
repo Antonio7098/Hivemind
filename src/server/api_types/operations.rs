@@ -47,3 +47,13 @@ pub(crate) struct WorktreeCleanupRequest {
     #[serde(default)]
     pub(crate) dry_run: bool,
 }
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct WorktreeRestoreTurnRequest {
+    pub(crate) attempt_id: String,
+    pub(crate) ordinal: u32,
+    #[serde(default)]
+    pub(crate) confirm: bool,
+    #[serde(default)]
+    pub(crate) force: bool,
+}

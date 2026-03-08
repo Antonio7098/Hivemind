@@ -88,10 +88,11 @@ EVENTS_JSON="$($HIVEMIND -f json events stream --flow "$FLOW_ID" --limit 500)"
 [[ "$EVENTS_JSON" == *"runtime_started"* ]]
 [[ "$EVENTS_JSON" == *"runtime_output_chunk"* ]]
 [[ "$EVENTS_JSON" == *"runtime_exited"* ]]
+[[ "$EVENTS_JSON" == *"[opencode.json]"* ]]
 
 PROJECTED_COUNT=0
 for EVENT_TYPE in \
-  runtime_command_observed \
+  runtime_command_completed \
   runtime_tool_call_observed \
   runtime_todo_snapshot_updated \
   runtime_narrative_output_observed
@@ -102,8 +103,13 @@ do
   fi
 done
 
-if [[ "$EVENTS_JSON" != *"runtime_command_observed"* ]]; then
-  echo "expected at least one runtime_command_observed event from real opencode output"
+if [[ "$EVENTS_JSON" != *"runtime_command_completed"* ]]; then
+  echo "expected at least one runtime_command_completed event from real opencode output"
+  exit 1
+fi
+
+if [[ "$EVENTS_JSON" == *"runtime_command_observed"* ]]; then
+  echo "did not expect heuristic runtime_command_observed for structured json runtime output"
   exit 1
 fi
 
@@ -112,7 +118,26 @@ if [ "$PROJECTED_COUNT" -eq 0 ]; then
   exit 1
 fi
 
+EVENTS_JSON="$EVENTS_JSON" python3 - <<'PY'
+import json
+import os
+
+data = json.loads(os.environ["EVENTS_JSON"])["data"]
+observed = [
+    event["payload"]
+    for event in data
+    if event["payload"]["type"] in {
+        "runtime_command_completed",
+        "runtime_tool_call_observed",
+        "runtime_todo_snapshot_updated",
+        "runtime_narrative_output_observed",
+    }
+]
+assert observed, "expected projected runtime observations"
+assert all(payload["stream"] == "stdout" for payload in observed), observed
+PY
+
 echo "=== Runtime projection event excerpt ==="
-awk '/runtime_(command_observed|tool_call_observed|todo_snapshot_updated|narrative_output_observed)/ {print; c++; if (c>=8) exit}' <<<"$EVENTS_JSON"
+awk '/runtime_(command_completed|tool_call_observed|todo_snapshot_updated|narrative_output_observed)/ {print; c++; if (c>=8) exit}' <<<"$EVENTS_JSON"
 
 echo "Real opencode projection events found."

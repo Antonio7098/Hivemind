@@ -2,7 +2,7 @@
 //!
 //! All state in Hivemind is derived by replaying events. This ensures
 //! determinism, idempotency, and complete observability.
-use super::events::{Event, EventPayload, RuntimeRole};
+use super::events::{Event, EventPayload, RuntimeOutputStream, RuntimeRole};
 use super::flow::{FlowState, RetryMode, RunMode, TaskExecState, TaskExecution, TaskFlow};
 use super::graph::{GraphState, TaskGraph};
 use super::scope::{RepoAccessMode, Scope};
@@ -44,6 +44,30 @@ pub struct AttemptCheckpoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttemptRuntimeSession {
+    pub adapter_name: String,
+    pub session_id: String,
+    pub discovered_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttemptTurnRef {
+    pub ordinal: u32,
+    pub adapter_name: String,
+    pub stream: RuntimeOutputStream,
+    #[serde(default)]
+    pub provider_session_id: Option<String>,
+    #[serde(default)]
+    pub provider_turn_id: Option<String>,
+    #[serde(default)]
+    pub git_ref: Option<String>,
+    #[serde(default)]
+    pub commit_sha: Option<String>,
+    #[serde(default)]
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttemptState {
     pub id: Uuid,
     pub flow_id: Uuid,
@@ -58,6 +82,10 @@ pub struct AttemptState {
     pub checkpoints: Vec<AttemptCheckpoint>,
     #[serde(default)]
     pub all_checkpoints_completed: bool,
+    #[serde(default)]
+    pub runtime_session: Option<AttemptRuntimeSession>,
+    #[serde(default)]
+    pub turn_refs: Vec<AttemptTurnRef>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

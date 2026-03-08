@@ -208,3 +208,14 @@ fn projects_markers_with_ansi_prefixes() {
         )
     }));
 }
+
+#[test]
+fn ignores_raw_provider_json_mirror_lines() {
+    let mut projector = RuntimeEventProjector::new();
+    let observed = projector.observe_chunk(
+        RuntimeOutputStream::Stderr,
+        "[opencode.json] {\"type\":\"text\",\"part\":{\"text\":\"$ cargo test\\nTool: grep\\n- [ ] collect logs\\nI will verify outputs now.\"}}\n",
+    );
+
+    assert!(observed.is_empty());
+}
