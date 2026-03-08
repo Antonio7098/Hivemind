@@ -262,12 +262,24 @@ printf '%s\n' '{"type":"step_finish","part":{"reason":"stop"}}'
     assert!(report.stderr.contains("[opencode.json]"));
     assert_eq!(
         report.structured_runtime_observations,
-        vec![StructuredRuntimeObservation::CommandCompleted {
-            stream: RuntimeOutputStream::Stdout,
-            command: "pwd".to_string(),
-            exit_code: None,
-            output: Some("/tmp/runtime\n".to_string()),
-        }]
+        vec![
+            StructuredRuntimeObservation::TurnCompleted {
+                stream: RuntimeOutputStream::Stdout,
+                adapter_name: "opencode".to_string(),
+                ordinal: 1,
+                provider_session_id: None,
+                provider_turn_id: None,
+                git_ref: None,
+                commit_sha: None,
+                summary: None,
+            },
+            StructuredRuntimeObservation::CommandCompleted {
+                stream: RuntimeOutputStream::Stdout,
+                command: "pwd".to_string(),
+                exit_code: None,
+                output: Some("/tmp/runtime\n".to_string()),
+            },
+        ]
     );
 }
 
