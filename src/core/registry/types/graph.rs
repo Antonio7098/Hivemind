@@ -1,6 +1,7 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize)]
@@ -40,6 +41,22 @@ pub struct WorktreeCleanupResult {
     pub cleaned_worktrees: usize,
     pub forced: bool,
     pub dry_run: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorktreeTurnRestoreResult {
+    pub flow_id: Uuid,
+    pub task_id: Uuid,
+    pub attempt_id: Uuid,
+    pub ordinal: u32,
+    pub git_ref: Option<String>,
+    pub commit_sha: Option<String>,
+    pub worktree_path: PathBuf,
+    pub branch: Option<String>,
+    pub head_before: String,
+    pub head_after: String,
+    pub had_local_changes: bool,
+    pub forced: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

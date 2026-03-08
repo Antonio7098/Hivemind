@@ -66,9 +66,7 @@ impl Registry {
         filter.project_id = project_id;
         filter.limit = Some(limit);
 
-        self.store.read(&filter).map_err(|e| {
-            HivemindError::system("event_read_failed", e.to_string(), "registry:list_events")
-        })
+        self.read_events(&filter)
     }
 
     /// Returns the registry configuration.

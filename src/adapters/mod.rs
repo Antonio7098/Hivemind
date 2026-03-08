@@ -49,6 +49,7 @@
 
 pub mod claude_code;
 pub mod codex;
+mod json_output;
 pub mod kilo;
 pub mod opencode;
 pub mod runtime;
@@ -75,14 +76,27 @@ pub fn runtime_descriptors() -> [RuntimeDescriptor; 5] {
             default_binary: "opencode",
             opencode_compatible: true,
             requires_binary: true,
-            capabilities: &["external_cli", "opencode_family", "interactive_transport"],
+            capabilities: &[
+                "external_cli",
+                "opencode_family",
+                "interactive_transport",
+                "structured_json_output",
+                "session_resume",
+                "interrupt_runtime",
+            ],
         },
         RuntimeDescriptor {
             adapter_name: "codex",
             default_binary: "codex",
             opencode_compatible: false,
             requires_binary: true,
-            capabilities: &["external_cli", "tool_events", "interactive_transport"],
+            capabilities: &[
+                "external_cli",
+                "tool_events",
+                "interactive_transport",
+                "structured_json_output",
+                "session_resume",
+            ],
         },
         RuntimeDescriptor {
             adapter_name: "claude-code",
@@ -96,7 +110,14 @@ pub fn runtime_descriptors() -> [RuntimeDescriptor; 5] {
             default_binary: "kilo",
             opencode_compatible: true,
             requires_binary: true,
-            capabilities: &["external_cli", "opencode_family", "interactive_transport"],
+            capabilities: &[
+                "external_cli",
+                "opencode_family",
+                "interactive_transport",
+                "structured_json_output",
+                "session_resume",
+                "interrupt_runtime",
+            ],
         },
         RuntimeDescriptor {
             adapter_name: "native",
@@ -110,6 +131,7 @@ pub fn runtime_descriptors() -> [RuntimeDescriptor; 5] {
                 "scope_policy_enforcement",
                 "deterministic_harness",
                 "provider_agnostic_contracts",
+                "interrupt_runtime",
             ],
         },
     ]

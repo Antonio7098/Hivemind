@@ -49,3 +49,6 @@ impl OpenCodeAdapter {
         format_execution_prompt(input)
     }
 }
+
+#[cfg(test)]
+mod tests;

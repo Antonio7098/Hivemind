@@ -99,6 +99,8 @@ Every runtime adapter **must** provide the following capabilities.
 - Stream or capture stdout/stderr
 - Emit structured runtime events
 - Attribute outputs to task and attempt
+- Preserve provider-native JSON output when available and project known event shapes into Hivemind-native observations
+- Surface provider session/turn boundaries when the runtime exposes them
 
 Hivemind does not parse reasoning, only observable output.
 
@@ -149,6 +151,10 @@ Wrapper adapters:
 - Pass task instructions
 - Allow the runtime to operate freely within scope
 - Observe outputs and filesystem changes
+- Prefer provider-native structured output modes when available (for example, OpenCode/Kilo `run --format json`, Codex `exec --json`)
+- Normalize known provider event shapes into Hivemind runtime observations without discarding raw provider output
+- Persist observed provider session IDs on attempts and automatically resume compatible runtimes on continue-style retries
+- Materialize transient hidden per-turn refs under `refs/hivemind/transient/turns/...` so wrapper execution remains reversible at turn granularity
 
 Interactive execution is deprecated in the CLI. Adapters may still expose
 interactive internals, but `flow tick --interactive` is no longer supported.
@@ -158,6 +164,31 @@ interactive internals, but `flow tick --interactive` is no longer supported.
 - The UI (if any) is a projection over those events and CLI-accessible capabilities
 
 Undo, retry, and rollback are handled mechanically via git and worktrees.
+
+Current wrapper capability advertising includes additive flags such as:
+
+- `structured_json_output`
+- `session_resume`
+- `interrupt_runtime`
+
+These flags describe runtime transport/observation affordances; they do not change TaskFlow orchestration semantics.
+
+For JSON-capable wrappers, runtime observation now happens in two layers:
+
+1. **Structured adapter transform**
+   - mirror each raw provider JSON line into stderr using a provider prefix such as `[opencode.json] ...` or `[codex.json] ...`
+   - preserve human-readable stdout/stderr capture for operators
+   - emit authoritative structured observations when the provider supplies explicit machine-readable facts
+2. **Normalized output projection**
+   - re-scan the normalized text stream to derive additive runtime events such as tool calls, todo snapshots, narrative lines, and file-change summaries
+
+Current authoritative structured observations include:
+
+- `RuntimeCommandCompleted` — preferred command event for structured JSON wrappers, including `exit_code` and `output` when the provider exposes them
+- `RuntimeSessionObserved` — provider session identifier captured for retry/session-resume continuity
+- `RuntimeTurnCompleted` — turn ordinal plus provider turn/session IDs and transient worktree snapshot refs
+
+When `RuntimeCommandCompleted` is available, the older heuristic `RuntimeCommandObserved` projection is suppressed for that same command so UIs and automation do not receive duplicate command records.
 
 ---
 

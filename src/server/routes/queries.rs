@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_lines)]
 
 use super::*;
+use uuid::Uuid;
 
 pub(super) fn handle_get(
     path: &str,
@@ -64,6 +65,38 @@ pub(super) fn handle_get(
             })?;
             super::json_ok(registry.get_event(event_id)?)?
         }
+        "/api/runtime-stream" => {
+            let query = parse_query(url);
+            let limit = query
+                .get("limit")
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(default_events_limit);
+            let flow_id = query
+                .get("flow_id")
+                .map(|value| {
+                    Uuid::parse_str(value).map_err(|e| {
+                        HivemindError::user(
+                            "invalid_flow_id",
+                            format!("Invalid flow_id: {e}"),
+                            "server:runtime_stream",
+                        )
+                    })
+                })
+                .transpose()?;
+            let attempt_id = query
+                .get("attempt_id")
+                .map(|value| {
+                    Uuid::parse_str(value).map_err(|e| {
+                        HivemindError::user(
+                            "invalid_attempt_id",
+                            format!("Invalid attempt_id: {e}"),
+                            "server:runtime_stream",
+                        )
+                    })
+                })
+                .transpose()?;
+            super::json_ok(list_runtime_stream_items(registry, flow_id, attempt_id, limit)?)?
+        }
         "/api/verify/results" => {
             let query = parse_query(url);
             let attempt_id = query.get("attempt_id").ok_or_else(|| {
@@ -124,6 +157,28 @@ pub(super) fn handle_get(
                 started_at: attempt.started_at,
                 baseline_id: attempt.baseline_id.map(|v| v.to_string()),
                 diff_id: attempt.diff_id.map(|v| v.to_string()),
+                runtime_session: attempt
+                    .runtime_session
+                    .as_ref()
+                    .map(|session| AttemptRuntimeSessionView {
+                        adapter_name: session.adapter_name.clone(),
+                        session_id: session.session_id.clone(),
+                        discovered_at: session.discovered_at,
+                    }),
+                turn_refs: attempt
+                    .turn_refs
+                    .iter()
+                    .map(|turn| AttemptTurnRefView {
+                        ordinal: turn.ordinal,
+                        adapter_name: turn.adapter_name.clone(),
+                        stream: format!("{:?}", turn.stream).to_lowercase(),
+                        provider_session_id: turn.provider_session_id.clone(),
+                        provider_turn_id: turn.provider_turn_id.clone(),
+                        git_ref: turn.git_ref.clone(),
+                        commit_sha: turn.commit_sha.clone(),
+                        summary: turn.summary.clone(),
+                    })
+                    .collect(),
                 diff,
             })?
         }

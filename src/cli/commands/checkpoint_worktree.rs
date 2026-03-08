@@ -37,6 +37,8 @@ pub enum WorktreeCommands {
     Inspect(WorktreeInspectArgs),
     /// Remove worktrees for a flow (best-effort)
     Cleanup(WorktreeCleanupArgs),
+    /// Restore a task worktree to a stored transient turn ref for an attempt
+    RestoreTurn(WorktreeRestoreTurnArgs),
 }
 #[derive(Args)]
 pub struct WorktreeListArgs {
@@ -58,4 +60,19 @@ pub struct WorktreeCleanupArgs {
     /// Show what would be cleaned without removing worktrees
     #[arg(long, default_value_t = false)]
     pub dry_run: bool,
+}
+
+#[derive(Args)]
+pub struct WorktreeRestoreTurnArgs {
+    /// Attempt ID
+    pub attempt_id: String,
+    /// Turn ordinal to restore
+    #[arg(long)]
+    pub ordinal: u32,
+    /// Confirm destructive restore of current worktree contents
+    #[arg(long, default_value_t = false)]
+    pub confirm: bool,
+    /// Force restore when the owning flow is still running
+    #[arg(long, default_value_t = false)]
+    pub force: bool,
 }

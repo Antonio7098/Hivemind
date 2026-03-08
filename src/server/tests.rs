@@ -95,3 +95,34 @@ fn api_post_project_delete_ok() {
     assert_eq!(v["success"], true);
     assert!(v["data"]["project_id"].is_string());
 }
+
+#[test]
+fn api_runtime_stream_ok_empty() {
+    let reg = test_registry();
+    let resp = handle_api_request_inner(ApiMethod::Get, "/api/runtime-stream", 10, None, &reg)
+        .expect("runtime stream response");
+    assert_eq!(resp.status_code, 200);
+    let v = json_value(&resp.body);
+    assert_eq!(v["success"], true);
+    assert!(v["data"].is_array());
+}
+
+#[test]
+fn api_worktree_restore_turn_requires_confirmation() {
+    let reg = test_registry();
+    let body = serde_json::json!({
+        "attempt_id": uuid::Uuid::new_v4().to_string(),
+        "ordinal": 1,
+        "confirm": false
+    });
+    let body = serde_json::to_vec(&body).expect("json body");
+    let err = handle_api_request_inner(
+        ApiMethod::Post,
+        "/api/worktrees/restore-turn",
+        10,
+        Some(&body),
+        &reg,
+    )
+    .expect_err("restore turn should require confirmation");
+    assert_eq!(err.code, "confirmation_required");
+}

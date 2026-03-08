@@ -157,6 +157,151 @@ impl WorktreeManager {
         self.worktree_head(worktree_path)
     }
 
+    pub fn create_hidden_snapshot_ref(
+        &self,
+        worktree_path: &Path,
+        ref_name: &str,
+        message: &str,
+    ) -> Result<String> {
+        let temp_index = std::env::temp_dir().join(format!(
+            "hivemind-turn-ref-{}-{}.index",
+            std::process::id(),
+            Uuid::new_v4()
+        ));
+
+        let cleanup = |path: &Path| {
+            let _ = std::fs::remove_file(path);
+        };
+
+        let head = match Command::new("git")
+            .current_dir(worktree_path)
+            .args(["rev-parse", "HEAD"])
+            .output()
+        {
+            Ok(output) if output.status.success() => {
+                String::from_utf8_lossy(&output.stdout).trim().to_string()
+            }
+            Ok(output) => {
+                cleanup(&temp_index);
+                return Err(WorktreeError::GitError(
+                    String::from_utf8_lossy(&output.stderr).to_string(),
+                ));
+            }
+            Err(error) => {
+                cleanup(&temp_index);
+                return Err(WorktreeError::IoError(error));
+            }
+        };
+
+        let with_index = |args: &[&str]| -> Result<std::process::Output> {
+            Command::new("git")
+                .current_dir(worktree_path)
+                .env("GIT_INDEX_FILE", &temp_index)
+                .args(args)
+                .output()
+                .map_err(WorktreeError::IoError)
+        };
+
+        let read_tree = with_index(&["read-tree", "HEAD"])?;
+        if !read_tree.status.success() {
+            cleanup(&temp_index);
+            return Err(WorktreeError::GitError(
+                String::from_utf8_lossy(&read_tree.stderr).to_string(),
+            ));
+        }
+
+        let add = with_index(&["add", "-A"])?;
+        if !add.status.success() {
+            cleanup(&temp_index);
+            return Err(WorktreeError::GitError(
+                String::from_utf8_lossy(&add.stderr).to_string(),
+            ));
+        }
+
+        let tree = with_index(&["write-tree"])?;
+        if !tree.status.success() {
+            cleanup(&temp_index);
+            return Err(WorktreeError::GitError(
+                String::from_utf8_lossy(&tree.stderr).to_string(),
+            ));
+        }
+        let tree_sha = String::from_utf8_lossy(&tree.stdout).trim().to_string();
+
+        let commit = Command::new("git")
+            .current_dir(worktree_path)
+            .args([
+                "-c",
+                "user.name=Hivemind",
+                "-c",
+                "user.email=hivemind@example.com",
+                "commit-tree",
+                &tree_sha,
+                "-p",
+                &head,
+                "-m",
+                message,
+            ])
+            .output()?;
+        if !commit.status.success() {
+            cleanup(&temp_index);
+            return Err(WorktreeError::GitError(
+                String::from_utf8_lossy(&commit.stderr).to_string(),
+            ));
+        }
+        let commit_sha = String::from_utf8_lossy(&commit.stdout).trim().to_string();
+
+        let update_ref = Command::new("git")
+            .current_dir(worktree_path)
+            .args(["update-ref", ref_name, &commit_sha])
+            .output()?;
+        cleanup(&temp_index);
+        if !update_ref.status.success() {
+            return Err(WorktreeError::GitError(
+                String::from_utf8_lossy(&update_ref.stderr).to_string(),
+            ));
+        }
+
+        Ok(commit_sha)
+    }
+
+    pub fn restore_hidden_snapshot_ref(&self, worktree_path: &Path, reference: &str) -> Result<()> {
+        let restore = Command::new("git")
+            .current_dir(worktree_path)
+            .args(["restore", "--source", reference, "--staged", "--worktree", ":/"])
+            .output()?;
+        if !restore.status.success() {
+            return Err(WorktreeError::GitError(
+                String::from_utf8_lossy(&restore.stderr).to_string(),
+            ));
+        }
+
+        let clean = Command::new("git")
+            .current_dir(worktree_path)
+            .args(["clean", "-fd", "-e", ".hivemind/"])
+            .output()?;
+        if !clean.status.success() {
+            return Err(WorktreeError::GitError(
+                String::from_utf8_lossy(&clean.stderr).to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn has_uncommitted_changes(&self, worktree_path: &Path) -> Result<bool> {
+        let status = Command::new("git")
+            .current_dir(worktree_path)
+            .args(["status", "--porcelain", "--untracked-files=all"])
+            .output()?;
+        if !status.status.success() {
+            return Err(WorktreeError::GitError(
+                String::from_utf8_lossy(&status.stderr).to_string(),
+            ));
+        }
+
+        Ok(!String::from_utf8_lossy(&status.stdout).trim().is_empty())
+    }
+
     fn get_commit_hash(&self, reference: &str) -> Result<String> {
         let output = Command::new("git")
             .current_dir(&self.repo_path)

@@ -30,6 +30,8 @@ pub(crate) fn print_attempt_inspect_attempt(
         "started_at": attempt.started_at,
         "baseline_id": attempt.baseline_id,
         "diff_id": attempt.diff_id,
+        "runtime_session": attempt.runtime_session,
+        "turn_refs": attempt.turn_refs,
         "diff": diff,
         "context": context_value,
     });
@@ -60,6 +62,24 @@ pub(crate) fn print_attempt_inspect_attempt(
             if let Some(ctx) = context_value {
                 if let Ok(rendered) = serde_json::to_string_pretty(&ctx) {
                     println!("Context:\n{rendered}");
+                }
+            }
+            if let Some(session) = attempt.runtime_session.as_ref() {
+                println!(
+                    "Runtime:  {} session {} ({})",
+                    session.adapter_name, session.session_id, session.discovered_at
+                );
+            }
+            if !attempt.turn_refs.is_empty() {
+                println!("Turn refs:");
+                for turn in &attempt.turn_refs {
+                    println!(
+                        "  - turn {} [{}] ref={} commit={}",
+                        turn.ordinal,
+                        format!("{:?}", turn.stream).to_lowercase(),
+                        turn.git_ref.as_deref().unwrap_or("-"),
+                        turn.commit_sha.as_deref().unwrap_or("-")
+                    );
                 }
             }
             if let Some(d) = diff {

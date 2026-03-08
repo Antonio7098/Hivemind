@@ -62,7 +62,8 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskFlowCompleted { .. }
         | EventPayload::TaskFlowAborted { .. }
         | EventPayload::TaskFlowDeleted { .. }
-        | EventPayload::WorktreeCleanupPerformed { .. } => "flow",
+        | EventPayload::WorktreeCleanupPerformed { .. }
+        | EventPayload::WorktreeTurnRefRestored { .. } => "flow",
 
         EventPayload::TaskReady { .. }
         | EventPayload::TaskBlocked { .. }
@@ -130,6 +131,9 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::RuntimeRecoveryScheduled { .. }
         | EventPayload::RuntimeFilesystemObserved { .. }
         | EventPayload::RuntimeCommandObserved { .. }
+        | EventPayload::RuntimeCommandCompleted { .. }
+        | EventPayload::RuntimeSessionObserved { .. }
+        | EventPayload::RuntimeTurnCompleted { .. }
         | EventPayload::RuntimeToolCallObserved { .. }
         | EventPayload::RuntimeTodoSnapshotUpdated { .. }
         | EventPayload::RuntimeNarrativeOutputObserved { .. }

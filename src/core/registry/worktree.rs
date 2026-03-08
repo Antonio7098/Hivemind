@@ -123,4 +123,118 @@ impl Registry {
             dry_run,
         })
     }
+
+    pub fn worktree_restore_turn_ref(
+        &self,
+        attempt_id: &str,
+        ordinal: u32,
+        confirm: bool,
+        force: bool,
+    ) -> Result<WorktreeTurnRestoreResult> {
+        if !confirm {
+            return Err(HivemindError::user(
+                "confirmation_required",
+                "Restoring a turn ref discards current worktree changes; pass --confirm to proceed",
+                "registry:worktree_restore_turn_ref",
+            ));
+        }
+
+        let attempt = self.get_attempt(attempt_id)?;
+        let turn_ref = attempt
+            .turn_refs
+            .iter()
+            .find(|turn| turn.ordinal == ordinal)
+            .cloned()
+            .ok_or_else(|| {
+                HivemindError::user(
+                    "turn_ref_not_found",
+                    format!("Attempt '{attempt_id}' does not have a stored turn ref for ordinal {ordinal}"),
+                    "registry:worktree_restore_turn_ref",
+                )
+            })?;
+
+        let flow = self.get_flow(&attempt.flow_id.to_string())?;
+        if flow.state == FlowState::Running && !force {
+            return Err(HivemindError::user(
+                "flow_running_restore_requires_force",
+                "Flow is running; pass --force to restore an active worktree turn ref",
+                "registry:worktree_restore_turn_ref",
+            ));
+        }
+
+        let reference = turn_ref
+            .git_ref
+            .clone()
+            .or(turn_ref.commit_sha.clone())
+            .ok_or_else(|| {
+                HivemindError::user(
+                    "turn_ref_missing_reference",
+                    format!("Attempt '{attempt_id}' turn {ordinal} has no git ref or commit SHA"),
+                    "registry:worktree_restore_turn_ref",
+                )
+            })?;
+
+        let state = self.state()?;
+        let manager = Self::worktree_manager_for_flow(&flow, &state)?;
+        let status = manager
+            .inspect(flow.id, attempt.task_id)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref"))?;
+        if !status.is_worktree {
+            return Err(HivemindError::user(
+                "worktree_not_found",
+                format!("No active worktree exists for task '{}'", attempt.task_id),
+                "registry:worktree_restore_turn_ref",
+            ));
+        }
+
+        let had_local_changes = manager
+            .has_uncommitted_changes(&status.path)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref"))?;
+        let head_before = manager
+            .worktree_head(&status.path)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref"))?;
+        manager
+            .restore_hidden_snapshot_ref(&status.path, &reference)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref"))?;
+        let head_after = manager
+            .worktree_head(&status.path)
+            .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_restore_turn_ref"))?;
+
+        self.append_event(
+            Event::new(
+                EventPayload::WorktreeTurnRefRestored {
+                    flow_id: flow.id,
+                    task_id: attempt.task_id,
+                    attempt_id: attempt.id,
+                    ordinal,
+                    git_ref: turn_ref.git_ref.clone(),
+                    commit_sha: turn_ref.commit_sha.clone(),
+                    forced: force,
+                },
+                CorrelationIds::for_graph_flow_task_attempt(
+                    flow.project_id,
+                    flow.graph_id,
+                    flow.id,
+                    attempt.task_id,
+                    attempt.id,
+                ),
+            ),
+            "registry:worktree_restore_turn_ref",
+        )?;
+
+        Ok(WorktreeTurnRestoreResult {
+            flow_id: flow.id,
+            task_id: attempt.task_id,
+            attempt_id: attempt.id,
+            ordinal,
+            git_ref: turn_ref.git_ref,
+            commit_sha: turn_ref.commit_sha,
+            worktree_path: status.path,
+            branch: status.branch,
+            head_before,
+            head_after,
+            had_local_changes,
+            forced: force,
+        })
+    }
 }

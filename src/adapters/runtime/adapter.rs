@@ -1,9 +1,43 @@
 use super::NativeInvocationTrace;
+use crate::core::events::RuntimeOutputStream;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use uuid::Uuid;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum StructuredRuntimeObservation {
+    CommandCompleted {
+        stream: RuntimeOutputStream,
+        command: String,
+        #[serde(default)]
+        exit_code: Option<i32>,
+        #[serde(default)]
+        output: Option<String>,
+    },
+    SessionObserved {
+        stream: RuntimeOutputStream,
+        adapter_name: String,
+        session_id: String,
+    },
+    TurnCompleted {
+        stream: RuntimeOutputStream,
+        adapter_name: String,
+        ordinal: u32,
+        #[serde(default)]
+        provider_session_id: Option<String>,
+        #[serde(default)]
+        provider_turn_id: Option<String>,
+        #[serde(default)]
+        git_ref: Option<String>,
+        #[serde(default)]
+        commit_sha: Option<String>,
+        #[serde(default)]
+        summary: Option<String>,
+    },
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionReport {
@@ -17,6 +51,8 @@ pub struct ExecutionReport {
     pub errors: Vec<RuntimeError>,
     #[serde(default)]
     pub native_invocation: Option<NativeInvocationTrace>,
+    #[serde(default)]
+    pub structured_runtime_observations: Vec<StructuredRuntimeObservation>,
 }
 
 impl ExecutionReport {
@@ -31,6 +67,7 @@ impl ExecutionReport {
             files_deleted: Vec::new(),
             errors: Vec::new(),
             native_invocation: None,
+            structured_runtime_observations: Vec::new(),
         }
     }
 
@@ -55,6 +92,7 @@ impl ExecutionReport {
             files_deleted: Vec::new(),
             errors: vec![error],
             native_invocation: None,
+            structured_runtime_observations: Vec::new(),
         }
     }
 
@@ -79,6 +117,15 @@ impl ExecutionReport {
     #[must_use]
     pub fn with_native_invocation(mut self, invocation: NativeInvocationTrace) -> Self {
         self.native_invocation = Some(invocation);
+        self
+    }
+
+    #[must_use]
+    pub fn with_structured_runtime_observations(
+        mut self,
+        observations: Vec<StructuredRuntimeObservation>,
+    ) -> Self {
+        self.structured_runtime_observations = observations;
         self
     }
 }
@@ -132,6 +179,8 @@ pub struct AdapterConfig {
     pub binary_path: PathBuf,
     pub args: Vec<String>,
     pub env: HashMap<String, String>,
+    #[serde(default)]
+    pub resume_session_id: Option<String>,
     pub timeout: Duration,
     pub working_dir: Option<PathBuf>,
 }
@@ -143,6 +192,7 @@ impl AdapterConfig {
             binary_path,
             args: Vec::new(),
             env: HashMap::new(),
+            resume_session_id: None,
             timeout: Duration::from_secs(300),
             working_dir: None,
         }
@@ -163,6 +213,12 @@ impl AdapterConfig {
     #[must_use]
     pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.insert(key.into(), value.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_resume_session_id(mut self, session_id: impl Into<String>) -> Self {
+        self.resume_session_id = Some(session_id.into());
         self
     }
 }
