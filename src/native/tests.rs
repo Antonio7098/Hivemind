@@ -1012,10 +1012,244 @@ fn active_code_window_budget_prefers_dirty_windows_under_pressure() {
     let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
 
     assert_eq!(rendered.assembly.active_code_window_count, 1);
+    assert_eq!(rendered.assembly.omitted_active_code_window_count, 1);
     assert!(rendered
         .prompt
         .contains("path=src/native/prompt_assembly.rs"));
     assert!(!rendered.prompt.contains("path=src/native/tests.rs"));
+}
+
+#[test]
+fn prompt_assembly_reports_stale_tool_call_suppression() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let history = vec![
+        user_input_item(
+            "inv-stale-tool-call",
+            0,
+            "objective",
+            "Keep the latest assistant context only".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-stale-tool-call",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:list_files:{\"path\":\".\",\"recursive\":false}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-stale-tool-call:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-stale-tool-call".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-stale-list-files".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-stale-list-files".to_string(),
+                tool_name: "list_files".to_string(),
+                request: "{\"path\":\".\",\"recursive\":false}".to_string(),
+            },
+        },
+        assistant_item(
+            "inv-stale-tool-call",
+            1,
+            3,
+            &ModelDirective::Think {
+                message: "Continue with the latest state".to_string(),
+            },
+        ),
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(rendered.assembly.suppressed_stale_tool_call_count, 1);
+    assert!(!rendered.prompt.contains("[tool_call:list_files]"));
+}
+
+#[test]
+fn prompt_assembly_reports_duplicate_and_window_suppression_counters() {
+    let config = NativeRuntimeConfig {
+        token_budget: 3_000,
+        prompt_headroom: 1_000,
+        ..NativeRuntimeConfig::default()
+    };
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let clean_content = "fn clean() {}\n".repeat(40);
+    let dirty_content = "fn dirty() {}\n".repeat(40);
+    let history = vec![
+        user_input_item(
+            "inv-suppression-counters",
+            0,
+            "objective",
+            "Track prompt suppression counters".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-suppression-counters",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/tests.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-suppression-counters:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-suppression-counters".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-counter-1".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-counter-1".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/tests.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-suppression-counters:0:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-suppression-counters".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-counter-1".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-counter-1".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: clean_content.clone(),
+            },
+        },
+        assistant_item(
+            "inv-suppression-counters",
+            1,
+            4,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/tests.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-suppression-counters:1:5".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 5,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-suppression-counters".to_string(),
+                turn_index: Some(1),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-counter-2".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-counter-2".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/tests.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-suppression-counters:1:6".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 6,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-suppression-counters".to_string(),
+                turn_index: Some(1),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-counter-2".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-counter-2".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: clean_content,
+            },
+        },
+        assistant_item(
+            "inv-suppression-counters",
+            2,
+            7,
+            &ModelDirective::Act {
+                action: format!(
+                    "tool:write_file:{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = dirty_content,
+                ),
+            },
+        ),
+        TurnItem {
+            id: "inv-suppression-counters:2:8".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(2),
+                item_index: 8,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-suppression-counters".to_string(),
+                turn_index: Some(2),
+                source: "tool.call".to_string(),
+                reference: Some("call-write-counter".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-write-counter".to_string(),
+                tool_name: "write_file".to_string(),
+                request: format!(
+                    "{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = dirty_content,
+                ),
+            },
+        },
+        TurnItem {
+            id: "inv-suppression-counters:2:9".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(2),
+                item_index: 9,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-suppression-counters".to_string(),
+                turn_index: Some(2),
+                source: "tool.result".to_string(),
+                reference: Some("call-write-counter".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-write-counter".to_string(),
+                tool_name: "write_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "wrote file".to_string(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(rendered.assembly.active_code_window_count, 1);
+    assert_eq!(rendered.assembly.omitted_active_code_window_count, 1);
+    assert_eq!(rendered.assembly.suppressed_by_active_code_window_count, 3);
+    assert_eq!(rendered.assembly.suppressed_duplicate_read_count, 1);
+    assert_eq!(rendered.assembly.suppressed_stale_tool_call_count, 2);
 }
 
 #[test]

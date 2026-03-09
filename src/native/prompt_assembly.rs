@@ -59,6 +59,14 @@ pub struct NativePromptAssembly {
     #[serde(default)]
     pub truncated_item_count: usize,
     #[serde(default)]
+    pub omitted_active_code_window_count: usize,
+    #[serde(default)]
+    pub suppressed_by_active_code_window_count: usize,
+    #[serde(default)]
+    pub suppressed_duplicate_read_count: usize,
+    #[serde(default)]
+    pub suppressed_stale_tool_call_count: usize,
+    #[serde(default)]
     pub tool_result_items_visible: usize,
     #[serde(default)]
     pub latest_tool_result_turn_index: Option<u32>,
@@ -98,6 +106,14 @@ struct NativePromptSelection {
     items: Vec<TurnItem>,
     skipped_item_count: usize,
     truncated_item_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PreparedPromptItems {
+    items: Vec<TurnItem>,
+    suppressed_by_active_code_window_count: usize,
+    suppressed_duplicate_read_count: usize,
+    suppressed_stale_tool_call_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,10 +164,12 @@ struct ActiveCodeWindows {
     windows: Vec<ActiveCodeWindow>,
     represented_call_ids: HashSet<String>,
     represented_paths: HashSet<String>,
+    total_window_count: usize,
 }
 
 impl ActiveCodeWindows {
     fn from_windows(windows: Vec<ActiveCodeWindow>) -> Self {
+        let total_window_count = windows.len();
         let represented_call_ids = windows
             .iter()
             .flat_map(|window| window.represented_call_ids.iter().cloned())
@@ -164,6 +182,7 @@ impl ActiveCodeWindows {
             windows,
             represented_call_ids,
             represented_paths,
+            total_window_count,
         }
     }
 
@@ -219,13 +238,16 @@ pub(crate) fn assemble_native_prompt(
     let active_code_windows = select_active_code_windows(&active_code_windows, item_budget / 2);
     let active_code_window_items = active_code_windows.prompt_items();
     let active_code_window_count = active_code_window_items.len();
+    let omitted_active_code_window_count = active_code_windows
+        .total_window_count
+        .saturating_sub(active_code_window_count);
     let active_code_window_chars = active_code_window_items
         .iter()
         .map(|item| item.text.chars().count())
         .sum::<usize>();
-    let normalized = prepare_items_for_prompt(normalized, &active_code_windows);
+    let prepared = prepare_items_for_prompt(normalized, &active_code_windows);
     let selection = select_items_with_budget(
-        &normalized,
+        &prepared.items,
         item_budget.saturating_sub(active_code_window_chars),
     );
     let selected_items = selection.items;
@@ -389,6 +411,10 @@ pub(crate) fn assemble_native_prompt(
             runtime_context_bytes: metadata.runtime_context_bytes,
             skipped_item_count: selection.skipped_item_count,
             truncated_item_count: selection.truncated_item_count,
+            omitted_active_code_window_count,
+            suppressed_by_active_code_window_count: prepared.suppressed_by_active_code_window_count,
+            suppressed_duplicate_read_count: prepared.suppressed_duplicate_read_count,
+            suppressed_stale_tool_call_count: prepared.suppressed_stale_tool_call_count,
             tool_result_items_visible,
             latest_tool_result_turn_index,
             latest_tool_names_visible,
@@ -412,7 +438,7 @@ fn stable_hash(value: &str) -> String {
 fn prepare_items_for_prompt(
     items: Vec<TurnItem>,
     active_code_windows: &ActiveCodeWindows,
-) -> Vec<TurnItem> {
+) -> PreparedPromptItems {
     let latest_assistant_turn_index = items.iter().filter_map(|item| match item.kind {
         TurnItemKind::AssistantText { .. } => item.provenance.turn_index,
         _ => None,
@@ -433,22 +459,33 @@ fn prepare_items_for_prompt(
 
     let mut seen_read_results = HashSet::new();
     let mut prepared = Vec::with_capacity(items.len());
+    let mut suppressed_by_active_code_window_count = 0usize;
+    let mut suppressed_duplicate_read_count = 0usize;
+    let mut suppressed_stale_tool_call_count = 0usize;
     for item in items.into_iter().rev() {
         if is_represented_by_active_code_window(&item, active_code_windows) {
+            suppressed_by_active_code_window_count += 1;
             continue;
         }
         if should_drop_stale_tool_call(&item, latest_assistant_turn_index) {
+            suppressed_stale_tool_call_count += 1;
             continue;
         }
         if let Some(dedupe_key) = duplicate_read_result_key(&item, &read_requests_by_call_id) {
             if !seen_read_results.insert(dedupe_key) {
+                suppressed_duplicate_read_count += 1;
                 continue;
             }
         }
         prepared.push(item);
     }
     prepared.reverse();
-    prepared
+    PreparedPromptItems {
+        items: prepared,
+        suppressed_by_active_code_window_count,
+        suppressed_duplicate_read_count,
+        suppressed_stale_tool_call_count,
+    }
 }
 
 fn extract_active_code_windows(items: &[TurnItem]) -> ActiveCodeWindows {
@@ -550,7 +587,9 @@ fn select_active_code_windows(
             selected.push(window);
         }
     }
-    ActiveCodeWindows::from_windows(selected)
+    let mut selected_windows = ActiveCodeWindows::from_windows(selected);
+    selected_windows.total_window_count = active_code_windows.total_window_count;
+    selected_windows
 }
 
 fn build_read_code_window(

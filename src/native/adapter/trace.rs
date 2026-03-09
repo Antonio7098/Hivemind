@@ -214,6 +214,30 @@ impl NativeRuntimeAdapter {
                         .as_ref()
                         .map(|assembly| assembly.truncated_item_count)
                         .unwrap_or_default(),
+                    omitted_active_code_window_count: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.omitted_active_code_window_count)
+                        .unwrap_or_default(),
+                    suppressed_by_active_code_window_count: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.suppressed_by_active_code_window_count)
+                        .unwrap_or_default(),
+                    suppressed_duplicate_read_count: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.suppressed_duplicate_read_count)
+                        .unwrap_or_default(),
+                    suppressed_stale_tool_call_count: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.suppressed_stale_tool_call_count)
+                        .unwrap_or_default(),
                     tool_result_items_visible: turn
                         .request
                         .prompt_assembly
@@ -466,6 +490,30 @@ impl NativeRuntimeAdapter {
                         .prompt_assembly
                         .as_ref()
                         .map(|assembly| assembly.truncated_item_count)
+                        .unwrap_or_default(),
+                    omitted_active_code_window_count: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.omitted_active_code_window_count)
+                        .unwrap_or_default(),
+                    suppressed_by_active_code_window_count: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.suppressed_by_active_code_window_count)
+                        .unwrap_or_default(),
+                    suppressed_duplicate_read_count: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.suppressed_duplicate_read_count)
+                        .unwrap_or_default(),
+                    suppressed_stale_tool_call_count: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.suppressed_stale_tool_call_count)
                         .unwrap_or_default(),
                     tool_result_items_visible: turn
                         .request

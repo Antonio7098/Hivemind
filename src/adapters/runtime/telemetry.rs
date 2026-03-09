@@ -111,6 +111,14 @@ pub struct NativeTurnTrace {
     #[serde(default)]
     pub truncated_item_count: usize,
     #[serde(default)]
+    pub omitted_active_code_window_count: usize,
+    #[serde(default)]
+    pub suppressed_by_active_code_window_count: usize,
+    #[serde(default)]
+    pub suppressed_duplicate_read_count: usize,
+    #[serde(default)]
+    pub suppressed_stale_tool_call_count: usize,
+    #[serde(default)]
     pub tool_result_items_visible: usize,
     #[serde(default)]
     pub latest_tool_result_turn_index: Option<u32>,
