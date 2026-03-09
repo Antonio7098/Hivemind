@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_lines)]
 
 use super::*;
+use crate::adapters::runtime::NativePromptMetadata;
 
 pub(super) struct TickAttemptLaunch {
     pub(super) attempt_id: Uuid,
@@ -44,7 +45,7 @@ impl Registry {
             None
         } else {
             Some(format!(
-                "Execution checkpoints (in order): {}\nComplete checkpoints from the runtime using: \"$HIVEMIND_BIN\" checkpoint complete --id <checkpoint-id> [--summary \"...\"]\n(If available, \"$HIVEMIND_AGENT_BIN\" may be used equivalently.)\nAttempt ID for this run: {attempt_id}",
+                "Execution checkpoints (in order): {}\nComplete checkpoints from the runtime with the built-in tool: ACT:tool:checkpoint_complete:{{\"id\":\"<checkpoint-id>\",\"summary\":\"optional progress summary\"}}\nAttempt ID for this run: {attempt_id}",
                 checkpoint_ids.join(", ")
             ))
         };
@@ -234,16 +235,20 @@ impl Registry {
             origin,
         )?;
 
+        let manifest_hash = context_build.manifest_hash.clone();
+        let inputs_hash = context_build.inputs_hash.clone();
+        let delivery_target = "runtime_execution_input".to_string();
+
         self.append_event(
             Event::new(
                 EventPayload::AttemptContextDelivered {
                     flow_id: flow.id,
                     task_id,
                     attempt_id,
-                    manifest_hash: context_build.manifest_hash,
-                    inputs_hash: context_build.inputs_hash,
-                    context_hash: runtime_context_hash,
-                    delivery_target: "runtime_execution_input".to_string(),
+                    manifest_hash: manifest_hash.clone(),
+                    inputs_hash: inputs_hash.clone(),
+                    context_hash: runtime_context_hash.clone(),
+                    delivery_target: delivery_target.clone(),
                     prior_attempt_ids: retry_prior_attempt_ids,
                     prior_manifest_hashes: context_build.prior_manifest_hashes,
                 },
@@ -258,9 +263,18 @@ impl Registry {
                 .clone()
                 .unwrap_or_else(|| task.title.clone()),
             success_criteria: task.criteria.description.clone(),
-            context: Some(runtime_context),
+            context: Some(runtime_context.clone()),
             prior_attempts,
             verifier_feedback: None,
+            native_prompt_metadata: Some(NativePromptMetadata {
+                manifest_hash: Some(manifest_hash),
+                inputs_hash: Some(inputs_hash),
+                delivered_context_hash: Some(runtime_context_hash.to_string()),
+                rendered_context_hash: Some(runtime_context_hash.to_string()),
+                context_window_state_hash: None,
+                delivery_target: Some(delivery_target),
+                runtime_context_bytes: runtime_context.len(),
+            }),
         };
 
         Ok(TickAttemptLaunch {

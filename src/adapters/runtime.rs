@@ -39,6 +39,7 @@
 //!     context: Some("Use JWT tokens".to_string()),
 //!     prior_attempts: vec![],
 //!     verifier_feedback: None,
+//!     native_prompt_metadata: None,
 //! };
 //! ```
 //!
@@ -65,10 +66,10 @@ pub use env::{
     RuntimeEnvBuildError, RuntimeEnvInheritMode, RuntimeEnvironmentProvenance,
 };
 pub use mock::MockAdapter;
-pub use prompt::{format_execution_prompt, AttemptSummary, ExecutionInput};
+pub use prompt::{format_execution_prompt, AttemptSummary, ExecutionInput, NativePromptMetadata};
 pub use telemetry::{
     NativeInvocationFailure, NativeInvocationTrace, NativePayloadCaptureMode,
-    NativeReadinessTransition, NativeRuntimeStateTelemetry, NativeToolCallFailure,
+    NativeReadinessTransition, NativeHistoryCompactionTrace, NativeRuntimeStateTelemetry, NativeToolCallFailure,
     NativeToolCallTrace, NativeTransportAttemptTrace, NativeTransportFallbackTrace,
     NativeTransportTelemetry, NativeTurnTrace,
 };

@@ -460,3 +460,4 @@ fn sqlite_store_enforces_append_only_triggers() {
         EventPayload::ProjectCreated { .. }
     ));
 }
+

@@ -1,7 +1,9 @@
 use super::*;
 use fs2::FileExt;
 use std::fmt::Write;
+use std::io::Write as IoWrite;
 use std::process::Command;
+use std::process::Stdio;
 mod store;
 
 /// SQLite-backed event store (canonical) with optional JSONL mirror for inspectability.
@@ -79,12 +81,19 @@ impl SqliteEventStore {
             if json_output {
                 cmd.arg("-json");
             }
-            let output = cmd
+            let mut child = cmd
                 .arg("-cmd")
                 .arg(".timeout 5000")
                 .arg(db_path)
-                .arg(sql)
-                .output()?;
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?;
+            if let Some(stdin) = child.stdin.as_mut() {
+                stdin.write_all(sql.as_bytes())?;
+                stdin.write_all(b"\n")?;
+            }
+            let output = child.wait_with_output()?;
 
             if output.status.success() {
                 return Ok(output);
@@ -181,5 +190,48 @@ impl SqliteEventStore {
         let _ = file.flush();
         let _ = file.unlock();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::events::RuntimeOutputStream;
+    use crate::core::registry::shared_prelude::CorrelationIds;
+
+    #[test]
+    fn sqlite_store_accepts_large_event_payloads() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SqliteEventStore::open(dir.path()).unwrap();
+        let attempt_id = Uuid::new_v4();
+        let content = "x".repeat(3_000_000);
+
+        store
+            .append(Event::new(
+                EventPayload::RuntimeOutputChunk {
+                    attempt_id,
+                    stream: RuntimeOutputStream::Stdout,
+                    content: content.clone(),
+                },
+                CorrelationIds {
+                    project_id: Some(Uuid::new_v4()),
+                    graph_id: Some(Uuid::new_v4()),
+                    flow_id: Some(Uuid::new_v4()),
+                    task_id: Some(Uuid::new_v4()),
+                    attempt_id: Some(attempt_id),
+                },
+            ))
+            .unwrap();
+
+        let events = store.read_all().unwrap();
+        assert_eq!(events.len(), 1);
+        match &events[0].payload {
+            EventPayload::RuntimeOutputChunk {
+                content: stored, ..
+            } => {
+                assert_eq!(stored.len(), content.len());
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
     }
 }

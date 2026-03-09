@@ -4,7 +4,7 @@ use super::retry::{
 };
 use super::transport::OPENROUTER_FALLBACK_ENDPOINT_ENV;
 use super::OpenRouterModelClient;
-use crate::native::{AgentLoopState, ModelClient, ModelTurnRequest, NativeRuntimeError};
+use crate::native::{AgentLoopState, AgentMode, ModelClient, ModelTurnRequest, NativeRuntimeError};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -146,8 +146,10 @@ fn openrouter_retries_rate_limit_with_backoff_and_telemetry() {
     let request = ModelTurnRequest {
         turn_index: 0,
         state: AgentLoopState::Think,
+        agent_mode: AgentMode::TaskExecutor,
         prompt: "run".to_string(),
         context: None,
+        prompt_assembly: None,
     };
     let directive = client
         .complete_turn(&request)
@@ -218,14 +220,18 @@ fn openrouter_activates_fallback_transport_after_primary_failure() {
     let first = ModelTurnRequest {
         turn_index: 0,
         state: AgentLoopState::Think,
+        agent_mode: AgentMode::TaskExecutor,
         prompt: "first".to_string(),
         context: None,
+        prompt_assembly: None,
     };
     let second = ModelTurnRequest {
         turn_index: 1,
         state: AgentLoopState::Act,
+        agent_mode: AgentMode::TaskExecutor,
         prompt: "second".to_string(),
         context: None,
+        prompt_assembly: None,
     };
 
     let first_out = client
@@ -280,8 +286,10 @@ fn openrouter_classifies_incomplete_terminal_event() {
     let request = ModelTurnRequest {
         turn_index: 0,
         state: AgentLoopState::Think,
+        agent_mode: AgentMode::TaskExecutor,
         prompt: "run".to_string(),
         context: None,
+        prompt_assembly: None,
     };
     let err = client
         .complete_turn(&request)
@@ -332,8 +340,10 @@ fn openrouter_classifies_idle_timeout() {
     let request = ModelTurnRequest {
         turn_index: 0,
         state: AgentLoopState::Think,
+        agent_mode: AgentMode::TaskExecutor,
         prompt: "run".to_string(),
         context: None,
+        prompt_assembly: None,
     };
     let err = client
         .complete_turn(&request)
@@ -348,4 +358,19 @@ fn openrouter_classifies_idle_timeout() {
     assert_eq!(telemetry.attempts[0].code, "native_stream_idle_timeout");
 
     server_handle.join().expect("server thread should join");
+}
+
+#[test]
+fn openrouter_defaults_to_more_generous_timeouts() {
+    let mut env = HashMap::new();
+    env.insert("OPENROUTER_API_KEY".to_string(), "test-key".to_string());
+    env.insert(
+        "OPENROUTER_API_BASE_URL".to_string(),
+        "https://example.invalid/v1/chat/completions".to_string(),
+    );
+
+    let client = OpenRouterModelClient::from_env("openrouter/test-model", &env)
+        .expect("client should initialize");
+
+    assert_eq!(client.stream_idle_timeout_ms, 120_000);
 }

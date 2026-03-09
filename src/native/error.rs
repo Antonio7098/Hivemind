@@ -1,6 +1,15 @@
 use super::*;
 
 impl NativeRuntimeError {
+    fn preview_raw_output(raw_output: &str) -> String {
+        let sanitized = raw_output.split_whitespace().collect::<Vec<_>>().join(" ");
+        let mut preview = sanitized.chars().take(160).collect::<String>();
+        if sanitized.chars().count() > 160 {
+            preview.push_str(" …");
+        }
+        preview
+    }
+
     #[must_use]
     pub fn code(&self) -> &str {
         match self {
@@ -35,8 +44,15 @@ impl NativeRuntimeError {
             Self::ModelRequestFailed { message, .. } => {
                 format!("Native model request failed: {message}")
             }
-            Self::MalformedModelOutput { expected, .. } => {
-                format!("Malformed native model output. Expected {expected}")
+            Self::MalformedModelOutput {
+                expected,
+                raw_output,
+                ..
+            } => {
+                let preview = Self::preview_raw_output(raw_output);
+                format!(
+                    "Malformed native model output. Expected {expected}. Raw preview: {preview}"
+                )
             }
         }
     }

@@ -118,6 +118,9 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::ToolCallCompleted { .. }
         | EventPayload::ToolCallFailed { .. }
         | EventPayload::AgentTurnCompleted { .. }
+        | EventPayload::NativeBudgetThresholdReached { .. }
+        | EventPayload::NativeHistoryCompactionRecorded { .. }
+        | EventPayload::NativeTurnSummaryRecorded { .. }
         | EventPayload::AgentInvocationCompleted { .. }
         | EventPayload::RuntimeStarted { .. }
         | EventPayload::RuntimeEnvironmentPrepared { .. }

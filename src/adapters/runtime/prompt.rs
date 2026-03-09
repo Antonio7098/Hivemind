@@ -8,6 +8,26 @@ pub struct ExecutionInput {
     pub context: Option<String>,
     pub prior_attempts: Vec<AttemptSummary>,
     pub verifier_feedback: Option<String>,
+    #[serde(default)]
+    pub native_prompt_metadata: Option<NativePromptMetadata>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct NativePromptMetadata {
+    #[serde(default)]
+    pub manifest_hash: Option<String>,
+    #[serde(default)]
+    pub inputs_hash: Option<String>,
+    #[serde(default)]
+    pub delivered_context_hash: Option<String>,
+    #[serde(default)]
+    pub rendered_context_hash: Option<String>,
+    #[serde(default)]
+    pub context_window_state_hash: Option<String>,
+    #[serde(default)]
+    pub delivery_target: Option<String>,
+    #[serde(default)]
+    pub runtime_context_bytes: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

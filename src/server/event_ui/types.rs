@@ -117,6 +117,11 @@ pub(super) fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::ToolCallCompleted { .. } => "ToolCallCompleted",
         EventPayload::ToolCallFailed { .. } => "ToolCallFailed",
         EventPayload::AgentTurnCompleted { .. } => "AgentTurnCompleted",
+        EventPayload::NativeBudgetThresholdReached { .. } => "NativeBudgetThresholdReached",
+        EventPayload::NativeHistoryCompactionRecorded { .. } => {
+            "NativeHistoryCompactionRecorded"
+        }
+        EventPayload::NativeTurnSummaryRecorded { .. } => "NativeTurnSummaryRecorded",
         EventPayload::AgentInvocationCompleted { .. } => "AgentInvocationCompleted",
         EventPayload::RuntimeStarted { .. } => "RuntimeStarted",
         EventPayload::RuntimeEnvironmentPrepared { .. } => "RuntimeEnvironmentPrepared",

@@ -37,6 +37,7 @@ fn input_formatting() {
         context: Some("This is for testing".to_string()),
         prior_attempts: vec![],
         verifier_feedback: None,
+        native_prompt_metadata: None,
     };
 
     let formatted = adapter.format_input(&input);
@@ -59,6 +60,7 @@ fn input_formatting_with_retries() {
             failure_reason: Some("Tests failed".to_string()),
         }],
         verifier_feedback: Some("Check edge cases".to_string()),
+        native_prompt_metadata: None,
     };
 
     let formatted = adapter.format_input(&input);
@@ -117,6 +119,7 @@ fn execute_enforces_timeout() {
         context: None,
         prior_attempts: Vec::new(),
         verifier_feedback: None,
+        native_prompt_metadata: None,
     };
 
     let err = adapter.execute(input).unwrap_err();
@@ -163,6 +166,7 @@ fn execute_success_captures_stdout_and_stderr() {
         context: None,
         prior_attempts: Vec::new(),
         verifier_feedback: None,
+        native_prompt_metadata: None,
     };
 
     let report = adapter.execute(input).unwrap();
@@ -193,6 +197,7 @@ fn execute_nonzero_exit_returns_failure_report() {
         context: None,
         prior_attempts: Vec::new(),
         verifier_feedback: None,
+        native_prompt_metadata: None,
     };
 
     let report = adapter.execute(input).unwrap();

@@ -64,6 +64,10 @@ impl Registry {
             .env
             .insert("HIVEMIND_FLOW_ID".to_string(), flow.id.to_string());
         runtime_for_adapter.env.insert(
+            "HIVEMIND_DATA_DIR".to_string(),
+            self.config.data_dir.to_string_lossy().to_string(),
+        );
+        runtime_for_adapter.env.insert(
             "HIVEMIND_PRIMARY_WORKTREE".to_string(),
             worktree_status.path.to_string_lossy().to_string(),
         );

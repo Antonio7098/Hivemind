@@ -9,6 +9,7 @@ const FRAGMENTS: &[&str] = &[
 ];
 
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=src/core/events/payload.rs");
     for fragment in FRAGMENTS {
         println!("cargo:rerun-if-changed={fragment}");

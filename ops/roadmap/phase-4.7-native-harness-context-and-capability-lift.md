@@ -15,13 +15,13 @@
 
 ## CodeGraph Implementation Rule (Mandatory)
 
-- [ ] Before implementing any Phase 4.7 CodeGraph behavior, read both the Hivemind integration docs **and** the actual UCP CodeGraph docs first:
-  - [ ] `ops/roadmap/phase-3.md` Sprint 37 (`UCP Graph Integration and Snapshot Projection`)
-  - [ ] `docs/architecture/cli-capabilities.md` graph snapshot/query sections
-  - [ ] `docs/design/cli-semantics.md` graph snapshot + graph query sections
-  - [ ] `docs/design/codegraph-db-schema.md`
-  - [ ] `../unified-content-protocol/docs/ucp-cli/codegraph.md`
-  - [ ] `../unified-content-protocol/docs/ucp-api/README.md`
+- [x] Before implementing any Phase 4.7 CodeGraph behavior, read both the Hivemind integration docs **and** the actual UCP CodeGraph docs first:
+  - [x] `ops/roadmap/phase-3.md` Sprint 37 (`UCP Graph Integration and Snapshot Projection`)
+  - [x] `docs/architecture/cli-capabilities.md` graph snapshot/query sections
+  - [x] `docs/design/cli-semantics.md` graph snapshot + graph query sections
+  - [x] `docs/design/codegraph-db-schema.md`
+  - [x] `../unified-content-protocol/docs/ucp-cli/codegraph.md`
+  - [x] `../unified-content-protocol/docs/ucp-api/README.md`
 - [ ] Import/use CodeGraph locally from the existing UCP integration; do **not** create a second parser/extractor/query engine inside Hivemind
 - [ ] Hivemind must **not** implement a new CodeGraph engine from scratch; the local UCP CodeGraph implementation is the sole extraction/query backend for Phase 4.7 work
 - [ ] Treat CodeGraph as a runtime-managed substrate whose lifecycle stays in Hivemind, while extraction/query semantics continue to come from the locally imported UCP implementation
@@ -34,48 +34,48 @@
 **Goal:** Refactor the native harness into a real tool-result loop with explicit runtime-local history, mode-aware behavior, and deterministic prompt assembly.
 
 ### 58.1 Runtime-local turn item model
-- [ ] Introduce a native `TurnItem` family for runtime working memory:
-  - [ ] user input item
-  - [ ] assistant text item
-  - [ ] tool call item
-  - [ ] tool result item
-  - [ ] code-navigation item
-  - [ ] compacted summary item
-- [ ] Distinguish model-visible items from event-only/runtime-only artifacts
-- [ ] Tag each item with correlation metadata and stable provenance references
+- [x] Introduce a native `TurnItem` family for runtime working memory:
+  - [x] user input item
+  - [x] assistant text item
+  - [x] tool call item
+  - [x] tool result item
+  - [x] code-navigation item
+  - [x] compacted summary item
+- [x] Distinguish model-visible items from event-only/runtime-only artifacts
+- [x] Tag each item with correlation metadata and stable provenance references
 
 ### 58.2 In-loop tool execution
-- [ ] Refactor `AgentLoop` so tool calls are executed inside the conversational loop, not as a disconnected post-process
-- [ ] Ensure tool results are appended back into runtime-local history before the next model turn
-- [ ] Preserve deterministic native event ordering for request/start/completion/failure paths
-- [ ] Keep CodeGraph navigation inside the same native tool-result loop rather than as hidden prompt preprocessing
+- [x] Refactor `AgentLoop` so tool calls are executed inside the conversational loop, not as a disconnected post-process
+- [x] Ensure tool results are appended back into runtime-local history before the next model turn
+- [x] Preserve deterministic native event ordering for request/start/completion/failure paths
+- [x] Keep CodeGraph navigation inside the same native tool-result loop rather than as hidden prompt preprocessing
 
 ### 58.3 Agent mode model
-- [ ] Introduce `AgentMode` separate from runtime role:
-  - [ ] `planner`
-  - [ ] `freeflow`
-  - [ ] `task_executor`
-- [ ] Preserve existing `worker` / `validator` runtime-role semantics
-- [ ] Attach mode provenance to invocation and turn events
-- [ ] Make allowed tool/capability sets mode-aware
+- [x] Introduce `AgentMode` separate from runtime role:
+  - [x] `planner`
+  - [x] `freeflow`
+  - [x] `task_executor`
+- [x] Preserve existing `worker` / `validator` runtime-role semantics
+- [x] Attach mode provenance to invocation and turn events
+- [x] Make allowed tool/capability sets mode-aware
 
 ### 58.4 Prompt assembly contract
-- [ ] Build prompts from explicit components:
-  - [ ] base runtime instructions
-  - [ ] mode contract
-  - [ ] objective state (`task` / `retry` / `checkpoint` / `planner target` / `freeflow goal`)
-  - [ ] selected runtime-local history items
-  - [ ] code-navigation session items
-  - [ ] tool contracts
-  - [ ] compacted summaries
-- [ ] Emit prompt-delivery hashes and context-manifest metadata for observability
-- [ ] Reserve configurable headroom for the active turn and tool results
+- [x] Build prompts from explicit components:
+  - [x] base runtime instructions
+  - [x] mode contract
+  - [x] objective state (`task` / `retry` / `checkpoint` / `planner target` / `freeflow goal`)
+  - [x] selected runtime-local history items
+  - [x] code-navigation session items
+  - [x] tool contracts
+  - [x] compacted summaries
+- [x] Emit prompt-delivery hashes and context-manifest metadata for observability
+- [x] Reserve configurable headroom for the active turn and tool results
 
 ### 58.5 Validation and replay tests
-- [ ] Add deterministic mock-model tests for multi-turn tool/result conversations
-- [ ] Add malformed tool-call and partial-history normalization tests
-- [ ] Add replay tests proving runtime-local history can be reconstructed from journal/event sources
-- [ ] Add tests proving mode-specific prompt assembly is deterministic
+- [x] Add deterministic mock-model tests for multi-turn tool/result conversations
+- [x] Add malformed tool-call and partial-history normalization tests
+- [x] Add replay tests proving runtime-local history can be reconstructed from journal/event sources
+- [x] Add tests proving mode-specific prompt assembly is deterministic
 
 ### 58.6 Manual Testing (`@hivemind-test`)
 - [ ] Add/update Sprint 58 manual checklist under `@hivemind-test`
@@ -84,10 +84,10 @@
 - [ ] Publish Sprint 58 manual test report artifact in `@hivemind-test`
 
 ### 58.7 Exit Criteria
-- [ ] Native harness executes tools as part of the turn loop
-- [ ] Prompt assembly is explicit, attributable, and test-covered
-- [ ] Agent mode is explicit without breaking runtime-role semantics
-- [ ] Runtime working memory is clearly separated from authoritative orchestration state
+- [x] Native harness executes tools as part of the turn loop
+- [x] Prompt assembly is explicit, attributable, and test-covered
+- [x] Agent mode is explicit without breaking runtime-role semantics
+- [x] Runtime working memory is clearly separated from authoritative orchestration state
 - [ ] Manual validation in `@hivemind-test` is completed and documented
 
 ---
