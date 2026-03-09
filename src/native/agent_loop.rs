@@ -1,5 +1,7 @@
 use super::*;
 use crate::native::turn_items::{TurnItemKind, TurnItemOutcome};
+use crate::native::tool_engine::NativeToolAction;
+use serde_json::Value;
 
 impl<M: ModelClient> AgentLoop<M> {
     const MAX_MALFORMED_DIRECTIVE_RECOVERY_ATTEMPTS: u8 = 4;
@@ -174,6 +176,56 @@ impl<M: ModelClient> AgentLoop<M> {
             })
     }
 
+    fn checkpoint_id_from_response_payload(content: &str) -> Option<String> {
+        let value = serde_json::from_str::<Value>(content).ok()?;
+        value
+            .get("checkpoint_id")
+            .and_then(Value::as_str)
+            .or_else(|| {
+                value
+                    .get("output")
+                    .and_then(|output| output.get("checkpoint_id"))
+                    .and_then(Value::as_str)
+            })
+            .map(ToString::to_string)
+    }
+
+    fn completed_checkpoint_ids(
+        &self,
+        history: &[TurnItem],
+    ) -> std::collections::BTreeSet<String> {
+        let mut ids = std::collections::BTreeSet::new();
+        for item in history {
+            if let TurnItemKind::ToolResult {
+                tool_name,
+                outcome: TurnItemOutcome::Success,
+                content,
+                ..
+            } = &item.kind
+            {
+                if tool_name == "checkpoint_complete" {
+                    if let Some(id) = Self::checkpoint_id_from_response_payload(content) {
+                        ids.insert(id);
+                    }
+                }
+            }
+        }
+        for turn in &self.completed_turns {
+            for trace in &turn.tool_calls {
+                if trace.tool_name == "checkpoint_complete" && trace.failure.is_none() {
+                    if let Some(id) = trace
+                        .response
+                        .as_deref()
+                        .and_then(Self::checkpoint_id_from_response_payload)
+                    {
+                        ids.insert(id);
+                    }
+                }
+            }
+        }
+        ids
+    }
+
     fn soft_token_budget_compaction_limit(&self) -> usize {
         self.config
             .token_budget
@@ -219,7 +271,7 @@ impl<M: ModelClient> AgentLoop<M> {
         )
     }
 
-    fn first_declared_checkpoint_id(request: &ModelTurnRequest) -> Option<String> {
+    fn declared_checkpoint_ids(request: &ModelTurnRequest) -> Vec<String> {
         const PREFIX: &str = "Execution checkpoints (in order):";
 
         [request.context.as_deref(), Some(request.prompt.as_str())]
@@ -229,10 +281,65 @@ impl<M: ModelClient> AgentLoop<M> {
                 text.lines().find_map(|line| {
                     line.trim()
                         .strip_prefix(PREFIX)
-                        .and_then(|rest| rest.split(',').map(str::trim).find(|id| !id.is_empty()))
-                        .map(ToString::to_string)
+                        .map(|rest| {
+                            rest.split(',')
+                                .map(str::trim)
+                                .filter(|id| !id.is_empty())
+                                .map(ToString::to_string)
+                                .collect::<Vec<_>>()
+                        })
                 })
             })
+            .unwrap_or_default()
+    }
+
+    fn first_declared_checkpoint_id(request: &ModelTurnRequest) -> Option<String> {
+        Self::declared_checkpoint_ids(request).into_iter().next()
+    }
+
+    fn checkpoint_completion_action_payload(
+        directive: &ModelDirective,
+    ) -> Option<(String, Option<String>)> {
+        let ModelDirective::Act { action } = directive else {
+            return None;
+        };
+        let tool_action = NativeToolAction::parse(action).ok().flatten()?;
+        if tool_action.name != "checkpoint_complete" {
+            return None;
+        }
+        let checkpoint_id = tool_action.input.get("id")?.as_str()?.trim();
+        if checkpoint_id.is_empty() {
+            return None;
+        }
+        let summary = tool_action
+            .input
+            .get("summary")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string);
+        Some((checkpoint_id.to_string(), summary))
+    }
+
+    fn redundant_checkpoint_completion_done_summary(
+        &self,
+        request: &ModelTurnRequest,
+        history: &[TurnItem],
+        directive: &ModelDirective,
+    ) -> Option<String> {
+        let declared = Self::declared_checkpoint_ids(request);
+        if declared.is_empty() {
+            return None;
+        }
+        let completed = self.completed_checkpoint_ids(history);
+        if !declared.iter().all(|id| completed.contains(id)) {
+            return None;
+        }
+        let (checkpoint_id, summary) = Self::checkpoint_completion_action_payload(directive)?;
+        if !completed.contains(&checkpoint_id) {
+            return None;
+        }
+        Some(summary.unwrap_or_else(|| format!("completed checkpoints: {}", declared.join(", "))))
     }
 
     fn checkpoint_auto_completion_action(
@@ -457,7 +564,7 @@ impl<M: ModelClient> AgentLoop<M> {
             let budget_thresholds_crossed = self.budget_thresholds_crossed();
             self.enforce_budgets()?;
 
-            let directive = match Self::parse_directive(&raw_output) {
+            let mut directive = match Self::parse_directive(&raw_output) {
                 Ok(directive) => {
                     malformed_repair_attempts = 0;
                     directive
@@ -511,6 +618,11 @@ impl<M: ModelClient> AgentLoop<M> {
                 }
             }
             checkpoint_done_repair_attempts = 0;
+            if let Some(summary) =
+                self.redundant_checkpoint_completion_done_summary(&request, &history, &directive)
+            {
+                directive = ModelDirective::Done { summary };
+            }
             let tool_started = Instant::now();
             let tool_calls = if let Some(action) = synthetic_tool_action.as_deref() {
                 if let Some(observer) = observer.as_deref_mut() {
@@ -533,6 +645,8 @@ impl<M: ModelClient> AgentLoop<M> {
                     });
                 }
                 calls
+            } else if matches!(directive, ModelDirective::Done { .. }) {
+                Vec::new()
             } else {
                 match &directive {
                     ModelDirective::Act { action } => {
