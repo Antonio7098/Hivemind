@@ -105,7 +105,9 @@ struct ActiveCodeWindow {
     path: String,
     source_tool: String,
     originating_call_id: String,
+    represented_call_ids: Vec<String>,
     status: String,
+    freshness: String,
     current_digest: String,
     current_content: String,
     changed_lines: Vec<(usize, usize)>,
@@ -127,11 +129,12 @@ impl ActiveCodeWindow {
             )
         };
         format!(
-            "[code_window:{}:{}] path={} call_id={} digest={} content_chars={} {}\n{}",
+            "[code_window:{}:{}] path={} call_id={} freshness={} digest={} content_chars={} {}\n{}",
             self.status,
             self.source_tool,
             self.path,
             self.originating_call_id,
+            self.freshness,
             short_hash(&self.current_digest),
             self.current_content.chars().count(),
             changed_lines,
@@ -147,6 +150,35 @@ struct ActiveCodeWindows {
     represented_paths: HashSet<String>,
 }
 
+impl ActiveCodeWindows {
+    fn from_windows(windows: Vec<ActiveCodeWindow>) -> Self {
+        let represented_call_ids = windows
+            .iter()
+            .flat_map(|window| window.represented_call_ids.iter().cloned())
+            .collect::<HashSet<_>>();
+        let represented_paths = windows
+            .iter()
+            .map(|window| window.path.clone())
+            .collect::<HashSet<_>>();
+        Self {
+            windows,
+            represented_call_ids,
+            represented_paths,
+        }
+    }
+
+    fn prompt_items(&self) -> Vec<NativePromptItem> {
+        self.windows
+            .iter()
+            .map(|window| NativePromptItem {
+                item_id: format!("code-window:{}", window.path),
+                kind: "code_window".to_string(),
+                text: window.render_for_prompt(),
+            })
+            .collect()
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn assemble_native_prompt(
     config: &NativeRuntimeConfig,
@@ -156,7 +188,6 @@ pub(crate) fn assemble_native_prompt(
 ) -> NativePromptRender {
     let normalized = normalize_turn_items(history);
     let active_code_windows = extract_active_code_windows(&normalized);
-    let normalized = prepare_items_for_prompt(normalized, &active_code_windows);
     let base_runtime_instructions = base_runtime_instructions();
     let mode_contract = mode_contract(config.agent_mode);
     let objective_state = objective_state(config.agent_mode, input);
@@ -185,13 +216,14 @@ pub(crate) fn assemble_native_prompt(
     let static_prompt_chars = static_sections.chars().count();
     let static_budget = static_sections.chars().count().saturating_add(64);
     let item_budget = available_budget.saturating_sub(static_budget);
-    let active_code_window_items =
-        select_active_code_window_items(&active_code_windows, item_budget / 2);
+    let active_code_windows = select_active_code_windows(&active_code_windows, item_budget / 2);
+    let active_code_window_items = active_code_windows.prompt_items();
     let active_code_window_count = active_code_window_items.len();
     let active_code_window_chars = active_code_window_items
         .iter()
         .map(|item| item.text.chars().count())
         .sum::<usize>();
+    let normalized = prepare_items_for_prompt(normalized, &active_code_windows);
     let selection = select_items_with_budget(
         &normalized,
         item_budget.saturating_sub(active_code_window_chars),
@@ -223,10 +255,6 @@ pub(crate) fn assemble_native_prompt(
         .collect::<Vec<_>>();
     let selected_history_count = selected_history.len();
     let selected_history_chars = selected_history
-        .iter()
-        .map(|item| item.text.chars().count())
-        .sum();
-    let active_code_window_chars = active_code_window_items
         .iter()
         .map(|item| item.text.chars().count())
         .sum();
@@ -425,9 +453,19 @@ fn prepare_items_for_prompt(
 
 fn extract_active_code_windows(items: &[TurnItem]) -> ActiveCodeWindows {
     let mut windows_by_path = HashMap::<String, ActiveCodeWindow>::new();
-    let mut represented_call_ids = HashSet::new();
-    let mut represented_paths = HashSet::new();
     let mut read_requests_by_call_id = HashMap::<String, String>::new();
+    let successful_write_call_ids = items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            TurnItemKind::ToolResult {
+                call_id,
+                tool_name,
+                outcome: TurnItemOutcome::Success,
+                ..
+            } if tool_name == "write_file" => Some(call_id.clone()),
+            _ => None,
+        })
+        .collect::<HashSet<_>>();
 
     for item in items {
         match &item.kind {
@@ -437,8 +475,6 @@ fn extract_active_code_windows(items: &[TurnItem]) -> ActiveCodeWindows {
                 request,
             } if tool_name == "read_file" => {
                 if let Some(path) = json_request_string_field(request, "path") {
-                    represented_call_ids.insert(call_id.clone());
-                    represented_paths.insert(path.clone());
                     read_requests_by_call_id.insert(call_id.clone(), path);
                 }
             }
@@ -449,18 +485,16 @@ fn extract_active_code_windows(items: &[TurnItem]) -> ActiveCodeWindows {
                 content,
             } if tool_name == "read_file" => {
                 if let Some(path) = read_requests_by_call_id.get(call_id) {
+                    let previous = windows_by_path.get(path);
                     windows_by_path.insert(
                         path.clone(),
-                        ActiveCodeWindow {
-                            path: path.clone(),
-                            source_tool: "read_file".to_string(),
-                            originating_call_id: call_id.clone(),
-                            status: "clean".to_string(),
-                            current_digest: stable_hash(content),
-                            current_content: content.clone(),
-                            changed_lines: Vec::new(),
-                            last_turn_index: item.provenance.turn_index,
-                        },
+                        build_read_code_window(
+                            previous,
+                            path,
+                            call_id,
+                            content,
+                            item.provenance.turn_index,
+                        ),
                     );
                 }
             }
@@ -468,31 +502,21 @@ fn extract_active_code_windows(items: &[TurnItem]) -> ActiveCodeWindows {
                 call_id,
                 tool_name,
                 request,
-            } if tool_name == "write_file" => {
+            } if tool_name == "write_file" && successful_write_call_ids.contains(call_id) => {
                 if let (Some(path), Some(content)) = (
                     json_request_string_field(request, "path"),
                     json_request_string_field(request, "content"),
                 ) {
-                    let changed_lines = windows_by_path
-                        .get(&path)
-                        .map(|window| {
-                            compute_changed_line_ranges(&window.current_content, &content)
-                        })
-                        .unwrap_or_else(|| compute_changed_line_ranges("", &content));
-                    represented_call_ids.insert(call_id.clone());
-                    represented_paths.insert(path.clone());
+                    let previous = windows_by_path.get(&path);
                     windows_by_path.insert(
                         path.clone(),
-                        ActiveCodeWindow {
-                            path,
-                            source_tool: "write_file".to_string(),
-                            originating_call_id: call_id.clone(),
-                            status: "dirty".to_string(),
-                            current_digest: stable_hash(&content),
-                            current_content: content,
-                            changed_lines,
-                            last_turn_index: item.provenance.turn_index,
-                        },
+                        build_write_code_window(
+                            previous,
+                            &path,
+                            call_id,
+                            &content,
+                            item.provenance.turn_index,
+                        ),
                     );
                 }
             }
@@ -502,17 +526,13 @@ fn extract_active_code_windows(items: &[TurnItem]) -> ActiveCodeWindows {
 
     let mut windows = windows_by_path.into_values().collect::<Vec<_>>();
     windows.sort_by_key(|window| std::cmp::Reverse(window.last_turn_index.unwrap_or_default()));
-    ActiveCodeWindows {
-        windows,
-        represented_call_ids,
-        represented_paths,
-    }
+    ActiveCodeWindows::from_windows(windows)
 }
 
-fn select_active_code_window_items(
+fn select_active_code_windows(
     active_code_windows: &ActiveCodeWindows,
     budget: usize,
-) -> Vec<NativePromptItem> {
+) -> ActiveCodeWindows {
     let mut windows = active_code_windows.windows.clone();
     windows.sort_by_key(|window| {
         (
@@ -524,18 +544,109 @@ fn select_active_code_window_items(
     let mut used = 0usize;
     let mut selected = Vec::new();
     for window in windows {
-        let item = NativePromptItem {
-            item_id: format!("code-window:{}", window.path),
-            kind: "code_window".to_string(),
-            text: window.render_for_prompt(),
-        };
-        let chars = item.text.chars().count();
+        let chars = window.render_for_prompt().chars().count();
         if selected.is_empty() || used.saturating_add(chars) <= budget {
             used = used.saturating_add(chars);
-            selected.push(item);
+            selected.push(window);
         }
     }
-    selected
+    ActiveCodeWindows::from_windows(selected)
+}
+
+fn build_read_code_window(
+    previous: Option<&ActiveCodeWindow>,
+    path: &str,
+    call_id: &str,
+    content: &str,
+    last_turn_index: Option<u32>,
+) -> ActiveCodeWindow {
+    let current_digest = stable_hash(content);
+    let freshness = match previous {
+        None => "initial_read".to_string(),
+        Some(window) if window.current_digest == current_digest && window.status == "dirty" => {
+            "confirmed_write".to_string()
+        }
+        Some(window) if window.current_digest == current_digest => "reread_unchanged".to_string(),
+        Some(_) => "reread_changed".to_string(),
+    };
+    let changed_lines = match previous {
+        Some(window) if window.current_digest != current_digest => {
+            compute_changed_line_ranges(&window.current_content, content)
+        }
+        _ => Vec::new(),
+    };
+    ActiveCodeWindow {
+        path: path.to_string(),
+        source_tool: "read_file".to_string(),
+        originating_call_id: call_id.to_string(),
+        represented_call_ids: merge_represented_call_ids(previous, call_id),
+        status: "clean".to_string(),
+        freshness,
+        current_digest,
+        current_content: content.to_string(),
+        changed_lines,
+        last_turn_index,
+    }
+}
+
+fn build_write_code_window(
+    previous: Option<&ActiveCodeWindow>,
+    path: &str,
+    call_id: &str,
+    content: &str,
+    last_turn_index: Option<u32>,
+) -> ActiveCodeWindow {
+    let current_digest = stable_hash(content);
+    let (status, freshness, changed_lines) = match previous {
+        None => (
+            "dirty".to_string(),
+            "initial_write".to_string(),
+            compute_changed_line_ranges("", content),
+        ),
+        Some(window) if window.current_digest == current_digest => (
+            window.status.clone(),
+            if window.status == "dirty" {
+                "write_unchanged_dirty".to_string()
+            } else {
+                "write_unchanged_clean".to_string()
+            },
+            Vec::new(),
+        ),
+        Some(window) => (
+            "dirty".to_string(),
+            if window.status == "dirty" {
+                "write_updates_dirty".to_string()
+            } else {
+                "write_supersedes_read".to_string()
+            },
+            compute_changed_line_ranges(&window.current_content, content),
+        ),
+    };
+    ActiveCodeWindow {
+        path: path.to_string(),
+        source_tool: "write_file".to_string(),
+        originating_call_id: call_id.to_string(),
+        represented_call_ids: merge_represented_call_ids(previous, call_id),
+        status,
+        freshness,
+        current_digest,
+        current_content: content.to_string(),
+        changed_lines,
+        last_turn_index,
+    }
+}
+
+fn merge_represented_call_ids(previous: Option<&ActiveCodeWindow>, call_id: &str) -> Vec<String> {
+    let mut represented_call_ids = previous
+        .map(|window| window.represented_call_ids.clone())
+        .unwrap_or_default();
+    if !represented_call_ids
+        .iter()
+        .any(|existing| existing == call_id)
+    {
+        represented_call_ids.push(call_id.to_string());
+    }
+    represented_call_ids
 }
 
 fn is_represented_by_active_code_window(

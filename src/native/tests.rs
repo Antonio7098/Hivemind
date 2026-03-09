@@ -1019,6 +1019,509 @@ fn active_code_window_budget_prefers_dirty_windows_under_pressure() {
 }
 
 #[test]
+fn assemble_native_prompt_keeps_failed_read_visible_when_no_window_exists() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let history = vec![
+        user_input_item(
+            "inv-read-failure",
+            0,
+            "objective",
+            "Attempt a read that fails".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-read-failure",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-read-failure:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-read-failure".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-failure".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-failure".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-read-failure:0:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-read-failure".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-failure".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-failure".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Failure,
+                content: "permission denied".to_string(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(rendered.assembly.active_code_window_count, 0);
+    assert_eq!(rendered.assembly.tool_result_items_visible, 1);
+    assert!(rendered.prompt.contains("permission denied"));
+    assert!(rendered.prompt.contains("[tool_result:read_file:Failure]"));
+}
+
+#[test]
+fn assemble_native_prompt_keeps_failed_write_visible_without_dirty_window() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let attempted_content = "fn not_written() {}\n".repeat(32);
+    let tool_request = format!(
+        "{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+        content = attempted_content,
+    );
+    let history = vec![
+        user_input_item(
+            "inv-write-failure",
+            0,
+            "objective",
+            "Attempt a write that fails".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-write-failure",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: format!(
+                    "tool:write_file:{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = attempted_content,
+                ),
+            },
+        ),
+        TurnItem {
+            id: "inv-write-failure:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-write-failure".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-write-failure".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-write-failure".to_string(),
+                tool_name: "write_file".to_string(),
+                request: tool_request,
+            },
+        },
+        TurnItem {
+            id: "inv-write-failure:0:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-write-failure".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-write-failure".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-write-failure".to_string(),
+                tool_name: "write_file".to_string(),
+                outcome: TurnItemOutcome::Failure,
+                content: "disk full".to_string(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(rendered.assembly.active_code_window_count, 0);
+    assert!(rendered
+        .prompt
+        .contains("[tool_result:write_file:Failure] disk full"));
+    assert!(!rendered.prompt.contains("Active Code Windows"));
+    assert!(!rendered.prompt.contains(&attempted_content));
+}
+
+#[test]
+fn assemble_native_prompt_reread_confirms_dirty_window() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let initial_content = "fn before() {}\n".repeat(32);
+    let rewritten_content = "fn after() {}\n".repeat(32);
+    let history = vec![
+        user_input_item(
+            "inv-confirmed",
+            0,
+            "objective",
+            "Write then confirm the file contents".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-confirmed",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-confirmed:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-confirmed".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-confirmed-1".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-confirmed-1".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-confirmed:0:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-confirmed".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-confirmed-1".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-confirmed-1".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: initial_content,
+            },
+        },
+        assistant_item(
+            "inv-confirmed",
+            1,
+            4,
+            &ModelDirective::Act {
+                action: format!(
+                    "tool:write_file:{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = rewritten_content,
+                ),
+            },
+        ),
+        TurnItem {
+            id: "inv-confirmed:1:5".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 5,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-confirmed".to_string(),
+                turn_index: Some(1),
+                source: "tool.call".to_string(),
+                reference: Some("call-write-confirmed".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-write-confirmed".to_string(),
+                tool_name: "write_file".to_string(),
+                request: format!(
+                    "{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = rewritten_content,
+                ),
+            },
+        },
+        TurnItem {
+            id: "inv-confirmed:1:6".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 6,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-confirmed".to_string(),
+                turn_index: Some(1),
+                source: "tool.result".to_string(),
+                reference: Some("call-write-confirmed".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-write-confirmed".to_string(),
+                tool_name: "write_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "wrote file".to_string(),
+            },
+        },
+        assistant_item(
+            "inv-confirmed",
+            2,
+            7,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-confirmed:2:8".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(2),
+                item_index: 8,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-confirmed".to_string(),
+                turn_index: Some(2),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-confirmed-2".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-confirmed-2".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-confirmed:2:9".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(2),
+                item_index: 9,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-confirmed".to_string(),
+                turn_index: Some(2),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-confirmed-2".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-confirmed-2".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: rewritten_content.clone(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(rendered.assembly.active_code_window_count, 1);
+    assert!(rendered.prompt.contains("[code_window:clean:read_file]"));
+    assert!(rendered.prompt.contains("call_id=call-read-confirmed-2"));
+    assert!(rendered.prompt.contains("freshness=confirmed_write"));
+    assert_eq!(rendered.prompt.matches(&rewritten_content).count(), 1);
+    assert!(!rendered.prompt.contains("[tool_call:write_file]"));
+    assert!(!rendered.prompt.contains("[tool_result:write_file:Success]"));
+}
+
+#[test]
+fn assemble_native_prompt_reread_changed_supersedes_prior_dirty_window() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let initial_content = "fn before() {}\n".repeat(24);
+    let rewritten_content = "fn interim() {}\n".repeat(24);
+    let final_content = "fn external() {}\n".repeat(24);
+    let history = vec![
+        user_input_item(
+            "inv-reread-changed",
+            0,
+            "objective",
+            "Observe a reread that supersedes a dirty window".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-reread-changed",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-reread-changed:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-reread-changed".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-reread-changed-1".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-reread-changed-1".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-reread-changed:0:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-reread-changed".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-reread-changed-1".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-reread-changed-1".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: initial_content,
+            },
+        },
+        assistant_item(
+            "inv-reread-changed",
+            1,
+            4,
+            &ModelDirective::Act {
+                action: format!(
+                    "tool:write_file:{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = rewritten_content,
+                ),
+            },
+        ),
+        TurnItem {
+            id: "inv-reread-changed:1:5".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 5,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-reread-changed".to_string(),
+                turn_index: Some(1),
+                source: "tool.call".to_string(),
+                reference: Some("call-write-reread-changed".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-write-reread-changed".to_string(),
+                tool_name: "write_file".to_string(),
+                request: format!(
+                    "{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = rewritten_content,
+                ),
+            },
+        },
+        TurnItem {
+            id: "inv-reread-changed:1:6".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 6,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-reread-changed".to_string(),
+                turn_index: Some(1),
+                source: "tool.result".to_string(),
+                reference: Some("call-write-reread-changed".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-write-reread-changed".to_string(),
+                tool_name: "write_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "wrote file".to_string(),
+            },
+        },
+        assistant_item(
+            "inv-reread-changed",
+            2,
+            7,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-reread-changed:2:8".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(2),
+                item_index: 8,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-reread-changed".to_string(),
+                turn_index: Some(2),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-reread-changed-2".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-reread-changed-2".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-reread-changed:2:9".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(2),
+                item_index: 9,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-reread-changed".to_string(),
+                turn_index: Some(2),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-reread-changed-2".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-reread-changed-2".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: final_content.clone(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(rendered.assembly.active_code_window_count, 1);
+    assert!(rendered.prompt.contains("[code_window:clean:read_file]"));
+    assert!(rendered
+        .prompt
+        .contains("call_id=call-read-reread-changed-2"));
+    assert!(rendered.prompt.contains("freshness=reread_changed"));
+    assert!(rendered.prompt.contains(&final_content));
+    assert!(!rendered.prompt.contains(&rewritten_content));
+    assert!(!rendered.prompt.contains("[tool_call:write_file]"));
+}
+
+#[test]
 #[cfg(unix)]
 fn agent_loop_repairs_done_until_checkpoint_complete_succeeds() {
     let tmp = tempdir().expect("tempdir");
