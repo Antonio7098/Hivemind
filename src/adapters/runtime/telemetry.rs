@@ -85,6 +85,8 @@ pub struct NativeTurnTrace {
     #[serde(default)]
     pub selected_history_chars: usize,
     #[serde(default)]
+    pub active_code_window_chars: usize,
+    #[serde(default)]
     pub compacted_summary_chars: usize,
     #[serde(default)]
     pub code_navigation_chars: usize,
@@ -96,6 +98,8 @@ pub struct NativeTurnTrace {
     pub visible_item_count: usize,
     #[serde(default)]
     pub selected_history_count: usize,
+    #[serde(default)]
+    pub active_code_window_count: usize,
     #[serde(default)]
     pub code_navigation_count: usize,
     #[serde(default)]
@@ -149,6 +153,12 @@ pub struct NativeToolCallTrace {
     pub duration_ms: Option<u64>,
     #[serde(default)]
     pub response: Option<String>,
+    #[serde(default)]
+    pub response_original_bytes: Option<usize>,
+    #[serde(default)]
+    pub response_stored_bytes: Option<usize>,
+    #[serde(default)]
+    pub response_truncated: bool,
     #[serde(default)]
     pub failure: Option<NativeToolCallFailure>,
     #[serde(default)]

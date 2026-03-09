@@ -136,6 +136,12 @@ impl NativeRuntimeAdapter {
                         .as_ref()
                         .map(|assembly| assembly.selected_history_chars)
                         .unwrap_or_default(),
+                    active_code_window_chars: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.active_code_window_chars)
+                        .unwrap_or_default(),
                     compacted_summary_chars: turn
                         .request
                         .prompt_assembly
@@ -171,6 +177,12 @@ impl NativeRuntimeAdapter {
                         .prompt_assembly
                         .as_ref()
                         .map(|assembly| assembly.selected_history_count)
+                        .unwrap_or_default(),
+                    active_code_window_count: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.active_code_window_count)
                         .unwrap_or_default(),
                     code_navigation_count: turn
                         .request
@@ -377,6 +389,12 @@ impl NativeRuntimeAdapter {
                         .as_ref()
                         .map(|assembly| assembly.selected_history_chars)
                         .unwrap_or_default(),
+                    active_code_window_chars: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.active_code_window_chars)
+                        .unwrap_or_default(),
                     compacted_summary_chars: turn
                         .request
                         .prompt_assembly
@@ -412,6 +430,12 @@ impl NativeRuntimeAdapter {
                         .prompt_assembly
                         .as_ref()
                         .map(|assembly| assembly.selected_history_count)
+                        .unwrap_or_default(),
+                    active_code_window_count: turn
+                        .request
+                        .prompt_assembly
+                        .as_ref()
+                        .map(|assembly| assembly.active_code_window_count)
                         .unwrap_or_default(),
                     code_navigation_count: turn
                         .request
@@ -524,6 +548,9 @@ impl NativeRuntimeAdapter {
                 request: action.to_string(),
                 duration_ms: None,
                 response: None,
+                response_original_bytes: None,
+                response_stored_bytes: None,
+                response_truncated: false,
                 failure: Some(NativeToolCallFailure {
                     code: "native_tool_call_failed".to_string(),
                     message: message.trim().to_string(),
@@ -549,6 +576,9 @@ impl NativeRuntimeAdapter {
                 request: action.to_string(),
                 duration_ms: None,
                 response: Some(format!("completed:{action}")),
+                response_original_bytes: Some(action.len().saturating_add(10)),
+                response_stored_bytes: Some(action.len().saturating_add(10)),
+                response_truncated: false,
                 failure: None,
                 policy_tags: Vec::new(),
             },
@@ -558,6 +588,9 @@ impl NativeRuntimeAdapter {
                 request: action.to_string(),
                 duration_ms: None,
                 response: None,
+                response_original_bytes: None,
+                response_stored_bytes: None,
+                response_truncated: false,
                 failure: Some(NativeToolCallFailure {
                     code: error.code,
                     message: error.message,

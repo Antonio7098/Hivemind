@@ -1,8 +1,9 @@
 use super::*;
 use crate::adapters::runtime::{ExecutionInput, NativePromptMetadata};
 use crate::native::tool_engine::ToolContract;
-use crate::native::turn_items::TurnItemKind;
+use crate::native::turn_items::{TurnItemKind, TurnItemOutcome};
 use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NativePromptAssembly {
@@ -12,6 +13,8 @@ pub struct NativePromptAssembly {
     pub objective_state: String,
     #[serde(default)]
     pub selected_history: Vec<NativePromptItem>,
+    #[serde(default)]
+    pub active_code_windows: Vec<NativePromptItem>,
     #[serde(default)]
     pub code_navigation: Vec<NativePromptItem>,
     #[serde(default)]
@@ -27,7 +30,11 @@ pub struct NativePromptAssembly {
     #[serde(default)]
     pub static_prompt_chars: usize,
     #[serde(default)]
+    pub objective_state_chars: usize,
+    #[serde(default)]
     pub selected_history_chars: usize,
+    #[serde(default)]
+    pub active_code_window_chars: usize,
     #[serde(default)]
     pub compacted_summary_chars: usize,
     #[serde(default)]
@@ -39,6 +46,8 @@ pub struct NativePromptAssembly {
     pub selected_item_count: usize,
     #[serde(default)]
     pub selected_history_count: usize,
+    #[serde(default)]
+    pub active_code_window_count: usize,
     #[serde(default)]
     pub code_navigation_count: usize,
     #[serde(default)]
@@ -67,6 +76,8 @@ pub struct NativePromptAssembly {
     pub context_window_state_hash: Option<String>,
     #[serde(default)]
     pub delivery_target: Option<String>,
+    #[serde(default)]
+    pub overflow_classification: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,6 +100,53 @@ struct NativePromptSelection {
     truncated_item_count: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ActiveCodeWindow {
+    path: String,
+    source_tool: String,
+    originating_call_id: String,
+    status: String,
+    current_digest: String,
+    current_content: String,
+    changed_lines: Vec<(usize, usize)>,
+    last_turn_index: Option<u32>,
+}
+
+impl ActiveCodeWindow {
+    fn render_for_prompt(&self) -> String {
+        let changed_lines = if self.changed_lines.is_empty() {
+            "changed_lines=none".to_string()
+        } else {
+            format!(
+                "changed_lines={}",
+                self.changed_lines
+                    .iter()
+                    .map(|(start, end)| format!("{start}-{end}"))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        };
+        format!(
+            "[code_window:{}:{}] path={} call_id={} digest={} content_chars={} {}\n{}",
+            self.status,
+            self.source_tool,
+            self.path,
+            self.originating_call_id,
+            short_hash(&self.current_digest),
+            self.current_content.chars().count(),
+            changed_lines,
+            self.current_content,
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct ActiveCodeWindows {
+    windows: Vec<ActiveCodeWindow>,
+    represented_call_ids: HashSet<String>,
+    represented_paths: HashSet<String>,
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn assemble_native_prompt(
     config: &NativeRuntimeConfig,
@@ -97,9 +155,12 @@ pub(crate) fn assemble_native_prompt(
     tool_contracts: &[ToolContract],
 ) -> NativePromptRender {
     let normalized = normalize_turn_items(history);
+    let active_code_windows = extract_active_code_windows(&normalized);
+    let normalized = prepare_items_for_prompt(normalized, &active_code_windows);
     let base_runtime_instructions = base_runtime_instructions();
     let mode_contract = mode_contract(config.agent_mode);
     let objective_state = objective_state(config.agent_mode, input);
+    let objective_state_chars = objective_state.chars().count();
     let metadata = input.native_prompt_metadata.clone().unwrap_or_default();
     let available_budget = config
         .token_budget
@@ -124,7 +185,17 @@ pub(crate) fn assemble_native_prompt(
     let static_prompt_chars = static_sections.chars().count();
     let static_budget = static_sections.chars().count().saturating_add(64);
     let item_budget = available_budget.saturating_sub(static_budget);
-    let selection = select_items_with_budget(&normalized, item_budget);
+    let active_code_window_items =
+        select_active_code_window_items(&active_code_windows, item_budget / 2);
+    let active_code_window_count = active_code_window_items.len();
+    let active_code_window_chars = active_code_window_items
+        .iter()
+        .map(|item| item.text.chars().count())
+        .sum::<usize>();
+    let selection = select_items_with_budget(
+        &normalized,
+        item_budget.saturating_sub(active_code_window_chars),
+    );
     let selected_items = selection.items;
 
     let prompt_items = selected_items
@@ -152,6 +223,10 @@ pub(crate) fn assemble_native_prompt(
         .collect::<Vec<_>>();
     let selected_history_count = selected_history.len();
     let selected_history_chars = selected_history
+        .iter()
+        .map(|item| item.text.chars().count())
+        .sum();
+    let active_code_window_chars = active_code_window_items
         .iter()
         .map(|item| item.text.chars().count())
         .sum();
@@ -196,6 +271,16 @@ pub(crate) fn assemble_native_prompt(
         });
 
     let mut sections = vec![static_sections];
+    if !active_code_window_items.is_empty() {
+        sections.push(section(
+            "Active Code Windows",
+            &active_code_window_items
+                .iter()
+                .map(|item| item.text.clone())
+                .collect::<Vec<_>>()
+                .join("\n\n"),
+        ));
+    }
     if !selected_history.is_empty() {
         sections.push(section(
             "Runtime-local History",
@@ -230,6 +315,18 @@ pub(crate) fn assemble_native_prompt(
     let prompt = sections.join("\n\n");
     let rendered_prompt_hash = digest_hex(prompt.as_bytes());
     let rendered_prompt_bytes = prompt.len();
+    let rendered_prompt_chars = prompt.chars().count();
+    let budget_remaining_after_render = available_budget.saturating_sub(rendered_prompt_chars);
+    let overflow_classification = if selection.truncated_item_count > 0 {
+        "item_truncated"
+    } else if selection.skipped_item_count > 0 {
+        "history_compacted"
+    } else if budget_remaining_after_render <= config.prompt_headroom.min(128) {
+        "near_limit"
+    } else {
+        "within_budget"
+    }
+    .to_string();
 
     NativePromptRender {
         prompt,
@@ -239,6 +336,7 @@ pub(crate) fn assemble_native_prompt(
             mode_contract_hash,
             objective_state,
             selected_history,
+            active_code_windows: active_code_window_items,
             code_navigation,
             tool_contracts: tool_contract_lines,
             compacted_summaries,
@@ -246,14 +344,17 @@ pub(crate) fn assemble_native_prompt(
             available_budget,
             rendered_prompt_hash,
             rendered_prompt_bytes,
-            selected_item_count: prompt_items.len(),
+            selected_item_count: prompt_items.len() + active_code_window_count,
             static_prompt_chars,
+            objective_state_chars,
             selected_history_chars,
+            active_code_window_chars,
             compacted_summary_chars,
             code_navigation_chars,
             tool_contract_chars,
             assembly_duration_ms: 0,
             selected_history_count,
+            active_code_window_count,
             code_navigation_count,
             compacted_summary_count,
             tool_contract_count,
@@ -269,6 +370,7 @@ pub(crate) fn assemble_native_prompt(
             rendered_context_hash: metadata.rendered_context_hash,
             context_window_state_hash: metadata.context_window_state_hash,
             delivery_target: metadata.delivery_target,
+            overflow_classification,
         },
     }
 }
@@ -277,6 +379,275 @@ fn stable_hash(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
     format!("{:x}", hasher.finalize())
+}
+
+fn prepare_items_for_prompt(
+    items: Vec<TurnItem>,
+    active_code_windows: &ActiveCodeWindows,
+) -> Vec<TurnItem> {
+    let latest_assistant_turn_index = items.iter().filter_map(|item| match item.kind {
+        TurnItemKind::AssistantText { .. } => item.provenance.turn_index,
+        _ => None,
+    });
+    let latest_assistant_turn_index = latest_assistant_turn_index.max();
+
+    let read_requests_by_call_id: HashMap<String, String> = items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            TurnItemKind::ToolCall {
+                call_id,
+                tool_name,
+                request,
+            } if tool_name == "read_file" => Some((call_id.clone(), request.clone())),
+            _ => None,
+        })
+        .collect();
+
+    let mut seen_read_results = HashSet::new();
+    let mut prepared = Vec::with_capacity(items.len());
+    for item in items.into_iter().rev() {
+        if is_represented_by_active_code_window(&item, active_code_windows) {
+            continue;
+        }
+        if should_drop_stale_tool_call(&item, latest_assistant_turn_index) {
+            continue;
+        }
+        if let Some(dedupe_key) = duplicate_read_result_key(&item, &read_requests_by_call_id) {
+            if !seen_read_results.insert(dedupe_key) {
+                continue;
+            }
+        }
+        prepared.push(item);
+    }
+    prepared.reverse();
+    prepared
+}
+
+fn extract_active_code_windows(items: &[TurnItem]) -> ActiveCodeWindows {
+    let mut windows_by_path = HashMap::<String, ActiveCodeWindow>::new();
+    let mut represented_call_ids = HashSet::new();
+    let mut represented_paths = HashSet::new();
+    let mut read_requests_by_call_id = HashMap::<String, String>::new();
+
+    for item in items {
+        match &item.kind {
+            TurnItemKind::ToolCall {
+                call_id,
+                tool_name,
+                request,
+            } if tool_name == "read_file" => {
+                if let Some(path) = json_request_string_field(request, "path") {
+                    represented_call_ids.insert(call_id.clone());
+                    represented_paths.insert(path.clone());
+                    read_requests_by_call_id.insert(call_id.clone(), path);
+                }
+            }
+            TurnItemKind::ToolResult {
+                call_id,
+                tool_name,
+                outcome: TurnItemOutcome::Success,
+                content,
+            } if tool_name == "read_file" => {
+                if let Some(path) = read_requests_by_call_id.get(call_id) {
+                    windows_by_path.insert(
+                        path.clone(),
+                        ActiveCodeWindow {
+                            path: path.clone(),
+                            source_tool: "read_file".to_string(),
+                            originating_call_id: call_id.clone(),
+                            status: "clean".to_string(),
+                            current_digest: stable_hash(content),
+                            current_content: content.clone(),
+                            changed_lines: Vec::new(),
+                            last_turn_index: item.provenance.turn_index,
+                        },
+                    );
+                }
+            }
+            TurnItemKind::ToolCall {
+                call_id,
+                tool_name,
+                request,
+            } if tool_name == "write_file" => {
+                if let (Some(path), Some(content)) = (
+                    json_request_string_field(request, "path"),
+                    json_request_string_field(request, "content"),
+                ) {
+                    let changed_lines = windows_by_path
+                        .get(&path)
+                        .map(|window| {
+                            compute_changed_line_ranges(&window.current_content, &content)
+                        })
+                        .unwrap_or_else(|| compute_changed_line_ranges("", &content));
+                    represented_call_ids.insert(call_id.clone());
+                    represented_paths.insert(path.clone());
+                    windows_by_path.insert(
+                        path.clone(),
+                        ActiveCodeWindow {
+                            path,
+                            source_tool: "write_file".to_string(),
+                            originating_call_id: call_id.clone(),
+                            status: "dirty".to_string(),
+                            current_digest: stable_hash(&content),
+                            current_content: content,
+                            changed_lines,
+                            last_turn_index: item.provenance.turn_index,
+                        },
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut windows = windows_by_path.into_values().collect::<Vec<_>>();
+    windows.sort_by_key(|window| std::cmp::Reverse(window.last_turn_index.unwrap_or_default()));
+    ActiveCodeWindows {
+        windows,
+        represented_call_ids,
+        represented_paths,
+    }
+}
+
+fn select_active_code_window_items(
+    active_code_windows: &ActiveCodeWindows,
+    budget: usize,
+) -> Vec<NativePromptItem> {
+    let mut windows = active_code_windows.windows.clone();
+    windows.sort_by_key(|window| {
+        (
+            window.status != "dirty",
+            std::cmp::Reverse(window.last_turn_index.unwrap_or_default()),
+        )
+    });
+
+    let mut used = 0usize;
+    let mut selected = Vec::new();
+    for window in windows {
+        let item = NativePromptItem {
+            item_id: format!("code-window:{}", window.path),
+            kind: "code_window".to_string(),
+            text: window.render_for_prompt(),
+        };
+        let chars = item.text.chars().count();
+        if selected.is_empty() || used.saturating_add(chars) <= budget {
+            used = used.saturating_add(chars);
+            selected.push(item);
+        }
+    }
+    selected
+}
+
+fn is_represented_by_active_code_window(
+    item: &TurnItem,
+    active_code_windows: &ActiveCodeWindows,
+) -> bool {
+    match &item.kind {
+        TurnItemKind::ToolCall {
+            call_id, tool_name, ..
+        }
+        | TurnItemKind::ToolResult {
+            call_id, tool_name, ..
+        } if matches!(tool_name.as_str(), "read_file" | "write_file") => {
+            active_code_windows.represented_call_ids.contains(call_id)
+        }
+        TurnItemKind::AssistantText { directive, content } if directive == "act" => {
+            assistant_action_path(content).is_some_and(|(tool_name, path)| {
+                matches!(tool_name.as_str(), "read_file" | "write_file")
+                    && active_code_windows.represented_paths.contains(&path)
+            })
+        }
+        _ => false,
+    }
+}
+
+fn assistant_action_path(action: &str) -> Option<(String, String)> {
+    let mut parts = action.splitn(3, ':');
+    let prefix = parts.next()?;
+    if prefix != "tool" {
+        return None;
+    }
+    let tool_name = parts.next()?.to_string();
+    let payload = parts.next().unwrap_or_default();
+    let path = json_request_string_field(payload, "path")?;
+    Some((tool_name, path))
+}
+
+fn json_request_string_field(request: &str, key: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(request)
+        .ok()?
+        .get(key)?
+        .as_str()
+        .map(ToString::to_string)
+}
+
+fn short_hash(value: &str) -> String {
+    value.chars().take(12).collect()
+}
+
+fn compute_changed_line_ranges(previous: &str, current: &str) -> Vec<(usize, usize)> {
+    if previous == current {
+        return Vec::new();
+    }
+
+    let previous_lines = previous.lines().collect::<Vec<_>>();
+    let current_lines = current.lines().collect::<Vec<_>>();
+
+    let mut prefix = 0;
+    while prefix < previous_lines.len()
+        && prefix < current_lines.len()
+        && previous_lines[prefix] == current_lines[prefix]
+    {
+        prefix += 1;
+    }
+
+    let mut suffix = 0;
+    while suffix < previous_lines.len().saturating_sub(prefix)
+        && suffix < current_lines.len().saturating_sub(prefix)
+        && previous_lines[previous_lines.len() - 1 - suffix]
+            == current_lines[current_lines.len() - 1 - suffix]
+    {
+        suffix += 1;
+    }
+
+    let changed_start = prefix + 1;
+    let changed_end = current_lines
+        .len()
+        .saturating_sub(suffix)
+        .max(changed_start);
+    vec![(changed_start, changed_end)]
+}
+
+fn should_drop_stale_tool_call(item: &TurnItem, latest_assistant_turn_index: Option<u32>) -> bool {
+    let Some(latest_assistant_turn_index) = latest_assistant_turn_index else {
+        return false;
+    };
+    matches!(item.kind, TurnItemKind::ToolCall { .. })
+        && item
+            .provenance
+            .turn_index
+            .is_some_and(|turn_index| turn_index < latest_assistant_turn_index)
+}
+
+fn duplicate_read_result_key(
+    item: &TurnItem,
+    read_requests_by_call_id: &HashMap<String, String>,
+) -> Option<String> {
+    match &item.kind {
+        TurnItemKind::ToolResult {
+            call_id,
+            tool_name,
+            outcome: TurnItemOutcome::Success,
+            content,
+        } if tool_name == "read_file" => Some(format!(
+            "{}:{}",
+            read_requests_by_call_id
+                .get(call_id)
+                .map_or("", String::as_str),
+            stable_hash(content)
+        )),
+        _ => None,
+    }
 }
 
 fn base_runtime_instructions() -> String {
@@ -305,17 +676,19 @@ fn objective_state(mode: AgentMode, input: &ExecutionInput) -> String {
         AgentMode::TaskExecutor => {
             let kind = if !input.prior_attempts.is_empty() || input.verifier_feedback.is_some() {
                 "retry"
-            } else if input
-                .context
-                .as_deref()
-                .is_some_and(|context| context.contains("Execution checkpoints"))
-            {
-                "checkpoint"
             } else {
                 "task"
             };
+            let checkpoint_guidance = input
+                .context
+                .as_deref()
+                .filter(|context| context.contains("Execution checkpoints"))
+                .map(|_| {
+                    "\nCheckpoint Handling: keep making task progress; complete declared checkpoints when their step is actually reached, and never let checkpoint management replace the core task steps."
+                })
+                .unwrap_or("");
             format!(
-                "{kind}\nTask: {}\nSuccess Criteria: {}",
+                "{kind}\nTask: {}\nSuccess Criteria: {}{checkpoint_guidance}",
                 input.task_description, input.success_criteria
             )
         }

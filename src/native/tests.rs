@@ -208,6 +208,9 @@ fn agent_loop_compacts_history_to_avoid_token_budget_overflow() {
                     request: action.to_string(),
                     duration_ms: Some(1),
                     response: Some(large_tool_response.clone()),
+                    response_original_bytes: Some(large_tool_response.len()),
+                    response_stored_bytes: Some(large_tool_response.len()),
+                    response_truncated: false,
                     failure: None,
                     policy_tags: Vec::new(),
                 }]
@@ -303,6 +306,50 @@ fn agent_loop_executes_tools_inside_the_model_loop() {
         .latest_tool_names_visible
         .iter()
         .any(|tool| tool == "read_file"));
+}
+
+#[test]
+fn prompt_assembly_reports_lane_accounting_and_overflow_state() {
+    let mut config = NativeRuntimeConfig::default();
+    config.token_budget = 700;
+    config.prompt_headroom = 96;
+    let input = native_input(None);
+    let engine = NativeToolEngine::default();
+    let contracts = engine.contracts_for_mode(config.agent_mode);
+    let history = vec![
+        user_input_item(
+            "inv-overflow",
+            0,
+            "objective",
+            "Investigate a large tool output and summarize the important findings".to_string(),
+            "test",
+        ),
+        TurnItem {
+            id: "inv-overflow:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-overflow".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-1".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-1".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "A".repeat(1_800),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert!(rendered.assembly.objective_state_chars > 0);
+    assert_ne!(rendered.assembly.overflow_classification, "within_budget");
 }
 
 #[test]
@@ -494,6 +541,481 @@ fn budget_compaction_stabilizes_for_large_tool_result_history() {
         prompt.chars().count() < 1_000,
         "expected compacted prompt to fit budget"
     );
+}
+
+#[test]
+fn assemble_native_prompt_deduplicates_repeated_identical_read_results() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let repeated_content = "fn same_file_body() {}".repeat(400);
+    let history = vec![
+        user_input_item(
+            "inv-repeat-read",
+            0,
+            "objective",
+            "Inspect the same file twice".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-repeat-read",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-repeat-read:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-repeat-read".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-1".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-1".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-repeat-read:0:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-repeat-read".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-1".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-1".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: repeated_content.clone(),
+            },
+        },
+        assistant_item(
+            "inv-repeat-read",
+            1,
+            4,
+            &ModelDirective::Think {
+                message: "Read it again to confirm nothing changed".to_string(),
+            },
+        ),
+        assistant_item(
+            "inv-repeat-read",
+            2,
+            5,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-repeat-read:2:6".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(2),
+                item_index: 6,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-repeat-read".to_string(),
+                turn_index: Some(2),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-2".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-2".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-repeat-read:2:7".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(2),
+                item_index: 7,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-repeat-read".to_string(),
+                turn_index: Some(2),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-2".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-2".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: repeated_content.clone(),
+            },
+        },
+        assistant_item(
+            "inv-repeat-read",
+            3,
+            8,
+            &ModelDirective::Think {
+                message: "Proceed with the latest context only".to_string(),
+            },
+        ),
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(rendered.prompt.matches(&repeated_content).count(), 1);
+    assert_eq!(rendered.assembly.tool_result_items_visible, 0);
+    assert_eq!(rendered.assembly.active_code_window_count, 1);
+}
+
+#[test]
+fn assemble_native_prompt_summarizes_large_write_payloads() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let large_content = "let rewritten = true;\n".repeat(512);
+    let assistant_action = format!(
+        "tool:write_file:{{\"path\":\"src/native/tests.rs\",\"content\":{content:?},\"append\":false}}",
+        content = large_content,
+    );
+    let tool_request = format!(
+        "{{\"path\":\"src/native/tests.rs\",\"content\":{content:?},\"append\":false}}",
+        content = large_content,
+    );
+    let history = vec![
+        user_input_item(
+            "inv-write-summary",
+            0,
+            "objective",
+            "Rewrite a file through the write tool".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-write-summary",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: assistant_action,
+            },
+        ),
+        TurnItem {
+            id: "inv-write-summary:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-write-summary".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-write-1".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-write-1".to_string(),
+                tool_name: "write_file".to_string(),
+                request: tool_request,
+            },
+        },
+        TurnItem {
+            id: "inv-write-summary:0:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-write-summary".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-write-1".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-write-1".to_string(),
+                tool_name: "write_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "wrote file".to_string(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(rendered.prompt.matches(&large_content).count(), 1);
+    assert!(rendered.prompt.contains("Active Code Windows"));
+    assert!(rendered.prompt.contains("[code_window:dirty:write_file]"));
+    assert!(rendered.prompt.contains("path=src/native/tests.rs"));
+    assert!(rendered.prompt.contains("call_id=call-write-1"));
+    assert!(!rendered.prompt.contains("[tool_call:write_file]"));
+    assert!(!rendered.prompt.contains("[assistant:act] tool:write_file:"));
+}
+
+#[test]
+fn assemble_native_prompt_unifies_read_and_write_into_active_code_windows() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let initial_content = "fn before() {}\n".repeat(64);
+    let rewritten_content = "fn after() {}\n".repeat(64);
+    let tool_request = format!(
+        "{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+        content = rewritten_content,
+    );
+    let history = vec![
+        user_input_item(
+            "inv-windowed",
+            0,
+            "objective",
+            "Open and then rewrite a file".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-windowed",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-windowed:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-windowed".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-windowed".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-windowed".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-windowed:0:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-windowed".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-windowed".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-windowed".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: initial_content,
+            },
+        },
+        assistant_item(
+            "inv-windowed",
+            1,
+            4,
+            &ModelDirective::Act {
+                action: format!(
+                    "tool:write_file:{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = rewritten_content,
+                ),
+            },
+        ),
+        TurnItem {
+            id: "inv-windowed:1:5".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 5,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-windowed".to_string(),
+                turn_index: Some(1),
+                source: "tool.call".to_string(),
+                reference: Some("call-write-windowed".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-write-windowed".to_string(),
+                tool_name: "write_file".to_string(),
+                request: tool_request,
+            },
+        },
+        TurnItem {
+            id: "inv-windowed:1:6".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 6,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-windowed".to_string(),
+                turn_index: Some(1),
+                source: "tool.result".to_string(),
+                reference: Some("call-write-windowed".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-write-windowed".to_string(),
+                tool_name: "write_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "wrote file".to_string(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(rendered.assembly.active_code_window_count, 1);
+    assert!(rendered.prompt.contains("Active Code Windows"));
+    assert!(rendered.prompt.contains("[code_window:dirty:write_file]"));
+    assert!(rendered.prompt.contains("call_id=call-write-windowed"));
+    assert!(rendered.prompt.contains("changed_lines=1-64"));
+    assert!(rendered.prompt.contains(&rewritten_content));
+    assert!(!rendered.prompt.contains("[tool_call:read_file]"));
+    assert!(!rendered.prompt.contains("[tool_call:write_file]"));
+}
+
+#[test]
+fn active_code_window_budget_prefers_dirty_windows_under_pressure() {
+    let config = NativeRuntimeConfig {
+        token_budget: 3_000,
+        prompt_headroom: 1_000,
+        ..NativeRuntimeConfig::default()
+    };
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let clean_content = "fn clean() {}\n".repeat(40);
+    let dirty_content = "fn dirty() {}\n".repeat(40);
+    let history = vec![
+        user_input_item(
+            "inv-window-budget",
+            0,
+            "objective",
+            "Keep only the most relevant code window".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-window-budget",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/tests.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-window-budget:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-window-budget".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-budget".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-budget".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/tests.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-window-budget:0:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-window-budget".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-budget".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-budget".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: clean_content,
+            },
+        },
+        assistant_item(
+            "inv-window-budget",
+            1,
+            4,
+            &ModelDirective::Act {
+                action: format!(
+                    "tool:write_file:{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = dirty_content,
+                ),
+            },
+        ),
+        TurnItem {
+            id: "inv-window-budget:1:5".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 5,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-window-budget".to_string(),
+                turn_index: Some(1),
+                source: "tool.call".to_string(),
+                reference: Some("call-write-budget".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-write-budget".to_string(),
+                tool_name: "write_file".to_string(),
+                request: format!(
+                    "{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = dirty_content,
+                ),
+            },
+        },
+        TurnItem {
+            id: "inv-window-budget:1:6".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 6,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-window-budget".to_string(),
+                turn_index: Some(1),
+                source: "tool.result".to_string(),
+                reference: Some("call-write-budget".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-write-budget".to_string(),
+                tool_name: "write_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "wrote file".to_string(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(rendered.assembly.active_code_window_count, 1);
+    assert!(rendered
+        .prompt
+        .contains("path=src/native/prompt_assembly.rs"));
+    assert!(!rendered.prompt.contains("path=src/native/tests.rs"));
 }
 
 #[test]
@@ -993,6 +1515,9 @@ fn agent_loop_treats_checkpoint_already_completed_auto_completion_as_benign() {
                     request: "{}".to_string(),
                     duration_ms: None,
                     response: None,
+                    response_original_bytes: None,
+                    response_stored_bytes: None,
+                    response_truncated: false,
                     failure: Some(NativeToolCallFailure {
                         code: "native_tool_execution_failed".to_string(),
                         message: "checkpoint completion failed with checkpoint_already_completed"
@@ -1061,6 +1586,24 @@ fn prompt_assembly_is_deterministic_and_carries_manifest_hashes() {
     assert!(first.prompt.contains("input_schema="));
     assert!(first.prompt.contains("\"kind\""));
     assert!(first.prompt.contains("\"filter\""));
+}
+
+#[test]
+fn task_executor_objective_state_stays_task_oriented_when_checkpoints_exist() {
+    let config = NativeRuntimeConfig::default();
+    let mut input = native_input(None);
+    input.context = Some(
+        "Execution checkpoints (in order): checkpoint-1\nComplete checkpoints from the runtime with the built-in tool: ACT:tool:checkpoint_complete:{\"id\":\"<checkpoint-id>\",\"summary\":\"optional progress summary\"}".to_string(),
+    );
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+
+    let rendered = assemble_native_prompt(&config, &input, &[], &contracts);
+
+    assert!(rendered.assembly.objective_state.starts_with("task\n"));
+    assert!(rendered
+        .assembly
+        .objective_state
+        .contains("Checkpoint Handling: keep making task progress"));
 }
 
 #[test]

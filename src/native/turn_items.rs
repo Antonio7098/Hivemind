@@ -2,6 +2,8 @@ use super::*;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 
+const PROMPT_TOOL_PAYLOAD_PREVIEW_CHARS: usize = 160;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct TurnItem {
     pub id: String,
@@ -88,11 +90,21 @@ impl TurnItem {
         match &self.kind {
             TurnItemKind::UserInput { label, content } => format!("[user:{label}] {content}"),
             TurnItemKind::AssistantText { directive, content } => {
-                format!("[assistant:{directive}] {content}")
+                let rendered = if directive == "act" {
+                    summarize_assistant_action_for_prompt(content)
+                        .unwrap_or_else(|| content.clone())
+                } else {
+                    content.clone()
+                };
+                format!("[assistant:{directive}] {rendered}")
             }
             TurnItemKind::ToolCall {
                 tool_name, request, ..
-            } => format!("[tool_call:{tool_name}] {request}"),
+            } => format!(
+                "[tool_call:{tool_name}] {}",
+                summarize_tool_request_for_prompt(tool_name, request)
+                    .unwrap_or_else(|| request.clone())
+            ),
             TurnItemKind::ToolResult {
                 tool_name,
                 outcome,
@@ -128,6 +140,77 @@ impl TurnItem {
             }
         }
     }
+}
+
+fn summarize_assistant_action_for_prompt(action: &str) -> Option<String> {
+    let mut parts = action.splitn(3, ':');
+    let prefix = parts.next()?;
+    if prefix != "tool" {
+        return None;
+    }
+    let tool_name = parts.next()?;
+    let payload = parts.next().unwrap_or_default();
+    summarize_tool_request_for_prompt(tool_name, payload)
+        .map(|summary| format!("tool:{tool_name} {summary}"))
+}
+
+fn summarize_tool_request_for_prompt(tool_name: &str, request: &str) -> Option<String> {
+    let request_chars = request.chars().count();
+    let request_digest = short_digest(request.as_bytes());
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(request) {
+        if let Some(summary) = summarize_known_tool_request(tool_name, &value, request_chars) {
+            return Some(format!("{summary} request_digest={request_digest}"));
+        }
+    }
+    (request_chars > PROMPT_TOOL_PAYLOAD_PREVIEW_CHARS)
+        .then(|| format!("request_chars={request_chars} request_digest={request_digest}"))
+}
+
+fn summarize_known_tool_request(
+    tool_name: &str,
+    value: &serde_json::Value,
+    request_chars: usize,
+) -> Option<String> {
+    match tool_name {
+        "write_file" => Some(format!(
+            "path={} append={} content_chars={} request_chars={request_chars}",
+            json_string_field(value, "path").unwrap_or_else(|| "<unknown>".to_string()),
+            json_bool_field(value, "append").unwrap_or(false),
+            json_string_field(value, "content").map_or(0, |content| content.chars().count()),
+        )),
+        "str_replace_editor" => Some(format!(
+            "path={} old_chars={} new_chars={} request_chars={request_chars}",
+            json_string_field(value, "path").unwrap_or_else(|| "<unknown>".to_string()),
+            json_string_field(value, "old_str").map_or(0, |content| content.chars().count()),
+            json_string_field(value, "new_str").map_or(0, |content| content.chars().count()),
+        )),
+        "apply_patch" => Some(format!(
+            "patch_chars={} request_chars={request_chars}",
+            json_string_field(value, "patch").map_or(0, |content| content.chars().count()),
+        )),
+        "run_command" => Some(format!(
+            "command={} request_chars={request_chars}",
+            json_string_field(value, "command")
+                .map(|command| truncate_with_marker(&command, PROMPT_TOOL_PAYLOAD_PREVIEW_CHARS))
+                .unwrap_or_else(|| "<unknown>".to_string()),
+        )),
+        _ => None,
+    }
+}
+
+fn json_string_field(value: &serde_json::Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(ToString::to_string)
+}
+
+fn json_bool_field(value: &serde_json::Value, key: &str) -> Option<bool> {
+    value.get(key).and_then(serde_json::Value::as_bool)
+}
+
+fn short_digest(bytes: &[u8]) -> String {
+    digest_hex(bytes).chars().take(12).collect()
 }
 
 pub(crate) fn normalize_turn_items(items: &[TurnItem]) -> Vec<TurnItem> {
@@ -500,6 +583,94 @@ pub(crate) fn assistant_item(
     }
 }
 
+fn render_graph_query_navigation_summary(trace: &NativeToolCallTrace, response: &str) -> String {
+    let Ok(payload) = serde_json::from_str::<serde_json::Value>(response) else {
+        return truncate_with_marker(response, 512);
+    };
+    if payload
+        .get("output_truncated")
+        .and_then(serde_json::Value::as_bool)
+        == Some(true)
+    {
+        let original = payload
+            .get("original_bytes")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or_default();
+        let stored = payload
+            .get("stored_bytes")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or_default();
+        return format!(
+            "GraphCode navigation trace truncated at record time (original_bytes={original}, stored_bytes={stored}). Re-run with tighter bounds if you need more detail."
+        );
+    }
+    let Some(output) = payload.get("output") else {
+        return truncate_with_marker(response, 512);
+    };
+    let Ok(result) =
+        serde_json::from_value::<crate::core::graph_query::GraphQueryResult>(output.clone())
+    else {
+        return truncate_with_marker(response, 512);
+    };
+    let top_nodes = result
+        .nodes
+        .iter()
+        .take(4)
+        .map(|node| {
+            node.path
+                .clone()
+                .or_else(|| Some(node.logical_key.clone()))
+                .map(|path| format!("{}:{path}", node.node_class))
+                .unwrap_or_else(|| format!("{}:{}", node.node_class, node.node_id))
+        })
+        .collect::<Vec<_>>();
+    let mut summary = format!(
+        "kind={} nodes={} edges={} truncated={} visited={}/{} fingerprint={}",
+        result.query_kind,
+        result.nodes.len(),
+        result.edges.len(),
+        result.truncated,
+        result.cost.visited_nodes,
+        result.cost.visited_edges,
+        short_hash(&result.canonical_fingerprint),
+    );
+    if !top_nodes.is_empty() {
+        summary.push_str(" top=[");
+        summary.push_str(&top_nodes.join(", "));
+        summary.push(']');
+    }
+    if result.query_kind == "python_query" {
+        if let Some(repo_name) = result.python_repo_name.as_deref() {
+            summary.push_str(&format!(" repo={repo_name}"));
+        }
+        if !result.selected_block_ids.is_empty() {
+            summary.push_str(&format!(" selected={}", result.selected_block_ids.len()));
+        }
+        if let Some(usage) = result.python_usage.as_ref() {
+            if let Some(operations) = usage
+                .get("operation_count")
+                .and_then(serde_json::Value::as_u64)
+            {
+                summary.push_str(&format!(" ops={operations}"));
+            }
+        }
+        if let Some(stdout) = result.python_stdout.as_deref() {
+            if !stdout.is_empty() {
+                summary.push_str(" stdout=");
+                summary.push_str(&truncate_with_marker(stdout, 96));
+            }
+        }
+    }
+    if trace.response_truncated {
+        summary.push_str(" record_truncated=true");
+    }
+    truncate_with_marker(&summary, 512)
+}
+
+fn short_hash(value: &str) -> String {
+    value.chars().take(12).collect()
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn items_from_tool_trace(
     invocation_id: &str,
@@ -573,7 +744,7 @@ pub(crate) fn items_from_tool_trace(
                 kind: TurnItemKind::CodeNavigation {
                     call_id: trace.call_id.clone(),
                     tool_name: trace.tool_name.clone(),
-                    summary: truncate_with_marker(response, 512),
+                    summary: render_graph_query_navigation_summary(trace, response),
                 },
             });
         }
@@ -688,7 +859,7 @@ fn item_id(invocation_id: &str, turn_index: Option<u32>, item_index: u32) -> Str
     )
 }
 
-fn truncate_with_marker(input: &str, max_chars: usize) -> String {
+pub(crate) fn truncate_with_marker(input: &str, max_chars: usize) -> String {
     if max_chars == 0 {
         return String::new();
     }
