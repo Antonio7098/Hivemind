@@ -11,6 +11,8 @@
 
 **Sequencing note:** The capability-lift work previously tracked as Sprint 58 in Phase 4.5 remains intentionally relocated into this phase, but it must land on top of the original 4.7 foundation: native tool loop, bounded runtime-local context, prompt-safe terminal/session handling, and replay-safe journaling.
 
+**Stabilization note:** Correctness and recovery fixes discovered while hardening Sprint 58 behavior (for example checkpoint completion reliability, malformed-output recovery, deterministic history normalization, or compaction bugs that cause non-convergence) may land immediately as fast-follow stabilization work. Do **not** treat those fixes as permission to pull the broader runtime context-manager design forward; lane-aware budgeting, record-time truncation, semantic context-lane policy, and compaction-strategy architecture remain Sprint 59 scope.
+
 **Manual validation rule:** For every sprint in this phase, manual validation must include at least one real-project exercise in `@hivemind-test` where the native harness uses real provider-backed LLM calls to build, extend, debug, or resume work on a real app rather than a toy prompt-only scenario. The same reference project may be evolved across sprints if that produces better continuity and stronger evidence.
 
 ## CodeGraph Implementation Rule (Mandatory)
