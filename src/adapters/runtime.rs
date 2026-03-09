@@ -59,7 +59,7 @@ mod telemetry;
 
 pub use adapter::{
     AdapterConfig, ExecutionReport, InteractiveAdapterEvent, InteractiveExecutionResult,
-    RuntimeAdapter, RuntimeError,
+    RuntimeAdapter, RuntimeError, StructuredRuntimeObservation,
 };
 pub use env::{
     build_protected_runtime_environment, deterministic_env_pairs, ProtectedRuntimeEnvironment,

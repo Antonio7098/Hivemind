@@ -22,6 +22,7 @@ const GET_ONLY_PATHS: &[&str] = &[
     "/api/runtimes/health",
     "/api/events",
     "/api/events/inspect",
+    "/api/runtime-stream",
     "/api/verify/results",
     "/api/attempts/inspect",
     "/api/attempts/diff",
@@ -79,6 +80,7 @@ const POST_ONLY_PATHS: &[&str] = &[
     "/api/merge/execute",
     "/api/checkpoints/complete",
     "/api/worktrees/cleanup",
+    "/api/worktrees/restore-turn",
     "/api/governance/constitution/check",
     "/api/governance/graph-snapshot/refresh",
 ];

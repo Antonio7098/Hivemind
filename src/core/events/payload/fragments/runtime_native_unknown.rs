@@ -400,6 +400,37 @@
         stream: RuntimeOutputStream,
         command: String,
     },
+    RuntimeCommandCompleted {
+        attempt_id: Uuid,
+        stream: RuntimeOutputStream,
+        command: String,
+        #[serde(default)]
+        exit_code: Option<i32>,
+        #[serde(default)]
+        output: Option<String>,
+    },
+    RuntimeSessionObserved {
+        attempt_id: Uuid,
+        adapter_name: String,
+        stream: RuntimeOutputStream,
+        session_id: String,
+    },
+    RuntimeTurnCompleted {
+        attempt_id: Uuid,
+        adapter_name: String,
+        stream: RuntimeOutputStream,
+        ordinal: u32,
+        #[serde(default)]
+        provider_session_id: Option<String>,
+        #[serde(default)]
+        provider_turn_id: Option<String>,
+        #[serde(default)]
+        git_ref: Option<String>,
+        #[serde(default)]
+        commit_sha: Option<String>,
+        #[serde(default)]
+        summary: Option<String>,
+    },
     RuntimeToolCallObserved {
         attempt_id: Uuid,
         stream: RuntimeOutputStream,

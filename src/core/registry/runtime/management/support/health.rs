@@ -146,12 +146,14 @@ impl Registry {
         let mut runtime = runtime;
         Self::prepare_runtime_environment(&mut runtime, "registry:build_runtime_adapter")?;
         let timeout = Duration::from_millis(runtime.timeout_ms);
+        let resume_session_id = runtime.env.remove("HIVEMIND_RUNTIME_RESUME_SESSION_ID");
         match runtime.adapter_name.as_str() {
             "opencode" => {
                 let mut cfg = OpenCodeConfig::new(PathBuf::from(runtime.binary_path));
                 cfg.model = runtime.model.clone().or(cfg.model);
                 cfg.base.args = runtime.args;
                 cfg.base.env = runtime.env;
+                cfg.base.resume_session_id.clone_from(&resume_session_id);
                 cfg.base.timeout = timeout;
                 Ok(SelectedRuntimeAdapter::OpenCode(
                     crate::adapters::opencode::OpenCodeAdapter::new(cfg),
@@ -166,6 +168,7 @@ impl Registry {
                     runtime.args
                 };
                 cfg.base.env = runtime.env;
+                cfg.base.resume_session_id.clone_from(&resume_session_id);
                 cfg.base.timeout = timeout;
                 Ok(SelectedRuntimeAdapter::Codex(CodexAdapter::new(cfg)))
             }
@@ -188,6 +191,7 @@ impl Registry {
                 cfg.model = runtime.model;
                 cfg.base.args = runtime.args;
                 cfg.base.env = runtime.env;
+                cfg.base.resume_session_id.clone_from(&resume_session_id);
                 cfg.base.timeout = timeout;
                 Ok(SelectedRuntimeAdapter::Kilo(KiloAdapter::new(cfg)))
             }

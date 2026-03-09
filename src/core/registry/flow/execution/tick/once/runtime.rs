@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_lines)]
 
 use super::*;
+use crate::adapters::runtime::StructuredRuntimeObservation;
 
 pub(super) struct TickRuntimeExecution {
     pub(super) runtime_for_adapter: ProjectRuntimeConfig,
@@ -63,6 +64,13 @@ impl Registry {
         runtime_for_adapter
             .env
             .insert("HIVEMIND_FLOW_ID".to_string(), flow.id.to_string());
+        attach_resume_session_if_supported(
+            state,
+            flow,
+            task_id,
+            attempt_id,
+            &mut runtime_for_adapter,
+        );
         runtime_for_adapter.env.insert(
             "HIVEMIND_DATA_DIR".to_string(),
             self.config.data_dir.to_string_lossy().to_string(),
@@ -426,6 +434,17 @@ impl Registry {
             }
         }
 
+        let has_structured_command_events =
+            report
+                .structured_runtime_observations
+                .iter()
+                .any(|observation| {
+                    matches!(
+                        observation,
+                        StructuredRuntimeObservation::CommandCompleted { .. }
+                    )
+                });
+
         if !interactive {
             for chunk in report.stdout.lines() {
                 let content = chunk.to_string();
@@ -441,11 +460,15 @@ impl Registry {
                     HivemindError::system("event_append_failed", e.to_string(), origin)
                 })?;
 
+                let observations = runtime_projector
+                    .observe_chunk(RuntimeOutputStream::Stdout, &format!("{content}\n"));
                 let _ = self.append_projected_runtime_observations(
                     attempt_id,
                     attempt_corr,
-                    runtime_projector
-                        .observe_chunk(RuntimeOutputStream::Stdout, &format!("{content}\n")),
+                    filter_projected_runtime_observations(
+                        observations,
+                        has_structured_command_events,
+                    ),
                     origin,
                 );
             }
@@ -463,20 +486,34 @@ impl Registry {
                     HivemindError::system("event_append_failed", e.to_string(), origin)
                 })?;
 
+                let observations = runtime_projector
+                    .observe_chunk(RuntimeOutputStream::Stderr, &format!("{content}\n"));
                 let _ = self.append_projected_runtime_observations(
                     attempt_id,
                     attempt_corr,
-                    runtime_projector
-                        .observe_chunk(RuntimeOutputStream::Stderr, &format!("{content}\n")),
+                    filter_projected_runtime_observations(
+                        observations,
+                        has_structured_command_events,
+                    ),
                     origin,
                 );
             }
+
+            let _ = self.append_structured_runtime_observations(
+                attempt_id,
+                attempt_corr,
+                report.structured_runtime_observations.clone(),
+                origin,
+            );
         }
 
         let _ = self.append_projected_runtime_observations(
             attempt_id,
             attempt_corr,
-            runtime_projector.flush(),
+            filter_projected_runtime_observations(
+                runtime_projector.flush(),
+                has_structured_command_events,
+            ),
             origin,
         );
 
@@ -506,4 +543,78 @@ impl Registry {
             report,
         }))
     }
+}
+
+fn filter_projected_runtime_observations(
+    observations: Vec<ProjectedRuntimeObservation>,
+    suppress_command_observed: bool,
+) -> Vec<ProjectedRuntimeObservation> {
+    if !suppress_command_observed {
+        return observations;
+    }
+
+    observations
+        .into_iter()
+        .filter(|observation| {
+            !matches!(
+                observation,
+                ProjectedRuntimeObservation::CommandObserved { .. }
+            )
+        })
+        .collect()
+}
+
+fn attach_resume_session_if_supported(
+    state: &AppState,
+    flow: &TaskFlow,
+    task_id: Uuid,
+    attempt_id: Uuid,
+    runtime_for_adapter: &mut ProjectRuntimeConfig,
+) {
+    if !matches!(
+        runtime_for_adapter.adapter_name.as_str(),
+        "opencode" | "codex" | "kilo"
+    ) {
+        return;
+    }
+
+    let Some(exec) = flow.task_executions.get(&task_id) else {
+        return;
+    };
+    if exec.retry_mode != RetryMode::Continue {
+        return;
+    }
+
+    let Some(current_attempt) = state.attempts.get(&attempt_id) else {
+        return;
+    };
+
+    let previous = state
+        .attempts
+        .values()
+        .filter(|attempt| {
+            attempt.flow_id == flow.id
+                && attempt.task_id == task_id
+                && attempt.attempt_number < current_attempt.attempt_number
+        })
+        .filter_map(|attempt| {
+            attempt.runtime_session.as_ref().and_then(|session| {
+                (session.adapter_name == runtime_for_adapter.adapter_name)
+                    .then_some((attempt, session))
+            })
+        })
+        .max_by_key(|(attempt, _)| attempt.attempt_number);
+
+    let Some((previous_attempt, session)) = previous else {
+        return;
+    };
+
+    runtime_for_adapter.env.insert(
+        "HIVEMIND_RUNTIME_RESUME_SESSION_ID".to_string(),
+        session.session_id.clone(),
+    );
+    runtime_for_adapter.env.insert(
+        "HIVEMIND_RUNTIME_RESUME_PARENT_ATTEMPT_ID".to_string(),
+        previous_attempt.id.to_string(),
+    );
 }

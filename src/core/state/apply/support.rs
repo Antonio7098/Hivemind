@@ -54,6 +54,9 @@ impl AppState {
                 | EventPayload::RuntimeRecoveryScheduled { .. }
                 | EventPayload::RuntimeFilesystemObserved { .. }
                 | EventPayload::RuntimeCommandObserved { .. }
+                | EventPayload::RuntimeCommandCompleted { .. }
+                | EventPayload::RuntimeSessionObserved { .. }
+                | EventPayload::RuntimeTurnCompleted { .. }
                 | EventPayload::RuntimeToolCallObserved { .. }
                 | EventPayload::RuntimeTodoSnapshotUpdated { .. }
                 | EventPayload::RuntimeNarrativeOutputObserved { .. }
@@ -66,6 +69,7 @@ impl AppState {
                 | EventPayload::RetryContextAssembled { .. }
                 | EventPayload::FlowIntegrationLockAcquired { .. }
                 | EventPayload::WorktreeCleanupPerformed { .. }
+                | EventPayload::WorktreeTurnRefRestored { .. }
                 | EventPayload::Unknown
         )
     }
