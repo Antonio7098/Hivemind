@@ -259,7 +259,8 @@ mod turn_items;
 pub use self::mock::MockModelClient;
 pub(crate) use self::prompt_assembly::{assemble_native_prompt, NativePromptAssembly};
 pub(crate) use self::turn_items::{
-    assistant_item, compact_history_for_budget_pressure, compacted_summary_item,
+    assistant_item, compact_history_for_budget_pressure, compact_history_for_hard_budget_limit,
+    compacted_summary_item,
     items_from_tool_trace, normalize_turn_items, user_input_item, TurnItem,
 };
 

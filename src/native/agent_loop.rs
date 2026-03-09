@@ -376,7 +376,7 @@ impl<M: ModelClient> AgentLoop<M> {
             }
             if self.used_tokens.saturating_add(request_tokens) > self.config.token_budget {
                 if token_budget_recovery_attempts < Self::MAX_TOKEN_BUDGET_RECOVERY_ATTEMPTS {
-                    if let Some(compacted_history) = compact_history_for_budget_pressure(
+                    if let Some(compacted_history) = compact_history_for_hard_budget_limit(
                         invocation_id,
                         self.next_turn_index,
                         &history,

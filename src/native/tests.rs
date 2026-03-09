@@ -455,7 +455,7 @@ fn budget_compaction_stabilizes_for_large_tool_result_history() {
         .filter(|item| item.model_visible)
         .map(TurnItem::render_for_prompt)
         .collect::<Vec<_>>()];
-    while let Some(compacted) = compact_history_for_budget_pressure(
+    while let Some(compacted) = compact_history_for_hard_budget_limit(
         "inv-compact-stable",
         1,
         &history,

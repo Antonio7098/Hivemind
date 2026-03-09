@@ -231,6 +231,39 @@ pub(crate) fn compact_history_for_budget_pressure(
     next_turn_index: u32,
     items: &[TurnItem],
 ) -> Option<Vec<TurnItem>> {
+    compact_history_for_budget_mode(
+        invocation_id,
+        next_turn_index,
+        items,
+        BudgetCompactionMode::SoftPressure,
+    )
+}
+
+pub(crate) fn compact_history_for_hard_budget_limit(
+    invocation_id: &str,
+    next_turn_index: u32,
+    items: &[TurnItem],
+) -> Option<Vec<TurnItem>> {
+    compact_history_for_budget_mode(
+        invocation_id,
+        next_turn_index,
+        items,
+        BudgetCompactionMode::HardLimit,
+    )
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BudgetCompactionMode {
+    SoftPressure,
+    HardLimit,
+}
+
+fn compact_history_for_budget_mode(
+    invocation_id: &str,
+    next_turn_index: u32,
+    items: &[TurnItem],
+    mode: BudgetCompactionMode,
+) -> Option<Vec<TurnItem>> {
     const MAX_SUMMARY_CHARS: usize = 512;
     const RECENT_VISIBLE_ITEMS_TO_PIN: usize = 4;
     const MIN_COMPACTABLE_ITEMS_AFTER_OPTIONAL_PINNING: usize = 2;
@@ -259,55 +292,48 @@ pub(crate) fn compact_history_for_budget_pressure(
 
     let mut optional_pin_groups = Vec::new();
 
-    if let Some(latest_visible_turn_index) = items
-        .iter()
-        .filter(|item| item.model_visible)
-        .filter_map(|item| item.provenance.turn_index)
-        .max()
-    {
-        let group = items
+    if mode == BudgetCompactionMode::SoftPressure {
+        if let Some(latest_visible_turn_index) = items
+            .iter()
+            .filter(|item| item.model_visible)
+            .filter_map(|item| item.provenance.turn_index)
+            .max()
+        {
+            for (index, item) in items.iter().enumerate() {
+                if item.model_visible && item.provenance.turn_index == Some(latest_visible_turn_index)
+                {
+                    pinned_positions.insert(index);
+                }
+            }
+        }
+
+        if let Some(latest_tool_result_turn_index) = items
+            .iter()
+            .filter(|item| item.model_visible)
+            .rev()
+            .find_map(|item| match item.kind {
+                TurnItemKind::ToolResult { .. } => item.provenance.turn_index,
+                _ => None,
+            })
+        {
+            for (index, item) in items.iter().enumerate() {
+                if item.model_visible
+                    && item.provenance.turn_index == Some(latest_tool_result_turn_index)
+                {
+                    pinned_positions.insert(index);
+                }
+            }
+        }
+
+        for index in items
             .iter()
             .enumerate()
-            .filter_map(|(index, item)| {
-                (item.model_visible && item.provenance.turn_index == Some(latest_visible_turn_index))
-                    .then_some(index)
-            })
-            .collect::<Vec<_>>();
-        if !group.is_empty() {
-            optional_pin_groups.push(group);
+            .rev()
+            .filter_map(|(index, item)| item.model_visible.then_some(index))
+            .take(RECENT_VISIBLE_ITEMS_TO_PIN)
+        {
+            optional_pin_groups.push(vec![index]);
         }
-    }
-
-    if let Some(latest_tool_result_turn_index) = items
-        .iter()
-        .filter(|item| item.model_visible)
-        .rev()
-        .find_map(|item| match item.kind {
-            TurnItemKind::ToolResult { .. } => item.provenance.turn_index,
-            _ => None,
-        })
-    {
-        let group = items
-            .iter()
-            .enumerate()
-            .filter_map(|(index, item)| {
-                (item.model_visible && item.provenance.turn_index == Some(latest_tool_result_turn_index))
-                    .then_some(index)
-            })
-            .collect::<Vec<_>>();
-        if !group.is_empty() {
-            optional_pin_groups.push(group);
-        }
-    }
-
-    for index in items
-        .iter()
-        .enumerate()
-        .rev()
-        .filter_map(|(index, item)| item.model_visible.then_some(index))
-        .take(RECENT_VISIBLE_ITEMS_TO_PIN)
-    {
-        optional_pin_groups.push(vec![index]);
     }
 
     for group in optional_pin_groups {
