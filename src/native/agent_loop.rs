@@ -7,6 +7,7 @@ impl<M: ModelClient> AgentLoop<M> {
     const MAX_MALFORMED_DIRECTIVE_RECOVERY_ATTEMPTS: u8 = 4;
     const MAX_TOKEN_BUDGET_RECOVERY_ATTEMPTS: u8 = 3;
     const MAX_CHECKPOINT_DONE_RECOVERY_ATTEMPTS: u8 = 3;
+    const MAX_POST_CHECKPOINT_DONE_RECOVERY_ATTEMPTS: u8 = 1;
     const SOFT_TOKEN_BUDGET_COMPACTION_PERCENT: usize = 60;
 
     #[must_use]
@@ -226,6 +227,27 @@ impl<M: ModelClient> AgentLoop<M> {
         ids
     }
 
+    fn checkpoint_summary_from_request_payload(content: &str) -> Option<String> {
+        let value = serde_json::from_str::<Value>(content).ok()?;
+        value
+            .get("input")
+            .and_then(|input| input.get("summary"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|summary| !summary.is_empty())
+            .map(ToString::to_string)
+    }
+
+    fn latest_completed_checkpoint_summary(&self) -> Option<String> {
+        self.completed_turns.iter().rev().find_map(|turn| {
+            turn.tool_calls.iter().rev().find_map(|trace| {
+                (trace.tool_name == "checkpoint_complete" && trace.failure.is_none())
+                    .then_some(trace.request.as_str())
+                    .and_then(Self::checkpoint_summary_from_request_payload)
+            })
+        })
+    }
+
     fn soft_token_budget_compaction_limit(&self) -> usize {
         self.config
             .token_budget
@@ -342,6 +364,38 @@ impl<M: ModelClient> AgentLoop<M> {
         Some(summary.unwrap_or_else(|| format!("completed checkpoints: {}", declared.join(", "))))
     }
 
+    fn all_declared_checkpoints_completed(
+        &self,
+        request: &ModelTurnRequest,
+        history: &[TurnItem],
+    ) -> bool {
+        let declared = Self::declared_checkpoint_ids(request);
+        if declared.is_empty() {
+            return false;
+        }
+        let completed = self.completed_checkpoint_ids(history);
+        declared.iter().all(|id| completed.contains(id))
+    }
+
+    fn post_checkpoint_done_repair_item(
+        invocation_id: &str,
+        turn_index: u32,
+        repair_attempt: u8,
+    ) -> TurnItem {
+        user_input_item(
+            invocation_id,
+            turn_index
+                .saturating_mul(100)
+                .saturating_add(98)
+                .saturating_add(u32::from(repair_attempt)),
+            "controller_repair",
+            format!(
+                "Runtime repair #{repair_attempt}: all declared execution checkpoints are complete. Return DONE now with a concise summary. Do not call more tools unless essential to fix a newly discovered failure."
+            ),
+            "runtime.repair",
+        )
+    }
+
     fn checkpoint_auto_completion_action(
         request: &ModelTurnRequest,
         directive: &ModelDirective,
@@ -426,6 +480,7 @@ impl<M: ModelClient> AgentLoop<M> {
         let mut malformed_repair_attempts = 0u8;
         let mut token_budget_recovery_attempts = 0u8;
         let mut checkpoint_done_repair_attempts = 0u8;
+        let mut post_checkpoint_done_repair_attempts = 0u8;
 
         while self.state != AgentLoopState::Done {
             self.enforce_budgets()?;
@@ -622,6 +677,37 @@ impl<M: ModelClient> AgentLoop<M> {
                 self.redundant_checkpoint_completion_done_summary(&request, &history, &directive)
             {
                 directive = ModelDirective::Done { summary };
+            }
+            let all_declared_checkpoints_completed =
+                self.all_declared_checkpoints_completed(&request, &history);
+            if all_declared_checkpoints_completed && !matches!(directive, ModelDirective::Done { .. }) {
+                if post_checkpoint_done_repair_attempts
+                    >= Self::MAX_POST_CHECKPOINT_DONE_RECOVERY_ATTEMPTS
+                {
+                    directive = ModelDirective::Done {
+                        summary: self.latest_completed_checkpoint_summary().unwrap_or_else(|| {
+                            let declared = Self::declared_checkpoint_ids(&request);
+                            if declared.is_empty() {
+                                "completed declared execution checkpoints".to_string()
+                            } else {
+                                format!("completed checkpoints: {}", declared.join(", "))
+                            }
+                        }),
+                    };
+                } else {
+                    post_checkpoint_done_repair_attempts =
+                        post_checkpoint_done_repair_attempts.saturating_add(1);
+                    history.push(Self::post_checkpoint_done_repair_item(
+                        invocation_id,
+                        self.next_turn_index,
+                        post_checkpoint_done_repair_attempts,
+                    ));
+                    history = normalize_turn_items(&history);
+                    self.history_items = history.clone();
+                    continue;
+                }
+            } else {
+                post_checkpoint_done_repair_attempts = 0;
             }
             let tool_started = Instant::now();
             let tool_calls = if let Some(action) = synthetic_tool_action.as_deref() {
