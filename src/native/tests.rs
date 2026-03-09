@@ -1157,7 +1157,12 @@ fn active_code_window_budget_prefers_dirty_windows_under_pressure() {
     assert!(rendered
         .prompt
         .contains("path=src/native/prompt_assembly.rs"));
-    assert!(!rendered.prompt.contains("path=src/native/tests.rs"));
+    assert!(rendered
+        .prompt
+        .contains("[code_window_summary:clean:read_file] path=src/native/tests.rs"));
+    assert!(!rendered
+        .prompt
+        .contains("[tool_call:read_file] {\"path\":\"src/native/tests.rs\"}"));
 }
 
 #[test]
@@ -1388,9 +1393,12 @@ fn prompt_assembly_reports_duplicate_and_window_suppression_counters() {
 
     assert_eq!(rendered.assembly.active_code_window_count, 1);
     assert_eq!(rendered.assembly.omitted_active_code_window_count, 1);
-    assert_eq!(rendered.assembly.suppressed_by_active_code_window_count, 3);
-    assert_eq!(rendered.assembly.suppressed_duplicate_read_count, 1);
-    assert_eq!(rendered.assembly.suppressed_stale_tool_call_count, 2);
+    assert_eq!(rendered.assembly.suppressed_by_active_code_window_count, 9);
+    assert_eq!(rendered.assembly.suppressed_duplicate_read_count, 0);
+    assert_eq!(rendered.assembly.suppressed_stale_tool_call_count, 0);
+    assert!(rendered
+        .prompt
+        .contains("[code_window_summary:clean:read_file] path=src/native/tests.rs"));
 }
 
 #[test]

@@ -169,6 +169,32 @@ impl ActiveCodeWindow {
             format!("{}\n{}", changed_excerpt, self.current_content).trim_start(),
         )
     }
+
+    fn render_summary_for_prompt(&self) -> String {
+        let changed_lines = if self.changed_lines.is_empty() {
+            "changed_lines=none".to_string()
+        } else {
+            format!(
+                "changed_lines={}",
+                self.changed_lines
+                    .iter()
+                    .map(|(start, end)| format!("{start}-{end}"))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        };
+        format!(
+            "[code_window_summary:{}:{}] path={} call_id={} freshness={} digest={} content_chars={} {}",
+            self.status,
+            self.source_tool,
+            self.path,
+            self.originating_call_id,
+            self.freshness,
+            short_hash(&self.current_digest),
+            self.current_content.chars().count(),
+            changed_lines,
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -207,6 +233,33 @@ impl ActiveCodeWindows {
                 text: window.render_for_prompt(),
             })
             .collect()
+    }
+
+    fn summary_items(&self) -> Vec<NativePromptItem> {
+        self.windows
+            .iter()
+            .map(|window| NativePromptItem {
+                item_id: format!("code-window-summary:{}", window.path),
+                kind: "compacted_summary".to_string(),
+                text: window.render_summary_for_prompt(),
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ActiveCodeWindowSelection {
+    selected: ActiveCodeWindows,
+    summarized: ActiveCodeWindows,
+}
+
+impl ActiveCodeWindowSelection {
+    fn represented_windows(&self) -> ActiveCodeWindows {
+        let mut windows = self.selected.windows.clone();
+        windows.extend(self.summarized.windows.clone());
+        let mut represented = ActiveCodeWindows::from_windows(windows);
+        represented.total_window_count = self.selected.total_window_count;
+        represented
     }
 }
 
@@ -247,17 +300,22 @@ pub(crate) fn assemble_native_prompt(
     let static_prompt_chars = static_sections.chars().count();
     let static_budget = static_sections.chars().count().saturating_add(64);
     let item_budget = available_budget.saturating_sub(static_budget);
-    let active_code_windows = select_active_code_windows(&active_code_windows, item_budget / 2);
-    let active_code_window_items = active_code_windows.prompt_items();
+    let active_code_window_selection =
+        select_active_code_windows(&active_code_windows, item_budget / 2);
+    let active_code_window_items = active_code_window_selection.selected.prompt_items();
     let active_code_window_count = active_code_window_items.len();
-    let omitted_active_code_window_count = active_code_windows
+    let omitted_active_code_window_count = active_code_window_selection
+        .selected
         .total_window_count
         .saturating_sub(active_code_window_count);
     let active_code_window_chars = active_code_window_items
         .iter()
         .map(|item| item.text.chars().count())
         .sum::<usize>();
-    let prepared = prepare_items_for_prompt(normalized, &active_code_windows);
+    let prepared = prepare_items_for_prompt(
+        normalized,
+        &active_code_window_selection.represented_windows(),
+    );
     let selection = select_items_with_budget(
         &prepared.items,
         item_budget.saturating_sub(active_code_window_chars),
@@ -281,6 +339,7 @@ pub(crate) fn assemble_native_prompt(
         .iter()
         .filter(|item| item.kind == "compacted_summary")
         .cloned()
+        .chain(active_code_window_selection.summarized.summary_items())
         .collect::<Vec<_>>();
     let selected_history = prompt_items
         .iter()
@@ -581,7 +640,7 @@ fn extract_active_code_windows(items: &[TurnItem]) -> ActiveCodeWindows {
 fn select_active_code_windows(
     active_code_windows: &ActiveCodeWindows,
     budget: usize,
-) -> ActiveCodeWindows {
+) -> ActiveCodeWindowSelection {
     let mut windows = active_code_windows.windows.clone();
     windows.sort_by_key(|window| {
         (
@@ -592,16 +651,24 @@ fn select_active_code_windows(
 
     let mut used = 0usize;
     let mut selected = Vec::new();
+    let mut summarized = Vec::new();
     for window in windows {
         let chars = window.render_for_prompt().chars().count();
         if selected.is_empty() || used.saturating_add(chars) <= budget {
             used = used.saturating_add(chars);
             selected.push(window);
+        } else {
+            summarized.push(window);
         }
     }
     let mut selected_windows = ActiveCodeWindows::from_windows(selected);
     selected_windows.total_window_count = active_code_windows.total_window_count;
-    selected_windows
+    let mut summarized_windows = ActiveCodeWindows::from_windows(summarized);
+    summarized_windows.total_window_count = active_code_windows.total_window_count;
+    ActiveCodeWindowSelection {
+        selected: selected_windows,
+        summarized: summarized_windows,
+    }
 }
 
 fn build_read_code_window(
