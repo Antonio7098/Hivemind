@@ -254,6 +254,7 @@ printf '%s\n' '{"type":"step_finish","part":{"reason":"stop"}}'
             context: None,
             prior_attempts: Vec::new(),
             verifier_feedback: None,
+            native_prompt_metadata: None,
         })
         .unwrap();
 
@@ -334,6 +335,7 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":7,"cached_input_
             context: Some("verify stdin delivery".to_string()),
             prior_attempts: Vec::new(),
             verifier_feedback: None,
+            native_prompt_metadata: None,
         })
         .unwrap();
 
