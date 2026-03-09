@@ -122,6 +122,8 @@ impl Registry {
                     ),
                 );
                 let _ = self.store.append(event);
+            } else if updated.run_mode == RunMode::Auto {
+                return self.tick_flow(&updated.id.to_string(), false, None);
             }
         }
 

@@ -23,6 +23,13 @@ impl Registry {
                 model: invocation.model.clone(),
                 runtime_version: invocation.runtime_version.clone(),
                 capture_mode,
+                agent_mode: invocation.agent_mode.clone(),
+                allowed_tools: invocation.allowed_tools.clone(),
+                allowed_capabilities: invocation.allowed_capabilities.clone(),
+                configured_max_turns: invocation.configured_max_turns,
+                configured_timeout_budget_ms: invocation.configured_timeout_budget_ms,
+                configured_token_budget: invocation.configured_token_budget,
+                configured_prompt_headroom: invocation.configured_prompt_headroom,
             },
             correlation,
             origin,
@@ -39,6 +46,28 @@ impl Registry {
                 turn,
                 &native_correlation,
                 &mut saw_tool_failure,
+                origin,
+            )?;
+        }
+
+        for compaction in &invocation.history_compactions {
+            self.append_native_event(
+                EventPayload::NativeHistoryCompactionRecorded {
+                    native_correlation: native_correlation.clone(),
+                    invocation_id: invocation.invocation_id.clone(),
+                    turn_index: compaction.turn_index,
+                    reason: compaction.reason.clone(),
+                    rendered_prompt_bytes_before: compaction.rendered_prompt_bytes_before,
+                    selected_history_count_before: compaction.selected_history_count_before,
+                    selected_history_chars_before: compaction.selected_history_chars_before,
+                    visible_items_before: compaction.visible_items_before,
+                    visible_items_after: compaction.visible_items_after,
+                    prompt_tokens_before: compaction.prompt_tokens_before,
+                    projected_budget_used: compaction.projected_budget_used,
+                    token_budget: compaction.token_budget,
+                    elapsed_since_invocation_ms: compaction.elapsed_since_invocation_ms,
+                },
+                correlation,
                 origin,
             )?;
         }

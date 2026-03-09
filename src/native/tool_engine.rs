@@ -185,6 +185,9 @@ use policy_eval::evaluate_tool_policies_impl;
 mod run_command_tool;
 use run_command_tool::*;
 
+mod checkpoint_tool;
+use checkpoint_tool::*;
+
 mod filesystem_tools;
 use filesystem_tools::*;
 

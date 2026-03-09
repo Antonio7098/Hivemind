@@ -149,6 +149,7 @@ pub enum EventCommands {
     List(EventListArgs),
     Inspect(EventInspectArgs),
     Stream(EventStreamArgs),
+    NativeSummary(EventNativeSummaryArgs),
     Replay(EventReplayArgs),
     Verify(EventVerifyArgs),
     Recover(EventRecoverArgs),
@@ -215,6 +216,36 @@ pub struct EventStreamArgs {
     pub limit: usize,
     #[arg(long, default_value_t = false)]
     pub redact_secrets: bool,
+}
+
+#[derive(Args)]
+pub struct EventNativeSummaryArgs {
+    #[arg(long)]
+    pub project: Option<String>,
+    #[arg(long)]
+    pub graph: Option<String>,
+    #[arg(long)]
+    pub flow: Option<String>,
+    #[arg(long)]
+    pub task: Option<String>,
+    #[arg(long)]
+    pub attempt: Option<String>,
+    #[arg(long = "artifact-id")]
+    pub artifact_id: Option<String>,
+    #[arg(long = "template-id")]
+    pub template_id: Option<String>,
+    #[arg(long = "rule-id")]
+    pub rule_id: Option<String>,
+    #[arg(long = "error-type")]
+    pub error_type: Option<String>,
+    #[arg(long)]
+    pub since: Option<String>,
+    #[arg(long)]
+    pub until: Option<String>,
+    #[arg(long, default_value = "1000")]
+    pub limit: usize,
+    #[arg(long, default_value_t = false)]
+    pub verify: bool,
 }
 
 #[derive(Args)]

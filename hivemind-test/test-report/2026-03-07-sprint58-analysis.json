@@ -1,0 +1,26 @@
+{
+  "flow1_turn_count": 8,
+  "flow1_completed_tools": [
+    "git_diff",
+    "git_status",
+    "graph_query",
+    "list_files",
+    "read_file",
+    "run_command",
+    "write_file"
+  ],
+  "flow1_reuse_evidence": true,
+  "flow1_event_ordering_ok": true,
+  "flow1_summary_turns": 8,
+  "flow2_completed_tools": [
+    "read_file",
+    "write_file"
+  ],
+  "flow2_summary_verified": true,
+  "flow3_failure_codes": [
+    "native_tool_mode_denied"
+  ],
+  "flow3_denied_tools": [
+    "write_file"
+  ]
+}

@@ -9,7 +9,7 @@ impl NativeToolAction {
     /// - `tool:<name>:<json-object>`
     /// - `tool:{"name":"...","version":"...","input":{...}}`
     pub fn parse(action: &str) -> Result<Option<Self>, NativeToolEngineError> {
-        let Some(raw) = action.trim().strip_prefix("tool:") else {
+        let Some(raw) = parse_tool_prefix(action) else {
             return Ok(None);
         };
         let raw = raw.trim();
@@ -52,4 +52,14 @@ impl NativeToolAction {
             input,
         }))
     }
+}
+
+fn parse_tool_prefix(action: &str) -> Option<&str> {
+    let action = action.trim();
+    let prefix = action.get(..4)?;
+    if !prefix.eq_ignore_ascii_case("tool") {
+        return None;
+    }
+    let rest = action.get(4..)?.trim_start();
+    rest.strip_prefix(':')
 }

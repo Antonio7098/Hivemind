@@ -39,12 +39,12 @@ impl OpenRouterModelClient {
             .get("HIVEMIND_NATIVE_OPENROUTER_TIMEOUT_MS")
             .and_then(|raw| raw.parse::<u64>().ok())
             .filter(|value| *value > 0)
-            .unwrap_or(60_000);
+            .unwrap_or(180_000);
         let retry_policy = OpenRouterRetryPolicy::from_env(env);
         let stream_idle_timeout_ms = parse_u64_env(
             env,
             OPENROUTER_STREAM_IDLE_TIMEOUT_MS_ENV,
-            timeout_ms.min(30_000),
+            timeout_ms.min(120_000),
             100,
             timeout_ms.max(100),
         );
@@ -74,19 +74,16 @@ impl OpenRouterModelClient {
 
 impl ModelClient for OpenRouterModelClient {
     fn complete_turn(&mut self, request: &ModelTurnRequest) -> Result<String, NativeRuntimeError> {
-        self.history
-            .push(OpenRouterMessage::user(Self::user_prompt_for_turn(request)));
+        let mut messages = self.history.clone();
+        messages.push(OpenRouterMessage::user(Self::user_prompt_for_turn(request)));
 
         let payload = serde_json::json!({
             "model": self.model,
             "temperature": 0.0,
-            "messages": self.history,
+            "messages": messages,
         });
         let response_text = self.complete_turn_with_retry(request, &payload)?;
-        let directive = Self::normalize_directive(&response_text);
-        self.history
-            .push(OpenRouterMessage::assistant(directive.clone()));
-        Ok(directive)
+        Ok(Self::normalize_directive(&response_text))
     }
 
     fn take_transport_telemetry(&mut self) -> NativeTransportTelemetry {

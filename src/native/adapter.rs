@@ -15,13 +15,14 @@ use crate::native::tool_engine::{
     NativeToolAction, NativeToolEngine, ToolExecutionContext,
 };
 use crate::native::{
-    AgentLoop, MockModelClient, ModelClient, ModelDirective, NativeRuntimeConfig,
-    OpenRouterModelClient,
+    assemble_native_prompt, compacted_summary_item, user_input_item, AgentLoop, MockModelClient,
+    ModelClient, ModelDirective, ModelTurnRequest, NativeRuntimeConfig, OpenRouterModelClient,
+    TurnItem,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use uuid::Uuid;
 
 mod config;

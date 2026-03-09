@@ -1,4 +1,5 @@
 use super::*;
+use crate::native::AgentMode;
 
 impl Default for NativeToolEngine {
     fn default() -> Self {
@@ -12,6 +13,23 @@ impl Default for NativeToolEngine {
 }
 
 impl NativeToolEngine {
+    #[must_use]
+    pub fn contracts(&self) -> Vec<ToolContract> {
+        self.tools
+            .values()
+            .map(|tool| tool.contract.clone())
+            .collect()
+    }
+
+    #[must_use]
+    pub fn contracts_for_mode(&self, mode: AgentMode) -> Vec<ToolContract> {
+        self.tools
+            .values()
+            .filter(|tool| mode.allows_permissions(&tool.contract.required_permissions))
+            .map(|tool| tool.contract.clone())
+            .collect()
+    }
+
     pub fn new() -> Result<Self, NativeToolEngineError> {
         let mut engine = Self {
             tools: BTreeMap::new(),
@@ -47,6 +65,14 @@ impl NativeToolEngine {
             DEFAULT_TIMEOUT_MS,
             false,
             handle_run_command,
+        )?;
+        engine.register_builtin::<CheckpointCompleteInput, CheckpointCompleteOutput>(
+            "checkpoint_complete",
+            "orchestration_checkpoint",
+            vec![ToolPermission::Execution],
+            DEFAULT_TIMEOUT_MS,
+            false,
+            handle_checkpoint_complete,
         )?;
         engine.register_builtin::<ExecCommandInput, ExecSessionOutput>(
             "exec_command",
@@ -231,6 +257,7 @@ impl NativeToolEngine {
         action: &NativeToolAction,
         ctx: &ToolExecutionContext<'_>,
     ) -> NativeToolCallTrace {
+        let started = Instant::now();
         let request_payload = json!({
             "tool": action.name,
             "version": action.version,
@@ -245,6 +272,7 @@ impl NativeToolEngine {
 
         match self.execute_internal(action, ctx) {
             Ok((output, policy_tags)) => {
+                let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
                 let response_payload = json!({
                     "ok": true,
                     "output": output,
@@ -253,6 +281,7 @@ impl NativeToolEngine {
                     call_id,
                     tool_name: action.name.clone(),
                     request,
+                    duration_ms: Some(duration_ms),
                     response: Some(serde_json::to_string(&response_payload).unwrap_or_else(
                         |error| format!("{{\"ok\":false,\"encode_error\":\"{error}\"}}"),
                     )),
@@ -260,18 +289,80 @@ impl NativeToolEngine {
                     policy_tags,
                 }
             }
-            Err(error) => NativeToolCallTrace {
-                call_id,
-                tool_name: action.name.clone(),
-                request,
-                response: None,
-                failure: Some(NativeToolCallFailure {
-                    code: error.code.clone(),
-                    message: error.message.clone(),
-                    recoverable: error.recoverable,
-                }),
-                policy_tags: error.policy_tags,
-            },
+            Err(error) => {
+                let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+                NativeToolCallTrace {
+                    call_id,
+                    tool_name: action.name.clone(),
+                    request,
+                    duration_ms: Some(duration_ms),
+                    response: None,
+                    failure: Some(NativeToolCallFailure {
+                        code: error.code.clone(),
+                        message: error.message.clone(),
+                        recoverable: error.recoverable,
+                        policy_source: None,
+                        denial_reason: None,
+                        recovery_hint: None,
+                    }),
+                    policy_tags: error.policy_tags,
+                }
+            }
         }
+    }
+
+    pub fn execute_action_trace_for_mode(
+        &self,
+        mode: AgentMode,
+        call_id: String,
+        action: &NativeToolAction,
+        ctx: &ToolExecutionContext<'_>,
+    ) -> NativeToolCallTrace {
+        let tool_key = Self::tool_key(&action.name, &action.version);
+        let request_payload = json!({
+            "tool": action.name,
+            "version": action.version,
+            "input": action.input
+        });
+        let request = serde_json::to_string(&request_payload).unwrap_or_else(|error| {
+            format!(
+                "{{\"tool\":\"{}\",\"encode_error\":\"{}\"}}",
+                action.name, error
+            )
+        });
+
+        if let Some(tool) = self.tools.get(&tool_key) {
+            if !mode.allows_permissions(&tool.contract.required_permissions) {
+                return NativeToolCallTrace {
+                    call_id,
+                    tool_name: action.name.clone(),
+                    request,
+                    duration_ms: Some(0),
+                    response: None,
+                    failure: Some(NativeToolCallFailure {
+                        code: "native_tool_mode_denied".to_string(),
+                        message: format!(
+                            "tool '{}' is not permitted in agent mode '{}'",
+                            action.name,
+                            mode.as_str()
+                        ),
+                        recoverable: true,
+                        policy_source: Some("agent_mode_policy".to_string()),
+                        denial_reason: Some(format!(
+                            "agent mode '{}' does not allow tool '{}'",
+                            mode.as_str(),
+                            action.name
+                        )),
+                        recovery_hint: Some(
+                            "Use an allowed read-only tool for planner mode, or switch to task_executor/freeflow for mutations."
+                                .to_string(),
+                        ),
+                    }),
+                    policy_tags: vec![format!("agent_mode:{}", mode.as_str())],
+                };
+            }
+        }
+
+        self.execute_action_trace(call_id, action, ctx)
     }
 }

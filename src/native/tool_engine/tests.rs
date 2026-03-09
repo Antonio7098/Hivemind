@@ -402,6 +402,58 @@ fn run_command_respects_allowlist_policy() {
 
 #[test]
 #[cfg(unix)]
+fn checkpoint_complete_uses_hivemind_bin_from_runtime_env() {
+    let engine = NativeToolEngine::default();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let bin = tmp.path().join("bin");
+    fs::create_dir_all(&bin).expect("create bin directory");
+    let log_path = tmp.path().join("checkpoint.log");
+    let script = bin.join("fake-hivemind");
+    write_executable(
+        &script,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\n",
+            log_path.display()
+        ),
+    );
+
+    let policy = NativeCommandPolicy::default();
+    let mut env = HashMap::new();
+    env.insert(
+        "HIVEMIND_BIN".to_string(),
+        script.to_string_lossy().to_string(),
+    );
+    env.insert(
+        "HIVEMIND_DATA_DIR".to_string(),
+        tmp.path().join("data").to_string_lossy().to_string(),
+    );
+    env.insert("HIVEMIND_ATTEMPT_ID".to_string(), "attempt-123".to_string());
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+    let action = NativeToolAction {
+        name: "checkpoint_complete".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({ "id": "checkpoint-1", "summary": "done" }),
+    };
+
+    let output = engine
+        .execute(&action, &ctx)
+        .expect("checkpoint_complete should succeed");
+    let output: CheckpointCompleteOutput =
+        serde_json::from_value(output).expect("checkpoint_complete output should decode");
+
+    assert_eq!(output.checkpoint_id, "checkpoint-1");
+    let invoked = fs::read_to_string(log_path).expect("checkpoint invocation log");
+    assert!(invoked.contains("checkpoint"));
+    assert!(invoked.contains("complete"));
+    assert!(invoked.contains("--attempt-id"));
+    assert!(invoked.contains("attempt-123"));
+    assert!(invoked.contains("checkpoint-1"));
+    assert!(invoked.contains("done"));
+}
+
+#[test]
+#[cfg(unix)]
 fn normalize_exec_command_uses_python3_when_python_missing() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let bin = tmp.path().join("bin");

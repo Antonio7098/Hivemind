@@ -91,22 +91,12 @@ impl Registry {
         correlation: &CorrelationIds,
         invocation: &NativeInvocationTrace,
         native_correlation: NativeEventCorrelation,
-        saw_tool_failure: bool,
+        _saw_tool_failure: bool,
         origin: &'static str,
     ) -> Result<()> {
-        let success = invocation.failure.is_none() && !saw_tool_failure;
+        let success = invocation.failure.is_none();
         let (error_code, error_message, recoverable) = invocation.failure.as_ref().map_or_else(
-            || {
-                if saw_tool_failure {
-                    (
-                        Some("native_tool_call_failed".to_string()),
-                        Some("One or more native tool calls failed".to_string()),
-                        Some(false),
-                    )
-                } else {
-                    (None, None, None)
-                }
-            },
+            || (None, None, None),
             |failure| {
                 (
                     Some(failure.code.clone()),

@@ -12,6 +12,7 @@ fn execution_input_creation() {
         context: None,
         prior_attempts: Vec::new(),
         verifier_feedback: None,
+        native_prompt_metadata: None,
     };
 
     assert!(input.prior_attempts.is_empty());
@@ -148,6 +149,7 @@ fn mock_adapter_lifecycle() {
             context: None,
             prior_attempts: Vec::new(),
             verifier_feedback: None,
+            native_prompt_metadata: None,
         })
         .unwrap();
     assert!(report.is_success());
@@ -173,6 +175,7 @@ fn mock_adapter_custom_response() {
             context: None,
             prior_attempts: Vec::new(),
             verifier_feedback: None,
+            native_prompt_metadata: None,
         })
         .unwrap();
     assert!(!report.is_success());

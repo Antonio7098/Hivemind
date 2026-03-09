@@ -238,6 +238,10 @@ impl Registry {
             origin,
         )?;
 
+        if flow.run_mode == RunMode::Auto && flow.state == FlowState::Running {
+            let _ = self.auto_progress_flow(&flow.id.to_string());
+        }
+
         Ok(CheckpointCompletionResult {
             flow_id: flow.id,
             task_id: attempt.task_id,

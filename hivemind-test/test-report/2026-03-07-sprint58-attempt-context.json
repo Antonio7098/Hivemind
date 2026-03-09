@@ -1,0 +1,108 @@
+{
+  "adapter_name": "native",
+  "attempt_id": "b233c72e-9d02-47d5-a04c-05ce6e45caaf",
+  "context": {
+    "context_window_hash": "d69d7980abfa382d9fae5bc812cf58e9a1e449373339f0c82398817718df065b",
+    "delivered_context_hash": "4d7e82432e113680",
+    "inputs_hash": "72fd4220ffde3c75",
+    "manifest": {
+      "budget": {
+        "context_size_bytes": 1474,
+        "deduplicate": true,
+        "default_section_budget_bytes": 6000,
+        "max_expand_depth": 2,
+        "original_size_bytes": 1464,
+        "per_section_budget_bytes": {
+          "constitution": 6000,
+          "graph_summary": 6000,
+          "project_documents": 6000,
+          "skills": 6000,
+          "system_prompt": 6000
+        },
+        "policy": "ordered_section_then_total_budget",
+        "total_budget_bytes": 24000,
+        "truncated_sections": [],
+        "truncation_reasons": {}
+      },
+      "constitution": {
+        "content_hash": "60406b76eba973f9",
+        "digest": "60406b76eba973f9",
+        "path": "/tmp/hm-sprint58-native-runtime/home/.hivemind/projects/334642e9-cc8a-431e-acc6-67bbc639ffe7/constitution.yaml",
+        "revision": 1
+      },
+      "documents": [
+        {
+          "content_hash": "4999f9ae90be7e06",
+          "document_id": "api-contract",
+          "revision": 1,
+          "source": "template"
+        },
+        {
+          "content_hash": "609d4ad98a745cf2",
+          "document_id": "architecture-notes",
+          "revision": 1,
+          "source": "template"
+        },
+        {
+          "content_hash": "f32e9d1037455f3b",
+          "document_id": "testing-policy",
+          "revision": 1,
+          "source": "template"
+        }
+      ],
+      "excluded_sources": [
+        "project_notepad",
+        "global_notepad",
+        "implicit_memory"
+      ],
+      "graph_summary": {
+        "canonical_fingerprint": "713a5c0497bc9bea",
+        "languages": {
+          "python": 9
+        },
+        "present": true,
+        "repository_count": 1,
+        "total_edges": 16,
+        "total_nodes": 21
+      },
+      "manifest_version": 2,
+      "ordered_inputs": [
+        "constitution",
+        "system_prompt",
+        "skills",
+        "project_documents",
+        "graph_summary"
+      ],
+      "retry_links": [],
+      "schema_version": "attempt_context.v2",
+      "skills": [
+        {
+          "content_hash": "305d2750715cf280",
+          "skill_id": "sprint58-python-skill"
+        },
+        {
+          "content_hash": "b20b817df4a96d11",
+          "skill_id": "sprint58-validation-skill"
+        }
+      ],
+      "system_prompt": {
+        "content_hash": "5e5cf6f5db31e214",
+        "prompt_id": "sprint58-native-system"
+      },
+      "template_event_id": "00000000-0000-0015-b998-2227197237f8",
+      "template_id": "sprint58-native-template",
+      "template_projection_version": 1,
+      "template_schema_version": "governance.v1"
+    },
+    "manifest_hash": "a332c8874f00e2fe",
+    "rendered_prompt_hash": "dedfee40570a8f81",
+    "retry": null
+  },
+  "duration_ms": 19730,
+  "exit_code": 0,
+  "flow_id": "405ae8be-6d56-455a-b50a-f3b8cac653b3",
+  "graph_id": "e9eaa4df-56a5-4151-957c-ec274642ae88",
+  "project_id": "334642e9-cc8a-431e-acc6-67bbc639ffe7",
+  "task_id": "aa239c35-8922-48e1-849b-776b1dc71291",
+  "terminated_reason": "checkpoints_incomplete: All checkpoints must be completed before task completion"
+}

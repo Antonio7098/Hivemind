@@ -116,6 +116,11 @@ pub(super) fn event_type_label(payload: &crate::core::events::EventPayload) -> &
         EventPayload::ToolCallCompleted { .. } => "tool_call_completed",
         EventPayload::ToolCallFailed { .. } => "tool_call_failed",
         EventPayload::AgentTurnCompleted { .. } => "agent_turn_completed",
+        EventPayload::NativeBudgetThresholdReached { .. } => "native_budget_threshold_reached",
+        EventPayload::NativeHistoryCompactionRecorded { .. } => {
+            "native_history_compaction_recorded"
+        }
+        EventPayload::NativeTurnSummaryRecorded { .. } => "native_turn_summary_recorded",
         EventPayload::AgentInvocationCompleted { .. } => "agent_invocation_completed",
         EventPayload::RuntimeStarted { .. } => "runtime_started",
         EventPayload::RuntimeEnvironmentPrepared { .. } => "runtime_environment_prepared",

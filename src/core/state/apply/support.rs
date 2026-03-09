@@ -38,6 +38,7 @@ impl AppState {
                 | EventPayload::AgentTurnStarted { .. }
                 | EventPayload::ModelRequestPrepared { .. }
                 | EventPayload::ModelResponseReceived { .. }
+                | EventPayload::NativeHistoryCompactionRecorded { .. }
                 | EventPayload::ToolCallRequested { .. }
                 | EventPayload::ToolCallStarted { .. }
                 | EventPayload::ToolCallCompleted { .. }

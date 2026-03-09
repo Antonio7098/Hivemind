@@ -315,6 +315,8 @@ impl Registry {
                 );
                 self.append_event(event, origin)?;
                 self.maybe_autostart_dependent_flows(updated.id)?;
+            } else if updated.run_mode == RunMode::Auto {
+                return self.tick_flow(&updated.id.to_string(), false, None);
             }
 
             return self.get_flow(flow_id);
