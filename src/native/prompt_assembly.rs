@@ -127,6 +127,7 @@ struct ActiveCodeWindow {
     current_digest: String,
     current_content: String,
     changed_lines: Vec<(usize, usize)>,
+    changed_excerpt: Option<String>,
     last_turn_index: Option<u32>,
 }
 
@@ -144,6 +145,17 @@ impl ActiveCodeWindow {
                     .join(",")
             )
         };
+        let changed_excerpt = self
+            .changed_excerpt
+            .as_ref()
+            .map(|excerpt| {
+                format!(
+                    "\n[changed_excerpt lines={}]\n{}",
+                    excerpt.lines().count(),
+                    excerpt,
+                )
+            })
+            .unwrap_or_default();
         format!(
             "[code_window:{}:{}] path={} call_id={} freshness={} digest={} content_chars={} {}\n{}",
             self.status,
@@ -154,7 +166,7 @@ impl ActiveCodeWindow {
             short_hash(&self.current_digest),
             self.current_content.chars().count(),
             changed_lines,
-            self.current_content,
+            format!("{}\n{}", changed_excerpt, self.current_content).trim_start(),
         )
     }
 }
@@ -614,6 +626,7 @@ fn build_read_code_window(
         }
         _ => Vec::new(),
     };
+    let changed_excerpt = build_changed_excerpt(content, &changed_lines);
     ActiveCodeWindow {
         path: path.to_string(),
         source_tool: "read_file".to_string(),
@@ -624,6 +637,7 @@ fn build_read_code_window(
         current_digest,
         current_content: content.to_string(),
         changed_lines,
+        changed_excerpt,
         last_turn_index,
     }
 }
@@ -661,6 +675,7 @@ fn build_write_code_window(
             compute_changed_line_ranges(&window.current_content, content),
         ),
     };
+    let changed_excerpt = build_changed_excerpt(content, &changed_lines);
     ActiveCodeWindow {
         path: path.to_string(),
         source_tool: "write_file".to_string(),
@@ -671,6 +686,7 @@ fn build_write_code_window(
         current_digest,
         current_content: content.to_string(),
         changed_lines,
+        changed_excerpt,
         last_turn_index,
     }
 }
@@ -766,6 +782,43 @@ fn compute_changed_line_ranges(previous: &str, current: &str) -> Vec<(usize, usi
         .saturating_sub(suffix)
         .max(changed_start);
     vec![(changed_start, changed_end)]
+}
+
+fn build_changed_excerpt(current: &str, changed_lines: &[(usize, usize)]) -> Option<String> {
+    if changed_lines.is_empty() {
+        return None;
+    }
+
+    let current_lines = current.lines().collect::<Vec<_>>();
+    let mut excerpt = Vec::new();
+    let mut emitted = 0usize;
+    const MAX_EXCERPT_LINES: usize = 8;
+
+    'ranges: for (start, end) in changed_lines {
+        let start_idx = start.saturating_sub(1);
+        let end_idx = (*end).min(current_lines.len());
+        for line_index in start_idx..end_idx {
+            excerpt.push(format!(
+                "{:>4}: {}",
+                line_index + 1,
+                current_lines[line_index]
+            ));
+            emitted += 1;
+            if emitted >= MAX_EXCERPT_LINES {
+                break 'ranges;
+            }
+        }
+    }
+
+    let total_changed_lines = changed_lines
+        .iter()
+        .map(|(start, end)| end.saturating_sub(*start).saturating_add(1))
+        .sum::<usize>();
+    if emitted < total_changed_lines {
+        excerpt.push("   …".to_string());
+    }
+
+    Some(excerpt.join("\n"))
 }
 
 fn should_drop_stale_tool_call(item: &TurnItem, latest_assistant_turn_index: Option<u32>) -> bool {

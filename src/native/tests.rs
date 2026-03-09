@@ -889,6 +889,147 @@ fn assemble_native_prompt_unifies_read_and_write_into_active_code_windows() {
 }
 
 #[test]
+fn assemble_native_prompt_includes_changed_excerpt_for_partial_dirty_windows() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let initial_content = [
+        "fn alpha() {}",
+        "let beta = 1;",
+        "let gamma = 2;",
+        "let delta = 3;",
+        "let epsilon = 4;",
+        "let zeta = 5;",
+    ]
+    .join("\n");
+    let rewritten_content = [
+        "fn alpha() {}",
+        "let beta = 10;",
+        "let gamma = 20;",
+        "let delta = 3;",
+        "let epsilon = 4;",
+        "let zeta = 5;",
+    ]
+    .join("\n");
+    let history = vec![
+        user_input_item(
+            "inv-partial-diff",
+            0,
+            "objective",
+            "Capture a partial dirty edit".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-partial-diff",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-partial-diff:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-partial-diff".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-partial-diff".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-partial-diff".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-partial-diff:0:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-partial-diff".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-partial-diff".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-partial-diff".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: initial_content,
+            },
+        },
+        assistant_item(
+            "inv-partial-diff",
+            1,
+            4,
+            &ModelDirective::Act {
+                action: format!(
+                    "tool:write_file:{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = rewritten_content,
+                ),
+            },
+        ),
+        TurnItem {
+            id: "inv-partial-diff:1:5".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 5,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-partial-diff".to_string(),
+                turn_index: Some(1),
+                source: "tool.call".to_string(),
+                reference: Some("call-write-partial-diff".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-write-partial-diff".to_string(),
+                tool_name: "write_file".to_string(),
+                request: format!(
+                    "{{\"path\":\"src/native/prompt_assembly.rs\",\"content\":{content:?},\"append\":false}}",
+                    content = rewritten_content,
+                ),
+            },
+        },
+        TurnItem {
+            id: "inv-partial-diff:1:6".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 6,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-partial-diff".to_string(),
+                turn_index: Some(1),
+                source: "tool.result".to_string(),
+                reference: Some("call-write-partial-diff".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-write-partial-diff".to_string(),
+                tool_name: "write_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "wrote file".to_string(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert!(rendered.prompt.contains("changed_lines=2-3"));
+    assert!(rendered.prompt.contains("[changed_excerpt lines=2]"));
+    assert!(rendered.prompt.contains("   2: let beta = 10;"));
+    assert!(rendered.prompt.contains("   3: let gamma = 20;"));
+}
+
+#[test]
 fn active_code_window_budget_prefers_dirty_windows_under_pressure() {
     let config = NativeRuntimeConfig {
         token_budget: 3_000,
