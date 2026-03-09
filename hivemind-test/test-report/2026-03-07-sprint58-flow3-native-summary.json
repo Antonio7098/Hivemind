@@ -1,0 +1,128 @@
+{
+  "success": true,
+  "data": {
+    "invocation_count": 1,
+    "invocations": [
+      {
+        "invocation_id": "5b10f57a-5d4a-4157-872a-323e4787589a",
+        "project_id": "334642e9-cc8a-431e-acc6-67bbc639ffe7",
+        "graph_id": "2c77a34d-ecd4-41be-95ad-b3e76eb28216",
+        "flow_id": "84a5ad62-0066-42a1-97f9-51bed70c6546",
+        "task_id": "ea461d96-405f-47ed-9eef-eef6d1ac4a20",
+        "attempt_id": "7c09c4ac-85d6-4d5d-89dd-c03ec4a63606",
+        "adapter_name": "native",
+        "provider": "openrouter",
+        "model": "nvidia/nemotron-3-nano-30b-a3b:free",
+        "agent_mode": "planner",
+        "allowed_tools": [
+          "git_diff",
+          "git_status",
+          "graph_query",
+          "list_files",
+          "read_file"
+        ],
+        "allowed_capabilities": [
+          "filesystem_read",
+          "filesystemread",
+          "gitread",
+          "graph_query_read",
+          "repository_read"
+        ],
+        "total_turns": 2,
+        "success": false,
+        "final_state": "done",
+        "failure_codes": [
+          "native_tool_mode_denied"
+        ],
+        "denied_tools": [
+          {
+            "turn_index": 0,
+            "tool_name": "write_file",
+            "code": "native_tool_mode_denied",
+            "policy_source": "agent_mode_policy",
+            "denial_reason": "agent mode 'planner' does not allow tool 'write_file'"
+          }
+        ],
+        "budget_warnings": [],
+        "turns": [
+          {
+            "turn_index": 0,
+            "agent_mode": "planner",
+            "from_state": "think",
+            "to_state": "act",
+            "prompt_hash": "9c4bc1a50b417400ce16fc29af1ccae4971fac55d782741c62ec844e7f7e29ce",
+            "context_manifest_hash": "35da7b01ed1e9a80",
+            "delivered_context_hash": "0152327988515b98",
+            "mode_contract_hash": "95e88746e0505c28cd4a1cc32d48dc1cd397e25b3a3010a2643dfeff1948a09b",
+            "inputs_hash": "11bb946ba703279f",
+            "prompt_headroom": 512,
+            "available_budget": 95488,
+            "rendered_prompt_bytes": 4039,
+            "runtime_context_bytes": 1954,
+            "visible_item_count": 2,
+            "selected_history_count": 2,
+            "code_navigation_count": 0,
+            "compacted_summary_count": 0,
+            "tool_contract_count": 5,
+            "skipped_item_count": 0,
+            "truncated_item_count": 0,
+            "tool_result_items_visible": 0,
+            "latest_tool_result_turn_index": null,
+            "latest_tool_names_visible": [],
+            "tool_call_count": 1,
+            "tool_failure_count": 1,
+            "budget_used_before": 0,
+            "budget_used_after": 4162,
+            "budget_remaining": 91838,
+            "budget_thresholds_crossed": [],
+            "model_latency_ms": 1695,
+            "tool_latency_ms": 0,
+            "turn_duration_ms": 1695,
+            "summary": null
+          },
+          {
+            "turn_index": 1,
+            "agent_mode": "planner",
+            "from_state": "act",
+            "to_state": "done",
+            "prompt_hash": "4c05e5e84566e7fee4da03ef66cb9d29824786731f59c4487884222028f2a52d",
+            "context_manifest_hash": "35da7b01ed1e9a80",
+            "delivered_context_hash": "0152327988515b98",
+            "mode_contract_hash": "95e88746e0505c28cd4a1cc32d48dc1cd397e25b3a3010a2643dfeff1948a09b",
+            "inputs_hash": "11bb946ba703279f",
+            "prompt_headroom": 512,
+            "available_budget": 95488,
+            "rendered_prompt_bytes": 4496,
+            "runtime_context_bytes": 1954,
+            "visible_item_count": 5,
+            "selected_history_count": 5,
+            "code_navigation_count": 0,
+            "compacted_summary_count": 0,
+            "tool_contract_count": 5,
+            "skipped_item_count": 0,
+            "truncated_item_count": 0,
+            "tool_result_items_visible": 1,
+            "latest_tool_result_turn_index": 0,
+            "latest_tool_names_visible": [
+              "write_file"
+            ],
+            "tool_call_count": 0,
+            "tool_failure_count": 0,
+            "budget_used_before": 4162,
+            "budget_used_after": 8686,
+            "budget_remaining": 87314,
+            "budget_thresholds_crossed": [],
+            "model_latency_ms": 1844,
+            "tool_latency_ms": 0,
+            "turn_duration_ms": 1844,
+            "summary": "planner denial observed"
+          }
+        ]
+      }
+    ],
+    "verification": {
+      "passed": true,
+      "failures": []
+    }
+  }
+}

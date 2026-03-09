@@ -1,7 +1,7 @@
 use super::*;
 
 impl Registry {
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub(super) fn append_native_turn_events(
         &self,
         flow: &TaskFlow,
@@ -81,8 +81,10 @@ impl Registry {
                         .turns
                         .iter()
                         .find(|candidate| candidate.turn_index == turn.turn_index)
-                        .map(|candidate| candidate.budget_used_after + candidate.budget_remaining)
-                        .unwrap_or(turn.budget_used_after + turn.budget_remaining),
+                        .map_or(
+                            turn.budget_used_after + turn.budget_remaining,
+                            |candidate| candidate.budget_used_after + candidate.budget_remaining,
+                        ),
                     remaining_budget: turn.budget_remaining,
                 },
                 correlation,

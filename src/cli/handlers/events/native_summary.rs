@@ -179,6 +179,7 @@ pub(super) fn handle_events_native_summary(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn build_native_summary(events: &[Event]) -> NativeSummaryReport {
     let mut invocations = BTreeMap::<String, NativeInvocationSummary>::new();
     let mut verification = NativeVerificationSummary::default();
@@ -200,7 +201,7 @@ pub(super) fn build_native_summary(events: &[Event]) -> NativeSummaryReport {
                 ..
             } => {
                 let entry = invocations.entry(invocation_id.clone()).or_default();
-                entry.invocation_id = invocation_id.clone();
+                entry.invocation_id.clone_from(invocation_id);
                 entry.project_id = Some(native_correlation.project_id.to_string());
                 entry.graph_id = Some(native_correlation.graph_id.to_string());
                 entry.flow_id = Some(native_correlation.flow_id.to_string());
@@ -209,7 +210,7 @@ pub(super) fn build_native_summary(events: &[Event]) -> NativeSummaryReport {
                 entry.adapter_name = Some(adapter_name.clone());
                 entry.provider = Some(provider.clone());
                 entry.model = Some(model.clone());
-                entry.agent_mode = agent_mode.clone();
+                entry.agent_mode.clone_from(agent_mode);
                 entry.configured_max_turns = *configured_max_turns;
                 entry.configured_timeout_budget_ms = *configured_timeout_budget_ms;
                 entry.configured_token_budget = *configured_token_budget;
@@ -235,7 +236,6 @@ pub(super) fn build_native_summary(events: &[Event]) -> NativeSummaryReport {
                     denial_reason: denial_reason.clone(),
                 });
             }
-            EventPayload::ToolCallFailed { .. } => {}
             EventPayload::NativeBudgetThresholdReached {
                 invocation_id,
                 turn_index,
@@ -409,9 +409,11 @@ pub(super) fn build_native_summary(events: &[Event]) -> NativeSummaryReport {
     let mut summaries = invocations.into_values().collect::<Vec<_>>();
     summaries.sort_by(|left, right| left.invocation_id.cmp(&right.invocation_id));
     for summary in &mut summaries {
-        summary.total_model_latency_ms = summary.turns.iter().map(|turn| turn.model_latency_ms).sum();
+        summary.total_model_latency_ms =
+            summary.turns.iter().map(|turn| turn.model_latency_ms).sum();
         summary.total_tool_latency_ms = summary.turns.iter().map(|turn| turn.tool_latency_ms).sum();
-        summary.total_turn_duration_ms = summary.turns.iter().map(|turn| turn.turn_duration_ms).sum();
+        summary.total_turn_duration_ms =
+            summary.turns.iter().map(|turn| turn.turn_duration_ms).sum();
         summary.total_request_tokens = summary.turns.iter().map(|turn| turn.request_tokens).sum();
         summary.total_response_tokens = summary.turns.iter().map(|turn| turn.response_tokens).sum();
         summary.max_rendered_prompt_bytes = summary
@@ -519,6 +521,7 @@ fn push_unique(values: &mut Vec<String>, value: String) {
 }
 
 #[cfg(test)]
+#[allow(clippy::too_many_lines)]
 mod tests {
     use super::*;
     use crate::core::events::{

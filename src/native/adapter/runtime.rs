@@ -4,6 +4,8 @@ use crate::native::{AgentLoopObserver, NativeRuntimeError};
 use std::collections::BTreeSet;
 use std::time::Instant;
 
+type ProgressEmitter<'a> = Box<dyn FnMut(String) -> Result<(), RuntimeError> + 'a>;
+
 fn compact_progress_value(value: &str, max_chars: usize) -> String {
     let compact = value.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut chars = compact.chars();
@@ -15,7 +17,7 @@ fn compact_progress_value(value: &str, max_chars: usize) -> String {
     }
 }
 
-fn progress_callback_error(error: RuntimeError) -> NativeRuntimeError {
+fn progress_callback_error(error: &RuntimeError) -> NativeRuntimeError {
     NativeRuntimeError::ModelRequestFailed {
         code: "native_observability_callback_failed".to_string(),
         message: format!(
@@ -27,13 +29,13 @@ fn progress_callback_error(error: RuntimeError) -> NativeRuntimeError {
 }
 
 struct NativeProgressObserver<'a> {
-    emit: Option<Box<dyn FnMut(String) -> Result<(), RuntimeError> + 'a>>,
+    emit: Option<ProgressEmitter<'a>>,
     started_at: Instant,
     history_compactions: Vec<NativeHistoryCompactionTrace>,
 }
 
 impl<'a> NativeProgressObserver<'a> {
-    fn new(emit: Option<Box<dyn FnMut(String) -> Result<(), RuntimeError> + 'a>>) -> Self {
+    fn new(emit: Option<ProgressEmitter<'a>>) -> Self {
         Self {
             emit,
             started_at: Instant::now(),
@@ -56,7 +58,7 @@ impl<'a> NativeProgressObserver<'a> {
             line
         };
         if let Some(emit) = self.emit.as_mut() {
-            emit(format!("{line}\n")).map_err(progress_callback_error)?;
+            emit(format!("{line}\n")).map_err(|error| progress_callback_error(&error))?;
         }
         Ok(())
     }
@@ -73,7 +75,7 @@ impl AgentLoopObserver for NativeProgressObserver<'_> {
             request.turn_index,
             request.state.as_str(),
             request.prompt.len(),
-            request.context.as_ref().map_or(0, |value| value.len()),
+            request.context.as_ref().map_or(0, String::len),
             assembly.map_or(0, |value| value.prompt_headroom),
             assembly.map_or(0, |value| value.available_budget),
             assembly.map_or(0, |value| value.rendered_prompt_bytes),
@@ -144,8 +146,7 @@ impl AgentLoopObserver for NativeProgressObserver<'_> {
         tool_call_count: usize,
     ) -> Result<(), NativeRuntimeError> {
         self.emit_line(format!(
-            "[native-progress] stage=tool_action_completed turn={} tool_call_count={}",
-            turn_index, tool_call_count,
+            "[native-progress] stage=tool_action_completed turn={turn_index} tool_call_count={tool_call_count}",
         ))
     }
 
@@ -177,17 +178,7 @@ impl AgentLoopObserver for NativeProgressObserver<'_> {
             elapsed_since_invocation_ms,
         });
         self.emit_line(format!(
-            "[native-progress] stage=history_compacted turn={} reason={} rendered_prompt_bytes_before={} selected_history_count_before={} selected_history_chars_before={} visible_items_before={} visible_items_after={} prompt_tokens_before={} projected_budget_used={} token_budget={}",
-            turn_index,
-            reason,
-            rendered_prompt_bytes_before,
-            selected_history_count_before,
-            selected_history_chars_before,
-            visible_items_before,
-            visible_items_after,
-            prompt_tokens_before,
-            projected_budget_used,
-            token_budget,
+            "[native-progress] stage=history_compacted turn={turn_index} reason={reason} rendered_prompt_bytes_before={rendered_prompt_bytes_before} selected_history_count_before={selected_history_count_before} selected_history_chars_before={selected_history_chars_before} visible_items_before={visible_items_before} visible_items_after={visible_items_after} prompt_tokens_before={prompt_tokens_before} projected_budget_used={projected_budget_used} token_budget={token_budget}",
         ))
     }
 }
@@ -211,7 +202,7 @@ impl NativeRuntimeAdapter {
         F: FnMut(InteractiveAdapterEvent) -> std::result::Result<(), String>,
     {
         let report = self.execute_with_progress(
-            input.clone(),
+            input,
             Some(Box::new(|content| {
                 on_event(InteractiveAdapterEvent::Output { content })
                     .map_err(|e| RuntimeError::new("interactive_callback_failed", e, false))
@@ -330,17 +321,17 @@ impl NativeRuntimeAdapter {
         for contract in contracts {
             capabilities.insert(contract.required_scope.clone());
             for permission in &contract.required_permissions {
-                capabilities.insert(format!("{:?}", permission).to_ascii_lowercase());
+                capabilities.insert(format!("{permission:?}").to_ascii_lowercase());
             }
         }
         capabilities.into_iter().collect()
     }
 
     #[allow(clippy::too_many_lines)]
-    fn execute_with_progress<'a>(
-        &mut self,
-        input: ExecutionInput,
-        emit: Option<Box<dyn FnMut(String) -> Result<(), RuntimeError> + 'a>>,
+    fn execute_with_progress(
+        &self,
+        input: &ExecutionInput,
+        emit: Option<ProgressEmitter<'_>>,
     ) -> Result<ExecutionReport, RuntimeError> {
         if !self.prepared {
             return Err(RuntimeError::new(
@@ -452,7 +443,7 @@ impl NativeRuntimeAdapter {
             ))
             .map_err(|error| error.to_runtime_error())?;
         let mut loop_harness = AgentLoop::new(self.config.native.clone(), model);
-        let initial_items = Self::initial_turn_items(&invocation_id, &input);
+        let initial_items = Self::initial_turn_items(&invocation_id, input);
         observer
             .emit_line(format!(
                 "[native-progress] stage=loop_starting invocation_id={} initial_items={}",
@@ -466,12 +457,8 @@ impl NativeRuntimeAdapter {
             initial_items,
             |turn_index, state, history| {
                 let assembly_started = Instant::now();
-                let rendered = assemble_native_prompt(
-                    &self.config.native,
-                    &input,
-                    history,
-                    &allowed_contracts,
-                );
+                let rendered =
+                    assemble_native_prompt(&self.config.native, input, history, &allowed_contracts);
                 let assembly_duration_ms =
                     u64::try_from(assembly_started.elapsed().as_millis()).unwrap_or(u64::MAX);
                 let mut assembly = rendered.assembly;
@@ -517,8 +504,8 @@ impl NativeRuntimeAdapter {
                     runtime_state,
                     readiness_transitions,
                     observer.take_history_compactions(),
-                    allowed_tools.clone(),
-                    allowed_capabilities.clone(),
+                    allowed_tools,
+                    allowed_capabilities,
                 );
                 let stdout = Self::render_stdout(&result);
                 if let Some(failure) = trace.failure.clone() {
@@ -609,7 +596,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
 
     #[allow(clippy::too_many_lines)]
     fn execute(&mut self, input: ExecutionInput) -> Result<ExecutionReport, RuntimeError> {
-        self.execute_with_progress(input, None)
+        self.execute_with_progress(&input, None)
     }
 
     fn terminate(&mut self) -> Result<(), RuntimeError> {

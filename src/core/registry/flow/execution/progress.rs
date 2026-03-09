@@ -97,6 +97,7 @@ impl Registry {
 }
 
 #[cfg(test)]
+#[allow(clippy::too_many_lines)]
 mod tests {
     use super::*;
     use crate::core::registry::RegistryConfig;
@@ -341,6 +342,6 @@ mod tests {
             .current_dir(repo_dir)
             .status()
             .expect("run git");
-        assert!(status.success(), "git {:?} failed", args);
+        assert!(status.success(), "git {args:?} failed");
     }
 }

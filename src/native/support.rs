@@ -140,15 +140,16 @@ fn parse_directive_prefix(candidate: &str) -> Option<ModelDirective> {
 fn strip_leading_formatting(candidate: &str) -> &str {
     let mut current = candidate.trim();
     loop {
-        let next = if let Some(rest) = current.strip_prefix("- ") {
-            rest
-        } else if let Some(rest) = current.strip_prefix("* ") {
-            rest
-        } else if let Some(rest) = current.strip_prefix("• ") {
-            rest
-        } else {
-            strip_numbering_prefix(current).unwrap_or(current)
-        };
+        #[allow(clippy::option_if_let_else)]
+        let next = current.strip_prefix("- ").unwrap_or_else(|| {
+            if let Some(rest) = current.strip_prefix("* ") {
+                rest
+            } else if let Some(rest) = current.strip_prefix("• ") {
+                rest
+            } else {
+                strip_numbering_prefix(current).unwrap_or(current)
+            }
+        });
         if next == current {
             return current.trim();
         }
@@ -157,10 +158,7 @@ fn strip_leading_formatting(candidate: &str) -> &str {
 }
 
 fn strip_numbering_prefix(candidate: &str) -> Option<&str> {
-    let digit_count = candidate
-        .chars()
-        .take_while(|ch| ch.is_ascii_digit())
-        .count();
+    let digit_count = candidate.chars().take_while(char::is_ascii_digit).count();
     if digit_count == 0 {
         return None;
     }

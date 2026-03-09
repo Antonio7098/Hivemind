@@ -23,7 +23,7 @@ impl NativeRuntimeAdapter {
         lines.join("\n")
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub(crate) fn trace_from_success(
         invocation_id: &str,
         config: &NativeAdapterConfig,
@@ -262,6 +262,7 @@ impl NativeRuntimeAdapter {
         }
     }
 
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub(crate) fn trace_from_failure(
         invocation_id: &str,
         config: &NativeAdapterConfig,

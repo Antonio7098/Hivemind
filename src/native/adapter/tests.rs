@@ -166,12 +166,14 @@ fn execute_interactive_reports_history_compaction_under_budget_pressure() {
 #[test]
 fn recovered_tool_failures_do_not_fail_completed_native_invocation() {
     let state_dir = tempdir().expect("state tempdir");
-    let mut config = NativeAdapterConfig::default();
-    config.provider_name = "mock".to_string();
-    config.scripted_directives = vec![
-        "ACT:tool:graph_query:{\"query\":\"MATCH (n) RETURN n\"}".to_string(),
-        "DONE:recovered successfully".to_string(),
-    ];
+    let mut config = NativeAdapterConfig {
+        provider_name: "mock".to_string(),
+        scripted_directives: vec![
+            "ACT:tool:graph_query:{\"query\":\"MATCH (n) RETURN n\"}".to_string(),
+            "DONE:recovered successfully".to_string(),
+        ],
+        ..NativeAdapterConfig::default()
+    };
     config.base.env.insert(
         "HIVEMIND_NATIVE_STATE_DIR".to_string(),
         state_dir.path().display().to_string(),

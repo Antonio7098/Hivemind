@@ -131,6 +131,7 @@ pub trait AgentLoopObserver {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn on_history_compacted(
         &mut self,
         _turn_index: u32,
@@ -260,8 +261,7 @@ pub use self::mock::MockModelClient;
 pub(crate) use self::prompt_assembly::{assemble_native_prompt, NativePromptAssembly};
 pub(crate) use self::turn_items::{
     assistant_item, compact_history_for_budget_pressure, compact_history_for_hard_budget_limit,
-    compacted_summary_item,
-    items_from_tool_trace, normalize_turn_items, user_input_item, TurnItem,
+    compacted_summary_item, items_from_tool_trace, normalize_turn_items, user_input_item, TurnItem,
 };
 
 #[cfg(test)]

@@ -1,3 +1,10 @@
+#![allow(clippy::field_reassign_with_default)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::manual_assert)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::redundant_clone)]
+#![allow(clippy::significant_drop_tightening)]
+
 use super::*;
 use crate::adapters::runtime::{
     ExecutionInput, NativePromptMetadata, NativeToolCallFailure, NativeToolCallTrace,
@@ -455,11 +462,9 @@ fn budget_compaction_stabilizes_for_large_tool_result_history() {
         .filter(|item| item.model_visible)
         .map(TurnItem::render_for_prompt)
         .collect::<Vec<_>>()];
-    while let Some(compacted) = compact_history_for_hard_budget_limit(
-        "inv-compact-stable",
-        1,
-        &history,
-    ) {
+    while let Some(compacted) =
+        compact_history_for_hard_budget_limit("inv-compact-stable", 1, &history)
+    {
         if compacted == history {
             break;
         }
@@ -485,7 +490,10 @@ fn budget_compaction_stabilizes_for_large_tool_result_history() {
         .join("\n");
 
     assert!(compactions <= 3, "expected compaction to stabilize quickly");
-    assert!(prompt.chars().count() < 1_000, "expected compacted prompt to fit budget");
+    assert!(
+        prompt.chars().count() < 1_000,
+        "expected compacted prompt to fit budget"
+    );
 }
 
 #[test]
@@ -775,8 +783,10 @@ fn agent_loop_auto_finishes_after_redundant_checkpoint_completion() {
         fs::set_permissions(path, perms).expect("chmod");
     }
     let model = MockModelClient::from_outputs(vec![
-        "ACT:tool:checkpoint_complete:{\"id\":\"checkpoint-1\",\"summary\":\"finished work\"}".to_string(),
-        "ACT:tool:checkpoint_complete:{\"id\":\"checkpoint-1\",\"summary\":\"finished work\"}".to_string(),
+        "ACT:tool:checkpoint_complete:{\"id\":\"checkpoint-1\",\"summary\":\"finished work\"}"
+            .to_string(),
+        "ACT:tool:checkpoint_complete:{\"id\":\"checkpoint-1\",\"summary\":\"finished work\"}"
+            .to_string(),
     ]);
 
     let mut config = NativeRuntimeConfig::default();
@@ -841,7 +851,10 @@ fn agent_loop_auto_finishes_after_redundant_checkpoint_completion() {
     assert_eq!(result.final_summary.as_deref(), Some("finished work"));
     assert_eq!(result.turns.len(), 2);
     assert_eq!(result.turns[0].tool_calls.len(), 1);
-    assert!(matches!(result.turns[1].directive, ModelDirective::Done { .. }));
+    assert!(matches!(
+        result.turns[1].directive,
+        ModelDirective::Done { .. }
+    ));
     assert_eq!(result.turns[1].tool_calls.len(), 0);
 }
 
@@ -859,7 +872,8 @@ fn agent_loop_auto_finishes_after_post_checkpoint_non_done_loop() {
         fs::set_permissions(path, perms).expect("chmod");
     }
     let model = MockModelClient::from_outputs(vec![
-        "ACT:tool:checkpoint_complete:{\"id\":\"checkpoint-1\",\"summary\":\"finished work\"}".to_string(),
+        "ACT:tool:checkpoint_complete:{\"id\":\"checkpoint-1\",\"summary\":\"finished work\"}"
+            .to_string(),
         "THINK:double-checking final state".to_string(),
         "ACT:tool:list_files:{}".to_string(),
     ]);
@@ -926,7 +940,10 @@ fn agent_loop_auto_finishes_after_post_checkpoint_non_done_loop() {
     assert_eq!(result.final_summary.as_deref(), Some("finished work"));
     assert_eq!(result.turns.len(), 2);
     assert_eq!(result.turns[0].tool_calls.len(), 1);
-    assert!(matches!(result.turns[1].directive, ModelDirective::Done { .. }));
+    assert!(matches!(
+        result.turns[1].directive,
+        ModelDirective::Done { .. }
+    ));
     assert_eq!(result.turns[1].tool_calls.len(), 0);
 }
 

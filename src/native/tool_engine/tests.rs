@@ -427,10 +427,7 @@ fn checkpoint_complete_uses_hivemind_bin_from_runtime_env() {
         "HIVEMIND_DATA_DIR".to_string(),
         tmp.path().join("data").to_string_lossy().to_string(),
     );
-    env.insert(
-        "HIVEMIND_ATTEMPT_ID".to_string(),
-        "attempt-123".to_string(),
-    );
+    env.insert("HIVEMIND_ATTEMPT_ID".to_string(), "attempt-123".to_string());
     let scope = allow_all_scope();
     let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
     let action = NativeToolAction {

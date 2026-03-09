@@ -4,6 +4,43 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.51",
+      "date": "2026-03-09",
+      "phase": 58,
+      "changes": [
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Refactor the native harness around runtime-local `TurnItem` working memory and a real in-loop tool-result conversation in `src/native/agent_loop.rs`, `src/native/turn_items.rs`, and `src/native/prompt_assembly.rs`, so tool results, code-navigation items, and compacted summaries are explicitly replay-visible before each follow-up turn"
+        },
+        {
+          "type": "added",
+          "area": "native",
+          "description": "Introduce explicit `agent_mode` behavior (`planner`, `freeflow`, `task_executor`) with mode-aware prompt assembly/tool contracts plus provider-backed prompt/context provenance hashing and configurable prompt headroom across the native adapter/runtime telemetry surfaces"
+        },
+        {
+          "type": "changed",
+          "area": "events",
+          "description": "Extend native observability with live `[native-progress]` runtime output markers, actual runtime-config telemetry, history-compaction records, turn summaries, and stricter `events native-summary --verify` invariants for operator-facing diagnosis"
+        },
+        {
+          "type": "changed",
+          "area": "native",
+          "description": "Harden checkpoint-aware native execution by adding the built-in `checkpoint_complete` tool path, recovering premature `DONE` outputs before checkpoint completion, and auto-finishing redundant or lingering post-checkpoint loops once all declared checkpoints are complete"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 58 coverage for deterministic prompt assembly, runtime-local history normalization/replay, history-compaction stability, native summary invariants, and checkpoint terminalization recovery paths, plus provider-backed manual validation artifacts under `hivemind-test/test-report/`"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Mark Sprint 58 roadmap/manual validation completion, add the Sprint 58 report, and update native runtime architecture documentation to reflect the tool loop, agent modes, prompt assembly contract, and post-checkpoint recovery behavior"
+        }
+      ]
+    },
+    {
       "version": "v0.1.50",
       "date": "2026-03-01",
       "phase": 57,

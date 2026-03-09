@@ -213,15 +213,19 @@ A native runtime foundation includes:
 
 ---
 
-### 8.2 Current Native Scope (Sprints 42-57)
+### 8.2 Current Native Scope (Sprints 42-58)
 
-Sprints 42-57 introduce a first native runtime adapter mode (`native`) while preserving existing
+Sprints 42-58 introduce a first native runtime adapter mode (`native`) while preserving existing
 external adapters as first-class execution backends.
 
 Current native mode includes:
 - deterministic loop contracts and error semantics
 - explicit capability reporting via `runtime list` / `runtime health`
 - explicit `RuntimeCapabilitiesEvaluated` event emission before `RuntimeStarted`
+- runtime-local working memory via explicit `TurnItem` families (`user input`, `assistant text`, `tool call`, `tool result`, `code-navigation`, `compacted summary`) with stable provenance metadata
+- in-loop tool-result execution: tool calls are executed inside the native conversation loop and their results are appended back into prompt-visible runtime-local history before the next model turn
+- explicit `agent_mode` separate from runtime role (`planner`, `freeflow`, `task_executor`) with mode-aware tool/capability gating and invocation/turn provenance
+- deterministic prompt assembly from explicit components (base instructions, mode contract, objective state, selected runtime-local history, code-navigation items, tool contracts, compacted summaries) with configurable prompt headroom and prompt/context hashes
 - deterministic typed tool engine (`native`):
   - registry-based lookup with explicit `name@version` contracts
   - generated JSON schema input/output contracts per built-in tool
@@ -252,6 +256,7 @@ Current native mode includes:
   - `git_status`
   - `git_diff`
   - `graph_query` (bounded query over UCP snapshot substrate)
+  - `checkpoint_complete` (built-in execution-checkpoint completion path for native task execution)
 - native policy/scope enforcement surfaces:
   - task scope projection via `HIVEMIND_TASK_SCOPE_JSON`
   - graph-query runtime context surfaces:
@@ -336,6 +341,13 @@ Current native mode includes:
   - tokenized component readiness transitions for async runtime dependencies
   - startup sequencing blocks task execution until required native components are ready
   - readiness transitions and runtime-state bootstrap metadata are projected into `RuntimeRecoveryScheduled` (`native_component_readiness`, `native_runtime_state_bootstrap`)
+- native runtime observability additions:
+  - interactive `[native-progress]` stage markers during bootstrap/model/turn/tool/finalization boundaries
+  - explicit budget/compaction telemetry (`NativeBudgetThresholdReached`, `NativeHistoryCompactionRecorded`, `NativeTurnSummaryRecorded`)
+  - `hivemind events native-summary --verify` for operator-facing native invocation summaries and invariant checks
+- checkpoint completion and late-turn recovery hardening:
+  - repair prompts when the model returns `DONE` before required checkpoints are completed
+  - auto-finish redundant or lingering post-checkpoint loops once all declared checkpoints are satisfied
 
 Richer native execution internals (typed tool engine, policy-aware enforcement, and broader replay
 projection surfaces) continue in follow-on Phase 4 sprints.

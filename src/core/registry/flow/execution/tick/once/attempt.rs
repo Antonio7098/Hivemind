@@ -269,8 +269,8 @@ impl Registry {
             native_prompt_metadata: Some(NativePromptMetadata {
                 manifest_hash: Some(manifest_hash),
                 inputs_hash: Some(inputs_hash),
-                delivered_context_hash: Some(runtime_context_hash.to_string()),
-                rendered_context_hash: Some(runtime_context_hash.to_string()),
+                delivered_context_hash: Some(runtime_context_hash.clone()),
+                rendered_context_hash: Some(runtime_context_hash),
                 context_window_state_hash: None,
                 delivery_target: Some(delivery_target),
                 runtime_context_bytes: runtime_context.len(),

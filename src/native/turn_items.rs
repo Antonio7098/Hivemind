@@ -258,6 +258,7 @@ enum BudgetCompactionMode {
     HardLimit,
 }
 
+#[allow(clippy::too_many_lines)]
 fn compact_history_for_budget_mode(
     invocation_id: &str,
     next_turn_index: u32,
@@ -300,7 +301,8 @@ fn compact_history_for_budget_mode(
             .max()
         {
             for (index, item) in items.iter().enumerate() {
-                if item.model_visible && item.provenance.turn_index == Some(latest_visible_turn_index)
+                if item.model_visible
+                    && item.provenance.turn_index == Some(latest_visible_turn_index)
                 {
                     pinned_positions.insert(index);
                 }
@@ -386,7 +388,9 @@ fn compact_history_for_budget_mode(
                 let is_related_tool_artifact = match &item.kind {
                     TurnItemKind::ToolCall { call_id, .. }
                     | TurnItemKind::ToolResult { call_id, .. }
-                    | TurnItemKind::CodeNavigation { call_id, .. } => compacted_call_ids.contains(call_id),
+                    | TurnItemKind::CodeNavigation { call_id, .. } => {
+                        compacted_call_ids.contains(call_id)
+                    }
                     _ => false,
                 };
                 (is_initially_compactable || is_related_tool_artifact).then_some(index)
@@ -496,6 +500,7 @@ pub(crate) fn assistant_item(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) fn items_from_tool_trace(
     invocation_id: &str,
     turn: &AgentLoopTurn,
@@ -677,10 +682,10 @@ fn synthetic_missing_tool_result(
 }
 
 fn item_id(invocation_id: &str, turn_index: Option<u32>, item_index: u32) -> String {
-    match turn_index {
-        Some(turn_index) => format!("{invocation_id}:turn:{turn_index}:item:{item_index}"),
-        None => format!("{invocation_id}:seed:item:{item_index}"),
-    }
+    turn_index.map_or_else(
+        || format!("{invocation_id}:seed:item:{item_index}"),
+        |turn_index| format!("{invocation_id}:turn:{turn_index}:item:{item_index}"),
+    )
 }
 
 fn truncate_with_marker(input: &str, max_chars: usize) -> String {

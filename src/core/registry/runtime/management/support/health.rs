@@ -139,6 +139,7 @@ impl Registry {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn build_runtime_adapter(
         runtime: ProjectRuntimeConfig,
     ) -> Result<SelectedRuntimeAdapter> {
@@ -319,9 +320,10 @@ mod tests {
             max_parallel_tasks: 1,
         };
 
-        let mut adapter = match Registry::build_runtime_adapter(runtime).unwrap() {
-            SelectedRuntimeAdapter::Native(adapter) => adapter,
-            _ => panic!("expected native adapter"),
+        let SelectedRuntimeAdapter::Native(mut adapter) =
+            Registry::build_runtime_adapter(runtime).unwrap()
+        else {
+            panic!("expected native adapter");
         };
         adapter.initialize().unwrap();
         adapter.prepare(Uuid::new_v4(), worktree.path()).unwrap();

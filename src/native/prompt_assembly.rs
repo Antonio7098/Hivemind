@@ -89,6 +89,7 @@ struct NativePromptSelection {
     truncated_item_count: usize,
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) fn assemble_native_prompt(
     config: &NativeRuntimeConfig,
     input: &ExecutionInput,
@@ -358,7 +359,7 @@ fn render_tool_contract(contract: &ToolContract) -> String {
     let permissions = contract
         .required_permissions
         .iter()
-        .map(|permission| format!("{:?}", permission).to_ascii_lowercase())
+        .map(|permission| format!("{permission:?}").to_ascii_lowercase())
         .collect::<Vec<_>>()
         .join(",");
     let input_schema = serde_json::to_string(&contract.input_schema)
@@ -415,8 +416,12 @@ fn select_items_with_budget(items: &[TurnItem], budget: usize) -> NativePromptSe
     }
 }
 
+#[allow(clippy::manual_map, clippy::option_if_let_else)]
 fn optional_line(key: &str, value: Option<&str>) -> Option<String> {
-    value.map(|value| format!("{key}={value}"))
+    match value {
+        Some(value) => Some(format!("{key}={value}")),
+        None => None,
+    }
 }
 
 fn section(title: &str, body: &str) -> String {

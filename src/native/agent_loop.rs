@@ -1,6 +1,6 @@
 use super::*;
-use crate::native::turn_items::{TurnItemKind, TurnItemOutcome};
 use crate::native::tool_engine::NativeToolAction;
+use crate::native::turn_items::{TurnItemKind, TurnItemOutcome};
 use serde_json::Value;
 
 impl<M: ModelClient> AgentLoop<M> {
@@ -191,10 +191,7 @@ impl<M: ModelClient> AgentLoop<M> {
             .map(ToString::to_string)
     }
 
-    fn completed_checkpoint_ids(
-        &self,
-        history: &[TurnItem],
-    ) -> std::collections::BTreeSet<String> {
+    fn completed_checkpoint_ids(&self, history: &[TurnItem]) -> std::collections::BTreeSet<String> {
         let mut ids = std::collections::BTreeSet::new();
         for item in history {
             if let TurnItemKind::ToolResult {
@@ -301,15 +298,13 @@ impl<M: ModelClient> AgentLoop<M> {
             .flatten()
             .find_map(|text| {
                 text.lines().find_map(|line| {
-                    line.trim()
-                        .strip_prefix(PREFIX)
-                        .map(|rest| {
-                            rest.split(',')
-                                .map(str::trim)
-                                .filter(|id| !id.is_empty())
-                                .map(ToString::to_string)
-                                .collect::<Vec<_>>()
-                        })
+                    line.trim().strip_prefix(PREFIX).map(|rest| {
+                        rest.split(',')
+                            .map(str::trim)
+                            .filter(|id| !id.is_empty())
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                    })
                 })
             })
             .unwrap_or_default()
@@ -413,7 +408,7 @@ impl<M: ModelClient> AgentLoop<M> {
                 "summary": summary,
             })
         };
-        Some(format!("tool:checkpoint_complete:{}", payload))
+        Some(format!("tool:checkpoint_complete:{payload}"))
     }
 
     fn budget_thresholds_crossed(&mut self) -> Vec<u8> {
@@ -456,6 +451,11 @@ impl<M: ModelClient> AgentLoop<M> {
     }
 
     /// Execute the loop with explicit history-backed prompt assembly and optional observers.
+    #[allow(
+        clippy::collapsible_if,
+        clippy::needless_pass_by_value,
+        clippy::too_many_lines
+    )]
     pub(crate) fn run_with_history_observed<BuildRequest, ExecuteAction>(
         &mut self,
         invocation_id: &str,
@@ -680,19 +680,23 @@ impl<M: ModelClient> AgentLoop<M> {
             }
             let all_declared_checkpoints_completed =
                 self.all_declared_checkpoints_completed(&request, &history);
-            if all_declared_checkpoints_completed && !matches!(directive, ModelDirective::Done { .. }) {
+            if all_declared_checkpoints_completed
+                && !matches!(directive, ModelDirective::Done { .. })
+            {
                 if post_checkpoint_done_repair_attempts
                     >= Self::MAX_POST_CHECKPOINT_DONE_RECOVERY_ATTEMPTS
                 {
                     directive = ModelDirective::Done {
-                        summary: self.latest_completed_checkpoint_summary().unwrap_or_else(|| {
-                            let declared = Self::declared_checkpoint_ids(&request);
-                            if declared.is_empty() {
-                                "completed declared execution checkpoints".to_string()
-                            } else {
-                                format!("completed checkpoints: {}", declared.join(", "))
-                            }
-                        }),
+                        summary: self
+                            .latest_completed_checkpoint_summary()
+                            .unwrap_or_else(|| {
+                                let declared = Self::declared_checkpoint_ids(&request);
+                                if declared.is_empty() {
+                                    "completed declared execution checkpoints".to_string()
+                                } else {
+                                    format!("completed checkpoints: {}", declared.join(", "))
+                                }
+                            }),
                     };
                 } else {
                     post_checkpoint_done_repair_attempts =

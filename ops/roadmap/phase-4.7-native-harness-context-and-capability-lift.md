@@ -80,17 +80,17 @@
 - [x] Add tests proving mode-specific prompt assembly is deterministic
 
 ### 58.6 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 58 manual checklist under `@hivemind-test`
-- [ ] Run a real-project validation where Hivemind native harness uses real LLM calls to build or extend a real app through multiple tool-result turns
-- [ ] Capture prompt assembly evidence, tool-call traces, mode attribution, and final build/test outcomes for the exercised app task
-- [ ] Publish Sprint 58 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 58 manual checklist under `@hivemind-test`
+- [x] Run a real-project validation where Hivemind native harness uses real LLM calls to build or extend a real app through multiple tool-result turns
+- [x] Capture prompt assembly evidence, tool-call traces, mode attribution, and final build/test outcomes for the exercised app task
+- [x] Publish Sprint 58 manual test report artifact in `@hivemind-test`
 
 ### 58.7 Exit Criteria
 - [x] Native harness executes tools as part of the turn loop
 - [x] Prompt assembly is explicit, attributable, and test-covered
 - [x] Agent mode is explicit without breaking runtime-role semantics
 - [x] Runtime working memory is clearly separated from authoritative orchestration state
-- [ ] Manual validation in `@hivemind-test` is completed and documented
+- [x] Manual validation in `@hivemind-test` is completed and documented
 
 ---
 
