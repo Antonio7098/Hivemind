@@ -5,6 +5,8 @@ mod refresh;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use ucp_api::{build_code_graph, CodeGraphBuildInput, CodeGraphExtractorConfig};
 
     #[test]
     fn compute_snapshot_fingerprint_is_order_independent() {
@@ -94,5 +96,63 @@ mod tests {
         assert_eq!(summary.reference_edges, 3);
         assert_eq!(summary.languages.get("rust"), Some(&5));
         assert_eq!(summary.languages.get("python"), Some(&1));
+    }
+
+    #[test]
+    fn codegraph_scope_contract_allows_custom_semantic_edges() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path().join("repo");
+        fs::create_dir_all(repo.join("src")).expect("mkdir src");
+        fs::write(
+            repo.join("src/lib.rs"),
+            "pub struct Thing;\nimpl Thing { pub fn helper(&self) {} }\n",
+        )
+        .expect("write lib");
+        let built = build_code_graph(&CodeGraphBuildInput {
+            repository_path: repo,
+            commit_hash: "test".to_string(),
+            config: CodeGraphExtractorConfig::default(),
+        })
+        .expect("build code graph");
+        let document = PortableDocument::from_document(&built.document);
+        let edge_types = document
+            .blocks
+            .values()
+            .flat_map(|block| {
+                block
+                    .edges
+                    .iter()
+                    .map(|edge| edge.edge_type.as_str().clone())
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            edge_types.iter().any(|edge| edge == "custom:for_type"),
+            "{edge_types:?}"
+        );
+
+        Registry::ensure_codegraph_scope_contract(&document, "test")
+            .expect("custom semantic edges should be allowed");
+    }
+
+    #[test]
+    fn codegraph_scope_contract_accepts_coderef_paths_for_file_and_symbol_nodes() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path().join("repo");
+        fs::create_dir_all(repo.join("src")).expect("mkdir src");
+        fs::write(
+            repo.join("src/lib.rs"),
+            "pub struct Thing;\nimpl Thing { pub fn helper(&self) {} }\n",
+        )
+        .expect("write lib");
+        let built = build_code_graph(&CodeGraphBuildInput {
+            repository_path: repo,
+            commit_hash: "test".to_string(),
+            config: CodeGraphExtractorConfig::default(),
+        })
+        .expect("build code graph");
+
+        let document = PortableDocument::from_document(&built.document);
+        Registry::ensure_codegraph_scope_contract(&document, "test")
+            .expect("coderef.path should satisfy the path contract");
     }
 }

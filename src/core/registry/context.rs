@@ -116,6 +116,17 @@ impl Registry {
                 &window_result.context,
                 origin,
             )?;
+        self.sync_attempt_context_graph_into_runtime_registry(
+            state,
+            flow,
+            task_id,
+            attempt_id,
+            runtime_name,
+            &manifest,
+            &manifest_hash,
+            &context_hash,
+            origin,
+        )?;
 
         Ok(AttemptContextBuildResult {
             manifest_json,

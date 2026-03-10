@@ -82,6 +82,22 @@ fn git_commit_all(repo_dir: &std::path::Path, message: &str) {
     );
 }
 
+fn sqlite_scalar_string(db_path: &std::path::Path, sql: &str) -> String {
+    let output = Command::new("sqlite3")
+        .arg("-noheader")
+        .arg("-batch")
+        .arg(db_path)
+        .arg(sql)
+        .output()
+        .expect("sqlite3 query");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
 #[test]
 fn cli_project_governance_lifecycle_is_observable() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -2079,6 +2095,125 @@ fn cli_verify_override_can_force_success_after_check_failure_and_is_audited() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
+fn cli_verify_override_fail_completes_flow_with_failed_task() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--binary-path",
+            "/usr/bin/env",
+            "--arg",
+            "sh",
+            "--arg",
+            "-c",
+            "--arg",
+            "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+            "--timeout-ms",
+            "1000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out1, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out1
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "graph",
+            "add-check",
+            &graph_id,
+            &t1_id,
+            "--name",
+            "fail_check",
+            "--command",
+            "exit 1",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, _err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 1, "expected verification failure on required check");
+
+    let (code, _out, err) = run_hivemind_with_env(
+        tmp.path(),
+        &[
+            "verify",
+            "override",
+            &t1_id,
+            "fail",
+            "--reason",
+            "manual fail override",
+        ],
+        &[("HIVEMIND_USER", "tester")],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, flow_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "flow", "status", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_json: serde_json::Value = serde_json::from_str(&flow_out).expect("flow json");
+    assert_eq!(
+        flow_json
+            .get("data")
+            .and_then(|d| d.get("state"))
+            .and_then(|s| s.as_str()),
+        Some("completed"),
+        "{flow_out}"
+    );
+    assert_eq!(
+        flow_json
+            .get("data")
+            .and_then(|d| d.get("task_executions"))
+            .and_then(|tasks| tasks.get(&t1_id))
+            .and_then(|task| task.get("state"))
+            .and_then(|s| s.as_str()),
+        Some("failed"),
+        "{flow_out}"
+    );
+}
+
+#[test]
 fn cli_graph_flow_and_task_control_smoke() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
@@ -3796,6 +3931,67 @@ fn cli_attempt_inspect_context_returns_manifest_and_retry_linkage() {
             .and_then(serde_json::Value::as_str)
             .is_some(),
         "{inspect_out}"
+    );
+
+    let state_db_path = tmp
+        .path()
+        .join(".hivemind")
+        .join("native-runtime")
+        .join("native")
+        .join("runtime-state.sqlite");
+    assert!(state_db_path.is_file(), "{}", state_db_path.display());
+    assert_eq!(
+        sqlite_scalar_string(
+            &state_db_path,
+            "SELECT COUNT(1) FROM graphcode_artifacts WHERE substrate_kind = 'graph';",
+        ),
+        "1"
+    );
+    let storage_reference = sqlite_scalar_string(
+        &state_db_path,
+        "SELECT storage_reference FROM graphcode_artifacts WHERE substrate_kind = 'graph' LIMIT 1;",
+    );
+    assert!(
+        PathBuf::from(&storage_reference).is_file(),
+        "{storage_reference}"
+    );
+    let repo_manifest_json = sqlite_scalar_string(
+        &state_db_path,
+        "SELECT repo_manifest_json FROM graphcode_artifacts WHERE substrate_kind = 'graph' LIMIT 1;",
+    );
+    let repo_manifest: serde_json::Value =
+        serde_json::from_str(&repo_manifest_json).expect("graph manifest json");
+    let graph_key = repo_manifest[0]
+        .get("graph_key")
+        .and_then(serde_json::Value::as_str)
+        .expect("graph key");
+    assert!(repo_manifest[0]
+        .get("worktree_paths")
+        .and_then(serde_json::Value::as_array)
+        .is_some());
+    let portable = ucp_graph::GraphNavigator::open_sqlite(&storage_reference, graph_key)
+        .expect("open generic graph sqlite")
+        .to_portable_document()
+        .expect("portable graph document");
+    let document = portable.to_document().expect("document");
+    let labels: Vec<String> = document
+        .blocks
+        .values()
+        .filter_map(|block| block.metadata.label.clone())
+        .collect();
+    assert!(
+        labels.iter().any(|label| label.starts_with("Task · ")),
+        "{labels:?}"
+    );
+    assert!(
+        labels.iter().any(|label| label.starts_with("Documents · ")),
+        "{labels:?}"
+    );
+    assert!(
+        labels
+            .iter()
+            .any(|label| label.starts_with("Retry Attempt · ")),
+        "{labels:?}"
     );
 }
 

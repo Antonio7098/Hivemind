@@ -41,12 +41,8 @@ impl Registry {
                                 origin,
                             )
                         })?;
-                    let path = block
-                        .metadata
-                        .custom
-                        .get("path")
-                        .and_then(serde_json::Value::as_str)
-                        .ok_or_else(|| {
+                    let path =
+                        Self::graph_block_path_value(&block.metadata.custom).ok_or_else(|| {
                             HivemindError::system(
                                 "graph_snapshot_schema_invalid",
                                 "File node missing path metadata",
@@ -66,12 +62,7 @@ impl Registry {
                         },
                     );
                 } else if class_name == "symbol" {
-                    if let Some(path) = block
-                        .metadata
-                        .custom
-                        .get("path")
-                        .and_then(serde_json::Value::as_str)
-                    {
+                    if let Some(path) = Self::graph_block_path_value(&block.metadata.custom) {
                         let normalized_path = Self::normalize_graph_path(path);
                         facts
                             .symbol_file_keys

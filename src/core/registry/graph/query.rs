@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::graph_query::GRAPH_QUERY_ENV_PROJECT_ID;
 
 impl Registry {
     #[allow(clippy::too_many_arguments)]
@@ -128,6 +129,7 @@ impl Registry {
         runtime_env.remove(GRAPH_QUERY_ENV_GATE_ERROR);
         runtime_env.remove(GRAPH_QUERY_ENV_SNAPSHOT_PATH);
         runtime_env.remove(GRAPH_QUERY_ENV_CONSTITUTION_PATH);
+        runtime_env.remove(GRAPH_QUERY_ENV_PROJECT_ID);
 
         if project.repositories.is_empty() {
             return;
@@ -135,6 +137,35 @@ impl Registry {
 
         match self.ensure_graph_snapshot_current_for_constitution(project, origin) {
             Ok(()) => {
+                let constitution_path = self.constitution_path(project.id);
+                let constitution = constitution_path
+                    .is_file()
+                    .then_some(constitution_path.as_path());
+                let snapshot = self.read_graph_snapshot_artifact(project.id, origin);
+                match snapshot.and_then(|artifact| {
+                    artifact.map_or(Ok(()), |artifact| {
+                        self.sync_graph_snapshot_into_runtime_registry(
+                            project.id,
+                            &artifact,
+                            constitution,
+                            origin,
+                        )
+                    })
+                }) {
+                    Ok(()) => {}
+                    Err(error) => {
+                        runtime_env.insert(
+                            GRAPH_QUERY_ENV_GATE_ERROR.to_string(),
+                            Self::encode_runtime_graph_query_gate_error(&error),
+                        );
+                        return;
+                    }
+                }
+                let state_db_path =
+                    crate::native::runtime_hardening::RuntimeHardeningConfig::for_state_dir(
+                        &self.config.data_dir.join("native-runtime"),
+                    )
+                    .state_db_path;
                 runtime_env.insert(
                     GRAPH_QUERY_ENV_SNAPSHOT_PATH.to_string(),
                     self.graph_snapshot_path(project.id)
@@ -143,12 +174,22 @@ impl Registry {
                 );
                 runtime_env.insert(
                     GRAPH_QUERY_ENV_CONSTITUTION_PATH.to_string(),
-                    self.constitution_path(project.id)
-                        .to_string_lossy()
-                        .to_string(),
+                    constitution_path.to_string_lossy().to_string(),
+                );
+                runtime_env.insert(
+                    GRAPH_QUERY_ENV_PROJECT_ID.to_string(),
+                    project.id.to_string(),
+                );
+                runtime_env.insert(
+                    crate::native::runtime_hardening::STATE_DB_PATH_ENV.to_string(),
+                    state_db_path.to_string_lossy().to_string(),
                 );
             }
             Err(error) => {
+                if error.code.starts_with("graph_snapshot_") {
+                    let _ =
+                        self.mark_graph_snapshot_registry_freshness(project.id, "stale", origin);
+                }
                 runtime_env.insert(
                     GRAPH_QUERY_ENV_GATE_ERROR.to_string(),
                     Self::encode_runtime_graph_query_gate_error(&error),
@@ -167,9 +208,14 @@ impl Registry {
         let project = self
             .get_project(id_or_name)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
-        self.ensure_graph_snapshot_current_for_constitution(&project, origin)?;
+        if let Err(error) = self.ensure_graph_snapshot_current_for_constitution(&project, origin) {
+            if error.code.starts_with("graph_snapshot_") {
+                let _ = self.mark_graph_snapshot_registry_freshness(project.id, "stale", origin);
+            }
+            return Err(error);
+        }
         let snapshot = self
-            .read_graph_snapshot_artifact(project.id, origin)?
+            .read_authoritative_graph_snapshot_artifact(project.id, origin)?
             .ok_or_else(|| {
                 HivemindError::user(
                     "graph_snapshot_missing",

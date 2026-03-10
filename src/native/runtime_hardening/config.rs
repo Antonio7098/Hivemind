@@ -2,6 +2,16 @@ use super::*;
 
 impl RuntimeHardeningConfig {
     #[must_use]
+    pub(crate) fn for_state_dir(state_dir: &Path) -> Self {
+        let mut env = HashMap::new();
+        env.insert(
+            STATE_DIR_ENV.to_string(),
+            state_dir.to_string_lossy().to_string(),
+        );
+        Self::from_env(&env)
+    }
+
+    #[must_use]
     pub fn from_env(env: &HashMap<String, String>) -> Self {
         let state_dir = env
             .get(STATE_DIR_ENV)

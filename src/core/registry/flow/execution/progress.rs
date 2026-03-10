@@ -294,12 +294,9 @@ mod tests {
             TaskExecState::Verifying
         );
 
-        registry
+        let updated_flow = registry
             .flow_set_run_mode(&flow_id, RunMode::Auto)
             .expect("set auto mode");
-        let updated_flow = registry
-            .tick_flow(&flow_id, false, None)
-            .expect("tick flow after verification success");
 
         assert_eq!(
             updated_flow
@@ -325,6 +322,78 @@ mod tests {
             attempts.len(),
             2,
             "task B should have started automatically after verification success"
+        );
+    }
+
+    #[test]
+    fn auto_progress_completes_flow_when_only_task_is_terminal_failed() {
+        let temp = tempdir().expect("tempdir");
+        let data_dir = temp.path().join("data");
+        let repo_dir = temp.path().join("repo");
+        std::fs::create_dir_all(&data_dir).expect("create data dir");
+        std::fs::create_dir_all(&repo_dir).expect("create repo dir");
+        std::fs::write(repo_dir.join("README.md"), "seed\n").expect("write seed file");
+        init_git_repo(&repo_dir);
+
+        let registry =
+            Registry::open_with_config(RegistryConfig::with_dir(data_dir)).expect("registry");
+        let project = registry
+            .create_project("auto-progress-failed-terminal", None)
+            .expect("project");
+        let project_id = project.id.to_string();
+        registry
+            .attach_repo(
+                &project_id,
+                repo_dir.to_str().expect("repo path"),
+                Some("main"),
+                RepoAccessMode::ReadWrite,
+            )
+            .expect("attach repo");
+        let task = registry
+            .create_task(&project_id, "Task A", None, None)
+            .expect("task");
+        let graph = registry
+            .create_graph(&project_id, "graph", &[task.id])
+            .expect("graph");
+        let flow = registry
+            .create_flow(&graph.id.to_string(), Some("flow"))
+            .expect("flow");
+        let flow_id = flow.id.to_string();
+        registry.start_flow(&flow_id).expect("start flow");
+        registry
+            .start_task_execution(&task.id.to_string())
+            .expect("start task execution");
+        registry
+            .flow_set_run_mode(&flow_id, RunMode::Auto)
+            .expect("set auto mode");
+
+        let attempts = registry
+            .list_attempts(Some(&flow_id), None, 10)
+            .expect("attempts");
+        let attempt_id = attempts[0].attempt_id;
+        let running_flow = registry.get_flow(&flow_id).expect("running flow");
+        registry
+            .fail_running_attempt(
+                &running_flow,
+                task.id,
+                attempt_id,
+                "synthetic_failure",
+                "test:auto_progress_completes_flow_when_only_task_is_terminal_failed",
+            )
+            .expect("fail running attempt");
+
+        let updated = registry
+            .auto_progress_flow(&flow_id)
+            .expect("auto progress after failure");
+
+        assert_eq!(updated.state, FlowState::Completed);
+        assert_eq!(
+            updated
+                .task_executions
+                .get(&task.id)
+                .expect("task execution")
+                .state,
+            TaskExecState::Failed
         );
     }
 

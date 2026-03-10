@@ -1,3 +1,4 @@
+use super::super::graph_query_tool::mark_runtime_graph_dirty;
 use super::*;
 use support::{
     clamp_exec_wait_ms, collect_stream_delta, exec_session_manager, parse_session_cap,
@@ -139,6 +140,7 @@ pub(super) fn handle_exec_command(
     let exit_code = session.exit_code()?;
     drop(manager);
 
+    mark_runtime_graph_dirty(ctx.env, &[]);
     session_output(session_id, exit_code, stdout, stderr, warnings)
 }
 
@@ -228,5 +230,8 @@ pub(super) fn handle_write_stdin(
     }
     drop(manager);
 
+    if input.chars.is_some() {
+        mark_runtime_graph_dirty(ctx.env, &[]);
+    }
     session_output(input.session_id, exit_code, stdout, stderr, warnings)
 }

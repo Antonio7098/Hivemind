@@ -105,26 +105,22 @@ impl Registry {
                     }
                 }
             }
+        }
 
-            let all_success = updated
-                .task_executions
-                .values()
-                .all(|e| e.state == TaskExecState::Success);
-            if all_success {
-                let event = Event::new(
-                    EventPayload::TaskFlowCompleted {
-                        flow_id: updated.id,
-                    },
-                    CorrelationIds::for_graph_flow(
-                        updated.project_id,
-                        updated.graph_id,
-                        updated.id,
-                    ),
-                );
-                let _ = self.store.append(event);
-            } else if updated.run_mode == RunMode::Auto {
-                return self.tick_flow(&updated.id.to_string(), false, None);
-            }
+        let all_terminal = updated
+            .task_executions
+            .values()
+            .all(|e| e.state.is_terminal());
+        if all_terminal {
+            let event = Event::new(
+                EventPayload::TaskFlowCompleted {
+                    flow_id: updated.id,
+                },
+                CorrelationIds::for_graph_flow(updated.project_id, updated.graph_id, updated.id),
+            );
+            let _ = self.store.append(event);
+        } else if updated.run_mode == RunMode::Auto {
+            return self.tick_flow(&updated.id.to_string(), false, None);
         }
 
         self.get_flow(&flow.id.to_string())

@@ -97,6 +97,30 @@ fn flow_completion_requires_terminal_tasks() {
 }
 
 #[test]
+fn task_exec_state_terminality_matches_flow_contract() {
+    assert!(TaskExecState::Success.is_terminal());
+    assert!(TaskExecState::Failed.is_terminal());
+    assert!(TaskExecState::Escalated.is_terminal());
+    assert!(!TaskExecState::Verifying.is_terminal());
+}
+
+#[test]
+fn flow_completion_allows_failed_and_escalated_tasks() {
+    let mut flow = test_flow();
+    flow.start().unwrap();
+    let task_ids: Vec<_> = flow.task_executions.keys().copied().collect();
+    flow.transition_task(task_ids[0], TaskExecState::Success)
+        .unwrap();
+    flow.transition_task(task_ids[1], TaskExecState::Failed)
+        .unwrap();
+    flow.transition_task(task_ids[2], TaskExecState::Escalated)
+        .unwrap();
+
+    assert!(flow.complete().is_ok());
+    assert_eq!(flow.state, FlowState::Completed);
+}
+
+#[test]
 fn flow_serialization() {
     let flow = test_flow();
     let json = serde_json::to_string(&flow).unwrap();

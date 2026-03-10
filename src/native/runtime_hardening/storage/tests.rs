@@ -91,3 +91,90 @@ fn runtime_log_ingestor_batches_and_survives_restart() {
     let count = query_scalar_i64(&db_path, "SELECT COUNT(1) FROM runtime_logs;");
     assert!(count >= 2, "expected persisted runtime logs across restart");
 }
+
+#[test]
+fn runtime_state_store_persists_graphcode_registry_records() {
+    let dir = tempdir().expect("temp dir");
+    let config = RuntimeHardeningConfig::for_state_dir(dir.path());
+    let store = NativeRuntimeStateStore::open(&config).expect("state store should initialize");
+
+    store
+        .upsert_graphcode_artifact(&GraphCodeArtifactUpsert {
+            registry_key: "project-1:codegraph".to_string(),
+            project_id: "project-1".to_string(),
+            substrate_kind: "codegraph".to_string(),
+            storage_backend: "sqlite".to_string(),
+            storage_reference: "graphcode_artifacts/project-1:codegraph".to_string(),
+            derivative_snapshot_path: Some("/tmp/graph_snapshot.json".to_string()),
+            constitution_path: Some("/tmp/constitution.yaml".to_string()),
+            canonical_fingerprint: "fp-123".to_string(),
+            profile_version: ucp_api::CODEGRAPH_PROFILE_MARKER.to_string(),
+            ucp_engine_version: ucp_api::CODEGRAPH_EXTRACTOR_VERSION.to_string(),
+            extractor_version: ucp_api::CODEGRAPH_PROFILE_MARKER.to_string(),
+            runtime_version: env!("CARGO_PKG_VERSION").to_string(),
+            freshness_state: "current".to_string(),
+            repo_manifest_json: "[{\"repo_name\":\"repo\"}]".to_string(),
+            active_session_ref: Some("project-1:codegraph:session:default".to_string()),
+            snapshot_json: "{\"canonical_fingerprint\":\"fp-123\"}".to_string(),
+        })
+        .expect("artifact upsert");
+    store
+        .upsert_graphcode_session(&GraphCodeSessionUpsert {
+            session_ref: "project-1:codegraph:session:default".to_string(),
+            registry_key: "project-1:codegraph".to_string(),
+            substrate_kind: "codegraph".to_string(),
+            current_focus_json: "[\"node-1\"]".to_string(),
+            pinned_nodes_json: "[]".to_string(),
+            recent_traversals_json: "[{\"query_kind\":\"filter\"}]".to_string(),
+            working_set_refs_json: "[\"node-1\"]".to_string(),
+            hydrated_excerpts_json: "[]".to_string(),
+            path_artifacts_json: "[]".to_string(),
+            snapshot_fingerprint: "fp-123".to_string(),
+            freshness_state: "current".to_string(),
+        })
+        .expect("session upsert");
+
+    let record = store
+        .graphcode_artifact_by_project("project-1", "codegraph")
+        .expect("read graphcode record")
+        .expect("record should exist");
+    assert_eq!(record.canonical_fingerprint, "fp-123");
+    assert_eq!(record.storage_backend, "sqlite");
+
+    let by_registry = store
+        .graphcode_artifact_by_registry_key("project-1:codegraph")
+        .expect("read by registry key")
+        .expect("record should exist by registry key");
+    assert_eq!(by_registry.project_id, "project-1");
+
+    let session = store
+        .graphcode_session_by_ref("project-1:codegraph:session:default")
+        .expect("read session")
+        .expect("session should exist");
+    assert_eq!(session.snapshot_fingerprint, "fp-123");
+
+    store
+        .mark_graphcode_artifact_freshness_by_registry_key("project-1:codegraph", "stale")
+        .expect("mark artifact stale by registry key");
+    store
+        .mark_graphcode_session_freshness_by_registry_key("project-1:codegraph", "stale")
+        .expect("mark session stale by registry key");
+
+    let artifact_freshness = query_scalar_i64(
+        &store.db_path,
+        "SELECT COUNT(1) FROM graphcode_artifacts WHERE registry_key = 'project-1:codegraph' AND freshness_state = 'stale';",
+    );
+    assert_eq!(artifact_freshness, 1);
+
+    let session_freshness = query_scalar_i64(
+        &store.db_path,
+        "SELECT COUNT(1) FROM graphcode_sessions WHERE registry_key = 'project-1:codegraph' AND freshness_state = 'stale';",
+    );
+    assert_eq!(session_freshness, 1);
+
+    let session_count = query_scalar_i64(
+        &store.db_path,
+        "SELECT COUNT(1) FROM graphcode_sessions WHERE registry_key = 'project-1:codegraph';",
+    );
+    assert_eq!(session_count, 1);
+}

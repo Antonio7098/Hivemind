@@ -263,10 +263,7 @@ impl<M: ModelClient> AgentLoop<M> {
         directive: &ModelDirective,
     ) -> bool {
         matches!(directive, ModelDirective::Done { .. })
-            && request
-                .prompt_assembly
-                .as_ref()
-                .is_some_and(|assembly| assembly.objective_state.starts_with("checkpoint"))
+            && Self::first_declared_checkpoint_id(request).is_some()
             && !self.checkpoint_completion_recorded(history)
     }
 

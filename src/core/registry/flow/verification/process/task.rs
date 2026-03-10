@@ -298,11 +298,11 @@ impl Registry {
             }
 
             let updated = self.get_flow(flow_id)?;
-            let all_success = updated
+            let all_terminal = updated
                 .task_executions
                 .values()
-                .all(|e| e.state == TaskExecState::Success);
-            if all_success {
+                .all(|e| e.state.is_terminal());
+            if all_terminal {
                 let event = Event::new(
                     EventPayload::TaskFlowCompleted {
                         flow_id: updated.id,

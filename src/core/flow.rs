@@ -39,6 +39,13 @@ pub enum TaskExecState {
     Escalated,
 }
 
+impl TaskExecState {
+    #[must_use]
+    pub const fn is_terminal(self) -> bool {
+        matches!(self, Self::Success | Self::Failed | Self::Escalated)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum RetryMode {

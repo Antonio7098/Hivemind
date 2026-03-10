@@ -30,7 +30,12 @@ mod tests;
 
 use self::readiness::NativeReadinessGate;
 use self::secrets::NativeSecretsManager;
-use self::storage::{NativeRuntimeStateStore, RuntimeLogIngestor, RuntimeLogRecord};
+#[allow(unused_imports)]
+pub(crate) use self::storage::{
+    GraphCodeArtifactRecord, GraphCodeArtifactUpsert, GraphCodeSessionUpsert,
+    NativeRuntimeStateStore,
+};
+use self::storage::{RuntimeLogIngestor, RuntimeLogRecord};
 
 use crate::adapters::runtime::{
     NativeReadinessTransition, NativeRuntimeStateTelemetry, RuntimeError,
@@ -54,8 +59,8 @@ const DEFAULT_LOG_RETENTION_DAYS: u64 = 14;
 const DEFAULT_LEASE_TTL_MS: u64 = 30_000;
 const DEFAULT_RETENTION_SWEEP_INTERVAL_SECS: u64 = 30;
 
-const STATE_DB_PATH_ENV: &str = "HIVEMIND_NATIVE_STATE_DB_PATH";
-const STATE_DIR_ENV: &str = "HIVEMIND_NATIVE_STATE_DIR";
+pub(crate) const STATE_DB_PATH_ENV: &str = "HIVEMIND_NATIVE_STATE_DB_PATH";
+pub(crate) const STATE_DIR_ENV: &str = "HIVEMIND_NATIVE_STATE_DIR";
 const BUSY_TIMEOUT_ENV: &str = "HIVEMIND_NATIVE_STATE_BUSY_TIMEOUT_MS";
 const LOG_BATCH_SIZE_ENV: &str = "HIVEMIND_NATIVE_LOG_BATCH_SIZE";
 const LOG_FLUSH_INTERVAL_ENV: &str = "HIVEMIND_NATIVE_LOG_FLUSH_INTERVAL_MS";

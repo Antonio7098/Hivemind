@@ -1,3 +1,4 @@
+use super::graph_query_tool::mark_runtime_graph_dirty;
 use super::*;
 
 fn ensure_can_read(scope: Option<&Scope>, rel_path: &Path) -> Result<(), NativeToolEngineError> {
@@ -244,6 +245,7 @@ pub(super) fn handle_write_file(
         bytes_written: u64::try_from(input.content.len()).unwrap_or(u64::MAX),
         append: input.append,
     };
+    mark_runtime_graph_dirty(ctx.env, std::slice::from_ref(&rel));
     serde_json::to_value(output).map_err(|error| {
         NativeToolEngineError::execution(format!("failed to encode write_file output: {error}"))
     })

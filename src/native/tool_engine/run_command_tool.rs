@@ -1,3 +1,4 @@
+use super::graph_query_tool::mark_runtime_graph_dirty;
 use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -289,6 +290,9 @@ pub(super) fn handle_run_command(
         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
         timed_out: false,
     };
+    if status == 0 {
+        mark_runtime_graph_dirty(ctx.env, &[]);
+    }
     serde_json::to_value(result).map_err(|error| {
         NativeToolEngineError::execution(format!("failed to encode run_command output: {error}"))
     })

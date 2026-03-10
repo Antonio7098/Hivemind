@@ -40,7 +40,10 @@ jsonschema = "0.17"
 serde_path_to_error = "0.1"
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 nix = { version = "0.28", features = ["resource", "process"] }
-ucp-api = { git = "https://github.com/Antonio7098/unified-content-protocol.git", rev = "cf745b5efb66711f5fbcd89a41c640533b2fdc84" }
+ucp-api = { path = "../unified-content-protocol/crates/ucp-api", version = "0.1.14" }
+ucp-graph = { version = "0.1.14", path = "../unified-content-protocol/crates/ucp-graph" }
+ucp-codegraph = { version = "0.1.14", path = "../unified-content-protocol/crates/ucp-codegraph" }
+ucm-core = { version = "0.1.14", path = "../unified-content-protocol/crates/ucm-core" }
 
 [dev-dependencies]
 insta = { version = "1", features = ["json"] }
