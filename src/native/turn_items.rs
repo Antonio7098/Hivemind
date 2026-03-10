@@ -699,13 +699,18 @@ pub(crate) fn items_from_tool_trace(
         },
     });
     if let Some(response) = trace.response.as_ref() {
+        let prompt_content = if trace.tool_name == "graph_query" {
+            render_graph_query_navigation_summary(trace, response)
+        } else {
+            response.clone()
+        };
         items.push(TurnItem {
             id: item_id(
                 invocation_id,
                 Some(turn.turn_index),
                 base_index.saturating_add(1),
             ),
-            model_visible: trace.tool_name != "graph_query",
+            model_visible: true,
             correlation: TurnItemCorrelation {
                 turn_index: Some(turn.turn_index),
                 item_index: base_index.saturating_add(1),
@@ -720,7 +725,7 @@ pub(crate) fn items_from_tool_trace(
                 call_id: trace.call_id.clone(),
                 tool_name: trace.tool_name.clone(),
                 outcome: TurnItemOutcome::Success,
-                content: response.clone(),
+                content: prompt_content,
             },
         });
         if trace.tool_name == "graph_query" {

@@ -1,16 +1,16 @@
 # Sprint 59 Manual Checklist
 
-Date: 2026-03-09
+Date: 2026-03-10
 Owner: Antonio
 Sprint: 59 (GraphCode Context Registry, Runtime Compaction, And Bounded Prompt Loss Accounting)
-Status: PARTIAL / PROVIDER-BACKED VALIDATION PENDING
+Status: IN PROGRESS / GRAPH RUNTIME PROVIDER PASS CAPTURED
 
 ## 59.3 GraphCode-backed context lanes
 
 - [x] Confirm graph snapshot refresh seeds the runtime GraphCode registry and default navigation session tables.
 - [x] Confirm native `graph_query` resolves GraphCode context from the runtime registry and marks stale snapshots as stale in authoritative metadata.
-- [ ] Validate on a real repo that non-code structured context still routes through the intended generic graph runtime path.
-- [ ] Validate on a real repo that runtime GraphCode evidence comes from local UCP-backed integration rather than a duplicated parser/query layer.
+- [x] Validate on a real repo that non-code structured context still routes through the intended generic graph runtime path.
+- [x] Validate on a real repo that runtime GraphCode evidence comes from local UCP-backed integration rather than a duplicated parser/query layer.
 
 ## 59.4 Compaction model
 
@@ -26,5 +26,6 @@ Status: PARTIAL / PROVIDER-BACKED VALIDATION PENDING
 ## Artifacts
 
 - `hivemind-test/test-report/sprint-59-manual-report.md`
+- `hivemind-test/test-report/2026-03-10-sprint59-graph-runtime-report.md`
 - `ops/reports/sprint-59-report-2026-03-09.md`
 

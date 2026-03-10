@@ -309,6 +309,104 @@ fn agent_loop_executes_tools_inside_the_model_loop() {
 }
 
 #[test]
+fn agent_loop_surfaces_graph_query_results_into_the_next_prompt() {
+    let prompts = Arc::new(Mutex::new(Vec::new()));
+    let model = RecordingModelClient::new(
+        vec![
+            "ACT:tool:graph_query:{\"kind\":\"filter\",\"path_prefix\":\"src/native\",\"max_results\":4}".to_string(),
+            "DONE:graph query observed".to_string(),
+        ],
+        prompts.clone(),
+    );
+
+    let mut config = NativeRuntimeConfig::default();
+    config.prompt_headroom = 256;
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let mut loop_harness = AgentLoop::new(config.clone(), model);
+    let graph_query_response = json!({
+        "output": {
+            "query_kind": "python_query",
+            "canonical_fingerprint": "abc123def4567890",
+            "max_results": 4,
+            "truncated": false,
+            "duration_ms": 7,
+            "cost": {"visited_nodes": 3, "visited_edges": 1},
+            "nodes": [{
+                "node_id": "node-1",
+                "repo_name": "hivemind",
+                "logical_key": "src/native/tool_engine.rs",
+                "node_class": "file",
+                "path": "src/native/tool_engine.rs",
+                "partition": "code"
+            }],
+            "edges": [],
+            "selected_block_ids": ["block-1"],
+            "python_repo_name": "hivemind",
+            "python_usage": {"operation_count": 2},
+            "python_stdout": "matched native runtime nodes"
+        }
+    })
+    .to_string();
+
+    let result = loop_harness
+        .run_with_history(
+            "inv-graph-query-visible",
+            vec![user_input_item(
+                "inv-graph-query-visible",
+                0,
+                "objective",
+                "inspect native graph runtime state".to_string(),
+                "test",
+            )],
+            |turn_index, state, history| {
+                let rendered = assemble_native_prompt(&config, &input, history, &contracts);
+                Ok(ModelTurnRequest {
+                    turn_index,
+                    state,
+                    agent_mode: config.agent_mode,
+                    prompt: rendered.prompt,
+                    context: input.context.clone(),
+                    prompt_assembly: Some(rendered.assembly),
+                })
+            },
+            move |_turn_index, action| {
+                vec![NativeToolCallTrace {
+                    call_id: "call-graph-query-1".to_string(),
+                    tool_name: "graph_query".to_string(),
+                    request: action.to_string(),
+                    duration_ms: Some(7),
+                    response: Some(graph_query_response.clone()),
+                    response_original_bytes: Some(graph_query_response.len()),
+                    response_stored_bytes: Some(graph_query_response.len()),
+                    response_truncated: false,
+                    failure: None,
+                    policy_tags: Vec::new(),
+                }]
+            },
+        )
+        .expect("loop should complete");
+
+    assert_eq!(result.turns.len(), 2);
+
+    let captured = prompts.lock().expect("prompts lock");
+    assert_eq!(captured.len(), 2);
+    assert!(captured[1].contains("tool_result:graph_query"));
+    assert!(captured[1].contains("kind=python_query nodes=1 edges=0"));
+    let second_assembly = result.turns[1]
+        .request
+        .prompt_assembly
+        .as_ref()
+        .expect("second turn assembly");
+    assert_eq!(second_assembly.tool_result_items_visible, 1);
+    assert_eq!(second_assembly.latest_tool_result_turn_index, Some(0));
+    assert!(second_assembly
+        .latest_tool_names_visible
+        .iter()
+        .any(|tool| tool == "graph_query"));
+}
+
+#[test]
 fn prompt_assembly_reports_lane_accounting_and_overflow_state() {
     let mut config = NativeRuntimeConfig::default();
     config.token_budget = 700;

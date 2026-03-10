@@ -6,7 +6,7 @@
 - **Date**: 2026-03-09
 - **Branch**: `sprint/59-graphcode-roadmap-refresh`
 - **Owner**: Antonio
-- **Status**: PARTIAL (technical roadmap items closed locally; provider-backed/manual validation still pending on OpenRouter credentials)
+- **Status**: IN PROGRESS (core roadmap items and Sprint 59 graph-runtime provider validation are green; broader compaction/benchmark follow-up remains)
 
 ## 2. Delivered Changes
 
@@ -23,6 +23,7 @@
 - Added record-time tool response truncation metadata to native tool traces.
 - Added prompt-assembly lane accounting (`objective_state_chars`, per-lane sizes already tracked, and `overflow_classification`).
 - Replaced raw graph-query prompt summaries with bounded structured GraphCode navigation summaries.
+- Surfaced compact successful `graph_query` tool results into subsequent prompts so provider-backed runs can reliably advance after bounded graph navigation steps.
 - Added a Sprint 59 provider-backed manual validation script under `hivemind-test/` for OpenRouter/native runtime execution.
 
 ## 3. Validation
@@ -31,25 +32,29 @@ Executed:
 
 - `cargo test native::tool_engine::tests:: -- --nocapture`
 - `cargo test core::graph_query:: -- --nocapture`
+- `cargo test agent_loop_surfaces_graph_query_results_into_the_next_prompt -- --nocapture`
 - `cargo test cli_attempt_inspect_context_returns_manifest_and_retry_linkage -- --nocapture`
 - `cargo test codegraph_session_covers_canonical_pathing_and_explanation_workflows -- --nocapture`
 - `cargo test native::runtime_hardening::storage::tests::runtime_state_store_applies_wal_and_migrations -- --nocapture`
 - `cargo test native::runtime_hardening::storage::tests::runtime_state_store_persists_graphcode_registry_records -- --nocapture`
 - `cargo test native::tests:: -- --nocapture`
+- `bash hivemind-test/test_sprint_59_graph_runtime.sh`
 
-Result: PASS for the automated scopes above.
+Result: PASS for the automated scopes above and for the current-branch provider-backed Sprint 59 graph-runtime validation flow.
 
 ## 4. Remaining Gaps Against Sprint 59 Roadmap
 
 Still unchecked in the roadmap after this implementation:
 
-- provider-backed `@hivemind-test` manual validation execution and evidence capture
+- a longer real implementation flow that visibly exercises compaction/truncation under prompt pressure
+- a benchmark-style GraphCode workflow beyond the current graph-runtime smoke
 - conditional higher-order scripted graph/code query wrappers (not yet exposed beyond the current bounded `graph_query` surface)
 
 ## 5. Manual Validation Artifacts
 
 - `hivemind-test/test-report/sprint-59-manual-checklist.md`
 - `hivemind-test/test-report/sprint-59-manual-report.md`
+- `hivemind-test/test-report/2026-03-10-sprint59-graph-runtime-report.md`
 - `hivemind-test/test_sprint_59_graph_runtime.sh`
 
 ## 6. Principle Checkpoint
