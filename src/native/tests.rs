@@ -1064,6 +1064,173 @@ fn prompt_assembly_is_deterministic_and_carries_manifest_hashes() {
 }
 
 #[test]
+fn prompt_assembly_hides_older_successful_read_file_history_for_same_path() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let history = vec![
+        user_input_item(
+            "inv-read-dedupe",
+            0,
+            "objective",
+            "inspect src/native/support.rs".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-read-dedupe",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/support.rs\"}".to_string(),
+            },
+        ),
+        tool_call_item(
+            "inv-read-dedupe",
+            0,
+            2,
+            "call-read-1",
+            "read_file",
+            "{\"input\":{\"path\":\"src/native/support.rs\"},\"tool\":\"read_file\",\"version\":\"1.0.0\"}",
+        ),
+        tool_result_item(
+            "inv-read-dedupe",
+            0,
+            3,
+            "call-read-1",
+            "read_file",
+            TurnItemOutcome::Success,
+            "old support payload",
+        ),
+        assistant_item(
+            "inv-read-dedupe",
+            1,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/support.rs\"}".to_string(),
+            },
+        ),
+        tool_call_item(
+            "inv-read-dedupe",
+            1,
+            2,
+            "call-read-2",
+            "read_file",
+            "{\"input\":{\"path\":\"src/native/support.rs\"},\"tool\":\"read_file\",\"version\":\"1.0.0\"}",
+        ),
+        tool_result_item(
+            "inv-read-dedupe",
+            1,
+            3,
+            "call-read-2",
+            "read_file",
+            TurnItemOutcome::Success,
+            "new support payload",
+        ),
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert!(!rendered.prompt.contains("old support payload"));
+    assert!(rendered.prompt.contains("new support payload"));
+    assert_eq!(
+        rendered
+            .assembly
+            .selected_history
+            .iter()
+            .filter(|item| item.kind == "tool_result")
+            .count(),
+        1
+    );
+    assert_eq!(rendered.assembly.tool_result_items_visible, 1);
+    assert_eq!(rendered.assembly.latest_tool_result_turn_index, Some(1));
+}
+
+#[test]
+fn prompt_assembly_hides_stale_list_files_after_later_read_file() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let history = vec![
+        user_input_item(
+            "inv-list-stale",
+            0,
+            "objective",
+            "inspect src/native contents".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-list-stale",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:list_files:{\"path\":\"src/native\",\"recursive\":false}"
+                    .to_string(),
+            },
+        ),
+        tool_call_item(
+            "inv-list-stale",
+            0,
+            2,
+            "call-list-1",
+            "list_files",
+            "{\"input\":{\"path\":\"src/native\",\"recursive\":false},\"tool\":\"list_files\",\"version\":\"1.0.0\"}",
+        ),
+        tool_result_item(
+            "inv-list-stale",
+            0,
+            3,
+            "call-list-1",
+            "list_files",
+            TurnItemOutcome::Success,
+            "LISTING: openrouter.rs support.rs",
+        ),
+        assistant_item(
+            "inv-list-stale",
+            1,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/openrouter.rs\"}".to_string(),
+            },
+        ),
+        tool_call_item(
+            "inv-list-stale",
+            1,
+            2,
+            "call-read-1",
+            "read_file",
+            "{\"input\":{\"path\":\"src/native/openrouter.rs\"},\"tool\":\"read_file\",\"version\":\"1.0.0\"}",
+        ),
+        tool_result_item(
+            "inv-list-stale",
+            1,
+            3,
+            "call-read-1",
+            "read_file",
+            TurnItemOutcome::Success,
+            "OPENROUTER FILE CONTENT",
+        ),
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert!(!rendered
+        .prompt
+        .contains("LISTING: openrouter.rs support.rs"));
+    assert!(rendered.prompt.contains("OPENROUTER FILE CONTENT"));
+    assert_eq!(rendered.assembly.tool_result_items_visible, 1);
+    assert!(rendered
+        .assembly
+        .latest_tool_names_visible
+        .iter()
+        .any(|tool| tool == "read_file"));
+    assert!(!rendered
+        .assembly
+        .latest_tool_names_visible
+        .iter()
+        .any(|tool| tool == "list_files"));
+}
+
+#[test]
 fn turn_item_normalization_marks_missing_and_orphaned_tool_history() {
     use super::turn_items::{
         TurnItemCorrelation, TurnItemKind, TurnItemOutcome, TurnItemProvenance,
@@ -1261,6 +1428,66 @@ fn native_input(native_prompt_metadata: Option<NativePromptMetadata>) -> Executi
         prior_attempts: Vec::new(),
         verifier_feedback: None,
         native_prompt_metadata,
+    }
+}
+
+fn tool_call_item(
+    invocation_id: &str,
+    turn_index: u32,
+    item_index: u32,
+    call_id: &str,
+    tool_name: &str,
+    request: &str,
+) -> TurnItem {
+    TurnItem {
+        id: format!("{invocation_id}:{turn_index}:{item_index}"),
+        model_visible: true,
+        correlation: TurnItemCorrelation {
+            turn_index: Some(turn_index),
+            item_index,
+        },
+        provenance: TurnItemProvenance {
+            invocation_id: invocation_id.to_string(),
+            turn_index: Some(turn_index),
+            source: "test".to_string(),
+            reference: Some(call_id.to_string()),
+        },
+        kind: TurnItemKind::ToolCall {
+            call_id: call_id.to_string(),
+            tool_name: tool_name.to_string(),
+            request: request.to_string(),
+        },
+    }
+}
+
+fn tool_result_item(
+    invocation_id: &str,
+    turn_index: u32,
+    item_index: u32,
+    call_id: &str,
+    tool_name: &str,
+    outcome: TurnItemOutcome,
+    content: &str,
+) -> TurnItem {
+    TurnItem {
+        id: format!("{invocation_id}:{turn_index}:{item_index}"),
+        model_visible: true,
+        correlation: TurnItemCorrelation {
+            turn_index: Some(turn_index),
+            item_index,
+        },
+        provenance: TurnItemProvenance {
+            invocation_id: invocation_id.to_string(),
+            turn_index: Some(turn_index),
+            source: "test".to_string(),
+            reference: Some(call_id.to_string()),
+        },
+        kind: TurnItemKind::ToolResult {
+            call_id: call_id.to_string(),
+            tool_name: tool_name.to_string(),
+            outcome,
+            content: content.to_string(),
+        },
     }
 }
 

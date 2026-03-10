@@ -3,6 +3,7 @@ use crate::adapters::runtime::{ExecutionInput, NativePromptMetadata};
 use crate::native::tool_engine::ToolContract;
 use crate::native::turn_items::TurnItemKind;
 use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NativePromptAssembly {
@@ -97,6 +98,7 @@ pub(crate) fn assemble_native_prompt(
     tool_contracts: &[ToolContract],
 ) -> NativePromptRender {
     let normalized = normalize_turn_items(history);
+    let prompt_ready_history = suppress_stale_filesystem_history(&normalized);
     let base_runtime_instructions = base_runtime_instructions();
     let mode_contract = mode_contract(config.agent_mode);
     let objective_state = objective_state(config.agent_mode, input);
@@ -124,7 +126,7 @@ pub(crate) fn assemble_native_prompt(
     let static_prompt_chars = static_sections.chars().count();
     let static_budget = static_sections.chars().count().saturating_add(64);
     let item_budget = available_budget.saturating_sub(static_budget);
-    let selection = select_items_with_budget(&normalized, item_budget);
+    let selection = select_items_with_budget(&prompt_ready_history, item_budget);
     let selected_items = selection.items;
 
     let prompt_items = selected_items
@@ -353,6 +355,162 @@ fn render_metadata_section(metadata: &NativePromptMetadata) -> String {
             "(no context manifest metadata)",
         ),
     )
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FilesystemHistoryRecord {
+    call_id: String,
+    path: String,
+    position: usize,
+}
+
+fn suppress_stale_filesystem_history(items: &[TurnItem]) -> Vec<TurnItem> {
+    let mut request_metadata = HashMap::<String, (String, usize)>::new();
+    let mut successful_calls = HashSet::<String>::new();
+
+    for (position, item) in items.iter().enumerate() {
+        match &item.kind {
+            TurnItemKind::ToolCall {
+                call_id,
+                tool_name,
+                request,
+            } if matches!(tool_name.as_str(), "read_file" | "list_files") => {
+                if let Some(path) = extract_tool_request_path(tool_name, request) {
+                    request_metadata.insert(call_id.clone(), (path, position));
+                }
+            }
+            TurnItemKind::ToolResult {
+                call_id, outcome, ..
+            } if *outcome == crate::native::turn_items::TurnItemOutcome::Success => {
+                successful_calls.insert(call_id.clone());
+            }
+            _ => {}
+        }
+    }
+
+    let mut read_records = Vec::new();
+    let mut list_records = Vec::new();
+    for item in items {
+        if let TurnItemKind::ToolCall {
+            call_id, tool_name, ..
+        } = &item.kind
+        {
+            if !successful_calls.contains(call_id) {
+                continue;
+            }
+            let Some((path, position)) = request_metadata.get(call_id) else {
+                continue;
+            };
+            let record = FilesystemHistoryRecord {
+                call_id: call_id.clone(),
+                path: path.clone(),
+                position: *position,
+            };
+            match tool_name.as_str() {
+                "read_file" => read_records.push(record),
+                "list_files" => list_records.push(record),
+                _ => {}
+            }
+        }
+    }
+
+    let mut suppressed_call_ids = HashSet::new();
+    suppress_older_records_by_exact_path(&read_records, &mut suppressed_call_ids);
+    suppress_older_records_by_exact_path(&list_records, &mut suppressed_call_ids);
+
+    for list_record in &list_records {
+        if suppressed_call_ids.contains(&list_record.call_id) {
+            continue;
+        }
+        if read_records.iter().any(|read_record| {
+            read_record.position > list_record.position
+                && path_is_within(&read_record.path, &list_record.path)
+        }) {
+            suppressed_call_ids.insert(list_record.call_id.clone());
+        }
+    }
+
+    if suppressed_call_ids.is_empty() {
+        return items.to_vec();
+    }
+
+    items
+        .iter()
+        .cloned()
+        .map(|mut item| {
+            match &item.kind {
+                TurnItemKind::ToolCall { call_id, .. }
+                | TurnItemKind::ToolResult { call_id, .. } => {
+                    if suppressed_call_ids.contains(call_id) {
+                        item.model_visible = false;
+                    }
+                }
+                _ => {}
+            }
+            item
+        })
+        .collect()
+}
+
+fn suppress_older_records_by_exact_path(
+    records: &[FilesystemHistoryRecord],
+    suppressed_call_ids: &mut HashSet<String>,
+) {
+    let mut latest_positions = HashMap::<String, usize>::new();
+    for record in records {
+        latest_positions.insert(record.path.clone(), record.position);
+    }
+    for record in records {
+        if latest_positions
+            .get(&record.path)
+            .is_some_and(|latest| *latest > record.position)
+        {
+            suppressed_call_ids.insert(record.call_id.clone());
+        }
+    }
+}
+
+fn extract_tool_request_path(tool_name: &str, request: &str) -> Option<String> {
+    if let Some(payload) = request.strip_prefix(&format!("tool:{tool_name}:")) {
+        return extract_path_from_json_payload(tool_name, payload);
+    }
+
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(request) else {
+        return None;
+    };
+    let input = value.get("input").unwrap_or(&value);
+    input
+        .get("path")
+        .and_then(|value| value.as_str())
+        .map(normalize_tool_path)
+        .or_else(|| (tool_name == "list_files").then(|| ".".to_string()))
+}
+
+fn extract_path_from_json_payload(tool_name: &str, payload: &str) -> Option<String> {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) else {
+        return None;
+    };
+    value
+        .get("path")
+        .and_then(|value| value.as_str())
+        .map(normalize_tool_path)
+        .or_else(|| (tool_name == "list_files").then(|| ".".to_string()))
+}
+
+fn normalize_tool_path(path: &str) -> String {
+    let trimmed = path.trim().trim_start_matches("./").trim_end_matches('/');
+    if trimmed.is_empty() {
+        ".".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn path_is_within(candidate: &str, container: &str) -> bool {
+    if container == "." {
+        return true;
+    }
+    candidate == container || candidate.starts_with(&format!("{container}/"))
 }
 
 fn render_tool_contract(contract: &ToolContract) -> String {
