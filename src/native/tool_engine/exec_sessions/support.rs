@@ -12,6 +12,7 @@ pub(super) struct ExecSession {
     pub(super) session_id: u64,
     pub(super) owner_worktree: PathBuf,
     pub(super) command_line: String,
+    pub(super) worktree_baseline: Option<crate::core::diff::Baseline>,
     pub(super) child: Child,
     pub(super) stdin: Option<ChildStdin>,
     pub(super) stdout_rx: Receiver<Vec<u8>>,

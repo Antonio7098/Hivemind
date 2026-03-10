@@ -166,6 +166,18 @@ impl Registry {
         format!("{project_id}:codegraph")
     }
 
+    pub(crate) fn graphcode_attempt_registry_prefix(project_id: Uuid) -> String {
+        format!("{}:attempt:", Self::graphcode_registry_key(project_id))
+    }
+
+    pub(crate) fn graphcode_attempt_registry_key(project_id: Uuid, attempt_id: Uuid) -> String {
+        format!(
+            "{}{}",
+            Self::graphcode_attempt_registry_prefix(project_id),
+            attempt_id
+        )
+    }
+
     pub(crate) fn open_native_runtime_state_store(
         &self,
         origin: &'static str,
@@ -266,7 +278,64 @@ impl Registry {
                 "codegraph",
                 freshness_state,
             )
+            .map_err(|error| HivemindError::system(error.code, error.message, origin))?;
+        store
+            .mark_graphcode_session_freshness_by_registry_prefix(
+                &Self::graphcode_registry_key(project_id),
+                freshness_state,
+            )
             .map_err(|error| HivemindError::system(error.code, error.message, origin))
+    }
+
+    pub(crate) fn mark_attempt_graph_snapshot_registry_freshness(
+        &self,
+        project_id: Uuid,
+        attempt_id: Uuid,
+        freshness_state: &str,
+        origin: &'static str,
+    ) -> Result<()> {
+        let store = self.open_native_runtime_state_store(origin)?;
+        let registry_key = Self::graphcode_attempt_registry_key(project_id, attempt_id);
+        store
+            .mark_graphcode_artifact_freshness_by_registry_key(&registry_key, freshness_state)
+            .map_err(|error| HivemindError::system(error.code, error.message, origin))?;
+        store
+            .mark_graphcode_session_freshness_by_registry_key(&registry_key, freshness_state)
+            .map_err(|error| HivemindError::system(error.code, error.message, origin))
+    }
+
+    pub(crate) fn mark_execution_graph_snapshot_registries_freshness(
+        &self,
+        project_id: Uuid,
+        freshness_state: &str,
+        origin: &'static str,
+    ) -> Result<()> {
+        let store = self.open_native_runtime_state_store(origin)?;
+        let attempt_prefix = Self::graphcode_attempt_registry_prefix(project_id);
+        store
+            .mark_graphcode_artifact_freshness_by_registry_prefix(&attempt_prefix, freshness_state)
+            .map_err(|error| HivemindError::system(error.code, error.message, origin))?;
+        store
+            .mark_graphcode_session_freshness_by_registry_prefix(&attempt_prefix, freshness_state)
+            .map_err(|error| HivemindError::system(error.code, error.message, origin))
+    }
+
+    pub(crate) fn mark_attempt_graph_snapshot_dirty_paths(
+        &self,
+        project_id: Uuid,
+        attempt_id: Uuid,
+        dirty_paths: &[PathBuf],
+        refresh_reason: &str,
+        origin: &'static str,
+    ) -> Result<()> {
+        let store = self.open_native_runtime_state_store(origin)?;
+        crate::native::tool_engine::mark_runtime_graph_registry_dirty(
+            &store,
+            &Self::graphcode_attempt_registry_key(project_id, attempt_id),
+            dirty_paths,
+            Some(refresh_reason),
+        )
+        .map_err(|error| HivemindError::system(error.code, error.message, origin))
     }
 
     pub(crate) fn read_authoritative_graph_snapshot_artifact(

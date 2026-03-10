@@ -128,7 +128,7 @@ impl Registry {
         })
     }
 
-    pub(super) fn maybe_complete_finished_flow(
+    pub(crate) fn maybe_complete_finished_flow(
         &self,
         flow: &TaskFlow,
         flow_id: &str,

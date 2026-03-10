@@ -28,15 +28,22 @@ impl Registry {
                     graph.tasks.contains_key(&task_id) && Self::can_auto_run_task(&state, task_id)
                 });
 
+            if !has_verifying && !has_auto_runnable {
+                if let Some(completed) = self.maybe_complete_finished_flow(
+                    &latest,
+                    flow_id,
+                    "registry:auto_progress_flow",
+                )? {
+                    return Ok(completed);
+                }
+                return Ok(latest);
+            }
+
             let before_state = latest.state;
             let before_counts = latest.task_state_counts();
             let next = self.tick_flow(flow_id, false, None)?;
             let after_counts = next.task_state_counts();
-            if before_state == next.state
-                && before_counts == after_counts
-                && !has_verifying
-                && !has_auto_runnable
-            {
+            if before_state == next.state && before_counts == after_counts {
                 return Ok(next);
             }
         }

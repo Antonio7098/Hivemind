@@ -646,6 +646,11 @@ fn render_graph_query_navigation_summary(trace: &NativeToolCallTrace, response: 
         if !result.selected_block_ids.is_empty() {
             summary.push_str(&format!(" selected={}", result.selected_block_ids.len()));
         }
+        if let Some(python_result) = result.python_result.as_ref() {
+            if let Some(preview) = summarize_python_query_result_preview(python_result) {
+                summary.push_str(&preview);
+            }
+        }
         if let Some(usage) = result.python_usage.as_ref() {
             if let Some(operations) = usage
                 .get("operation_count")
@@ -665,6 +670,46 @@ fn render_graph_query_navigation_summary(trace: &NativeToolCallTrace, response: 
         summary.push_str(" record_truncated=true");
     }
     truncate_with_marker(&summary, 512)
+}
+
+fn summarize_python_query_result_preview(result: &serde_json::Value) -> Option<String> {
+    if let Some(ranked) = result.get("ranked").and_then(serde_json::Value::as_array) {
+        let ranked_preview = ranked
+            .iter()
+            .take(2)
+            .filter_map(|entry| {
+                let logical_key = entry.get("logical_key")?.as_str()?;
+                let logical_key = truncate_with_marker(logical_key, 160);
+                let score = entry
+                    .get("score")
+                    .and_then(|value| value.as_i64().or_else(|| value.as_u64().map(|v| v as i64)));
+                Some(match score {
+                    Some(score) => format!("{logical_key}({score})"),
+                    None => logical_key,
+                })
+            })
+            .collect::<Vec<_>>();
+        if !ranked_preview.is_empty() {
+            return Some(format!(" ranked=[{}]", ranked_preview.join(", ")));
+        }
+    }
+
+    for field in ["files", "symbols", "logical_keys"] {
+        let preview = result
+            .get(field)
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+            .take(3)
+            .map(|value| truncate_with_marker(value, 80))
+            .collect::<Vec<_>>();
+        if !preview.is_empty() {
+            return Some(format!(" {field}=[{}]", preview.join(", ")));
+        }
+    }
+
+    None
 }
 
 fn short_hash(value: &str) -> String {
@@ -735,7 +780,7 @@ pub(crate) fn items_from_tool_trace(
                     Some(turn.turn_index),
                     base_index.saturating_add(2),
                 ),
-                model_visible: true,
+                model_visible: false,
                 correlation: TurnItemCorrelation {
                     turn_index: Some(turn.turn_index),
                     item_index: base_index.saturating_add(2),

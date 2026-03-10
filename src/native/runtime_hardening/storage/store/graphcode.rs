@@ -132,6 +132,19 @@ impl NativeRuntimeStateStore {
         ))
     }
 
+    pub(crate) fn mark_graphcode_artifact_freshness_by_registry_prefix(
+        &self,
+        registry_prefix: &str,
+        freshness_state: &str,
+    ) -> Result<()> {
+        self.exec(&format!(
+            "UPDATE graphcode_artifacts SET freshness_state = '{freshness_state}', updated_at_ms = {updated_at_ms} WHERE registry_key LIKE '{registry_prefix}%';",
+            freshness_state = sql_escape(freshness_state),
+            updated_at_ms = now_ms(),
+            registry_prefix = sql_escape(registry_prefix),
+        ))
+    }
+
     pub(crate) fn mark_graphcode_session_freshness_by_registry_key(
         &self,
         registry_key: &str,
@@ -142,6 +155,19 @@ impl NativeRuntimeStateStore {
             freshness_state = sql_escape(freshness_state),
             updated_at_ms = now_ms(),
             registry_key = sql_escape(registry_key),
+        ))
+    }
+
+    pub(crate) fn mark_graphcode_session_freshness_by_registry_prefix(
+        &self,
+        registry_prefix: &str,
+        freshness_state: &str,
+    ) -> Result<()> {
+        self.exec(&format!(
+            "UPDATE graphcode_sessions SET freshness_state = '{freshness_state}', updated_at_ms = {updated_at_ms} WHERE registry_key LIKE '{registry_prefix}%';",
+            freshness_state = sql_escape(freshness_state),
+            updated_at_ms = now_ms(),
+            registry_prefix = sql_escape(registry_prefix),
         ))
     }
 }

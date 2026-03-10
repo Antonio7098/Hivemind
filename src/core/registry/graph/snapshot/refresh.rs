@@ -265,6 +265,11 @@ impl Registry {
 
         let diff_detected = previous_fingerprint.as_deref() != Some(canonical_fingerprint.as_str());
         if diff_detected {
+            if let Err(err) =
+                self.mark_execution_graph_snapshot_registries_freshness(project.id, "stale", origin)
+            {
+                self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            }
             self.append_event(
                 Event::new(
                     EventPayload::GraphSnapshotDiffDetected {

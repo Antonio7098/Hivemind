@@ -298,24 +298,13 @@ impl Registry {
             }
 
             let updated = self.get_flow(flow_id)?;
-            let all_terminal = updated
-                .task_executions
-                .values()
-                .all(|e| e.state.is_terminal());
-            if all_terminal {
-                let event = Event::new(
-                    EventPayload::TaskFlowCompleted {
-                        flow_id: updated.id,
-                    },
-                    CorrelationIds::for_graph_flow(
-                        updated.project_id,
-                        updated.graph_id,
-                        updated.id,
-                    ),
-                );
-                self.append_event(event, origin)?;
-                self.maybe_autostart_dependent_flows(updated.id)?;
-            } else if updated.run_mode == RunMode::Auto {
+            if self
+                .maybe_complete_finished_flow(&updated, flow_id, origin)?
+                .is_some()
+            {
+                return self.get_flow(flow_id);
+            }
+            if updated.run_mode == RunMode::Auto {
                 return self.tick_flow(&updated.id.to_string(), false, None);
             }
 

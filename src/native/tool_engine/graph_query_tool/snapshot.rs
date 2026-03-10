@@ -778,10 +778,11 @@ fn ensure_execution_runtime_graph_current(
     Ok(artifact)
 }
 
-fn mark_registry_graph_dirty(
+pub(crate) fn mark_runtime_graph_registry_dirty(
     store: &crate::native::runtime_hardening::NativeRuntimeStateStore,
     registry_key: &str,
     dirty_paths: &[PathBuf],
+    refresh_reason: Option<&str>,
 ) -> Result<(), NativeToolEngineError> {
     let Some(record) = store
         .graphcode_artifact_by_registry_key(registry_key)
@@ -810,7 +811,7 @@ fn mark_registry_graph_dirty(
             .filter(|path| !path.is_empty()),
     );
     metadata.dirty_paths = dirty.into_iter().collect();
-    metadata.refresh_reason = Some("tool_mutation".to_string());
+    metadata.refresh_reason = Some(refresh_reason.unwrap_or("tool_mutation").to_string());
     let snapshot_json = serialize_snapshot_metadata(&metadata)?;
     store
         .upsert_graphcode_artifact(&crate::native::runtime_hardening::GraphCodeArtifactUpsert {
@@ -845,7 +846,7 @@ pub(crate) fn mark_runtime_graph_dirty(env: &HashMap<String, String>, dirty_path
         return;
     };
     let registry_key = active_runtime_registry_key(project_id, env);
-    let _ = mark_registry_graph_dirty(&store, &registry_key, dirty_paths);
+    let _ = mark_runtime_graph_registry_dirty(&store, &registry_key, dirty_paths, None);
 }
 
 pub(super) fn mark_runtime_graph_snapshot_freshness(

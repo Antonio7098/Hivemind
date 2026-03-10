@@ -343,6 +343,18 @@ fn agent_loop_surfaces_graph_query_results_into_the_next_prompt() {
             "edges": [],
             "selected_block_ids": ["block-1"],
             "python_repo_name": "hivemind",
+            "python_result": {
+                "ranked": [
+                    {
+                        "logical_key": "symbol:src/native/tests.rs::graph_query_prompt_visibility",
+                        "score": 2
+                    },
+                    {
+                        "logical_key": "symbol:tests/integration.rs::graph_query_filter_results",
+                        "score": 1
+                    }
+                ]
+            },
             "python_usage": {"operation_count": 2},
             "python_stdout": "matched native runtime nodes"
         }
@@ -393,12 +405,16 @@ fn agent_loop_surfaces_graph_query_results_into_the_next_prompt() {
     assert_eq!(captured.len(), 2);
     assert!(captured[1].contains("tool_result:graph_query"));
     assert!(captured[1].contains("kind=python_query nodes=1 edges=0"));
+    assert!(captured[1].contains("graph_query_prompt_visibility(2)"));
+    assert!(captured[1].contains("graph_query_filter_results(1)"));
+    assert!(!captured[1].contains("Code Navigation Session"));
     let second_assembly = result.turns[1]
         .request
         .prompt_assembly
         .as_ref()
         .expect("second turn assembly");
     assert_eq!(second_assembly.tool_result_items_visible, 1);
+    assert_eq!(second_assembly.code_navigation_count, 0);
     assert_eq!(second_assembly.latest_tool_result_turn_index, Some(0));
     assert!(second_assembly
         .latest_tool_names_visible
@@ -1317,6 +1333,162 @@ fn prompt_assembly_reports_stale_tool_call_suppression() {
 
     assert_eq!(rendered.assembly.suppressed_stale_tool_call_count, 1);
     assert!(!rendered.prompt.contains("[tool_call:list_files]"));
+}
+
+#[test]
+fn prompt_assembly_suppresses_stale_graph_query_results() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let history = vec![
+        user_input_item(
+            "inv-stale-graph-query",
+            0,
+            "objective",
+            "Keep only the latest successful graph query result visible".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-stale-graph-query",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:graph_query:{\"kind\":\"filter\",\"path_prefix\":\"src/native\",\"max_results\":4}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-stale-graph-query:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-stale-graph-query".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-graph-query-1".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-graph-query-1".to_string(),
+                tool_name: "graph_query".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "kind=filter nodes=2 edges=0 top=[file:src/native/old.rs]".to_string(),
+            },
+        },
+        assistant_item(
+            "inv-stale-graph-query",
+            1,
+            3,
+            &ModelDirective::Think {
+                message: "Need a more precise ranked query".to_string(),
+            },
+        ),
+        assistant_item(
+            "inv-stale-graph-query",
+            2,
+            4,
+            &ModelDirective::Act {
+                action: "tool:graph_query:{\"kind\":\"python_query\",\"repo_name\":\"repo\",\"max_results\":4}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-stale-graph-query:2:5".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(2),
+                item_index: 5,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-stale-graph-query".to_string(),
+                turn_index: Some(2),
+                source: "tool.result".to_string(),
+                reference: Some("call-graph-query-2".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-graph-query-2".to_string(),
+                tool_name: "graph_query".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "kind=python_query nodes=1 edges=0 ranked=[symbol:src/native/tests.rs::latest_graph_query(2)]".to_string(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(
+        rendered.assembly.suppressed_stale_graph_query_result_count,
+        1
+    );
+    assert_eq!(rendered.assembly.tool_result_items_visible, 1);
+    assert!(rendered
+        .prompt
+        .contains("kind=python_query nodes=1 edges=0"));
+    assert!(!rendered.prompt.contains("kind=filter nodes=2 edges=0"));
+}
+
+#[test]
+fn prompt_assembly_keeps_long_graph_query_history_within_budget() {
+    let mut config = NativeRuntimeConfig::default();
+    config.token_budget = 15_000;
+    config.prompt_headroom = 128;
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let mut history = vec![user_input_item(
+        "inv-long-graph-query-history",
+        0,
+        "objective",
+        "Carry a long graph-query-heavy runtime history without blowing the prompt budget"
+            .to_string(),
+        "test",
+    )];
+
+    for turn_index in 0..6 {
+        history.push(assistant_item(
+            "inv-long-graph-query-history",
+            turn_index,
+            turn_index.saturating_mul(2).saturating_add(1),
+            &ModelDirective::Act {
+                action: format!(
+                    "tool:graph_query:{{\"kind\":\"python_query\",\"repo_name\":\"repo\",\"max_results\":4,\"turn\":{turn_index}}}"
+                ),
+            },
+        ));
+        history.push(TurnItem {
+            id: format!("inv-long-graph-query-history:{turn_index}:result"),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(turn_index),
+                item_index: turn_index.saturating_mul(2).saturating_add(2),
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-long-graph-query-history".to_string(),
+                turn_index: Some(turn_index),
+                source: "tool.result".to_string(),
+                reference: Some(format!("call-graph-query-{turn_index}")),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: format!("call-graph-query-{turn_index}"),
+                tool_name: "graph_query".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: format!(
+                    "kind=python_query nodes=1 edges=0 ranked=[symbol:src/native/tests.rs::graph_query_turn_{turn_index}(2)] notes={} ",
+                    "X".repeat(1_400)
+                ),
+            },
+        });
+    }
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert_eq!(
+        rendered.assembly.suppressed_stale_graph_query_result_count,
+        5
+    );
+    assert_eq!(rendered.assembly.tool_result_items_visible, 1);
+    assert!(rendered.prompt.contains("graph_query_turn_5(2)"));
+    assert!(!rendered.prompt.contains("graph_query_turn_0(2)"));
+    assert!(rendered.prompt.chars().count() <= rendered.assembly.available_budget);
 }
 
 #[test]

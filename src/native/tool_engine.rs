@@ -176,6 +176,7 @@ pub use exec_sessions::cleanup_exec_sessions;
 use exec_sessions::*;
 
 mod graph_query_tool;
+pub(crate) use graph_query_tool::mark_runtime_graph_registry_dirty;
 #[cfg(test)]
 pub(crate) use graph_query_tool::{
     aggregate_snapshot_fingerprint_registry_style, RuntimeGraphSnapshotArtifact,

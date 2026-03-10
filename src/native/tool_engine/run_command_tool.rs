@@ -158,6 +158,7 @@ pub(super) fn handle_run_command(
     input: &Value,
     default_timeout_ms: u64,
 ) -> Result<Value, NativeToolEngineError> {
+    let worktree_baseline = capture_worktree_baseline(ctx.worktree).ok();
     let input = decode_input::<RunCommandInput>(input)?;
     let raw_command = input.command.trim();
     if raw_command.is_empty() {
@@ -291,7 +292,16 @@ pub(super) fn handle_run_command(
         timed_out: false,
     };
     if status == 0 {
-        mark_runtime_graph_dirty(ctx.env, &[]);
+        match worktree_baseline.as_ref() {
+            Some(previous) => match capture_worktree_dirty_paths(ctx.worktree, previous) {
+                Ok((dirty_paths, _)) if !dirty_paths.is_empty() => {
+                    mark_runtime_graph_dirty(ctx.env, &dirty_paths);
+                }
+                Ok(_) => {}
+                Err(_) => mark_runtime_graph_dirty(ctx.env, &[]),
+            },
+            None => mark_runtime_graph_dirty(ctx.env, &[]),
+        }
     }
     serde_json::to_value(result).map_err(|error| {
         NativeToolEngineError::execution(format!("failed to encode run_command output: {error}"))

@@ -1,5 +1,7 @@
 use super::*;
 
+const MAX_INLINE_NATIVE_BLOB_BYTES: usize = 64 * 1024;
+
 impl Registry {
     pub(crate) fn projected_runtime_event_payload(
         attempt_id: Uuid,
@@ -91,6 +93,25 @@ impl Registry {
         hex
     }
 
+    #[cfg(test)]
+    pub(crate) fn native_blob_inline_payload_limit_bytes() -> usize {
+        MAX_INLINE_NATIVE_BLOB_BYTES
+    }
+
+    fn inline_native_blob_payload(
+        payload: &str,
+        payload_bytes: &[u8],
+        mode: NativePayloadCaptureMode,
+    ) -> Option<String> {
+        if !matches!(mode, NativePayloadCaptureMode::FullPayload) {
+            return None;
+        }
+        if payload_bytes.len() > MAX_INLINE_NATIVE_BLOB_BYTES {
+            return None;
+        }
+        Some(payload.to_string())
+    }
+
     pub(crate) fn persist_native_blob(
         &self,
         media_type: &str,
@@ -119,11 +140,7 @@ impl Registry {
             byte_size: u64::try_from(payload_bytes.len()).unwrap_or(u64::MAX),
             media_type: media_type.to_string(),
             blob_path: blob_path.to_string_lossy().to_string(),
-            payload: if matches!(mode, NativePayloadCaptureMode::FullPayload) {
-                Some(payload.to_string())
-            } else {
-                None
-            },
+            payload: Self::inline_native_blob_payload(payload, payload_bytes, mode),
         })
     }
 

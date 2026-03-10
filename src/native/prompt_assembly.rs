@@ -67,6 +67,8 @@ pub struct NativePromptAssembly {
     #[serde(default)]
     pub suppressed_stale_tool_call_count: usize,
     #[serde(default)]
+    pub suppressed_stale_graph_query_result_count: usize,
+    #[serde(default)]
     pub tool_result_items_visible: usize,
     #[serde(default)]
     pub latest_tool_result_turn_index: Option<u32>,
@@ -114,6 +116,7 @@ struct PreparedPromptItems {
     suppressed_by_active_code_window_count: usize,
     suppressed_duplicate_read_count: usize,
     suppressed_stale_tool_call_count: usize,
+    suppressed_stale_graph_query_result_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -486,6 +489,8 @@ pub(crate) fn assemble_native_prompt(
             suppressed_by_active_code_window_count: prepared.suppressed_by_active_code_window_count,
             suppressed_duplicate_read_count: prepared.suppressed_duplicate_read_count,
             suppressed_stale_tool_call_count: prepared.suppressed_stale_tool_call_count,
+            suppressed_stale_graph_query_result_count: prepared
+                .suppressed_stale_graph_query_result_count,
             tool_result_items_visible,
             latest_tool_result_turn_index,
             latest_tool_names_visible,
@@ -533,6 +538,8 @@ fn prepare_items_for_prompt(
     let mut suppressed_by_active_code_window_count = 0usize;
     let mut suppressed_duplicate_read_count = 0usize;
     let mut suppressed_stale_tool_call_count = 0usize;
+    let mut suppressed_stale_graph_query_result_count = 0usize;
+    let mut seen_successful_graph_query_result = false;
     for item in items.into_iter().rev() {
         if is_represented_by_active_code_window(&item, active_code_windows) {
             suppressed_by_active_code_window_count += 1;
@@ -548,6 +555,13 @@ fn prepare_items_for_prompt(
                 continue;
             }
         }
+        if should_drop_stale_graph_query_result(&item, seen_successful_graph_query_result) {
+            suppressed_stale_graph_query_result_count += 1;
+            continue;
+        }
+        if is_successful_graph_query_result(&item) {
+            seen_successful_graph_query_result = true;
+        }
         prepared.push(item);
     }
     prepared.reverse();
@@ -556,6 +570,7 @@ fn prepare_items_for_prompt(
         suppressed_by_active_code_window_count,
         suppressed_duplicate_read_count,
         suppressed_stale_tool_call_count,
+        suppressed_stale_graph_query_result_count,
     }
 }
 
@@ -918,6 +933,21 @@ fn duplicate_read_result_key(
         )),
         _ => None,
     }
+}
+
+fn should_drop_stale_graph_query_result(item: &TurnItem, seen_newer_success: bool) -> bool {
+    seen_newer_success && is_successful_graph_query_result(item)
+}
+
+fn is_successful_graph_query_result(item: &TurnItem) -> bool {
+    matches!(
+        item.kind,
+        TurnItemKind::ToolResult {
+            ref tool_name,
+            outcome: TurnItemOutcome::Success,
+            ..
+        } if tool_name == "graph_query"
+    )
 }
 
 fn base_runtime_instructions() -> String {

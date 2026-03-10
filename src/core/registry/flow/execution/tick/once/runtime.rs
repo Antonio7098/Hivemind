@@ -420,6 +420,20 @@ impl Registry {
                                 attempt_corr.clone(),
                             );
                             let _ = self.store.append(fs_event);
+                            let dirty_paths = diff
+                                .changes
+                                .iter()
+                                .map(|change| change.path.clone())
+                                .collect::<Vec<_>>();
+                            if !dirty_paths.is_empty() {
+                                let _ = self.mark_attempt_graph_snapshot_dirty_paths(
+                                    flow.project_id,
+                                    attempt_id,
+                                    &dirty_paths,
+                                    "runtime_filesystem_observed",
+                                    origin,
+                                );
+                            }
                         }
                     }
                 }

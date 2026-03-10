@@ -107,19 +107,14 @@ impl Registry {
             }
         }
 
-        let all_terminal = updated
-            .task_executions
-            .values()
-            .all(|e| e.state.is_terminal());
-        if all_terminal {
-            let event = Event::new(
-                EventPayload::TaskFlowCompleted {
-                    flow_id: updated.id,
-                },
-                CorrelationIds::for_graph_flow(updated.project_id, updated.graph_id, updated.id),
-            );
-            let _ = self.store.append(event);
-        } else if updated.run_mode == RunMode::Auto {
+        let updated_flow_id = updated.id.to_string();
+        if self
+            .maybe_complete_finished_flow(&updated, &updated_flow_id, origin)?
+            .is_some()
+        {
+            return self.get_flow(&updated_flow_id);
+        }
+        if updated.run_mode == RunMode::Auto {
             return self.tick_flow(&updated.id.to_string(), false, None);
         }
 

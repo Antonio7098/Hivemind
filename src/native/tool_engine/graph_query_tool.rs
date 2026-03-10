@@ -12,6 +12,7 @@ pub(crate) use snapshot::aggregate_snapshot_fingerprint_registry_style;
 #[cfg(test)]
 pub(crate) use snapshot::load_runtime_graph_snapshot;
 pub(crate) use snapshot::mark_runtime_graph_dirty;
+pub(crate) use snapshot::mark_runtime_graph_registry_dirty;
 pub(crate) use types::{
     GraphQueryInput, RuntimeGraphSnapshotArtifact, RuntimeGraphSnapshotRepository,
 };

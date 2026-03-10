@@ -8,7 +8,7 @@ impl<M: ModelClient> AgentLoop<M> {
     const MAX_TOKEN_BUDGET_RECOVERY_ATTEMPTS: u8 = 3;
     const MAX_CHECKPOINT_DONE_RECOVERY_ATTEMPTS: u8 = 3;
     const MAX_POST_CHECKPOINT_DONE_RECOVERY_ATTEMPTS: u8 = 1;
-    const SOFT_TOKEN_BUDGET_COMPACTION_PERCENT: usize = 60;
+    const SOFT_TOKEN_BUDGET_COMPACTION_PERCENT: usize = 45;
 
     #[must_use]
     pub fn new(config: NativeRuntimeConfig, model_client: M) -> Self {

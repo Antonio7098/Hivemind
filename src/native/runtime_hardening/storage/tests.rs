@@ -178,3 +178,88 @@ fn runtime_state_store_persists_graphcode_registry_records() {
     );
     assert_eq!(session_count, 1);
 }
+
+#[test]
+fn runtime_state_store_marks_graphcode_records_by_registry_prefix() {
+    let dir = tempdir().expect("temp dir");
+    let config = RuntimeHardeningConfig::for_state_dir(dir.path());
+    let store = NativeRuntimeStateStore::open(&config).expect("state store should initialize");
+
+    for registry_key in [
+        "project-1:codegraph",
+        "project-1:codegraph:attempt:attempt-1",
+        "project-2:codegraph:attempt:attempt-2",
+    ] {
+        let session_ref = format!("{registry_key}:session:default");
+        store
+            .upsert_graphcode_artifact(&GraphCodeArtifactUpsert {
+                registry_key: registry_key.to_string(),
+                project_id: registry_key
+                    .split(':')
+                    .next()
+                    .unwrap_or("project")
+                    .to_string(),
+                substrate_kind: "codegraph".to_string(),
+                storage_backend: "sqlite".to_string(),
+                storage_reference: format!("graphcode_artifacts/{registry_key}"),
+                derivative_snapshot_path: None,
+                constitution_path: None,
+                canonical_fingerprint: format!("fp-{registry_key}"),
+                profile_version: ucp_api::CODEGRAPH_PROFILE_MARKER.to_string(),
+                ucp_engine_version: ucp_api::CODEGRAPH_EXTRACTOR_VERSION.to_string(),
+                extractor_version: ucp_api::CODEGRAPH_PROFILE_MARKER.to_string(),
+                runtime_version: env!("CARGO_PKG_VERSION").to_string(),
+                freshness_state: "current".to_string(),
+                repo_manifest_json: "[]".to_string(),
+                active_session_ref: Some(session_ref.clone()),
+                snapshot_json: "{}".to_string(),
+            })
+            .expect("artifact upsert");
+        store
+            .upsert_graphcode_session(&GraphCodeSessionUpsert {
+                session_ref,
+                registry_key: registry_key.to_string(),
+                substrate_kind: "codegraph".to_string(),
+                current_focus_json: "[]".to_string(),
+                pinned_nodes_json: "[]".to_string(),
+                recent_traversals_json: "[]".to_string(),
+                working_set_refs_json: "[]".to_string(),
+                hydrated_excerpts_json: "[]".to_string(),
+                path_artifacts_json: "[]".to_string(),
+                snapshot_fingerprint: format!("fp-{registry_key}"),
+                freshness_state: "current".to_string(),
+            })
+            .expect("session upsert");
+    }
+
+    store
+        .mark_graphcode_artifact_freshness_by_registry_prefix(
+            "project-1:codegraph:attempt:",
+            "stale",
+        )
+        .expect("mark artifacts by prefix");
+    store
+        .mark_graphcode_session_freshness_by_registry_prefix(
+            "project-1:codegraph:attempt:",
+            "stale",
+        )
+        .expect("mark sessions by prefix");
+
+    let stale_artifacts = query_scalar_i64(
+        &store.db_path,
+        "SELECT COUNT(1) FROM graphcode_artifacts WHERE registry_key LIKE 'project-1:codegraph:attempt:%' AND freshness_state = 'stale';",
+    );
+    assert_eq!(stale_artifacts, 1);
+
+    let stale_sessions = query_scalar_i64(
+        &store.db_path,
+        "SELECT COUNT(1) FROM graphcode_sessions WHERE registry_key LIKE 'project-1:codegraph:attempt:%' AND freshness_state = 'stale';",
+    );
+    assert_eq!(stale_sessions, 1);
+
+    let untouched_authoritative = query_scalar_i64(
+        &store.db_path,
+        "SELECT COUNT(1) FROM graphcode_artifacts WHERE registry_key = 'project-1:codegraph' AND freshness_state = 'current';",
+    );
+    assert_eq!(untouched_authoritative, 1);
+}

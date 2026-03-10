@@ -1445,6 +1445,93 @@ fn graph_query_tool_refreshes_attempt_scoped_execution_graph_incrementally() {
 }
 
 #[test]
+fn graph_query_attempt_registry_dirty_helper_records_runtime_observed_paths() {
+    let engine = NativeToolEngine::default();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let repo = tmp.path().join("repo");
+    init_git_repo(&repo);
+    fs::create_dir_all(repo.join("src")).expect("mkdir src");
+    fs::write(repo.join("src/lib.rs"), "pub fn helper() {}\n").expect("write lib");
+    git_commit_all(&repo, "seed");
+
+    let snapshot_path = tmp.path().join("graph_snapshot.json");
+    write_snapshot_artifact(&repo, &snapshot_path);
+
+    let policy = NativeCommandPolicy::default();
+    let scope = allow_all_scope();
+    let state_db_path = tmp.path().join("native-state.sqlite");
+    let mut env = HashMap::new();
+    env.insert(
+        GRAPH_QUERY_ENV_SNAPSHOT_PATH.to_string(),
+        snapshot_path.to_string_lossy().to_string(),
+    );
+    env.insert(
+        crate::core::graph_query::GRAPH_QUERY_ENV_PROJECT_ID.to_string(),
+        "project-graph-query-runtime-dirty".to_string(),
+    );
+    env.insert(
+        crate::native::runtime_hardening::STATE_DB_PATH_ENV.to_string(),
+        state_db_path.to_string_lossy().to_string(),
+    );
+    env.insert("HIVEMIND_ATTEMPT_ID".to_string(), "attempt-9".to_string());
+    env.insert(
+        "HIVEMIND_PRIMARY_WORKTREE".to_string(),
+        repo.to_string_lossy().to_string(),
+    );
+
+    let ctx = test_tool_context(repo.as_path(), Some(&scope), &policy, &env);
+    let query_action = NativeToolAction {
+        name: "graph_query".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({
+            "kind": "filter",
+            "path_prefix": "src",
+            "max_results": 50
+        }),
+    };
+    engine
+        .execute(&query_action, &ctx)
+        .expect("initial graph query should run");
+
+    let store = crate::native::runtime_hardening::NativeRuntimeStateStore::open(
+        &crate::native::runtime_hardening::RuntimeHardeningConfig::from_env(&env),
+    )
+    .expect("open runtime state store");
+    mark_runtime_graph_registry_dirty(
+        &store,
+        "project-graph-query-runtime-dirty:codegraph:attempt:attempt-9",
+        &[
+            PathBuf::from("src/generated.rs"),
+            PathBuf::from("src/lib.rs"),
+        ],
+        Some("runtime_filesystem_observed"),
+    )
+    .expect("mark runtime graph dirty by registry key");
+
+    assert_eq!(
+        sqlite_scalar_string(
+            &state_db_path,
+            "SELECT freshness_state FROM graphcode_artifacts WHERE registry_key = 'project-graph-query-runtime-dirty:codegraph:attempt:attempt-9';",
+        ),
+        "stale"
+    );
+    let metadata_raw = sqlite_scalar_string(
+        &state_db_path,
+        "SELECT snapshot_json FROM graphcode_artifacts WHERE registry_key = 'project-graph-query-runtime-dirty:codegraph:attempt:attempt-9';",
+    );
+    let metadata: Value = serde_json::from_str(&metadata_raw).expect("decode metadata");
+    assert_eq!(
+        metadata.get("refresh_reason").and_then(Value::as_str),
+        Some("runtime_filesystem_observed")
+    );
+    let dirty_paths = metadata["dirty_paths"]
+        .as_array()
+        .expect("dirty_paths array");
+    assert!(dirty_paths.iter().any(|value| value == "src/generated.rs"));
+    assert!(dirty_paths.iter().any(|value| value == "src/lib.rs"));
+}
+
+#[test]
 fn graph_query_refresh_selectively_invalidates_impacted_session_state() {
     let engine = NativeToolEngine::default();
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1551,6 +1638,232 @@ fn graph_query_refresh_selectively_invalidates_impacted_session_state() {
         ),
         "current"
     );
+}
+
+#[test]
+fn run_command_records_dirty_paths_for_selective_graph_refresh() {
+    let engine = NativeToolEngine::default();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let repo = tmp.path().join("repo");
+    init_git_repo(&repo);
+    fs::create_dir_all(repo.join("src")).expect("mkdir src");
+    fs::write(repo.join("src/a.rs"), "pub fn alpha() {}\n").expect("write a");
+    fs::write(repo.join("src/b.rs"), "pub fn beta() {}\n").expect("write b");
+    git_commit_all(&repo, "seed");
+
+    let snapshot_path = tmp.path().join("graph_snapshot.json");
+    write_snapshot_artifact(&repo, &snapshot_path);
+
+    let policy = NativeCommandPolicy {
+        allowlist: vec!["sh".to_string()],
+        denylist: Vec::new(),
+        deny_by_default: true,
+    };
+    let scope = allow_all_scope();
+    let state_db_path = tmp.path().join("native-state.sqlite");
+    let mut env = HashMap::new();
+    env.insert(
+        GRAPH_QUERY_ENV_SNAPSHOT_PATH.to_string(),
+        snapshot_path.to_string_lossy().to_string(),
+    );
+    env.insert(
+        crate::core::graph_query::GRAPH_QUERY_ENV_PROJECT_ID.to_string(),
+        "project-graph-query-run-command".to_string(),
+    );
+    env.insert(
+        crate::native::runtime_hardening::STATE_DB_PATH_ENV.to_string(),
+        state_db_path.to_string_lossy().to_string(),
+    );
+    env.insert(
+        "HIVEMIND_ATTEMPT_ID".to_string(),
+        "attempt-run-command".to_string(),
+    );
+    env.insert(
+        "HIVEMIND_PRIMARY_WORKTREE".to_string(),
+        repo.to_string_lossy().to_string(),
+    );
+
+    let ctx = test_tool_context(repo.as_path(), Some(&scope), &policy, &env);
+    let query_action = NativeToolAction {
+        name: "graph_query".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({
+            "kind": "filter",
+            "path_prefix": "src",
+            "max_results": 50
+        }),
+    };
+    engine
+        .execute(&query_action, &ctx)
+        .expect("initial graph query should run");
+
+    let run_action = NativeToolAction {
+        name: "run_command".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({
+            "command": "sh",
+            "args": [
+                "-c",
+                "printf 'pub fn alpha() {}\\npub fn alpha_two() {}\\n' > src/a.rs"
+            ]
+        }),
+    };
+    engine
+        .execute(&run_action, &ctx)
+        .expect("run_command should succeed");
+
+    let metadata_raw = sqlite_scalar_string(
+        &state_db_path,
+        "SELECT snapshot_json FROM graphcode_artifacts WHERE registry_key = 'project-graph-query-run-command:codegraph:attempt:attempt-run-command';",
+    );
+    let metadata: Value = serde_json::from_str(&metadata_raw).expect("decode metadata");
+    let dirty_paths = metadata["dirty_paths"]
+        .as_array()
+        .expect("dirty_paths array");
+    assert!(dirty_paths.iter().any(|value| value == "src/a.rs"));
+
+    crate::native::tool_engine::graph_query_tool::load_runtime_graph_snapshot(&env)
+        .expect("execution graph refresh should succeed");
+
+    let session_ref =
+        "project-graph-query-run-command:codegraph:attempt:attempt-run-command:session:default";
+    let after_raw = sqlite_scalar_string(
+        &state_db_path,
+        &format!(
+            "SELECT working_set_refs_json FROM graphcode_sessions WHERE session_ref = '{session_ref}';"
+        ),
+    );
+    let after: Vec<Value> = serde_json::from_str(&after_raw).expect("decode working set after");
+    assert!(
+        after.iter().any(|value| value["path"] == "src/b.rs"),
+        "{after:?}"
+    );
+    assert!(
+        after.iter().all(|value| value["path"] != "src/a.rs"),
+        "{after:?}"
+    );
+}
+
+#[test]
+fn write_stdin_records_dirty_paths_for_selective_graph_refresh() {
+    let _guard = lock_exec_session_tests();
+    let _ = cleanup_exec_sessions();
+
+    let engine = NativeToolEngine::default();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let repo = tmp.path().join("repo");
+    init_git_repo(&repo);
+    fs::create_dir_all(repo.join("src")).expect("mkdir src");
+    fs::write(repo.join("src/a.rs"), "pub fn alpha() {}\n").expect("write a");
+    fs::write(repo.join("src/b.rs"), "pub fn beta() {}\n").expect("write b");
+    git_commit_all(&repo, "seed");
+
+    let snapshot_path = tmp.path().join("graph_snapshot.json");
+    write_snapshot_artifact(&repo, &snapshot_path);
+
+    let policy = NativeCommandPolicy {
+        allowlist: vec!["sh".to_string()],
+        denylist: Vec::new(),
+        deny_by_default: true,
+    };
+    let scope = allow_all_scope();
+    let state_db_path = tmp.path().join("native-state.sqlite");
+    let mut env = HashMap::new();
+    env.insert(
+        GRAPH_QUERY_ENV_SNAPSHOT_PATH.to_string(),
+        snapshot_path.to_string_lossy().to_string(),
+    );
+    env.insert(
+        crate::core::graph_query::GRAPH_QUERY_ENV_PROJECT_ID.to_string(),
+        "project-graph-query-write-stdin".to_string(),
+    );
+    env.insert(
+        crate::native::runtime_hardening::STATE_DB_PATH_ENV.to_string(),
+        state_db_path.to_string_lossy().to_string(),
+    );
+    env.insert(
+        "HIVEMIND_ATTEMPT_ID".to_string(),
+        "attempt-write-stdin".to_string(),
+    );
+    env.insert(
+        "HIVEMIND_PRIMARY_WORKTREE".to_string(),
+        repo.to_string_lossy().to_string(),
+    );
+
+    let ctx = test_tool_context(repo.as_path(), Some(&scope), &policy, &env);
+    let query_action = NativeToolAction {
+        name: "graph_query".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({
+            "kind": "filter",
+            "path_prefix": "src",
+            "max_results": 50
+        }),
+    };
+    engine
+        .execute(&query_action, &ctx)
+        .expect("initial graph query should run");
+
+    let spawn_action = NativeToolAction {
+        name: "exec_command".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({
+            "cmd": "sh",
+            "args": ["-c", "cat > src/a.rs"],
+            "capture_ms": 40
+        }),
+    };
+    let spawned = engine
+        .execute(&spawn_action, &ctx)
+        .expect("spawn exec session");
+    let spawned: ExecSessionOutput = serde_json::from_value(spawned).expect("decode spawn");
+
+    let write_action = NativeToolAction {
+        name: "write_stdin".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({
+            "session_id": spawned.session_id,
+            "chars": "pub fn alpha() {}\npub fn alpha_three() {}\n",
+            "close_stdin": true,
+            "wait_ms": 120
+        }),
+    };
+    engine
+        .execute(&write_action, &ctx)
+        .expect("write_stdin should succeed");
+
+    let metadata_raw = sqlite_scalar_string(
+        &state_db_path,
+        "SELECT snapshot_json FROM graphcode_artifacts WHERE registry_key = 'project-graph-query-write-stdin:codegraph:attempt:attempt-write-stdin';",
+    );
+    let metadata: Value = serde_json::from_str(&metadata_raw).expect("decode metadata");
+    let dirty_paths = metadata["dirty_paths"]
+        .as_array()
+        .expect("dirty_paths array");
+    assert!(dirty_paths.iter().any(|value| value == "src/a.rs"));
+
+    crate::native::tool_engine::graph_query_tool::load_runtime_graph_snapshot(&env)
+        .expect("execution graph refresh should succeed");
+
+    let session_ref =
+        "project-graph-query-write-stdin:codegraph:attempt:attempt-write-stdin:session:default";
+    let after_raw = sqlite_scalar_string(
+        &state_db_path,
+        &format!(
+            "SELECT working_set_refs_json FROM graphcode_sessions WHERE session_ref = '{session_ref}';"
+        ),
+    );
+    let after: Vec<Value> = serde_json::from_str(&after_raw).expect("decode working set after");
+    assert!(
+        after.iter().any(|value| value["path"] == "src/b.rs"),
+        "{after:?}"
+    );
+    assert!(
+        after.iter().all(|value| value["path"] != "src/a.rs"),
+        "{after:?}"
+    );
+
+    let _ = cleanup_exec_sessions();
 }
 
 #[test]
