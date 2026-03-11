@@ -174,6 +174,41 @@ pub struct GovernanceMigration {
     pub migrated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatMessageState {
+    pub id: Uuid,
+    pub role: String,
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+    #[serde(default)]
+    pub request_id: Option<String>,
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub final_state: Option<String>,
+    #[serde(default)]
+    pub runtime_selection_source: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatSessionState {
+    pub id: Uuid,
+    pub mode: String,
+    pub title: String,
+    #[serde(default)]
+    pub project_id: Option<Uuid>,
+    #[serde(default)]
+    pub task_id: Option<Uuid>,
+    #[serde(default)]
+    pub flow_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub messages: Vec<ChatMessageState>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct TaskRuntimeRoleOverrides {
     #[serde(default)]
@@ -270,6 +305,7 @@ pub struct AppState {
     pub governance_artifacts: HashMap<String, GovernanceArtifact>,
     pub governance_attachments: HashMap<String, GovernanceAttachment>,
     pub governance_migrations: Vec<GovernanceMigration>,
+    pub chat_sessions: HashMap<Uuid, ChatSessionState>,
     pub tasks: HashMap<Uuid, Task>,
     pub graphs: HashMap<Uuid, TaskGraph>,
     pub flows: HashMap<Uuid, TaskFlow>,

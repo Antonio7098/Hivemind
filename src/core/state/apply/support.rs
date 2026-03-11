@@ -70,6 +70,7 @@ impl AppState {
                 | EventPayload::FlowIntegrationLockAcquired { .. }
                 | EventPayload::WorktreeCleanupPerformed { .. }
                 | EventPayload::WorktreeTurnRefRestored { .. }
+                | EventPayload::ChatStreamChunkAppended { .. }
                 | EventPayload::Unknown
         )
     }
