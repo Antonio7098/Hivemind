@@ -3224,6 +3224,122 @@ fn cli_runtime_config_and_flow_tick() {
 }
 
 #[test]
+fn cli_native_runtime_reports_startup_progress_in_events_and_summary() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let state_dir = tmp.path().join("native-state");
+    let runtime_env = format!("HIVEMIND_NATIVE_STATE_DIR={}", state_dir.to_string_lossy());
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--role",
+            "worker",
+            "--adapter",
+            "native",
+            "--binary-path",
+            "builtin-native",
+            "--model",
+            "native-mock-v1",
+            "--timeout-ms",
+            "5000",
+            "--env",
+            "HIVEMIND_NATIVE_PROVIDER=mock",
+            "--env",
+            "HIVEMIND_NATIVE_CAPTURE_FULL_PAYLOADS=true",
+            "--env",
+            &runtime_env,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
+    assert_eq!(code, 0, "{err}");
+    let t1_id = out
+        .lines()
+        .find_map(|l| l.strip_prefix("ID:").map(|s| s.trim().to_string()))
+        .expect("task id");
+
+    let (code, gout, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "g1", "--from-tasks", &t1_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = gout
+        .lines()
+        .find_map(|l| l.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, fout, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = fout
+        .lines()
+        .find_map(|l| l.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "400",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("runtime_started"), "{out}");
+    assert!(out.contains("agent_invocation_started"), "{out}");
+    assert!(out.contains("runtime_output_chunk"), "{out}");
+    assert!(out.contains("[native-progress]"), "{out}");
+    assert!(out.contains("stage=invocation_starting"), "{out}");
+
+    let (code, out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "events", "native-summary", "--flow", &flow_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let summary: serde_json::Value = serde_json::from_str(&out).expect("native summary json");
+    let invocation = &summary["data"]["invocations"][0];
+    assert!(
+        invocation["runtime_to_invocation_ms"].as_i64().is_some(),
+        "{out}"
+    );
+    assert!(
+        invocation["invocation_to_first_model_request_ms"]
+            .as_i64()
+            .is_some(),
+        "{out}"
+    );
+    assert!(
+        invocation["runtime_output_chunk_count"]
+            .as_u64()
+            .unwrap_or(0)
+            > 0,
+        "{out}"
+    );
+    assert_eq!(
+        invocation["startup_progress"][0]["stage"].as_str(),
+        Some("invocation_starting")
+    );
+}
+
+#[test]
 #[allow(clippy::too_many_lines)]
 fn cli_checkpoint_complete_unblocks_attempt_and_emits_lifecycle_events() {
     let tmp = tempfile::tempdir().expect("tempdir");

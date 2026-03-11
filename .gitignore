@@ -13,6 +13,8 @@ target-local/
 # Generated local validation artifacts (timestamped scratch outputs).
 hivemind-test/test-report/20*-*.log
 hivemind-test/test-report/20*-*.json
+hivemind-test/test-report/20*-*.jsonl
 hivemind-test/test-report/20*-*.md
 hivemind-test/test-report/20*-*.txt
+hivemind-test/test-report/20*-deep-prompt-provenance-hivemind.*
 hivemind-test/test-report/20*-*/

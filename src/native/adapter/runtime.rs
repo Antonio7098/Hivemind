@@ -1,7 +1,12 @@
 use super::*;
 use crate::adapters::runtime::NativeHistoryCompactionTrace;
+use crate::native::assemble_native_prompt_with_runtime_env;
+use crate::native::runtime_hardening::STATE_DIR_ENV;
 use crate::native::{AgentLoopObserver, NativeRuntimeError};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
+use std::fs;
+use std::path::PathBuf;
 use std::time::Instant;
 
 type ProgressEmitter<'a> = Box<dyn FnMut(String) -> Result<(), RuntimeError> + 'a>;
@@ -32,14 +37,27 @@ struct NativeProgressObserver<'a> {
     emit: Option<ProgressEmitter<'a>>,
     started_at: Instant,
     history_compactions: Vec<NativeHistoryCompactionTrace>,
+    invocation_id: String,
+    request_snapshot_root: Option<PathBuf>,
+}
+
+struct TurnRequestSnapshot {
+    digest: String,
+    path: PathBuf,
 }
 
 impl<'a> NativeProgressObserver<'a> {
-    fn new(emit: Option<ProgressEmitter<'a>>) -> Self {
+    fn new(
+        emit: Option<ProgressEmitter<'a>>,
+        invocation_id: String,
+        request_snapshot_root: Option<PathBuf>,
+    ) -> Self {
         Self {
             emit,
             started_at: Instant::now(),
             history_compactions: Vec::new(),
+            invocation_id,
+            request_snapshot_root,
         }
     }
 
@@ -62,6 +80,29 @@ impl<'a> NativeProgressObserver<'a> {
         }
         Ok(())
     }
+
+    fn persist_request_snapshot(
+        &self,
+        request: &ModelTurnRequest,
+    ) -> Result<Option<TurnRequestSnapshot>, String> {
+        let Some(root) = self.request_snapshot_root.as_ref() else {
+            return Ok(None);
+        };
+        let payload = serde_json::to_vec_pretty(request)
+            .map_err(|error| format!("serialize failed: {error}"))?;
+        let digest = format!("{:x}", Sha256::digest(&payload));
+        let dir = root.join(&self.invocation_id);
+        fs::create_dir_all(&dir)
+            .map_err(|error| format!("create dir failed for {}: {error}", dir.display()))?;
+        let path = dir.join(format!(
+            "turn-{:04}-{}.json",
+            request.turn_index,
+            &digest[..12]
+        ));
+        fs::write(&path, payload)
+            .map_err(|error| format!("write failed for {}: {error}", path.display()))?;
+        Ok(Some(TurnRequestSnapshot { digest, path }))
+    }
 }
 
 impl AgentLoopObserver for NativeProgressObserver<'_> {
@@ -69,6 +110,24 @@ impl AgentLoopObserver for NativeProgressObserver<'_> {
         &mut self,
         request: &ModelTurnRequest,
     ) -> Result<(), NativeRuntimeError> {
+        match self.persist_request_snapshot(request) {
+            Ok(Some(snapshot)) => {
+                self.emit_line(format!(
+                    "[native-progress] stage=turn_request_snapshot turn={} digest={} snapshot_path={}",
+                    request.turn_index,
+                    snapshot.digest,
+                    snapshot.path.display(),
+                ))?;
+            }
+            Ok(None) => {}
+            Err(error) => {
+                self.emit_line(format!(
+                    "[native-progress] stage=turn_request_snapshot_failed turn={} message={}",
+                    request.turn_index,
+                    compact_progress_value(&error, 160),
+                ))?;
+            }
+        }
         let assembly = request.prompt_assembly.as_ref();
         self.emit_line(format!(
             "[native-progress] stage=turn_request_prepared turn={} state={} prompt_bytes={} context_bytes={} prompt_headroom={} available_budget={} rendered_prompt_bytes={} runtime_context_bytes={} visible_items={} selected_history_count={} selected_history_chars={} compacted_summary_count={} compacted_summary_chars={} assembly_latency_ms={}",
@@ -243,6 +302,14 @@ impl NativeRuntimeAdapter {
             let client = OpenRouterModelClient::from_env(config.model_name.clone(), runtime_env)
                 .map_err(|error| error.to_runtime_error())?;
             Ok(Box::new(client))
+        } else if config.provider_name.eq_ignore_ascii_case("groq") {
+            let client = GroqModelClient::from_env(config.model_name.clone(), runtime_env)
+                .map_err(|error| error.to_runtime_error())?;
+            Ok(Box::new(client))
+        } else if config.provider_name.eq_ignore_ascii_case("minimax") {
+            let client = MiniMaxModelClient::from_env(config.model_name.clone(), runtime_env)
+                .map_err(|error| error.to_runtime_error())?;
+            Ok(Box::new(client))
         } else {
             Ok(Box::new(MockModelClient::from_outputs(
                 config.scripted_directives.clone(),
@@ -348,12 +415,25 @@ impl NativeRuntimeAdapter {
             )
         })?;
         let mut runtime_env = self.config.base.env.clone();
+        let request_snapshot_root = if self.config.native.capture_full_payloads {
+            runtime_env
+                .get(STATE_DIR_ENV)
+                .map(|path| PathBuf::from(path).join("request-snapshots"))
+        } else {
+            None
+        };
         let runtime_support = NativeRuntimeSupport::bootstrap(&runtime_env)
             .map_err(|error| error.to_runtime_error())?;
         let readiness_transitions = runtime_support.readiness_transitions();
         let runtime_state = Some(runtime_support.telemetry());
         runtime_support
             .ensure_secret_from_or_to_env(&mut runtime_env, "OPENROUTER_API_KEY")
+            .map_err(|error| error.to_runtime_error())?;
+        runtime_support
+            .ensure_secret_from_or_to_env(&mut runtime_env, "MINIMAX_API_KEY")
+            .map_err(|error| error.to_runtime_error())?;
+        runtime_support
+            .ensure_secret_from_or_to_env(&mut runtime_env, "GROQ_API_KEY")
             .map_err(|error| error.to_runtime_error())?;
 
         let scope = Self::scope_from_env(&runtime_env)?;
@@ -381,7 +461,10 @@ impl NativeRuntimeAdapter {
             .map(|contract| contract.name.clone())
             .collect::<Vec<_>>();
         let allowed_capabilities = Self::allowed_capabilities(&allowed_contracts);
-        let mut observer = NativeProgressObserver::new(emit);
+        let started_at = Instant::now();
+        let invocation_id = Uuid::new_v4().to_string();
+        let mut observer =
+            NativeProgressObserver::new(emit, invocation_id.clone(), request_snapshot_root);
 
         let timeout_budget_ms =
             u64::try_from(self.config.native.timeout_budget.as_millis()).unwrap_or(u64::MAX);
@@ -415,8 +498,6 @@ impl NativeRuntimeAdapter {
             ))
             .map_err(|error| error.to_runtime_error())?;
 
-        let started_at = Instant::now();
-        let invocation_id = Uuid::new_v4().to_string();
         runtime_support
             .ingest_log(
                 "native_runtime",
@@ -457,8 +538,13 @@ impl NativeRuntimeAdapter {
             initial_items,
             |turn_index, state, history| {
                 let assembly_started = Instant::now();
-                let rendered =
-                    assemble_native_prompt(&self.config.native, input, history, &allowed_contracts);
+                let rendered = assemble_native_prompt_with_runtime_env(
+                    &self.config.native,
+                    input,
+                    history,
+                    &allowed_contracts,
+                    &runtime_env,
+                );
                 let assembly_duration_ms =
                     u64::try_from(assembly_started.elapsed().as_millis()).unwrap_or(u64::MAX);
                 let mut assembly = rendered.assembly;

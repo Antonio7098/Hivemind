@@ -15,7 +15,13 @@ pub(super) fn handle_exec_command(
     let started = Instant::now();
     let owner_worktree = session_owner_worktree(ctx.worktree);
     let worktree_baseline = capture_worktree_baseline(&owner_worktree).ok();
-    let input = decode_input::<ExecCommandInput>(input)?;
+    let mut input = decode_input::<ExecCommandInput>(input)?;
+    if input.args.is_empty() {
+        if let Some((command, args)) = split_command_string(&input.cmd) {
+            input.cmd = command;
+            input.args = args;
+        }
+    }
     let raw_command = input.cmd.trim();
     if raw_command.is_empty() {
         return Err(NativeToolEngineError::validation(

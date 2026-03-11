@@ -101,6 +101,8 @@ pub struct NativeTurnTrace {
     #[serde(default)]
     pub active_code_window_count: usize,
     #[serde(default)]
+    pub active_code_window_trace: Vec<NativeActiveCodeWindowTrace>,
+    #[serde(default)]
     pub code_navigation_count: usize,
     #[serde(default)]
     pub compacted_summary_count: usize,
@@ -153,6 +155,32 @@ pub struct NativeTurnTrace {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NativeActiveCodeWindowTrace {
+    pub path: String,
+    pub source_tool: String,
+    pub status: String,
+    pub freshness: String,
+    pub delivery_lane: String,
+    pub content_source: String,
+    #[serde(default)]
+    pub content_chars: usize,
+    #[serde(default)]
+    pub last_turn_index: Option<u32>,
+    #[serde(default)]
+    pub relevance_score: u32,
+    #[serde(default)]
+    pub desired_representation: String,
+    #[serde(default)]
+    pub minimum_floor: String,
+    #[serde(default)]
+    pub turns_until_next_downgrade: Option<u32>,
+    #[serde(default)]
+    pub lease_remaining_turns: Option<u32>,
+    #[serde(default)]
+    pub reason_codes: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NativeToolCallTrace {
     pub call_id: String,
     pub tool_name: String,
@@ -161,6 +189,8 @@ pub struct NativeToolCallTrace {
     pub duration_ms: Option<u64>,
     #[serde(default)]
     pub response: Option<String>,
+    #[serde(default, skip)]
+    pub prompt_response: Option<String>,
     #[serde(default)]
     pub response_original_bytes: Option<usize>,
     #[serde(default)]

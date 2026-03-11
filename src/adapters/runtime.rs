@@ -68,10 +68,11 @@ pub use env::{
 pub use mock::MockAdapter;
 pub use prompt::{format_execution_prompt, AttemptSummary, ExecutionInput, NativePromptMetadata};
 pub use telemetry::{
-    NativeHistoryCompactionTrace, NativeInvocationFailure, NativeInvocationTrace,
-    NativePayloadCaptureMode, NativeReadinessTransition, NativeRuntimeStateTelemetry,
-    NativeToolCallFailure, NativeToolCallTrace, NativeTransportAttemptTrace,
-    NativeTransportFallbackTrace, NativeTransportTelemetry, NativeTurnTrace,
+    NativeActiveCodeWindowTrace, NativeHistoryCompactionTrace, NativeInvocationFailure,
+    NativeInvocationTrace, NativePayloadCaptureMode, NativeReadinessTransition,
+    NativeRuntimeStateTelemetry, NativeToolCallFailure, NativeToolCallTrace,
+    NativeTransportAttemptTrace, NativeTransportFallbackTrace, NativeTransportTelemetry,
+    NativeTurnTrace,
 };
 
 #[cfg(test)]

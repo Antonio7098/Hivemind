@@ -1,5 +1,9 @@
 use super::*;
-use crate::adapters::runtime::{ExecutionInput, NativePromptMetadata};
+use crate::adapters::runtime::{ExecutionInput, NativeActiveCodeWindowTrace, NativePromptMetadata};
+use crate::native::context_visibility::{
+    load_graph_working_set_hints, score_context_windows, ContextRepresentationLevel,
+    ContextWindowSignals,
+};
 use crate::native::tool_engine::ToolContract;
 use crate::native::turn_items::{TurnItemKind, TurnItemOutcome};
 use sha2::{Digest, Sha256};
@@ -15,6 +19,8 @@ pub struct NativePromptAssembly {
     pub selected_history: Vec<NativePromptItem>,
     #[serde(default)]
     pub active_code_windows: Vec<NativePromptItem>,
+    #[serde(default)]
+    pub active_code_window_trace: Vec<NativeActiveCodeWindowTrace>,
     #[serde(default)]
     pub code_navigation: Vec<NativePromptItem>,
     #[serde(default)]
@@ -123,6 +129,7 @@ struct PreparedPromptItems {
 struct ActiveCodeWindow {
     path: String,
     source_tool: String,
+    content_source: String,
     originating_call_id: String,
     represented_call_ids: Vec<String>,
     status: String,
@@ -132,9 +139,43 @@ struct ActiveCodeWindow {
     changed_lines: Vec<(usize, usize)>,
     changed_excerpt: Option<String>,
     last_turn_index: Option<u32>,
+    relevance_score: u32,
+    desired_level: ContextRepresentationLevel,
+    minimum_floor: ContextRepresentationLevel,
+    turns_until_next_downgrade: Option<u32>,
+    lease_remaining_turns: Option<u32>,
+    graph_neighbor_paths: Vec<String>,
+    reason_codes: Vec<String>,
 }
 
+const CLEAN_ACTIVE_WINDOW_MAX_CONTENT_CHARS: usize = 4_000;
+const DIRTY_ACTIVE_WINDOW_MAX_CONTENT_CHARS: usize = 12_000;
+
 impl ActiveCodeWindow {
+    fn visibility_bits(&self) -> String {
+        let next_downgrade = self
+            .turns_until_next_downgrade
+            .map(|turns| turns.to_string())
+            .unwrap_or_else(|| "none".to_string());
+        let lease = self
+            .lease_remaining_turns
+            .map(|turns| turns.to_string())
+            .unwrap_or_else(|| "none".to_string());
+        format!(
+            "relevance={} target_level={} floor={} next_downgrade={} lease_remaining={} reasons={}",
+            self.relevance_score,
+            self.desired_level.as_str(),
+            self.minimum_floor.as_str(),
+            next_downgrade,
+            lease,
+            if self.reason_codes.is_empty() {
+                "none".to_string()
+            } else {
+                self.reason_codes.join("|")
+            }
+        )
+    }
+
     fn render_for_prompt(&self) -> String {
         let changed_lines = if self.changed_lines.is_empty() {
             "changed_lines=none".to_string()
@@ -159,17 +200,29 @@ impl ActiveCodeWindow {
                 )
             })
             .unwrap_or_default();
+        let max_content_chars = if self.status == "dirty" {
+            DIRTY_ACTIVE_WINDOW_MAX_CONTENT_CHARS
+        } else {
+            CLEAN_ACTIVE_WINDOW_MAX_CONTENT_CHARS
+        };
+        let rendered_content =
+            truncate_middle_with_marker(&self.current_content, max_content_chars);
+        let content_truncated = rendered_content != self.current_content;
         format!(
-            "[code_window:{}:{}] path={} call_id={} freshness={} digest={} content_chars={} {}\n{}",
+            "[code_window:{}:{}] path={} call_id={} freshness={} content_source={} digest={} content_chars={} rendered_content_chars={} content_truncated={} {} {}\n{}",
             self.status,
             self.source_tool,
             self.path,
             self.originating_call_id,
             self.freshness,
+            self.content_source,
             short_hash(&self.current_digest),
             self.current_content.chars().count(),
+            rendered_content.chars().count(),
+            content_truncated,
+            self.visibility_bits(),
             changed_lines,
-            format!("{}\n{}", changed_excerpt, self.current_content).trim_start(),
+            format!("{}\n{}", changed_excerpt, rendered_content).trim_start(),
         )
     }
 
@@ -186,17 +239,44 @@ impl ActiveCodeWindow {
                     .join(",")
             )
         };
+        let graph_neighbors = if self.graph_neighbor_paths.is_empty() {
+            "graph_neighbors=none".to_string()
+        } else {
+            format!("graph_neighbors={}", self.graph_neighbor_paths.join(","))
+        };
         format!(
-            "[code_window_summary:{}:{}] path={} call_id={} freshness={} digest={} content_chars={} {}",
+            "[code_window_summary:{}:{}] path={} call_id={} freshness={} content_source={} digest={} content_chars={} {} {} {}",
             self.status,
             self.source_tool,
             self.path,
             self.originating_call_id,
             self.freshness,
+            self.content_source,
             short_hash(&self.current_digest),
             self.current_content.chars().count(),
+            self.visibility_bits(),
+            graph_neighbors,
             changed_lines,
         )
+    }
+
+    fn trace(&self, delivery_lane: &str) -> NativeActiveCodeWindowTrace {
+        NativeActiveCodeWindowTrace {
+            path: self.path.clone(),
+            source_tool: self.source_tool.clone(),
+            status: self.status.clone(),
+            freshness: self.freshness.clone(),
+            delivery_lane: delivery_lane.to_string(),
+            content_source: self.content_source.clone(),
+            content_chars: self.current_content.chars().count(),
+            last_turn_index: self.last_turn_index,
+            relevance_score: self.relevance_score,
+            desired_representation: self.desired_level.as_str().to_string(),
+            minimum_floor: self.minimum_floor.as_str().to_string(),
+            turns_until_next_downgrade: self.turns_until_next_downgrade,
+            lease_remaining_turns: self.lease_remaining_turns,
+            reason_codes: self.reason_codes.clone(),
+        }
     }
 }
 
@@ -264,17 +344,56 @@ impl ActiveCodeWindowSelection {
         represented.total_window_count = self.selected.total_window_count;
         represented
     }
+
+    fn trace(&self) -> Vec<NativeActiveCodeWindowTrace> {
+        self.selected
+            .windows
+            .iter()
+            .map(|window| window.trace("active_code_windows"))
+            .chain(
+                self.summarized
+                    .windows
+                    .iter()
+                    .map(|window| window.trace("compacted_summary")),
+            )
+            .collect()
+    }
 }
 
 #[allow(clippy::too_many_lines)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn assemble_native_prompt(
     config: &NativeRuntimeConfig,
     input: &ExecutionInput,
     history: &[TurnItem],
     tool_contracts: &[ToolContract],
 ) -> NativePromptRender {
+    assemble_native_prompt_with_runtime_env(config, input, history, tool_contracts, &HashMap::new())
+}
+
+pub(crate) fn assemble_native_prompt_with_runtime_env(
+    config: &NativeRuntimeConfig,
+    input: &ExecutionInput,
+    history: &[TurnItem],
+    tool_contracts: &[ToolContract],
+    runtime_env: &HashMap<String, String>,
+) -> NativePromptRender {
     let normalized = normalize_turn_items(history);
-    let active_code_windows = extract_active_code_windows(&normalized);
+    let current_turn_index = normalized
+        .iter()
+        .filter_map(|item| item.provenance.turn_index)
+        .max()
+        .unwrap_or_default()
+        .saturating_add(1);
+    let graph_hints = load_graph_working_set_hints(runtime_env);
+    let mut active_code_windows = extract_active_code_windows(&normalized);
+    apply_context_visibility(
+        input,
+        &normalized,
+        &mut active_code_windows,
+        current_turn_index,
+        &graph_hints,
+    );
     let base_runtime_instructions = base_runtime_instructions();
     let mode_contract = mode_contract(config.agent_mode);
     let objective_state = objective_state(config.agent_mode, input);
@@ -306,6 +425,13 @@ pub(crate) fn assemble_native_prompt(
     let active_code_window_selection =
         select_active_code_windows(&active_code_windows, item_budget / 2);
     let active_code_window_items = active_code_window_selection.selected.prompt_items();
+    let active_code_window_summary_items = active_code_window_selection.summarized.summary_items();
+    let active_code_window_section_items = if active_code_window_items.is_empty() {
+        active_code_window_summary_items.clone()
+    } else {
+        active_code_window_items.clone()
+    };
+    let active_code_window_trace = active_code_window_selection.trace();
     let active_code_window_count = active_code_window_items.len();
     let omitted_active_code_window_count = active_code_window_selection
         .selected
@@ -342,7 +468,12 @@ pub(crate) fn assemble_native_prompt(
         .iter()
         .filter(|item| item.kind == "compacted_summary")
         .cloned()
-        .chain(active_code_window_selection.summarized.summary_items())
+        .chain(
+            active_code_window_items
+                .is_empty()
+                .then_some(Vec::new())
+                .unwrap_or(active_code_window_summary_items.clone()),
+        )
         .collect::<Vec<_>>();
     let selected_history = prompt_items
         .iter()
@@ -395,10 +526,10 @@ pub(crate) fn assemble_native_prompt(
         });
 
     let mut sections = vec![static_sections];
-    if !active_code_window_items.is_empty() {
+    if !active_code_window_section_items.is_empty() {
         sections.push(section(
             "Active Code Windows",
-            &active_code_window_items
+            &active_code_window_section_items
                 .iter()
                 .map(|item| item.text.clone())
                 .collect::<Vec<_>>()
@@ -461,6 +592,7 @@ pub(crate) fn assemble_native_prompt(
             objective_state,
             selected_history,
             active_code_windows: active_code_window_items,
+            active_code_window_trace,
             code_navigation,
             tool_contracts: tool_contract_lines,
             compacted_summaries,
@@ -505,6 +637,52 @@ pub(crate) fn assemble_native_prompt(
     }
 }
 
+fn apply_context_visibility(
+    input: &ExecutionInput,
+    history: &[TurnItem],
+    active_code_windows: &mut ActiveCodeWindows,
+    current_turn_index: u32,
+    graph_hints: &crate::native::context_visibility::GraphWorkingSetHints,
+) {
+    if active_code_windows.windows.is_empty() {
+        return;
+    }
+    let mut task_text = format!("{}\n{}", input.task_description, input.success_criteria);
+    if let Some(context) = input.context.as_deref() {
+        task_text.push('\n');
+        task_text.push_str(context);
+    }
+    let signals = active_code_windows
+        .windows
+        .iter()
+        .map(|window| ContextWindowSignals {
+            path: window.path.clone(),
+            status: window.status.clone(),
+            freshness: window.freshness.clone(),
+            last_turn_index: window.last_turn_index,
+            changed_line_count: window.changed_lines.len(),
+        })
+        .collect::<Vec<_>>();
+    let decisions = score_context_windows(
+        &task_text,
+        current_turn_index,
+        history,
+        &signals,
+        graph_hints,
+    );
+    for window in &mut active_code_windows.windows {
+        if let Some(decision) = decisions.get(&window.path) {
+            window.relevance_score = decision.relevance_score;
+            window.desired_level = decision.desired_level;
+            window.minimum_floor = decision.minimum_floor;
+            window.turns_until_next_downgrade = decision.turns_until_next_downgrade;
+            window.lease_remaining_turns = decision.lease_remaining_turns;
+            window.graph_neighbor_paths = decision.graph_neighbor_paths.clone();
+            window.reason_codes = decision.reason_codes.clone();
+        }
+    }
+}
+
 fn stable_hash(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
@@ -520,6 +698,15 @@ fn prepare_items_for_prompt(
         _ => None,
     });
     let latest_assistant_turn_index = latest_assistant_turn_index.max();
+    let assistant_action_turns = items
+        .iter()
+        .filter_map(|item| match &item.kind {
+            TurnItemKind::AssistantText { directive, .. } if directive == "act" => {
+                item.provenance.turn_index
+            }
+            _ => None,
+        })
+        .collect::<HashSet<_>>();
 
     let read_requests_by_call_id: HashMap<String, String> = items
         .iter()
@@ -528,7 +715,10 @@ fn prepare_items_for_prompt(
                 call_id,
                 tool_name,
                 request,
-            } if tool_name == "read_file" => Some((call_id.clone(), request.clone())),
+            } if tool_name == "read_file" => Some((
+                call_id.clone(),
+                json_request_string_field(request, "path").unwrap_or_else(|| request.clone()),
+            )),
             _ => None,
         })
         .collect();
@@ -540,13 +730,19 @@ fn prepare_items_for_prompt(
     let mut suppressed_stale_tool_call_count = 0usize;
     let mut suppressed_stale_graph_query_result_count = 0usize;
     let mut seen_successful_graph_query_result = false;
+    let mut kept_latest_assistant_think = false;
+    let mut seen_successful_tools = HashSet::new();
     for item in items.into_iter().rev() {
         if is_represented_by_active_code_window(&item, active_code_windows) {
             suppressed_by_active_code_window_count += 1;
             continue;
         }
-        if should_drop_stale_tool_call(&item, latest_assistant_turn_index) {
+        if should_drop_stale_tool_call(&item, latest_assistant_turn_index, &assistant_action_turns)
+        {
             suppressed_stale_tool_call_count += 1;
+            continue;
+        }
+        if should_drop_stale_assistant_think(&item, &mut kept_latest_assistant_think) {
             continue;
         }
         if let Some(dedupe_key) = duplicate_read_result_key(&item, &read_requests_by_call_id) {
@@ -555,9 +751,15 @@ fn prepare_items_for_prompt(
                 continue;
             }
         }
+        if should_drop_resolved_tool_failure(&item, &seen_successful_tools) {
+            continue;
+        }
         if should_drop_stale_graph_query_result(&item, seen_successful_graph_query_result) {
             suppressed_stale_graph_query_result_count += 1;
             continue;
+        }
+        if let Some(tool_name) = successful_tool_name(&item) {
+            seen_successful_tools.insert(tool_name.to_string());
         }
         if is_successful_graph_query_result(&item) {
             seen_successful_graph_query_result = true;
@@ -608,6 +810,7 @@ fn extract_active_code_windows(items: &[TurnItem]) -> ActiveCodeWindows {
                 content,
             } if tool_name == "read_file" => {
                 if let Some(path) = read_requests_by_call_id.get(call_id) {
+                    let decoded = decode_read_file_content(content);
                     let previous = windows_by_path.get(path);
                     windows_by_path.insert(
                         path.clone(),
@@ -615,7 +818,8 @@ fn extract_active_code_windows(items: &[TurnItem]) -> ActiveCodeWindows {
                             previous,
                             path,
                             call_id,
-                            content,
+                            &decoded.content,
+                            decoded.content_source,
                             item.provenance.turn_index,
                         ),
                     );
@@ -659,6 +863,9 @@ fn select_active_code_windows(
     let mut windows = active_code_windows.windows.clone();
     windows.sort_by_key(|window| {
         (
+            !window.minimum_floor.is_excerpt(),
+            !window.desired_level.is_excerpt(),
+            std::cmp::Reverse(window.relevance_score),
             window.status != "dirty",
             std::cmp::Reverse(window.last_turn_index.unwrap_or_default()),
         )
@@ -669,7 +876,11 @@ fn select_active_code_windows(
     let mut summarized = Vec::new();
     for window in windows {
         let chars = window.render_for_prompt().chars().count();
-        if selected.is_empty() || used.saturating_add(chars) <= budget {
+        let must_keep_exact = window.minimum_floor.is_excerpt();
+        let prefers_exact = window.desired_level.is_excerpt();
+        if must_keep_exact
+            || (prefers_exact && (selected.is_empty() || used.saturating_add(chars) <= budget))
+        {
             used = used.saturating_add(chars);
             selected.push(window);
         } else {
@@ -691,6 +902,7 @@ fn build_read_code_window(
     path: &str,
     call_id: &str,
     content: &str,
+    content_source: &str,
     last_turn_index: Option<u32>,
 ) -> ActiveCodeWindow {
     let current_digest = stable_hash(content);
@@ -712,6 +924,7 @@ fn build_read_code_window(
     ActiveCodeWindow {
         path: path.to_string(),
         source_tool: "read_file".to_string(),
+        content_source: content_source.to_string(),
         originating_call_id: call_id.to_string(),
         represented_call_ids: merge_represented_call_ids(previous, call_id),
         status: "clean".to_string(),
@@ -721,6 +934,13 @@ fn build_read_code_window(
         changed_lines,
         changed_excerpt,
         last_turn_index,
+        relevance_score: 0,
+        desired_level: ContextRepresentationLevel::HandleOnly,
+        minimum_floor: ContextRepresentationLevel::HandleOnly,
+        turns_until_next_downgrade: None,
+        lease_remaining_turns: None,
+        graph_neighbor_paths: Vec::new(),
+        reason_codes: Vec::new(),
     }
 }
 
@@ -761,6 +981,7 @@ fn build_write_code_window(
     ActiveCodeWindow {
         path: path.to_string(),
         source_tool: "write_file".to_string(),
+        content_source: "write_request_content".to_string(),
         originating_call_id: call_id.to_string(),
         represented_call_ids: merge_represented_call_ids(previous, call_id),
         status,
@@ -770,6 +991,13 @@ fn build_write_code_window(
         changed_lines,
         changed_excerpt,
         last_turn_index,
+        relevance_score: 0,
+        desired_level: ContextRepresentationLevel::ExactExcerpt,
+        minimum_floor: ContextRepresentationLevel::ExactExcerpt,
+        turns_until_next_downgrade: None,
+        lease_remaining_turns: None,
+        graph_neighbor_paths: Vec::new(),
+        reason_codes: Vec::new(),
     }
 }
 
@@ -822,15 +1050,86 @@ fn assistant_action_path(action: &str) -> Option<(String, String)> {
 }
 
 fn json_request_string_field(request: &str, key: &str) -> Option<String> {
-    serde_json::from_str::<serde_json::Value>(request)
-        .ok()?
-        .get(key)?
-        .as_str()
+    let value = serde_json::from_str::<serde_json::Value>(request).ok()?;
+    value
+        .get(key)
+        .or_else(|| value.get("input").and_then(|input| input.get(key)))
+        .and_then(serde_json::Value::as_str)
         .map(ToString::to_string)
+}
+
+struct DecodedReadFileContent<'a> {
+    content: String,
+    content_source: &'a str,
+}
+
+fn decode_read_file_content(content: &str) -> DecodedReadFileContent<'static> {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(content) else {
+        return DecodedReadFileContent {
+            content: content.to_string(),
+            content_source: "raw_tool_result",
+        };
+    };
+
+    if let Some(decoded) = value
+        .get("output")
+        .and_then(|output| output.get("content"))
+        .and_then(serde_json::Value::as_str)
+    {
+        return DecodedReadFileContent {
+            content: decoded.to_string(),
+            content_source: "decoded_output_content",
+        };
+    }
+
+    if value
+        .get("output_truncated")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
+        if let Some(preview) = value.get("preview").and_then(serde_json::Value::as_str) {
+            return DecodedReadFileContent {
+                content: preview.to_string(),
+                content_source: "truncated_response_preview",
+            };
+        }
+    }
+
+    DecodedReadFileContent {
+        content: content.to_string(),
+        content_source: "raw_tool_result",
+    }
 }
 
 fn short_hash(value: &str) -> String {
     value.chars().take(12).collect()
+}
+
+fn truncate_middle_with_marker(input: &str, max_chars: usize) -> String {
+    if max_chars == 0 {
+        return String::new();
+    }
+    let count = input.chars().count();
+    if count <= max_chars {
+        return input.to_string();
+    }
+    let marker = "\n… [truncated] …\n";
+    let marker_chars = marker.chars().count();
+    if max_chars <= marker_chars + 2 {
+        return input.chars().take(max_chars).collect();
+    }
+    let head_chars = (max_chars - marker_chars) / 2;
+    let tail_chars = max_chars - marker_chars - head_chars;
+    let head = input.chars().take(head_chars).collect::<String>();
+    let tail = input
+        .chars()
+        .rev()
+        .take(tail_chars)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<String>();
+    format!("{head}{marker}{tail}")
 }
 
 fn compute_changed_line_ranges(previous: &str, current: &str) -> Vec<(usize, usize)> {
@@ -903,7 +1202,19 @@ fn build_changed_excerpt(current: &str, changed_lines: &[(usize, usize)]) -> Opt
     Some(excerpt.join("\n"))
 }
 
-fn should_drop_stale_tool_call(item: &TurnItem, latest_assistant_turn_index: Option<u32>) -> bool {
+fn should_drop_stale_tool_call(
+    item: &TurnItem,
+    latest_assistant_turn_index: Option<u32>,
+    assistant_action_turns: &HashSet<u32>,
+) -> bool {
+    if matches!(item.kind, TurnItemKind::ToolCall { .. })
+        && item
+            .provenance
+            .turn_index
+            .is_some_and(|turn_index| assistant_action_turns.contains(&turn_index))
+    {
+        return true;
+    }
     let Some(latest_assistant_turn_index) = latest_assistant_turn_index else {
         return false;
     };
@@ -912,6 +1223,27 @@ fn should_drop_stale_tool_call(item: &TurnItem, latest_assistant_turn_index: Opt
             .provenance
             .turn_index
             .is_some_and(|turn_index| turn_index < latest_assistant_turn_index)
+}
+
+fn should_drop_stale_assistant_think(
+    item: &TurnItem,
+    kept_latest_assistant_think: &mut bool,
+) -> bool {
+    let is_think = matches!(
+        item.kind,
+        TurnItemKind::AssistantText {
+            ref directive,
+            ..
+        } if directive == "think"
+    );
+    if !is_think {
+        return false;
+    }
+    if *kept_latest_assistant_think {
+        return true;
+    }
+    *kept_latest_assistant_think = true;
+    false
 }
 
 fn duplicate_read_result_key(
@@ -929,7 +1261,7 @@ fn duplicate_read_result_key(
             read_requests_by_call_id
                 .get(call_id)
                 .map_or("", String::as_str),
-            stable_hash(content)
+            stable_hash(&decode_read_file_content(content).content)
         )),
         _ => None,
     }
@@ -937,6 +1269,31 @@ fn duplicate_read_result_key(
 
 fn should_drop_stale_graph_query_result(item: &TurnItem, seen_newer_success: bool) -> bool {
     seen_newer_success && is_successful_graph_query_result(item)
+}
+
+fn successful_tool_name(item: &TurnItem) -> Option<&str> {
+    match &item.kind {
+        TurnItemKind::ToolResult {
+            tool_name,
+            outcome: TurnItemOutcome::Success,
+            ..
+        } => Some(tool_name.as_str()),
+        _ => None,
+    }
+}
+
+fn should_drop_resolved_tool_failure(
+    item: &TurnItem,
+    seen_successful_tools: &HashSet<String>,
+) -> bool {
+    match &item.kind {
+        TurnItemKind::ToolResult {
+            tool_name,
+            outcome: TurnItemOutcome::Failure,
+            ..
+        } => seen_successful_tools.contains(tool_name),
+        _ => false,
+    }
 }
 
 fn is_successful_graph_query_result(item: &TurnItem) -> bool {
@@ -951,7 +1308,7 @@ fn is_successful_graph_query_result(item: &TurnItem) -> bool {
 }
 
 fn base_runtime_instructions() -> String {
-    "You are the Hivemind native runtime controller. Work only from explicit prompt sections, use the declared tools, and keep progress attributable through THINK / ACT / DONE directives. If you would otherwise reply with plain-English planning text like 'I'll inspect the repo first', emit that as THINK instead. When emitting ACT tool:<name>:<payload>, the payload must be a JSON object that matches that tool's input_schema exactly; do not invent fields, do not pass bare strings unless the schema explicitly allows them, and reformulate the action to fit the schema when needed."
+    "You are the Hivemind native runtime controller. Work only from explicit prompt sections, use the declared tools, and keep progress attributable through THINK / ACT / DONE directives. If you would otherwise reply with plain-English planning text like 'I'll inspect the repo first', emit that as THINK instead. When emitting ACT tool:<name>:<payload>, the payload must be a JSON object that matches that tool's input_schema exactly; do not invent fields, do not pass bare strings unless the schema explicitly allows them, and reformulate the action to fit the schema when needed. Before write_file on an existing path, ensure that path is currently visible in Active Code Windows as lexical context; if it is not, reread it first. Active code windows may expose relevance and next_downgrade signals; if a file still matters across upcoming turns, you may request a bounded lease with the retain_context tool rather than rereading preemptively."
         .to_string()
 }
 

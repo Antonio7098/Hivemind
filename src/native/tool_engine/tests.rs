@@ -271,6 +271,7 @@ fn rejects_invalid_input_schema() {
         .execute(&action, &ctx)
         .expect_err("invalid schema should fail");
     assert_eq!(error.code, "native_tool_input_invalid");
+    assert!(error.recoverable);
 }
 
 #[test]
@@ -387,6 +388,7 @@ fn run_command_is_deny_by_default() {
         .execute(&action, &ctx)
         .expect_err("policy should deny command");
     assert_eq!(error.code, "native_policy_violation");
+    assert!(error.recoverable);
 }
 
 #[test]
@@ -414,6 +416,154 @@ fn run_command_respects_allowlist_policy() {
         serde_json::from_value(value).expect("run_command output should decode");
     assert_eq!(output.exit_code, 0);
     assert!(output.stdout.contains("hello"));
+}
+
+#[test]
+fn run_command_normalizes_cmd_alias_inline_args_and_wrapped_input() {
+    let engine = NativeToolEngine::default();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let policy = NativeCommandPolicy {
+        allowlist: vec!["echo".to_string()],
+        denylist: Vec::new(),
+        deny_by_default: true,
+    };
+    let env = HashMap::new();
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+    let action = NativeToolAction {
+        name: "run_command".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({
+            "action": "run_command",
+            "arguments": {
+                "cmd": "echo normalized-command",
+                "cwd": tmp.path().to_string_lossy().to_string()
+            }
+        }),
+    };
+
+    let value = engine
+        .execute(&action, &ctx)
+        .expect("normalized run_command should run");
+    let output: RunCommandOutput =
+        serde_json::from_value(value).expect("run_command output should decode");
+    assert_eq!(output.exit_code, 0);
+    assert_eq!(output.stdout.trim(), "normalized-command");
+}
+
+#[test]
+fn run_command_handler_splits_inline_command_strings_defensively() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let policy = NativeCommandPolicy {
+        allowlist: vec!["echo".to_string()],
+        denylist: Vec::new(),
+        deny_by_default: true,
+    };
+    let env = HashMap::new();
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+
+    let value = super::run_command_tool::handle_run_command(
+        &ctx,
+        &json!({ "command": "echo handler-split" }),
+        2_000,
+    )
+    .expect("handler should split inline command string");
+    let output: RunCommandOutput = serde_json::from_value(value).expect("decode output");
+    assert_eq!(output.exit_code, 0);
+    assert_eq!(output.stdout.trim(), "handler-split");
+}
+
+#[test]
+#[cfg(unix)]
+fn exec_command_accepts_command_alias_and_absolute_worktree_cwd() {
+    let _guard = lock_exec_session_tests();
+    let _ = cleanup_exec_sessions();
+    let engine = NativeToolEngine::default();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let policy = NativeCommandPolicy {
+        allowlist: vec!["pwd".to_string()],
+        denylist: Vec::new(),
+        deny_by_default: true,
+    };
+    let env = HashMap::new();
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+    let action = NativeToolAction {
+        name: "exec_command".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({
+            "command": "pwd",
+            "cwd": tmp.path().to_string_lossy().to_string(),
+            "capture_ms": 40
+        }),
+    };
+
+    let value = engine
+        .execute(&action, &ctx)
+        .expect("normalized exec_command should run");
+    let output: ExecSessionOutput = serde_json::from_value(value).expect("decode exec output");
+    assert!(output.session_id > 0);
+    assert_eq!(output.stdout.trim(), tmp.path().to_string_lossy());
+}
+
+#[test]
+#[cfg(unix)]
+fn exec_command_handler_splits_inline_command_strings_defensively() {
+    let _guard = lock_exec_session_tests();
+    let _ = cleanup_exec_sessions();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let policy = NativeCommandPolicy {
+        allowlist: vec!["pwd".to_string()],
+        denylist: Vec::new(),
+        deny_by_default: true,
+    };
+    let env = HashMap::new();
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+
+    let value = super::exec_sessions::handle_exec_command(
+        &ctx,
+        &json!({
+            "cmd": format!("pwd --logical"),
+            "capture_ms": 40
+        }),
+        2_000,
+    )
+    .expect("handler should split inline exec command string");
+    let output: ExecSessionOutput = serde_json::from_value(value).expect("decode exec output");
+    assert!(output.session_id > 0);
+    assert_eq!(output.stdout.trim(), tmp.path().to_string_lossy());
+}
+
+#[test]
+fn write_file_accepts_wrapped_arguments_and_absolute_worktree_paths() {
+    let engine = NativeToolEngine::default();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let policy = NativeCommandPolicy::default();
+    let env = HashMap::new();
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+    let absolute = tmp.path().join("src/normalized.txt");
+    let action = NativeToolAction {
+        name: "write_file".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({
+            "action": "write_file",
+            "arguments": {
+                "path": absolute.to_string_lossy().to_string(),
+                "content": "normalized-write"
+            }
+        }),
+    };
+
+    engine
+        .execute(&action, &ctx)
+        .expect("normalized write_file should succeed");
+    assert_eq!(
+        fs::read_to_string(absolute).expect("read normalized write"),
+        "normalized-write"
+    );
 }
 
 #[test]
@@ -2011,6 +2161,86 @@ fn execute_action_trace_truncates_large_responses_at_record_time() {
     );
     let response = trace.response.expect("response payload");
     assert!(response.contains("\"output_truncated\":true"));
+}
+
+#[test]
+fn execute_action_trace_adds_rg_recovery_hint_for_grep_policy_failure() {
+    let engine = NativeToolEngine::default();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let policy = NativeCommandPolicy {
+        allowlist: vec!["rg".to_string()],
+        denylist: Vec::new(),
+        deny_by_default: true,
+    };
+    let env = HashMap::new();
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+    let action = NativeToolAction {
+        name: "run_command".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({ "command": "grep", "args": ["-r", "Provenance", "src"] }),
+    };
+
+    let trace = engine.execute_action_trace("grep-policy".to_string(), &action, &ctx);
+    let failure = trace.failure.expect("policy failure");
+
+    assert_eq!(failure.code, "native_policy_violation");
+    assert!(failure
+        .recovery_hint
+        .as_deref()
+        .is_some_and(|hint| hint.contains("Use `rg` instead of `grep`")));
+}
+
+#[test]
+fn execute_action_trace_adds_repo_relative_hint_for_invalid_path() {
+    let engine = NativeToolEngine::default();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let repo = tmp.path().join("repo");
+    fs::create_dir_all(&repo).expect("mkdir repo");
+
+    let policy = NativeCommandPolicy::default();
+    let env = HashMap::new();
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(repo.as_path(), Some(&scope), &policy, &env);
+    let action = NativeToolAction {
+        name: "list_files".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({ "path": "/tmp/not-the-repo/src/native", "recursive": false }),
+    };
+
+    let trace = engine.execute_action_trace("bad-path".to_string(), &action, &ctx);
+    let failure = trace.failure.expect("path failure");
+
+    assert_eq!(failure.code, "native_tool_input_invalid");
+    assert!(failure
+        .recovery_hint
+        .as_deref()
+        .is_some_and(|hint| hint.contains("repository-relative paths")));
+}
+
+#[test]
+fn execute_action_trace_marks_missing_read_file_as_recoverable() {
+    let engine = NativeToolEngine::default();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let policy = NativeCommandPolicy::default();
+    let env = HashMap::new();
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), Some(&scope), &policy, &env);
+    let action = NativeToolAction {
+        name: "read_file".to_string(),
+        version: TOOL_VERSION_V1.to_string(),
+        input: json!({ "path": "src/does-not-exist.rs" }),
+    };
+
+    let trace = engine.execute_action_trace("missing-read".to_string(), &action, &ctx);
+    let failure = trace.failure.expect("missing file should fail");
+
+    assert_eq!(failure.code, "native_tool_execution_failed");
+    assert!(failure.recoverable);
+    assert!(failure
+        .recovery_hint
+        .as_deref()
+        .is_some_and(|hint| hint.contains("Check the repository-relative path first")));
 }
 
 proptest! {

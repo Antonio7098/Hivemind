@@ -245,6 +245,8 @@ pub struct EventNativeSummaryArgs {
     #[arg(long, default_value = "1000")]
     pub limit: usize,
     #[arg(long, default_value_t = false)]
+    pub include_reconstructed_context: bool,
+    #[arg(long, default_value_t = false)]
     pub verify: bool,
 }
 

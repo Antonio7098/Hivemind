@@ -15,6 +15,21 @@ pub(crate) fn normalize_exec_command(command: &str, env_map: &HashMap<String, St
     normalized.to_string()
 }
 
+pub(crate) fn split_command_string(raw: &str) -> Option<(String, Vec<String>)> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || !trimmed.chars().any(char::is_whitespace) {
+        return None;
+    }
+    let mut parts = trimmed.split_whitespace();
+    let command = parts.next()?.to_string();
+    let args = parts.map(ToString::to_string).collect::<Vec<_>>();
+    if args.is_empty() {
+        None
+    } else {
+        Some((command, args))
+    }
+}
+
 pub(crate) fn command_exists_in_path(command: &str, env_map: &HashMap<String, String>) -> bool {
     let trimmed = command.trim();
     if trimmed.is_empty() {

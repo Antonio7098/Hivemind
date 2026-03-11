@@ -1,4 +1,6 @@
 use super::*;
+use crate::adapters::runtime::NativeToolCallFailure;
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 
@@ -194,6 +196,15 @@ fn summarize_known_tool_request(
                 .map(|command| truncate_with_marker(&command, PROMPT_TOOL_PAYLOAD_PREVIEW_CHARS))
                 .unwrap_or_else(|| "<unknown>".to_string()),
         )),
+        "retain_context" => Some(format!(
+            "path={} turns={} floor={} request_chars={request_chars}",
+            json_string_field(value, "path").unwrap_or_else(|| "<unknown>".to_string()),
+            value
+                .get("turns")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(3),
+            json_string_field(value, "floor").unwrap_or_else(|| "graph_card".to_string()),
+        )),
         _ => None,
     }
 }
@@ -201,12 +212,16 @@ fn summarize_known_tool_request(
 fn json_string_field(value: &serde_json::Value, key: &str) -> Option<String> {
     value
         .get(key)
+        .or_else(|| value.get("input").and_then(|input| input.get(key)))
         .and_then(serde_json::Value::as_str)
         .map(ToString::to_string)
 }
 
 fn json_bool_field(value: &serde_json::Value, key: &str) -> Option<bool> {
-    value.get(key).and_then(serde_json::Value::as_bool)
+    value
+        .get(key)
+        .or_else(|| value.get("input").and_then(|input| input.get(key)))
+        .and_then(serde_json::Value::as_bool)
 }
 
 fn short_digest(bytes: &[u8]) -> String {
@@ -712,6 +727,18 @@ fn summarize_python_query_result_preview(result: &serde_json::Value) -> Option<S
     None
 }
 
+fn render_failed_tool_result_content(failure: &NativeToolCallFailure) -> String {
+    let mut content = format!(
+        "code={} recoverable={} message={}",
+        failure.code, failure.recoverable, failure.message
+    );
+    if let Some(recovery_hint) = failure.recovery_hint.as_deref() {
+        content.push_str(" recovery_hint=");
+        content.push_str(recovery_hint);
+    }
+    content
+}
+
 fn short_hash(value: &str) -> String {
     value.chars().take(12).collect()
 }
@@ -743,12 +770,8 @@ pub(crate) fn items_from_tool_trace(
             request: trace.request.clone(),
         },
     });
-    if let Some(response) = trace.response.as_ref() {
-        let prompt_content = if trace.tool_name == "graph_query" {
-            render_graph_query_navigation_summary(trace, response)
-        } else {
-            response.clone()
-        };
+    if let Some(response) = trace.prompt_response.as_ref().or(trace.response.as_ref()) {
+        let prompt_content = render_successful_tool_result_content(trace, response);
         items.push(TurnItem {
             id: item_id(
                 invocation_id,
@@ -821,14 +844,130 @@ pub(crate) fn items_from_tool_trace(
                 call_id: trace.call_id.clone(),
                 tool_name: trace.tool_name.clone(),
                 outcome: TurnItemOutcome::Failure,
-                content: format!(
-                    "code={} recoverable={} message={}",
-                    failure.code, failure.recoverable, failure.message
-                ),
+                content: render_failed_tool_result_content(failure),
             },
         });
     }
     items
+}
+
+fn render_successful_tool_result_content(trace: &NativeToolCallTrace, response: &str) -> String {
+    match trace.tool_name.as_str() {
+        "graph_query" => render_graph_query_navigation_summary(trace, response),
+        "list_files" => render_list_files_result_summary(response),
+        "run_command" | "exec_command" => render_command_result_summary(response),
+        "retain_context" => render_retain_context_result_summary(response),
+        _ => response.to_string(),
+    }
+}
+
+fn render_retain_context_result_summary(response: &str) -> String {
+    let Ok(value) = serde_json::from_str::<Value>(response) else {
+        return truncate_with_marker(response, 256);
+    };
+    format!(
+        "granted={} path={} turns={} floor={} reason={}",
+        value
+            .get("granted")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        value
+            .get("path")
+            .and_then(Value::as_str)
+            .unwrap_or("<unknown>"),
+        value.get("turns").and_then(Value::as_u64).unwrap_or(0),
+        value
+            .get("floor")
+            .and_then(Value::as_str)
+            .unwrap_or("graph_card"),
+        value
+            .get("reason")
+            .and_then(Value::as_str)
+            .map(|reason| truncate_with_marker(reason, 80))
+            .unwrap_or_else(|| "<none>".to_string())
+    )
+}
+
+fn render_list_files_result_summary(response: &str) -> String {
+    let Ok(value) = serde_json::from_str::<Value>(response) else {
+        return truncate_with_marker(response, 512);
+    };
+    let output = value.get("output").and_then(Value::as_object);
+    let base_path = output
+        .and_then(|output| output.get("base_path"))
+        .and_then(Value::as_str)
+        .unwrap_or(".");
+    let entries = output
+        .and_then(|output| output.get("entries"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let dir_count = entries
+        .iter()
+        .filter(|entry| {
+            entry
+                .get("is_dir")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        })
+        .count();
+    let file_count = entries.len().saturating_sub(dir_count);
+    let preview = entries
+        .iter()
+        .filter_map(|entry| entry.get("path").and_then(Value::as_str))
+        .take(8)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let truncated = entries.len() > 8;
+    format!(
+        "ok=true base_path={} entries={} dirs={} files={} preview={}{}",
+        base_path,
+        entries.len(),
+        dir_count,
+        file_count,
+        if preview.is_empty() {
+            "(none)"
+        } else {
+            &preview
+        },
+        if truncated { ", …" } else { "" },
+    )
+}
+
+fn render_command_result_summary(response: &str) -> String {
+    let Ok(value) = serde_json::from_str::<Value>(response) else {
+        return truncate_with_marker(response, 512);
+    };
+    let output = value.get("output").and_then(Value::as_object);
+    let exit_code = output
+        .and_then(|output| output.get("exit_code"))
+        .and_then(Value::as_i64)
+        .unwrap_or_default();
+    let stdout = output
+        .and_then(|output| output.get("stdout"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let stderr = output
+        .and_then(|output| output.get("stderr"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let preview_source = if !stderr.trim().is_empty() {
+        stderr
+    } else {
+        stdout
+    };
+    let preview = truncate_with_marker(&preview_source.replace('\n', " | "), 200);
+    format!(
+        "ok=true exit_code={} stdout_chars={} stderr_chars={} preview={}",
+        exit_code,
+        stdout.chars().count(),
+        stderr.chars().count(),
+        if preview.is_empty() {
+            "(none)"
+        } else {
+            &preview
+        },
+    )
 }
 
 #[cfg(test)]
@@ -839,6 +978,86 @@ fn assistant_item_from_turn(invocation_id: &str, turn: &AgentLoopTurn) -> TurnIt
         turn.turn_index.saturating_mul(10).saturating_add(1),
         &turn.directive,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_failed_tool_result_content_includes_recovery_hint() {
+        let failure = NativeToolCallFailure {
+            code: "native_policy_violation".to_string(),
+            message: "run_command blocked by execution policy: grep -r foo src".to_string(),
+            recoverable: false,
+            policy_source: None,
+            denial_reason: None,
+            recovery_hint: Some(
+                "Use `rg` instead of `grep`, and prefer repository-relative paths under `src/`."
+                    .to_string(),
+            ),
+        };
+
+        let rendered = render_failed_tool_result_content(&failure);
+
+        assert!(rendered.contains("code=native_policy_violation"));
+        assert!(rendered.contains("message=run_command blocked by execution policy"));
+        assert!(rendered.contains("recovery_hint=Use `rg` instead of `grep`"));
+    }
+
+    #[test]
+    fn render_successful_list_files_tool_result_is_summarized_for_prompt() {
+        let trace = NativeToolCallTrace {
+            call_id: "call-list-files".to_string(),
+            tool_name: "list_files".to_string(),
+            request: "{\"path\":\"src/native\",\"recursive\":false}".to_string(),
+            duration_ms: Some(12),
+            response: None,
+            prompt_response: None,
+            response_original_bytes: None,
+            response_stored_bytes: None,
+            response_truncated: false,
+            failure: None,
+            policy_tags: Vec::new(),
+        };
+
+        let rendered = render_successful_tool_result_content(
+            &trace,
+            r#"{"ok":true,"output":{"base_path":"src/native","entries":[{"path":"src/native/prompt_assembly.rs","is_dir":false},{"path":"src/native/turn_items.rs","is_dir":false},{"path":"src/native/tests.rs","is_dir":false}]}}"#,
+        );
+
+        assert!(rendered.contains("base_path=src/native"));
+        assert!(rendered.contains("entries=3"));
+        assert!(rendered.contains("preview=src/native/prompt_assembly.rs"));
+        assert!(!rendered.contains("\"entries\""));
+    }
+
+    #[test]
+    fn render_successful_run_command_tool_result_is_summarized_for_prompt() {
+        let trace = NativeToolCallTrace {
+            call_id: "call-run-command".to_string(),
+            tool_name: "run_command".to_string(),
+            request: "{\"command\":[\"cargo\",\"test\"]}".to_string(),
+            duration_ms: Some(24),
+            response: None,
+            prompt_response: None,
+            response_original_bytes: None,
+            response_stored_bytes: None,
+            response_truncated: false,
+            failure: None,
+            policy_tags: Vec::new(),
+        };
+
+        let rendered = render_successful_tool_result_content(
+            &trace,
+            r#"{"ok":true,"output":{"exit_code":101,"stdout":"","stderr":"error: test failed\nhelp: re-run with --nocapture"}}"#,
+        );
+
+        assert!(rendered.contains("exit_code=101"));
+        assert!(rendered.contains("stderr_chars="));
+        assert!(rendered.contains("preview=error: test failed | help: re-run with --nocapture"));
+        assert!(!rendered.contains("\"stderr\""));
+    }
 }
 
 fn synthetic_tool_call(

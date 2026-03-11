@@ -136,6 +136,319 @@ fn parse_relaxed_infers_freeform_first_person_planning_as_think() {
 }
 
 #[test]
+fn parse_relaxed_accepts_bracketed_tool_call_variants() {
+    let directive = ModelDirective::parse_relaxed(
+        "[tool_call:list_files:{\"include_hidden\":false,\"path\":\"src\",\"recursive\":true}]",
+    )
+    .expect("bracketed tool call should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action:
+                "tool:list_files:{\"include_hidden\":false,\"path\":\"src\",\"recursive\":true}"
+                    .to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_uppercase_bracketed_tool_call_with_shell_flags_after_think() {
+    let directive = ModelDirective::parse_relaxed(
+        "THINK:I need to inspect the remaining files before editing.\n[TOOL_CALL]tool:read_file --path \"/tmp/hm-deep-prompt-provenance/home/hivemind/worktrees/flow/task/src/native/turn_items.rs\"[/TOOL_CALL]\n[TOOL_CALL]tool:list_files --path \"/tmp/hm-deep-prompt-provenance/home/hivemind/worktrees/flow/task/src/core/events\"[/TOOL_CALL]",
+    )
+    .expect("uppercase bracketed tool call should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:read_file:{\"path\":\"/tmp/hm-deep-prompt-provenance/home/hivemind/worktrees/flow/task/src/native/turn_items.rs\"}".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_xml_named_tool_wrapper_after_think() {
+    let directive = ModelDirective::parse_relaxed(
+        "THINK:Exploring the repository structure.\n</think>\n<tool:list_files>\n<path>/tmp/worktree/src</path>\n<recursive>false</recursive>\n</tool:list_files>",
+    )
+    .expect("xml named tool wrapper should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:list_files:{\"path\":\"/tmp/worktree/src\",\"recursive\":false}"
+                .to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_bracketed_named_tool_wrapper_with_json_body_after_think() {
+    let directive = ModelDirective::parse_relaxed(
+        "THINK:Exploring the repository structure.\n[tool:list_files]\n{\"path\":\"/tmp/worktree/src\",\"recursive\":false}\n[/tool]",
+    )
+    .expect("bracketed named tool wrapper should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:list_files:{\"path\":\"/tmp/worktree/src\",\"recursive\":false}"
+                .to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_bracketed_named_tool_wrapper_with_args_without_closing_tag() {
+    let directive = ModelDirective::parse_relaxed(
+        "THINK:Need turn_items.rs for structure.\n[tool:read_file]\n[args: {\n  --path \"src/native/turn_items.rs\"\n}\n[/tool_call]",
+    )
+    .expect("bracketed named tool wrapper with args should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:read_file:{\"path\":\"src/native/turn_items.rs\"}".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_bracketed_tool_call_with_named_tool_and_json_body() {
+    let directive = ModelDirective::parse_relaxed(
+        "THINK:Need telemetry.rs next.\n[tool_call:read_file] {\"path\": \"src/adapters/runtime/telemetry.rs\"}",
+    )
+    .expect("bracketed tool call with named tool and json body should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:read_file:{\"path\": \"src/adapters/runtime/telemetry.rs\"}".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_uppercase_bracketed_tool_call_without_closing_tag() {
+    let directive = ModelDirective::parse_relaxed(
+        "THINK:Checking current state.\n[TOOL_CALL] {tool: \"read_file\", version: \"1.0.0\", input: {\"path\": \"src/native/prompt_assembly.rs\"}}",
+    )
+    .expect("uppercase bracketed tool call without closing tag should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:{tool: \"read_file\", version: \"1.0.0\", input: {\"path\": \"src/native/prompt_assembly.rs\"}}".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_bracketed_assistant_act_variants() {
+    let directive = ModelDirective::parse_relaxed(
+        "[assistant:act] tool:read_file:{\"path\":\"src/core/runtime_event_projection/parser.rs\"}",
+    )
+    .expect("assistant act wrapper should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:read_file:{\"path\":\"src/core/runtime_event_projection/parser.rs\"}"
+                .to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_skips_bracketed_assistant_act_metadata_and_uses_later_valid_act() {
+    let directive = ModelDirective::parse_relaxed(
+        "<think>continuing exploration</think>\n[assistant:act] tool:list_files request_chars=170 request_digest=891585b78d1b\n[tool_result:list_files:Success] {\"ok\":true}\nACT:tool:list_files:{\"path\":\"src/adapters/runtime\",\"recursive\":true}",
+    )
+    .expect("later valid ACT should be selected");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:list_files:{\"path\":\"src/adapters/runtime\",\"recursive\":true}"
+                .to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_xml_tool_call_variants() {
+    let directive = ModelDirective::parse_relaxed(
+        r#"<tool_call> <function=ACT> <parameter=tool> read_file </parameter> <parameter=arguments> {"path":"note.txt"} </parameter> </tool_call>"#,
+    )
+    .expect("xml-style tool call should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:read_file:{\"path\":\"note.txt\"}".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_xml_function_tool_variants() {
+    let directive = ModelDirective::parse_relaxed(
+        r#"<tool_call> <function=read_file:{"path":"src/core/events/payload.rs"}>"#,
+    )
+    .expect("xml function tool wrapper should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:read_file:{\"path\":\"src/core/events/payload.rs\"}".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_leading_think_tag_freeform_reasoning() {
+    let directive = ModelDirective::parse_relaxed("<think> Let me inspect the file list first")
+        .expect("leading think tag should parse as THINK");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Think {
+            message: "Let me inspect the file list first".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_think_preface_with_embedded_act_variant() {
+    let directive = ModelDirective::parse_relaxed(
+        "<think>Let me explore the prompt inputs first.</think> ACT tool:read_file {\"path\":\"src/native/prompt_assembly.rs\"}",
+    )
+    .expect("embedded ACT after think preface should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:read_file {\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_prefers_minimax_tool_call_wrapper_after_leading_think() {
+    let directive = ModelDirective::parse_relaxed(
+        "THINK:From the previous exploration, I can see NativeTurnSummaryRow already has several hash fields. Let me inspect the native events directory.\n<minimax:tool_call>\n<invoke name=\"list_files\">\n<parameter name=\"path\">src/core/registry/runtime/native_events</parameter>\n<parameter name=\"recursive\">false</parameter>\n</invoke>\n</minimax:tool_call>",
+    )
+    .expect("MiniMax wrapper after THINK should parse as ACT");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action:
+                "tool:list_files:{\"path\":\"src/core/registry/runtime/native_events\",\"recursive\":false}"
+                    .to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_minimax_tool_wrapper_with_native_tool_lines() {
+    let directive = ModelDirective::parse_relaxed(
+        "THINK:I need to read the remaining target files before implementing the telemetry changes.\n<minimax:tool_call>\ntool:read_file:{\"path\":\"src/native/turn_items.rs\"}\n[/tool_call]",
+    )
+    .expect("MiniMax native tool wrapper should parse as ACT");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:read_file:{\"path\":\"src/native/turn_items.rs\"}".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_minimax_tool_wrapper_with_inline_colon_native_tool_action() {
+    let directive = ModelDirective::parse_relaxed(
+        "THINK:I've reviewed the existing codebase. Let me start by modifying turn_items.rs to add the provenance structure.\n<minimax:tool_call>:tool:read_file:{\"path\":\"src/native/turn_items.rs\"}",
+    )
+    .expect("MiniMax inline colon wrapper should parse as ACT");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:read_file:{\"path\":\"src/native/turn_items.rs\"}".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_minimax_tool_wrapper_without_explicit_tool_prefix() {
+    let directive = ModelDirective::parse_relaxed(
+        "<minimax:tool_call>:read_file{\"path\":\"src/native/turn_items.rs\"}",
+    )
+    .expect("MiniMax wrapper without explicit tool prefix should parse as ACT");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:read_file:{\"path\":\"src/native/turn_items.rs\"}".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_accepts_minimax_tool_wrapper_with_inline_json_tag_tool_call() {
+    let directive = ModelDirective::parse_relaxed(
+        "THINK:Checking the actual path structure.\n<minimax:tool_call>\n<tool_call>tool:list_files <json>{\"path\":\"src/core/registry\",\"recursive\":true}</tool_call>[/tool_call]",
+    )
+    .expect("MiniMax inline json-tag tool call should parse");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:list_files:{\"path\":\"src/core/registry\",\"recursive\":true}"
+                .to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_relaxed_recovers_wrapper_leaked_structured_tool_payload() {
+    let directive = ModelDirective::parse_relaxed(
+        r#"ACT:tool:ACT] {"tool":"write_file","args":{"path":"src/native/turn_items.rs","content":"patched","append":false}}[/tool_call]"#,
+    )
+    .expect("wrapper-leaked structured tool payload should parse");
+
+    let ModelDirective::Act { action } = directive else {
+        panic!("expected ACT directive");
+    };
+    let action = NativeToolAction::parse(&action)
+        .expect("parse recovered action")
+        .expect("tool action");
+
+    assert_eq!(action.name, "write_file");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/native/turn_items.rs", "content": "patched", "append": false})
+    );
+}
+
+#[test]
+fn parse_relaxed_uses_first_valid_tool_from_minimax_multi_tool_wrapper() {
+    let directive = ModelDirective::parse_relaxed(
+        "THINK:I need to read the remaining target files in parallel.\n<minimax:tool_call>\ntool:read_file:{\"path\":\"src/native/turn_items.rs\"}\ntool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}\n[/tool_call]",
+    )
+    .expect("MiniMax multi-tool wrapper should yield the first valid ACT");
+
+    assert_eq!(
+        directive,
+        ModelDirective::Act {
+            action: "tool:read_file:{\"path\":\"src/native/turn_items.rs\"}".to_string(),
+        }
+    );
+}
+
+#[test]
 fn agent_loop_recovers_after_multiple_malformed_model_outputs() {
     let model = MockModelClient::from_outputs(vec![
         "status=inspect_query_pipeline".to_string(),
@@ -161,6 +474,37 @@ fn agent_loop_recovers_after_multiple_malformed_model_outputs() {
         result.final_summary.as_deref(),
         Some("feature path recovered")
     );
+}
+
+#[test]
+fn agent_loop_repairs_excessive_noop_think_streaks() {
+    let model = MockModelClient::from_outputs(vec![
+        "THINK:inspect the task first".to_string(),
+        "THINK:review likely files".to_string(),
+        "THINK:confirm I need more context".to_string(),
+        "THINK:one more planning step".to_string(),
+        "ACT:tool:read_file:{\"path\":\"Cargo.toml\"}".to_string(),
+        "DONE:recovered after acting".to_string(),
+    ]);
+    let mut loop_harness = AgentLoop::new(NativeRuntimeConfig::default(), model);
+    let result = loop_harness
+        .run("test prompt", None)
+        .expect("expected no-op THINK repair to recover");
+
+    assert_eq!(
+        result.final_summary.as_deref(),
+        Some("recovered after acting")
+    );
+    assert!(result.history_items.iter().any(|item| item
+        .render_for_prompt()
+        .contains("consecutive turns in THINK")));
+    assert!(matches!(
+        result
+            .turns
+            .iter()
+            .find(|turn| matches!(turn.directive, ModelDirective::Act { .. })),
+        Some(_)
+    ));
 }
 
 #[test]
@@ -208,6 +552,7 @@ fn agent_loop_compacts_history_to_avoid_token_budget_overflow() {
                     request: action.to_string(),
                     duration_ms: Some(1),
                     response: Some(large_tool_response.clone()),
+                    prompt_response: None,
                     response_original_bytes: Some(large_tool_response.len()),
                     response_stored_bytes: Some(large_tool_response.len()),
                     response_truncated: false,
@@ -228,7 +573,8 @@ fn agent_loop_compacts_history_to_avoid_token_budget_overflow() {
 #[test]
 fn agent_loop_executes_tools_inside_the_model_loop() {
     let tmp = tempdir().expect("tempdir");
-    fs::write(tmp.path().join("note.txt"), "hello from tool\n").expect("seed file");
+    let note_content = format!("hello from tool\n{}", "line from tool\n".repeat(1_200));
+    fs::write(tmp.path().join("note.txt"), &note_content).expect("seed file");
 
     let prompts = Arc::new(Mutex::new(Vec::new()));
     let model = RecordingModelClient::new(
@@ -286,26 +632,137 @@ fn agent_loop_executes_tools_inside_the_model_loop() {
 
     assert_eq!(result.turns.len(), 2);
     assert_eq!(result.turns[0].tool_calls.len(), 1);
+    assert!(result.turns[0].tool_calls[0].response_truncated);
     assert!(result.turns[0].tool_calls[0]
         .response
         .as_deref()
         .is_some_and(|response| response.contains("hello from tool")));
+    let prompt_response = result.turns[0].tool_calls[0]
+        .prompt_response
+        .as_deref()
+        .expect("full prompt-visible tool response");
+    let prompt_response = serde_json::from_str::<serde_json::Value>(prompt_response)
+        .expect("prompt response should be valid json");
+    assert_eq!(
+        prompt_response
+            .get("output")
+            .and_then(|output| output.get("content"))
+            .and_then(serde_json::Value::as_str),
+        Some(note_content.as_str())
+    );
 
     let captured = prompts.lock().expect("prompts lock");
     assert_eq!(captured.len(), 2);
-    assert!(captured[1].contains("tool_result:read_file"));
+    assert!(captured[1].contains("Active Code Windows"));
+    assert!(captured[1].contains("[code_window:clean:read_file]"));
+    assert!(!captured[1].contains("tool_result:read_file"));
     assert!(captured[1].contains("hello from tool"));
     let second_assembly = result.turns[1]
         .request
         .prompt_assembly
         .as_ref()
         .expect("second turn assembly");
-    assert_eq!(second_assembly.tool_result_items_visible, 1);
-    assert_eq!(second_assembly.latest_tool_result_turn_index, Some(0));
-    assert!(second_assembly
-        .latest_tool_names_visible
+    assert_eq!(second_assembly.active_code_window_count, 1);
+    assert_eq!(second_assembly.tool_result_items_visible, 0);
+    assert_eq!(second_assembly.latest_tool_result_turn_index, None);
+    assert!(second_assembly.latest_tool_names_visible.is_empty());
+    assert_eq!(second_assembly.active_code_window_trace.len(), 1);
+    assert_eq!(second_assembly.active_code_window_trace[0].path, "note.txt");
+    assert_eq!(
+        second_assembly.active_code_window_trace[0].delivery_lane,
+        "active_code_windows"
+    );
+    assert_eq!(
+        second_assembly.active_code_window_trace[0].content_source,
+        "decoded_output_content"
+    );
+}
+
+#[test]
+fn agent_loop_reads_write_target_before_allowing_write_file() {
+    let tmp = tempdir().expect("tempdir");
+    fs::write(tmp.path().join("note.txt"), "before\n").expect("seed file");
+
+    let prompts = Arc::new(Mutex::new(Vec::new()));
+    let model = RecordingModelClient::new(
+        vec![
+            "ACT:tool:write_file:{\"path\":\"note.txt\",\"content\":\"after\\n\",\"append\":false}"
+                .to_string(),
+            "ACT:tool:write_file:{\"path\":\"note.txt\",\"content\":\"after\\n\",\"append\":false}"
+                .to_string(),
+            "DONE:wrote after reading".to_string(),
+        ],
+        prompts.clone(),
+    );
+
+    let mut config = NativeRuntimeConfig::default();
+    config.prompt_headroom = 256;
+    let input = native_input(None);
+    let engine = NativeToolEngine::default();
+    let allowed_contracts = engine.contracts_for_mode(config.agent_mode);
+    let env = HashMap::new();
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), &scope, &env);
+    let mut loop_harness = AgentLoop::new(config.clone(), model);
+
+    let result = loop_harness
+        .run_with_history(
+            "inv-write-guard",
+            vec![user_input_item(
+                "inv-write-guard",
+                1,
+                "objective",
+                "update note.txt safely".to_string(),
+                "test",
+            )],
+            |turn_index, state, history| {
+                let rendered = assemble_native_prompt(&config, &input, history, &allowed_contracts);
+                Ok(ModelTurnRequest {
+                    turn_index,
+                    state,
+                    agent_mode: config.agent_mode,
+                    prompt: rendered.prompt,
+                    context: input.context.clone(),
+                    prompt_assembly: Some(rendered.assembly),
+                })
+            },
+            |turn_index, action| {
+                let tool_action = NativeToolAction::parse(action)
+                    .expect("parse tool action")
+                    .expect("tool action present");
+                vec![engine.execute_action_trace_for_mode(
+                    config.agent_mode,
+                    format!("inv-write-guard:turn:{turn_index}:tool:0"),
+                    &tool_action,
+                    &ctx,
+                )]
+            },
+        )
+        .expect("loop should succeed");
+
+    assert_eq!(result.turns.len(), 3);
+    assert_eq!(result.turns[0].tool_calls.len(), 1);
+    assert_eq!(result.turns[0].tool_calls[0].tool_name, "read_file");
+    assert_eq!(result.turns[1].tool_calls.len(), 1);
+    assert_eq!(result.turns[1].tool_calls[0].tool_name, "write_file");
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("note.txt")).expect("read updated file"),
+        "after\n"
+    );
+
+    let second_prompt = result.turns[1]
+        .request
+        .prompt_assembly
+        .as_ref()
+        .expect("second prompt assembly");
+    assert!(second_prompt
+        .active_code_windows
         .iter()
-        .any(|tool| tool == "read_file"));
+        .any(|item| item.item_id == "code-window:note.txt"));
+
+    let captured = prompts.lock().expect("prompts lock");
+    assert_eq!(captured.len(), 3);
+    assert!(captured[1].contains("path=note.txt"));
 }
 
 #[test]
@@ -389,6 +846,7 @@ fn agent_loop_surfaces_graph_query_results_into_the_next_prompt() {
                     request: action.to_string(),
                     duration_ms: Some(7),
                     response: Some(graph_query_response.clone()),
+                    prompt_response: None,
                     response_original_bytes: Some(graph_query_response.len()),
                     response_stored_bytes: Some(graph_query_response.len()),
                     response_truncated: false,
@@ -785,7 +1243,9 @@ fn assemble_native_prompt_deduplicates_repeated_identical_read_results() {
 
     let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
 
-    assert_eq!(rendered.prompt.matches(&repeated_content).count(), 1);
+    assert!(rendered
+        .prompt
+        .contains("[code_window:clean:read_file] path=src/native/prompt_assembly.rs"));
     assert_eq!(rendered.assembly.tool_result_items_visible, 0);
     assert_eq!(rendered.assembly.active_code_window_count, 1);
 }
@@ -870,6 +1330,963 @@ fn assemble_native_prompt_summarizes_large_write_payloads() {
     assert!(rendered.prompt.contains("call_id=call-write-1"));
     assert!(!rendered.prompt.contains("[tool_call:write_file]"));
     assert!(!rendered.prompt.contains("[assistant:act] tool:write_file:"));
+}
+
+#[test]
+fn assemble_native_prompt_surfaces_context_lease_metadata_on_active_windows() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let history = vec![
+        user_input_item(
+            "inv-context-lease",
+            0,
+            "objective",
+            "Keep a file available while finishing a refactor".to_string(),
+            "user.input",
+        ),
+        assistant_item(
+            "inv-context-lease",
+            1,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-context-lease:1:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-context-lease".to_string(),
+                turn_index: Some(1),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-lease".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-lease".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-context-lease:1:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-context-lease".to_string(),
+                turn_index: Some(1),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-lease".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-lease".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "fn assemble_native_prompt() {}".to_string(),
+            },
+        },
+        assistant_item(
+            "inv-context-lease",
+            1,
+            4,
+            &ModelDirective::Act {
+                action: "tool:retain_context:{\"path\":\"src/native/prompt_assembly.rs\",\"turns\":4,\"floor\":\"exact_excerpt\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-context-lease:1:5".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 5,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-context-lease".to_string(),
+                turn_index: Some(1),
+                source: "tool.call".to_string(),
+                reference: Some("call-retain-context".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-retain-context".to_string(),
+                tool_name: "retain_context".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\",\"turns\":4,\"floor\":\"exact_excerpt\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-context-lease:1:6".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 6,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-context-lease".to_string(),
+                turn_index: Some(1),
+                source: "tool.result".to_string(),
+                reference: Some("call-retain-context".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-retain-context".to_string(),
+                tool_name: "retain_context".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "{\"granted\":true}".to_string(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+    let trace = rendered
+        .assembly
+        .active_code_window_trace
+        .iter()
+        .find(|window| window.path == "src/native/prompt_assembly.rs")
+        .expect("active window trace should exist");
+
+    assert!(rendered.prompt.contains("lease_remaining="));
+    assert_eq!(trace.minimum_floor, "exact_excerpt");
+    assert!(trace.lease_remaining_turns.unwrap_or_default() >= 1);
+    assert!(trace
+        .reason_codes
+        .iter()
+        .any(|reason| reason == "lease_active"));
+}
+
+#[test]
+fn assemble_native_prompt_uses_graph_session_hints_to_boost_supporting_paths() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let temp = tempdir().expect("tempdir");
+    let db_path = temp.path().join("runtime-state.sqlite3");
+    let mut runtime_env = HashMap::new();
+    runtime_env.insert(
+        crate::native::runtime_hardening::STATE_DB_PATH_ENV.to_string(),
+        db_path.display().to_string(),
+    );
+    runtime_env.insert(
+        crate::core::graph_query::GRAPH_QUERY_ENV_PROJECT_ID.to_string(),
+        "proj-graph-boost".to_string(),
+    );
+    let store = crate::native::runtime_hardening::NativeRuntimeStateStore::open(
+        &crate::native::runtime_hardening::RuntimeHardeningConfig::from_env(&runtime_env),
+    )
+    .expect("store should open");
+    store
+        .upsert_graphcode_artifact(&crate::native::runtime_hardening::GraphCodeArtifactUpsert {
+            registry_key: "proj-graph-boost:codegraph".to_string(),
+            project_id: "proj-graph-boost".to_string(),
+            substrate_kind: "codegraph".to_string(),
+            storage_backend: "sqlite".to_string(),
+            storage_reference: "inline".to_string(),
+            derivative_snapshot_path: None,
+            constitution_path: None,
+            canonical_fingerprint: "fingerprint-1".to_string(),
+            profile_version: "test".to_string(),
+            ucp_engine_version: "test".to_string(),
+            extractor_version: "test".to_string(),
+            runtime_version: "test".to_string(),
+            freshness_state: "fresh".to_string(),
+            repo_manifest_json: "{}".to_string(),
+            active_session_ref: Some("proj-graph-boost:codegraph:session:1".to_string()),
+            snapshot_json: "{}".to_string(),
+        })
+        .expect("artifact should upsert");
+    store
+        .upsert_graphcode_session(&crate::native::runtime_hardening::GraphCodeSessionUpsert {
+            session_ref: "proj-graph-boost:codegraph:session:1".to_string(),
+            registry_key: "proj-graph-boost:codegraph".to_string(),
+            substrate_kind: "codegraph".to_string(),
+            current_focus_json: "[\"node-a\"]".to_string(),
+            pinned_nodes_json: "[]".to_string(),
+            recent_traversals_json: "[{\"paths\":[\"src/native/prompt_assembly.rs\",\"src/native/turn_items.rs\"]}]".to_string(),
+            working_set_refs_json: "[{\"node_id\":\"node-a\",\"path\":\"src/native/prompt_assembly.rs\"},{\"node_id\":\"node-b\",\"path\":\"src/native/turn_items.rs\"},{\"node_id\":\"node-c\",\"path\":\"src/native/tests.rs\"}]".to_string(),
+            hydrated_excerpts_json: "[]".to_string(),
+            path_artifacts_json: serde_json::to_string(&vec![crate::core::graph_query::GraphQueryEdge {
+                source: "node-a".to_string(),
+                target: "node-b".to_string(),
+                edge_type: "calls".to_string(),
+            }])
+            .expect("serialize graph edge"),
+            snapshot_fingerprint: "snapshot-1".to_string(),
+            freshness_state: "fresh".to_string(),
+        })
+        .expect("session should upsert");
+    let history = vec![
+        user_input_item(
+            "inv-graph-boost",
+            0,
+            "objective",
+            "Finish prompt assembly changes and verify supporting code".to_string(),
+            "user.input",
+        ),
+        assistant_item(
+            "inv-graph-boost",
+            1,
+            1,
+            &ModelDirective::Act {
+                action: "tool:write_file:{\"path\":\"src/native/prompt_assembly.rs\",\"content\":\"updated\",\"append\":false}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-graph-boost:1:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-graph-boost".to_string(),
+                turn_index: Some(1),
+                source: "tool.call".to_string(),
+                reference: Some("call-write-a".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-write-a".to_string(),
+                tool_name: "write_file".to_string(),
+                request: "{\"path\":\"src/native/prompt_assembly.rs\",\"content\":\"updated\",\"append\":false}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-graph-boost:1:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-graph-boost".to_string(),
+                turn_index: Some(1),
+                source: "tool.result".to_string(),
+                reference: Some("call-write-a".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-write-a".to_string(),
+                tool_name: "write_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "updated".to_string(),
+            },
+        },
+        assistant_item(
+            "inv-graph-boost",
+            1,
+            4,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/turn_items.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-graph-boost:1:5".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 5,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-graph-boost".to_string(),
+                turn_index: Some(1),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-b".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-b".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/turn_items.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-graph-boost:1:6".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 6,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-graph-boost".to_string(),
+                turn_index: Some(1),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-b".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-b".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "fn render_successful_tool_result_content() {}".to_string(),
+            },
+        },
+        assistant_item(
+            "inv-graph-boost",
+            1,
+            7,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/tests.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-graph-boost:1:8".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 8,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-graph-boost".to_string(),
+                turn_index: Some(1),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-c".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-c".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/tests.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-graph-boost:1:9".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(1),
+                item_index: 9,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-graph-boost".to_string(),
+                turn_index: Some(1),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-c".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-c".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: "fn helper() {}".to_string(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt_with_runtime_env(
+        &config,
+        &input,
+        &history,
+        &contracts,
+        &runtime_env,
+    );
+    let supporting = rendered
+        .assembly
+        .active_code_window_trace
+        .iter()
+        .find(|window| window.path == "src/native/turn_items.rs")
+        .expect("supporting window should exist");
+    let unrelated = rendered
+        .assembly
+        .active_code_window_trace
+        .iter()
+        .find(|window| window.path == "src/native/tests.rs")
+        .expect("unrelated window should exist");
+
+    assert!(supporting.relevance_score > unrelated.relevance_score);
+    assert!(supporting
+        .reason_codes
+        .iter()
+        .any(|reason| reason == "graph_supports_dirty"));
+    assert!(!unrelated
+        .reason_codes
+        .iter()
+        .any(|reason| reason == "graph_supports_dirty"));
+}
+
+#[test]
+fn agent_loop_smoke_simulates_navigation_editing_and_context_visibility() {
+    let tmp = tempdir().expect("tempdir");
+    let src_native = tmp.path().join("src/native");
+    fs::create_dir_all(&src_native).expect("create src/native");
+    fs::write(
+        src_native.join("prompt_assembly.rs"),
+        "fn assemble_native_prompt() {\n    \"before edit\"\n}\n",
+    )
+    .expect("seed prompt assembly file");
+    fs::write(
+        src_native.join("turn_items.rs"),
+        "fn render_successful_tool_result_content() {\n    \"turn items support\"\n}\n",
+    )
+    .expect("seed turn items file");
+    fs::write(
+        src_native.join("tests.rs"),
+        "fn unrelated_helper() {\n    \"tests file\"\n}\n",
+    )
+    .expect("seed unrelated file");
+
+    let prompts = Arc::new(Mutex::new(Vec::new()));
+    let model = RecordingModelClient::new(
+        vec![
+            "ACT:tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            "ACT:tool:retain_context:{\"path\":\"src/native/prompt_assembly.rs\",\"turns\":4,\"floor\":\"exact_excerpt\"}".to_string(),
+            "ACT:tool:write_file:{\"path\":\"src/native/prompt_assembly.rs\",\"content\":\"fn assemble_native_prompt() {\\n    \\\"after edit\\\"\\n}\\n\",\"append\":false}".to_string(),
+            "ACT:tool:read_file:{\"path\":\"src/native/turn_items.rs\"}".to_string(),
+            "ACT:tool:read_file:{\"path\":\"src/native/tests.rs\"}".to_string(),
+            "DONE:simulated navigation and edits complete".to_string(),
+        ],
+        prompts.clone(),
+    );
+
+    let mut config = NativeRuntimeConfig::default();
+    config.prompt_headroom = 256;
+    let input = ExecutionInput {
+        task_description:
+            "Update src/native/prompt_assembly.rs and consult supporting code nearby"
+                .to_string(),
+        success_criteria:
+            "Keep the target file in context while checking src/native/turn_items.rs and ignoring unrelated files"
+                .to_string(),
+        context: Some(
+            "When multiple files are visible, the graph-adjacent support file should outrank unrelated files."
+                .to_string(),
+        ),
+        prior_attempts: Vec::new(),
+        verifier_feedback: None,
+        native_prompt_metadata: None,
+    };
+    let engine = NativeToolEngine::default();
+    let contracts = engine.contracts_for_mode(config.agent_mode);
+    let db_path = tmp.path().join("runtime-state.sqlite3");
+    let mut runtime_env = HashMap::new();
+    runtime_env.insert(
+        crate::native::runtime_hardening::STATE_DB_PATH_ENV.to_string(),
+        db_path.display().to_string(),
+    );
+    runtime_env.insert(
+        crate::core::graph_query::GRAPH_QUERY_ENV_PROJECT_ID.to_string(),
+        "proj-smoke-context".to_string(),
+    );
+    let store = crate::native::runtime_hardening::NativeRuntimeStateStore::open(
+        &crate::native::runtime_hardening::RuntimeHardeningConfig::from_env(&runtime_env),
+    )
+    .expect("store should open");
+    store
+        .upsert_graphcode_artifact(&crate::native::runtime_hardening::GraphCodeArtifactUpsert {
+            registry_key: "proj-smoke-context:codegraph".to_string(),
+            project_id: "proj-smoke-context".to_string(),
+            substrate_kind: "codegraph".to_string(),
+            storage_backend: "sqlite".to_string(),
+            storage_reference: "inline".to_string(),
+            derivative_snapshot_path: None,
+            constitution_path: None,
+            canonical_fingerprint: "fingerprint-smoke".to_string(),
+            profile_version: "test".to_string(),
+            ucp_engine_version: "test".to_string(),
+            extractor_version: "test".to_string(),
+            runtime_version: "test".to_string(),
+            freshness_state: "fresh".to_string(),
+            repo_manifest_json: "{}".to_string(),
+            active_session_ref: Some("proj-smoke-context:codegraph:session:1".to_string()),
+            snapshot_json: "{}".to_string(),
+        })
+        .expect("artifact should upsert");
+    store
+        .upsert_graphcode_session(&crate::native::runtime_hardening::GraphCodeSessionUpsert {
+            session_ref: "proj-smoke-context:codegraph:session:1".to_string(),
+            registry_key: "proj-smoke-context:codegraph".to_string(),
+            substrate_kind: "codegraph".to_string(),
+            current_focus_json: "[\"node-a\"]".to_string(),
+            pinned_nodes_json: "[]".to_string(),
+            recent_traversals_json:
+                "[{\"paths\":[\"src/native/prompt_assembly.rs\",\"src/native/turn_items.rs\"]}]"
+                    .to_string(),
+            working_set_refs_json: "[{\"node_id\":\"node-a\",\"path\":\"src/native/prompt_assembly.rs\"},{\"node_id\":\"node-b\",\"path\":\"src/native/turn_items.rs\"},{\"node_id\":\"node-c\",\"path\":\"src/native/tests.rs\"}]".to_string(),
+            hydrated_excerpts_json: "[]".to_string(),
+            path_artifacts_json: serde_json::to_string(&vec![crate::core::graph_query::GraphQueryEdge {
+                source: "node-a".to_string(),
+                target: "node-b".to_string(),
+                edge_type: "calls".to_string(),
+            }])
+            .expect("serialize graph edge"),
+            snapshot_fingerprint: "snapshot-smoke".to_string(),
+            freshness_state: "fresh".to_string(),
+        })
+        .expect("session should upsert");
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), &scope, &runtime_env);
+    let mut loop_harness = AgentLoop::new(config.clone(), model);
+
+    let result = loop_harness
+        .run_with_history(
+            "inv-smoke-context",
+            vec![user_input_item(
+                "inv-smoke-context",
+                0,
+                "objective",
+                "Simulate navigation, edit the target file, and inspect supporting files"
+                    .to_string(),
+                "test",
+            )],
+            |turn_index, state, history| {
+                let rendered = assemble_native_prompt_with_runtime_env(
+                    &config,
+                    &input,
+                    history,
+                    &contracts,
+                    &runtime_env,
+                );
+                Ok(ModelTurnRequest {
+                    turn_index,
+                    state,
+                    agent_mode: config.agent_mode,
+                    prompt: rendered.prompt,
+                    context: input.context.clone(),
+                    prompt_assembly: Some(rendered.assembly),
+                })
+            },
+            |turn_index, action| {
+                let tool_action = NativeToolAction::parse(action)
+                    .expect("parse tool action")
+                    .expect("tool action present");
+                vec![engine.execute_action_trace_for_mode(
+                    config.agent_mode,
+                    format!("inv-smoke-context:turn:{turn_index}:tool:0"),
+                    &tool_action,
+                    &ctx,
+                )]
+            },
+        )
+        .expect("loop should complete");
+
+    for turn in &result.turns {
+        if let Some(assembly) = turn.request.prompt_assembly.as_ref() {
+            let windows = assembly
+                .active_code_window_trace
+                .iter()
+                .map(|window| {
+                    format!(
+                        "{}:{}:{}:{}:lease={:?}:reasons={}",
+                        window.path,
+                        window.relevance_score,
+                        window.desired_representation,
+                        window.minimum_floor,
+                        window.lease_remaining_turns,
+                        window.reason_codes.join("|")
+                    )
+                })
+                .collect::<Vec<_>>();
+            eprintln!(
+                "turn {} active windows => {}",
+                turn.turn_index,
+                windows.join(" ; ")
+            );
+        }
+    }
+
+    assert_eq!(result.turns.len(), 6);
+    assert!(fs::read_to_string(src_native.join("prompt_assembly.rs"))
+        .expect("read edited file")
+        .contains("after edit"));
+
+    let lease_assembly = result.turns[2]
+        .request
+        .prompt_assembly
+        .as_ref()
+        .expect("lease turn assembly");
+    let lease_trace = lease_assembly
+        .active_code_window_trace
+        .iter()
+        .find(|window| window.path == "src/native/prompt_assembly.rs")
+        .expect("leased target trace should exist");
+    assert_eq!(lease_trace.minimum_floor, "exact_excerpt");
+    assert!(lease_trace.lease_remaining_turns.unwrap_or_default() >= 1);
+    assert!(lease_trace
+        .reason_codes
+        .iter()
+        .any(|reason| reason == "lease_active"));
+
+    let final_assembly = result.turns[5]
+        .request
+        .prompt_assembly
+        .as_ref()
+        .expect("final prompt assembly");
+    let target = final_assembly
+        .active_code_window_trace
+        .iter()
+        .find(|window| window.path == "src/native/prompt_assembly.rs")
+        .expect("dirty target trace should exist");
+    let supporting = final_assembly
+        .active_code_window_trace
+        .iter()
+        .find(|window| window.path == "src/native/turn_items.rs")
+        .expect("supporting trace should exist");
+    let unrelated = final_assembly
+        .active_code_window_trace
+        .iter()
+        .find(|window| window.path == "src/native/tests.rs")
+        .expect("unrelated trace should exist");
+
+    assert_eq!(target.status, "dirty");
+    assert_eq!(target.minimum_floor, "exact_excerpt");
+    assert!(
+        target.desired_representation == "exact_excerpt"
+            || target.desired_representation == "expanded_excerpt"
+    );
+    assert!(supporting.relevance_score > unrelated.relevance_score);
+    assert!(supporting
+        .reason_codes
+        .iter()
+        .any(|reason| reason == "graph_supports_dirty"));
+    assert!(!unrelated
+        .reason_codes
+        .iter()
+        .any(|reason| reason == "graph_supports_dirty"));
+
+    let captured = prompts.lock().expect("prompts lock");
+    assert_eq!(captured.len(), 6);
+    assert!(captured[2].contains("lease_remaining="));
+    assert!(captured[5].contains("target_level="));
+    assert!(captured[5].contains("next_downgrade="));
+}
+
+#[test]
+fn agent_loop_smoke_observes_context_lease_expiry_across_turns() {
+    let tmp = tempdir().expect("tempdir");
+    let src_native = tmp.path().join("src/native");
+    fs::create_dir_all(&src_native).expect("create src/native");
+    fs::write(
+        src_native.join("prompt_assembly.rs"),
+        "fn assemble_native_prompt() {\n    \"lease target\"\n}\n",
+    )
+    .expect("seed target file");
+    for (name, label) in [
+        ("turn_items.rs", "support a"),
+        ("tests.rs", "support b"),
+        ("adapter.rs", "support c"),
+        ("tool_engine.rs", "support d"),
+    ] {
+        fs::write(
+            src_native.join(name),
+            format!("fn helper() {{\n    \"{label}\"\n}}\n"),
+        )
+        .expect("seed support file");
+    }
+
+    let prompts = Arc::new(Mutex::new(Vec::new()));
+    let model = RecordingModelClient::new(
+        vec![
+            "ACT:tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+            "ACT:tool:retain_context:{\"path\":\"src/native/prompt_assembly.rs\",\"turns\":4,\"floor\":\"exact_excerpt\"}".to_string(),
+            "ACT:tool:read_file:{\"path\":\"src/native/turn_items.rs\"}".to_string(),
+            "ACT:tool:read_file:{\"path\":\"src/native/tests.rs\"}".to_string(),
+            "ACT:tool:read_file:{\"path\":\"src/native/adapter.rs\"}".to_string(),
+            "ACT:tool:read_file:{\"path\":\"src/native/tool_engine.rs\"}".to_string(),
+            "DONE:lease window naturally expired".to_string(),
+        ],
+        prompts.clone(),
+    );
+
+    let mut config = NativeRuntimeConfig::default();
+    config.prompt_headroom = 256;
+    let input = ExecutionInput {
+        task_description:
+            "Keep src/native/prompt_assembly.rs available while navigating nearby files".to_string(),
+        success_criteria:
+            "Observe lease countdown and eventual expiry without re-reading the target".to_string(),
+        context: Some(
+            "Continue navigating related files for several turns after requesting a lease."
+                .to_string(),
+        ),
+        prior_attempts: Vec::new(),
+        verifier_feedback: None,
+        native_prompt_metadata: None,
+    };
+    let engine = NativeToolEngine::default();
+    let contracts = engine.contracts_for_mode(config.agent_mode);
+    let env = HashMap::new();
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), &scope, &env);
+    let mut loop_harness = AgentLoop::new(config.clone(), model);
+
+    let result = loop_harness
+        .run_with_history(
+            "inv-lease-expiry",
+            vec![user_input_item(
+                "inv-lease-expiry",
+                0,
+                "objective",
+                "Lease the main target and keep working elsewhere until it expires".to_string(),
+                "test",
+            )],
+            |turn_index, state, history| {
+                let rendered = assemble_native_prompt(&config, &input, history, &contracts);
+                Ok(ModelTurnRequest {
+                    turn_index,
+                    state,
+                    agent_mode: config.agent_mode,
+                    prompt: rendered.prompt,
+                    context: input.context.clone(),
+                    prompt_assembly: Some(rendered.assembly),
+                })
+            },
+            |turn_index, action| {
+                let tool_action = NativeToolAction::parse(action)
+                    .expect("parse tool action")
+                    .expect("tool action present");
+                vec![engine.execute_action_trace_for_mode(
+                    config.agent_mode,
+                    format!("inv-lease-expiry:turn:{turn_index}:tool:0"),
+                    &tool_action,
+                    &ctx,
+                )]
+            },
+        )
+        .expect("loop should complete");
+
+    let lease_remaining = [2usize, 3, 4, 5]
+        .into_iter()
+        .map(|turn_index| {
+            result.turns[turn_index]
+                .request
+                .prompt_assembly
+                .as_ref()
+                .and_then(|assembly| {
+                    assembly
+                        .active_code_window_trace
+                        .iter()
+                        .find(|window| window.path == "src/native/prompt_assembly.rs")
+                })
+                .and_then(|window| window.lease_remaining_turns)
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>();
+    let expired_trace = result.turns[6]
+        .request
+        .prompt_assembly
+        .as_ref()
+        .expect("expiry turn assembly")
+        .active_code_window_trace
+        .iter()
+        .find(|window| window.path == "src/native/prompt_assembly.rs")
+        .expect("target trace on expiry turn");
+
+    eprintln!("lease countdown => {:?}", lease_remaining);
+    eprintln!(
+        "lease expiry turn => floor={} lease={:?} reasons={}",
+        expired_trace.minimum_floor,
+        expired_trace.lease_remaining_turns,
+        expired_trace.reason_codes.join("|")
+    );
+
+    assert_eq!(result.turns.len(), 7);
+    assert_eq!(lease_remaining, vec![3, 2, 1, 1]);
+    assert_eq!(expired_trace.lease_remaining_turns, None);
+    assert_eq!(expired_trace.minimum_floor, "handle_only");
+    assert!(!expired_trace
+        .reason_codes
+        .iter()
+        .any(|reason| reason == "lease_active"));
+
+    let captured = prompts.lock().expect("prompts lock");
+    assert_eq!(captured.len(), 7);
+    assert!(captured[2].contains("lease_remaining=3"));
+    assert!(captured[6].contains("lease_remaining=none"));
+}
+
+#[test]
+fn agent_loop_smoke_observes_budget_pressure_with_many_active_windows() {
+    let tmp = tempdir().expect("tempdir");
+    let src_native = tmp.path().join("src/native");
+    fs::create_dir_all(&src_native).expect("create src/native");
+    let target_path = src_native.join("prompt_assembly.rs");
+    fs::write(
+        &target_path,
+        format!(
+            "fn assemble_native_prompt() {{\n    \"{}\"\n}}\n",
+            "target before ".repeat(120)
+        ),
+    )
+    .expect("seed target file");
+    for index in 0..4 {
+        fs::write(
+            src_native.join(format!("support_{index}.rs")),
+            format!(
+                "fn support_{index}() {{\n    \"{}\"\n}}\n",
+                format!("support-{index} ").repeat(120)
+            ),
+        )
+        .expect("seed support file");
+    }
+
+    let mut config = NativeRuntimeConfig::default();
+    config.token_budget = 2_200;
+    config.prompt_headroom = 64;
+    let input = ExecutionInput {
+        task_description:
+            "Edit src/native/prompt_assembly.rs, then navigate many nearby support files"
+                .to_string(),
+        success_criteria:
+            "Under pressure, keep the dirty target visible while summarizing or omitting lower-priority windows"
+                .to_string(),
+        context: Some(
+            "This smoke intentionally creates many active windows so prompt assembly must compact them."
+                .to_string(),
+        ),
+        prior_attempts: Vec::new(),
+        verifier_feedback: None,
+        native_prompt_metadata: None,
+    };
+    let engine = NativeToolEngine::default();
+    let contracts = engine.contracts_for_mode(config.agent_mode);
+    let env = HashMap::new();
+    let scope = allow_all_scope();
+    let ctx = test_tool_context(tmp.path(), &scope, &env);
+    let invocation_id = "inv-budget-windows";
+    let mut history = vec![user_input_item(
+        invocation_id,
+        0,
+        "objective",
+        "Force many active windows while keeping the edited target visible".to_string(),
+        "test",
+    )];
+    let actions = vec![
+        "tool:read_file:{\"path\":\"src/native/prompt_assembly.rs\"}".to_string(),
+        "tool:write_file:{\"path\":\"src/native/prompt_assembly.rs\",\"content\":\"fn assemble_native_prompt() {\\n    \\\"target after {}\\\"\\n}\\n\",\"append\":false}".replace("{}", &"edited ".repeat(40)),
+        "tool:read_file:{\"path\":\"src/native/support_0.rs\"}".to_string(),
+        "tool:read_file:{\"path\":\"src/native/support_1.rs\"}".to_string(),
+        "tool:read_file:{\"path\":\"src/native/support_2.rs\"}".to_string(),
+        "tool:read_file:{\"path\":\"src/native/support_3.rs\"}".to_string(),
+    ];
+    for (turn_index, action) in actions.iter().enumerate() {
+        let turn_index = u32::try_from(turn_index).expect("turn index");
+        history.push(assistant_item(
+            invocation_id,
+            turn_index,
+            1,
+            &ModelDirective::Act {
+                action: action.clone(),
+            },
+        ));
+        let tool_action = NativeToolAction::parse(action)
+            .expect("parse tool action")
+            .expect("tool action present");
+        let trace = engine.execute_action_trace_for_mode(
+            config.agent_mode,
+            format!("{invocation_id}:turn:{turn_index}:tool:0"),
+            &tool_action,
+            &ctx,
+        );
+        let turn = AgentLoopTurn {
+            turn_index,
+            from_state: AgentLoopState::Act,
+            to_state: AgentLoopState::Act,
+            request: ModelTurnRequest {
+                turn_index,
+                state: AgentLoopState::Act,
+                agent_mode: config.agent_mode,
+                prompt: String::new(),
+                context: None,
+                prompt_assembly: None,
+            },
+            directive: ModelDirective::Act {
+                action: action.clone(),
+            },
+            raw_output: format!("ACT:{action}"),
+            budget_used_before: 0,
+            budget_used_after: 0,
+            budget_remaining: config.token_budget,
+            budget_thresholds_crossed: Vec::new(),
+            model_latency_ms: 0,
+            tool_latency_ms: 0,
+            turn_duration_ms: 0,
+            elapsed_since_invocation_ms: 0,
+            request_tokens: 0,
+            response_tokens: 0,
+            tool_calls: vec![trace.clone()],
+        };
+        history.extend(crate::native::turn_items::items_from_tool_trace(
+            invocation_id,
+            &turn,
+            &trace,
+        ));
+    }
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+    let final_assembly = &rendered.assembly;
+    let target = final_assembly
+        .active_code_window_trace
+        .iter()
+        .find(|window| window.path == "src/native/prompt_assembly.rs")
+        .expect("dirty target trace should exist");
+
+    eprintln!(
+        "budget pressure => active={} trace={} compacted={} omitted={} overflow={} skipped={} truncated={}",
+        final_assembly.active_code_window_count,
+        final_assembly.active_code_window_trace.len(),
+        final_assembly.compacted_summary_count,
+        final_assembly.omitted_active_code_window_count,
+        final_assembly.overflow_classification,
+        final_assembly.skipped_item_count,
+        final_assembly.truncated_item_count
+    );
+
+    assert_eq!(target.status, "dirty");
+    assert_eq!(target.minimum_floor, "exact_excerpt");
+    assert!(final_assembly.active_code_window_trace.len() >= 5);
+    assert!(
+        final_assembly.active_code_window_count < final_assembly.active_code_window_trace.len()
+    );
+    assert!(final_assembly.omitted_active_code_window_count > 0);
+    assert!(final_assembly.compacted_summary_count > 0);
+    assert!(final_assembly
+        .active_code_windows
+        .iter()
+        .any(|item| item.text.contains("path=src/native/prompt_assembly.rs")));
+    assert!(final_assembly
+        .compacted_summaries
+        .iter()
+        .any(|item| item.text.contains("[code_window_summary:")));
+    assert!(rendered.prompt.contains("Compacted Summaries"));
+    assert!(rendered.prompt.contains("[code_window_summary:"));
+}
+
+#[test]
+fn retain_context_tool_grants_bounded_relative_path_lease() {
+    let engine = NativeToolEngine::default();
+    let version = engine
+        .contracts_for_mode(NativeRuntimeConfig::default().agent_mode)
+        .into_iter()
+        .find(|contract| contract.name == "retain_context")
+        .expect("retain_context contract should exist")
+        .version;
+    let temp = tempdir().expect("tempdir");
+    let scope = allow_all_scope();
+    let env = HashMap::new();
+    let ctx = test_tool_context(temp.path(), &scope, &env);
+    let output = engine
+        .execute(
+            &NativeToolAction {
+                name: "retain_context".to_string(),
+                version,
+                input: json!({
+                    "path": "src/native/prompt_assembly.rs",
+                    "turns": 99,
+                    "floor": "exact_excerpt"
+                }),
+            },
+            &ctx,
+        )
+        .expect("retain_context should succeed");
+
+    assert_eq!(
+        output.get("granted").and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        output.get("turns").and_then(|value| value.as_u64()),
+        Some(6)
+    );
+    assert_eq!(
+        output.get("floor").and_then(|value| value.as_str()),
+        Some("exact_excerpt")
+    );
 }
 
 #[test]
@@ -1280,6 +2697,81 @@ fn active_code_window_budget_prefers_dirty_windows_under_pressure() {
 }
 
 #[test]
+fn active_code_windows_truncate_large_clean_content_for_prompt() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let large_clean_content = format!(
+        "{}needle-middle{}needle-tail",
+        "A".repeat(4_500),
+        "B".repeat(4_500)
+    );
+    let history = vec![
+        user_input_item(
+            "inv-window-truncate",
+            0,
+            "objective",
+            "Keep a large clean window visible without replaying the whole file".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-window-truncate",
+            0,
+            1,
+            &ModelDirective::Act {
+                action: "tool:read_file:{\"path\":\"src/native/turn_items.rs\"}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-window-truncate:0:2".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 2,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-window-truncate".to_string(),
+                turn_index: Some(0),
+                source: "tool.call".to_string(),
+                reference: Some("call-read-large".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-read-large".to_string(),
+                tool_name: "read_file".to_string(),
+                request: "{\"path\":\"src/native/turn_items.rs\"}".to_string(),
+            },
+        },
+        TurnItem {
+            id: "inv-window-truncate:0:3".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(0),
+                item_index: 3,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-window-truncate".to_string(),
+                turn_index: Some(0),
+                source: "tool.result".to_string(),
+                reference: Some("call-read-large".to_string()),
+            },
+            kind: TurnItemKind::ToolResult {
+                call_id: "call-read-large".to_string(),
+                tool_name: "read_file".to_string(),
+                outcome: TurnItemOutcome::Success,
+                content: large_clean_content.clone(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert!(rendered.prompt.contains("content_truncated=true"));
+    assert!(rendered.prompt.contains("needle-tail"));
+    assert!(!rendered.prompt.contains("needle-middle"));
+    assert!(rendered.assembly.active_code_window_chars < large_clean_content.chars().count());
+}
+
+#[test]
 fn prompt_assembly_reports_stale_tool_call_suppression() {
     let config = NativeRuntimeConfig::default();
     let input = native_input(None);
@@ -1333,6 +2825,72 @@ fn prompt_assembly_reports_stale_tool_call_suppression() {
 
     assert_eq!(rendered.assembly.suppressed_stale_tool_call_count, 1);
     assert!(!rendered.prompt.contains("[tool_call:list_files]"));
+}
+
+#[test]
+fn prompt_assembly_suppresses_redundant_same_turn_tool_calls_and_stale_thinks() {
+    let config = NativeRuntimeConfig::default();
+    let input = native_input(None);
+    let contracts = NativeToolEngine::default().contracts_for_mode(config.agent_mode);
+    let history = vec![
+        user_input_item(
+            "inv-redundant-tool-call",
+            0,
+            "objective",
+            "Keep only the latest useful execution trace".to_string(),
+            "test",
+        ),
+        assistant_item(
+            "inv-redundant-tool-call",
+            0,
+            1,
+            &ModelDirective::Think {
+                message: "First thought".to_string(),
+            },
+        ),
+        assistant_item(
+            "inv-redundant-tool-call",
+            1,
+            2,
+            &ModelDirective::Think {
+                message: "Second thought".to_string(),
+            },
+        ),
+        assistant_item(
+            "inv-redundant-tool-call",
+            2,
+            3,
+            &ModelDirective::Act {
+                action: "tool:list_files:{\"path\":\"src/native\",\"recursive\":false}".to_string(),
+            },
+        ),
+        TurnItem {
+            id: "inv-redundant-tool-call:2:4".to_string(),
+            model_visible: true,
+            correlation: TurnItemCorrelation {
+                turn_index: Some(2),
+                item_index: 4,
+            },
+            provenance: TurnItemProvenance {
+                invocation_id: "inv-redundant-tool-call".to_string(),
+                turn_index: Some(2),
+                source: "tool.call".to_string(),
+                reference: Some("call-list-files-latest".to_string()),
+            },
+            kind: TurnItemKind::ToolCall {
+                call_id: "call-list-files-latest".to_string(),
+                tool_name: "list_files".to_string(),
+                request: "{\"path\":\"src/native\",\"recursive\":false}".to_string(),
+            },
+        },
+    ];
+
+    let rendered = assemble_native_prompt(&config, &input, &history, &contracts);
+
+    assert!(rendered.assembly.suppressed_stale_tool_call_count >= 1);
+    assert!(!rendered.prompt.contains("[tool_call:list_files]"));
+    assert!(rendered.prompt.contains("Second thought"));
+    assert!(!rendered.prompt.contains("First thought"));
 }
 
 #[test]
@@ -2671,6 +4229,7 @@ fn agent_loop_treats_checkpoint_already_completed_auto_completion_as_benign() {
                     request: "{}".to_string(),
                     duration_ms: None,
                     response: None,
+                    prompt_response: None,
                     response_original_bytes: None,
                     response_stored_bytes: None,
                     response_truncated: false,
@@ -2934,6 +4493,310 @@ fn tool_action_parse_accepts_case_and_spacing_variants() {
 
     assert_eq!(action.name, "read_file");
     assert_eq!(action.input, json!({"path": "note.txt"}));
+}
+
+#[test]
+fn tool_action_parse_ignores_trailing_annotations_after_json_payload() {
+    let action = NativeToolAction::parse(
+        r#"tool:list_files:{"path":"src","recursive":true} [tool_call:list_files] {"input":{"path":"src"}}"#,
+    )
+    .expect("parse")
+    .expect("tool action");
+
+    assert_eq!(action.name, "list_files");
+    assert_eq!(action.input, json!({"path": "src", "recursive": true}));
+}
+
+#[test]
+fn tool_action_parse_accepts_whitespace_separator_before_json_payload() {
+    let action = NativeToolAction::parse(r#"tool:read_file {"path":"note.txt"}"#)
+        .expect("parse")
+        .expect("tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(action.input, json!({"path": "note.txt"}));
+}
+
+#[test]
+fn tool_action_parse_accepts_inline_json_payload_without_separator() {
+    let action = NativeToolAction::parse(r#"tool:read_file{"path":"note.txt"}"#)
+        .expect("parse")
+        .expect("tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(action.input, json!({"path": "note.txt"}));
+}
+
+#[test]
+fn tool_action_parse_accepts_xml_parameter_payload() {
+    let action = NativeToolAction::parse(
+        "tool:list_files:\n<path>/tmp/worktree/src</path>\n<recursive>false</recursive>\n<include_hidden>false</include_hidden>\n<tool_name>list_files</tool_name>",
+    )
+    .expect("xml parameter payload should parse")
+    .expect("expected tool action");
+
+    assert_eq!(action.name, "list_files");
+    assert_eq!(
+        action.input,
+        json!({
+            "path": "/tmp/worktree/src",
+            "recursive": false,
+            "include_hidden": false,
+        })
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_act_with_param_name_tool_and_payload() {
+    let action = NativeToolAction::parse(
+        "tool:ACT\n<param name=\"tool\">list_files</param>\n<param name=\"payload\">{\"path\":\"src/adapters\",\"recursive\":true}</param>",
+    )
+    .expect("param-wrapped ACT should parse")
+    .expect("expected tool action");
+
+    assert_eq!(action.name, "list_files");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/adapters", "recursive": true})
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_param_name_xml_payload_for_inline_tool_name() {
+    let action = NativeToolAction::parse(
+        "tool:run_command\n<param name=\"command\">ls -la src/native</param>\n<param name=\"args\">[]</param>",
+    )
+    .expect("param-name payload should parse")
+    .expect("expected tool action");
+
+    assert_eq!(action.name, "run_command");
+    assert_eq!(
+        action.input,
+        json!({"command": "ls -la src/native", "args": []})
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_ruby_hash_style_structured_tool_action() {
+    let action = NativeToolAction::parse(
+        "tool:{tool => \"read_file\", args => { --path \"src/native/prompt_assembly.rs\" }}",
+    )
+    .expect("ruby-hash tool action should parse")
+    .expect("expected tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/native/prompt_assembly.rs"})
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_loose_structured_tool_action_with_unquoted_keys() {
+    let action = NativeToolAction::parse(
+        "tool:{tool: \"list_files\", version: \"1.0.0\", input: {\"path\":\"src/native\",\"recursive\":true}}",
+    )
+    .expect("loose structured action should parse")
+    .expect("expected tool action");
+
+    assert_eq!(action.name, "list_files");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/native", "recursive": true})
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_loose_structured_tool_action_with_cli_flag_args() {
+    let action = NativeToolAction::parse(
+        "tool:{tool: \"list_files\", args: {--path \"src/native\", --recursive true}}",
+    )
+    .expect("loose structured cli-flag action should parse")
+    .expect("expected tool action");
+
+    assert_eq!(action.name, "list_files");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/native", "recursive": true})
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_prefixed_args_shell_payload() {
+    let action = NativeToolAction::parse(
+        "tool:read_file\nargs:--path \"src/adapters/runtime/telemetry_provenance.rs\"",
+    )
+    .expect("prefixed args shell payload should parse")
+    .expect("expected tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/adapters/runtime/telemetry_provenance.rs"})
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_tool_wrapper_leak_before_ruby_hash_payload() {
+    let action = NativeToolAction::parse(
+        "tool:tool] {tool => \"read_file\", args => { --path \"src/native/prompt_assembly.rs\" }}",
+    )
+    .expect("tool wrapper leak should parse")
+    .expect("expected tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/native/prompt_assembly.rs"})
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_tool_name_with_tool_call_prefix() {
+    let action = NativeToolAction::parse(
+        "tool:<tool_call>read_file:{\"path\":\"src/native/turn_items.rs\"}",
+    )
+    .expect("tool_call-prefixed tool name should parse")
+    .expect("expected tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(action.input, json!({"path": "src/native/turn_items.rs"}));
+}
+
+#[test]
+fn tool_action_parse_accepts_key_value_payload_without_json() {
+    let action = NativeToolAction::parse("tool:read_file] path=\"src/native/prompt_assembly.rs\"")
+        .expect("key=value payload should parse")
+        .expect("expected tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/native/prompt_assembly.rs"})
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_act_prefixed_structured_key_values() {
+    let action = NativeToolAction::parse(
+        "tool:ACT tool=\"read_file\" path=\"src/native/prompt_assembly.rs\"",
+    )
+    .expect("ACT-prefixed structured key values should parse")
+    .expect("expected tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/native/prompt_assembly.rs"})
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_tool_bracket_prefix_before_inline_json() {
+    let action = NativeToolAction::parse(
+        "tool:tool]list_files{\"path\":\"src/adapters/runtime\",\"recursive\":true}",
+    )
+    .expect("tool]-prefixed inline json should parse")
+    .expect("expected tool action");
+
+    assert_eq!(action.name, "list_files");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/adapters/runtime", "recursive": true})
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_tool_name_with_trailing_bracket_before_json_payload() {
+    let action =
+        NativeToolAction::parse("tool:read_file] {\"path\":\"src/native/prompt_assembly.rs\"}")
+            .expect("trailing bracket tool name should parse")
+            .expect("expected tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/native/prompt_assembly.rs"})
+    );
+}
+
+#[test]
+fn tool_action_parse_accepts_whitespace_separator_with_trailing_annotations() {
+    let action = NativeToolAction::parse(
+        "tool:read_file {\"path\":\"src/native/prompt_assembly.rs\"}\n[assistant:act] ACT:tool:read_file:{\"path\":\"src/native/turn_items.rs\"}",
+    )
+    .expect("parse")
+    .expect("tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/native/prompt_assembly.rs"})
+    );
+}
+
+#[test]
+fn tool_action_parse_rejects_truncated_inline_json_payload_without_separator() {
+    let error = NativeToolAction::parse(r#"tool:read_file{"path":"#)
+        .expect_err("truncated inline JSON payload should be rejected");
+
+    assert_eq!(error.code, "native_tool_input_invalid");
+    assert!(error.message.contains("tool input JSON payload is invalid"));
+}
+
+#[test]
+fn tool_action_parse_recovers_wrapper_leaked_structured_payload() {
+    let action = NativeToolAction::parse(
+        r#"tool:ACT] {"tool":"write_file","args":{"path":"src/native/turn_items.rs","content":"patched","append":false}}[/tool_call]"#,
+    )
+    .expect("parse")
+    .expect("tool action");
+
+    assert_eq!(action.name, "write_file");
+    assert_eq!(
+        action.input,
+        json!({"path": "src/native/turn_items.rs", "content": "patched", "append": false})
+    );
+}
+
+#[test]
+fn tool_action_parse_recovers_wrapper_leaked_plain_payload() {
+    let action = NativeToolAction::parse(
+        "tool:ACT] tool:list_files {\"include_hidden\": false, \"path\": \"src/core/registry\", \"recursive\": true}\n[/tool_call",
+    )
+    .expect("parse")
+    .expect("tool action");
+
+    assert_eq!(action.name, "list_files");
+    assert_eq!(
+        action.input,
+        json!({"include_hidden": false, "path": "src/core/registry", "recursive": true})
+    );
+}
+
+#[test]
+fn tool_action_parse_preserves_valid_tool_name_with_structured_json_input() {
+    let action = NativeToolAction::parse(
+        r#"tool:read_file {"tool":"write_file","args":{"path":"note.txt"}}"#,
+    )
+    .expect("parse")
+    .expect("tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(
+        action.input,
+        json!({"tool": "write_file", "args": {"path": "note.txt"}})
+    );
+}
+
+#[test]
+fn tool_action_parse_keeps_incomplete_bare_action_without_fabricating_input() {
+    let action = NativeToolAction::parse("tool:read_file")
+        .expect("parse")
+        .expect("tool action");
+
+    assert_eq!(action.name, "read_file");
+    assert_eq!(action.input, json!({}));
 }
 
 #[test]

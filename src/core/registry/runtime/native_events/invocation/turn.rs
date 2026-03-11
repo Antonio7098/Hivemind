@@ -63,6 +63,7 @@ impl Registry {
                 tool_result_items_visible: turn.tool_result_items_visible,
                 latest_tool_result_turn_index: turn.latest_tool_result_turn_index,
                 latest_tool_names_visible: turn.latest_tool_names_visible.clone(),
+                active_code_window_trace: turn.active_code_window_trace.clone(),
                 delivery_target: turn.delivery_target.clone(),
             },
             correlation,
@@ -179,6 +180,7 @@ impl Registry {
                 tool_result_items_visible: turn.tool_result_items_visible,
                 latest_tool_result_turn_index: turn.latest_tool_result_turn_index,
                 latest_tool_names_visible: turn.latest_tool_names_visible.clone(),
+                active_code_window_trace: turn.active_code_window_trace.clone(),
                 tool_call_count: turn.tool_calls.len(),
                 tool_failure_count: turn
                     .tool_calls

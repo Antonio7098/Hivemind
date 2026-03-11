@@ -282,15 +282,23 @@ impl Registry {
         }
 
         let mut runtime_projector = RuntimeEventProjector::new();
+        let stream_live_output =
+            interactive || matches!(&adapter, SelectedRuntimeAdapter::Native(_));
 
-        let (report, terminated_reason) = if interactive {
-            let mut stdout = std::io::stdout();
+        let (report, terminated_reason) = if stream_live_output {
+            let mut stdout = if interactive {
+                Some(std::io::stdout())
+            } else {
+                None
+            };
             let res = adapter.execute_interactive(&input, |evt| {
                 match evt {
                     InteractiveAdapterEvent::Output { content } => {
                         let chunk = content;
-                        let _ = stdout.write_all(chunk.as_bytes());
-                        let _ = stdout.flush();
+                        if let Some(stdout) = stdout.as_mut() {
+                            let _ = stdout.write_all(chunk.as_bytes());
+                            let _ = stdout.flush();
+                        }
                         let event = Event::new(
                             EventPayload::RuntimeOutputChunk {
                                 attempt_id,
@@ -440,7 +448,7 @@ impl Registry {
             }
         }
 
-        if !interactive {
+        if !stream_live_output {
             for chunk in report.stdout.lines() {
                 let content = chunk.to_string();
                 let event = Event::new(

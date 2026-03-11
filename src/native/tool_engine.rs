@@ -193,6 +193,9 @@ use run_command_tool::*;
 mod checkpoint_tool;
 use checkpoint_tool::*;
 
+mod context_lease_tool;
+use context_lease_tool::*;
+
 mod filesystem_tools;
 use filesystem_tools::*;
 

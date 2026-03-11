@@ -159,7 +159,13 @@ pub(super) fn handle_run_command(
     default_timeout_ms: u64,
 ) -> Result<Value, NativeToolEngineError> {
     let worktree_baseline = capture_worktree_baseline(ctx.worktree).ok();
-    let input = decode_input::<RunCommandInput>(input)?;
+    let mut input = decode_input::<RunCommandInput>(input)?;
+    if input.args.is_empty() {
+        if let Some((command, args)) = split_command_string(&input.command) {
+            input.command = command;
+            input.args = args;
+        }
+    }
     let raw_command = input.command.trim();
     if raw_command.is_empty() {
         return Err(NativeToolEngineError::validation(

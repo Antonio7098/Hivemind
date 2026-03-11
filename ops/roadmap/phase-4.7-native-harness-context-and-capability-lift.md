@@ -101,6 +101,8 @@
 
 **Goal:** Add a runtime-local context manager that keeps prompts bounded while making the GraphCode substrate the primary semantic workspace, with CodeGraph leading for repository code tasks and the generic graph runtime available for non-code structured context.
 
+**Detailed design companion:** `ops/roadmap/phase-4.7-graph-first-context-manager-plan-2026-03-11.md`
+
 ### 59.1 Context budget accounting
 - [ ] Introduce runtime-local context budget policy separate from orchestration-level context-window operations
 - [ ] Add approximate byte/token estimation per history item

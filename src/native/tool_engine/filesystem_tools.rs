@@ -1,5 +1,6 @@
 use super::graph_query_tool::mark_runtime_graph_dirty;
 use super::*;
+use std::io::ErrorKind;
 
 fn ensure_can_read(scope: Option<&Scope>, rel_path: &Path) -> Result<(), NativeToolEngineError> {
     if let Some(scope) = scope {
@@ -48,9 +49,8 @@ pub(super) fn handle_read_file(
     let rel = normalize_relative_path(&input.path, false)?;
     ensure_can_read(ctx.scope, &rel)?;
     let path = ctx.worktree.join(&rel);
-    let content = fs::read_to_string(&path).map_err(|error| {
-        NativeToolEngineError::execution(format!("failed to read '{}': {error}", path.display()))
-    })?;
+    let content =
+        fs::read_to_string(&path).map_err(|error| filesystem_read_error("read", &path, &error))?;
     let output = ReadFileOutput {
         path: relative_display(&rel),
         byte_size: u64::try_from(content.len()).unwrap_or(u64::MAX),
@@ -129,12 +129,8 @@ fn list_entries(
     include_hidden: bool,
     entries: &mut Vec<ListFilesEntry>,
 ) -> Result<(), NativeToolEngineError> {
-    let read_dir = fs::read_dir(absolute_dir).map_err(|error| {
-        NativeToolEngineError::execution(format!(
-            "failed to read directory '{}': {error}",
-            absolute_dir.display()
-        ))
-    })?;
+    let read_dir = fs::read_dir(absolute_dir)
+        .map_err(|error| filesystem_read_error("read directory", absolute_dir, &error))?;
 
     for item in read_dir {
         let item = item.map_err(|error| {
@@ -181,6 +177,27 @@ fn list_entries(
     }
 
     Ok(())
+}
+
+fn filesystem_read_error(
+    action: &str,
+    path: &Path,
+    error: &std::io::Error,
+) -> NativeToolEngineError {
+    let message = format!("failed to {action} '{}': {error}", path.display());
+    if filesystem_read_error_is_recoverable(error) {
+        NativeToolEngineError::execution_recoverable(message)
+    } else {
+        NativeToolEngineError::execution(message)
+    }
+}
+
+fn filesystem_read_error_is_recoverable(error: &std::io::Error) -> bool {
+    if error.kind() == ErrorKind::NotFound {
+        return true;
+    }
+    let message = error.to_string().to_ascii_lowercase();
+    message.contains("not a directory") || message.contains("is a directory")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

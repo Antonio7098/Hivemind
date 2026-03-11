@@ -13,26 +13,35 @@ impl Default for NativeToolEngine {
     }
 }
 
+struct EncodedTraceResponse {
+    stored_response: String,
+    prompt_response: String,
+    original_bytes: Option<usize>,
+    stored_bytes: Option<usize>,
+    truncated: bool,
+}
+
 impl NativeToolEngine {
-    fn encode_traced_response(output: &Value) -> (String, Option<usize>, Option<usize>, bool) {
+    fn encode_traced_response(output: &Value) -> EncodedTraceResponse {
         let response_payload = json!({
             "ok": true,
             "output": output,
         });
-        let serialized = serde_json::to_string(&response_payload)
+        let prompt_response = serde_json::to_string(&response_payload)
             .unwrap_or_else(|error| format!("{{\"ok\":false,\"encode_error\":\"{error}\"}}"));
-        let original_bytes = serialized.len();
-        if serialized.chars().count() <= TOOL_TRACE_RESPONSE_MAX_CHARS {
-            return (
-                serialized,
-                Some(original_bytes),
-                Some(original_bytes),
-                false,
-            );
+        let original_bytes = prompt_response.len();
+        if prompt_response.chars().count() <= TOOL_TRACE_RESPONSE_MAX_CHARS {
+            return EncodedTraceResponse {
+                stored_response: prompt_response.clone(),
+                prompt_response,
+                original_bytes: Some(original_bytes),
+                stored_bytes: Some(original_bytes),
+                truncated: false,
+            };
         }
 
         let preview = truncate_with_marker(
-            &serialized,
+            &prompt_response,
             TOOL_TRACE_RESPONSE_MAX_CHARS.saturating_sub(256),
         );
         let truncated_payload = json!({
@@ -42,14 +51,15 @@ impl NativeToolEngine {
             "stored_bytes": preview.len(),
             "preview": preview,
         });
-        let stored = serde_json::to_string(&truncated_payload)
+        let stored_response = serde_json::to_string(&truncated_payload)
             .unwrap_or_else(|error| format!("{{\"ok\":false,\"encode_error\":\"{error}\"}}"));
-        (
-            stored.clone(),
-            Some(original_bytes),
-            Some(stored.len()),
-            true,
-        )
+        EncodedTraceResponse {
+            stored_bytes: Some(stored_response.len()),
+            stored_response,
+            prompt_response,
+            original_bytes: Some(original_bytes),
+            truncated: true,
+        }
     }
 
     #[must_use]
@@ -112,6 +122,14 @@ impl NativeToolEngine {
             CHECKPOINT_COMPLETE_TIMEOUT_MS,
             false,
             handle_checkpoint_complete,
+        )?;
+        engine.register_builtin::<RetainContextInput, RetainContextOutput>(
+            "retain_context",
+            "context_management",
+            vec![],
+            DEFAULT_TIMEOUT_MS,
+            true,
+            handle_retain_context,
         )?;
         engine.register_builtin::<ExecCommandInput, ExecSessionOutput>(
             "exec_command",
@@ -234,6 +252,116 @@ impl NativeToolEngine {
         })
     }
 
+    fn normalize_action_input(action: &NativeToolAction, worktree: &Path) -> Value {
+        let mut payload = Self::unwrap_input_wrapper(&action.input);
+        match action.name.as_str() {
+            "run_command" => {
+                Self::normalize_command_input(&mut payload, "command", &["cmd"]);
+                if let Some(object) = payload.as_object_mut() {
+                    object.remove("cwd");
+                }
+            }
+            "exec_command" => {
+                Self::normalize_command_input(&mut payload, "cmd", &["command"]);
+                Self::normalize_path_field(&mut payload, "cwd", worktree, true);
+            }
+            "read_file" | "write_file" | "retain_context" => {
+                Self::normalize_path_field(&mut payload, "path", worktree, false);
+            }
+            "list_files" => {
+                Self::normalize_path_field(&mut payload, "path", worktree, true);
+            }
+            _ => {}
+        }
+        payload
+    }
+
+    fn unwrap_input_wrapper(payload: &Value) -> Value {
+        let Some(object) = payload.as_object() else {
+            return payload.clone();
+        };
+        if let Some(arguments) = object.get("arguments").filter(|value| value.is_object()) {
+            return arguments.clone();
+        }
+        if (object.contains_key("action")
+            || object.contains_key("tool")
+            || object.contains_key("name"))
+            && object.get("input").is_some_and(Value::is_object)
+        {
+            return object
+                .get("input")
+                .cloned()
+                .unwrap_or_else(|| payload.clone());
+        }
+        payload.clone()
+    }
+
+    fn normalize_command_input(payload: &mut Value, primary: &str, aliases: &[&str]) {
+        let Some(object) = payload.as_object_mut() else {
+            return;
+        };
+        if !object.contains_key(primary) {
+            for alias in aliases {
+                if let Some(value) = object.remove(*alias) {
+                    object.insert(primary.to_string(), value);
+                    break;
+                }
+            }
+        }
+        let has_args = object
+            .get("args")
+            .and_then(Value::as_array)
+            .is_some_and(|args| !args.is_empty());
+        if has_args {
+            return;
+        }
+        let Some(raw_command) = object.get(primary).and_then(Value::as_str) else {
+            return;
+        };
+        let Some((command, args)) = split_command_string(raw_command) else {
+            return;
+        };
+        object.insert(primary.to_string(), Value::String(command));
+        object.insert(
+            "args".to_string(),
+            Value::Array(args.into_iter().map(Value::String).collect()),
+        );
+    }
+
+    fn normalize_path_field(payload: &mut Value, key: &str, worktree: &Path, allow_empty: bool) {
+        let Some(object) = payload.as_object_mut() else {
+            return;
+        };
+        let Some(raw) = object.get(key).and_then(Value::as_str) else {
+            return;
+        };
+        let Some(normalized) = Self::normalize_worktree_relative_path(raw, worktree, allow_empty)
+        else {
+            return;
+        };
+        object.insert(key.to_string(), Value::String(normalized));
+    }
+
+    fn normalize_worktree_relative_path(
+        raw: &str,
+        worktree: &Path,
+        allow_empty: bool,
+    ) -> Option<String> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        let candidate = Path::new(trimmed);
+        let raw_relative = if candidate.is_absolute() {
+            candidate.strip_prefix(worktree).ok()?.to_path_buf()
+        } else {
+            PathBuf::from(trimmed)
+        };
+        normalize_relative_path(&raw_relative.to_string_lossy(), allow_empty)
+            .ok()
+            .map(|path| relative_display(&path))
+    }
+
     fn validate_output(
         validator: &JSONSchema,
         tool_name: &str,
@@ -267,11 +395,19 @@ impl NativeToolEngine {
         let Some(tool) = self.tools.get(&tool_key) else {
             return Err(NativeToolEngineError::unknown_tool(&action.name));
         };
+        let normalized_action = NativeToolAction {
+            input: Self::normalize_action_input(action, ctx.worktree),
+            ..action.clone()
+        };
 
-        Self::validate_input(&tool.input_validator, &action.name, &action.input)?;
-        let policy_tags = Self::evaluate_tool_policies(action, tool, ctx)?;
+        Self::validate_input(
+            &tool.input_validator,
+            &action.name,
+            &normalized_action.input,
+        )?;
+        let policy_tags = Self::evaluate_tool_policies(&normalized_action, tool, ctx)?;
         let started = Instant::now();
-        let output = (tool.handler)(ctx, &action.input, tool.contract.timeout_ms)?;
+        let output = (tool.handler)(ctx, &normalized_action.input, tool.contract.timeout_ms)?;
         if started.elapsed() > Duration::from_millis(tool.contract.timeout_ms) {
             return Err(NativeToolEngineError::timeout(
                 &action.name,
@@ -312,29 +448,31 @@ impl NativeToolEngine {
         match self.execute_internal(action, ctx) {
             Ok((output, policy_tags)) => {
                 let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
-                let (response, response_original_bytes, response_stored_bytes, response_truncated) =
-                    Self::encode_traced_response(&output);
+                let encoded_response = Self::encode_traced_response(&output);
                 NativeToolCallTrace {
                     call_id,
                     tool_name: action.name.clone(),
                     request,
                     duration_ms: Some(duration_ms),
-                    response: Some(response),
-                    response_original_bytes,
-                    response_stored_bytes,
-                    response_truncated,
+                    response: Some(encoded_response.stored_response),
+                    prompt_response: Some(encoded_response.prompt_response),
+                    response_original_bytes: encoded_response.original_bytes,
+                    response_stored_bytes: encoded_response.stored_bytes,
+                    response_truncated: encoded_response.truncated,
                     failure: None,
                     policy_tags,
                 }
             }
             Err(error) => {
                 let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+                let recovery_hint = recovery_hint_for_tool_error(action, &error);
                 NativeToolCallTrace {
                     call_id,
                     tool_name: action.name.clone(),
                     request,
                     duration_ms: Some(duration_ms),
                     response: None,
+                    prompt_response: None,
                     response_original_bytes: None,
                     response_stored_bytes: None,
                     response_truncated: false,
@@ -344,7 +482,7 @@ impl NativeToolEngine {
                         recoverable: error.recoverable,
                         policy_source: None,
                         denial_reason: None,
-                        recovery_hint: None,
+                        recovery_hint,
                     }),
                     policy_tags: error.policy_tags,
                 }
@@ -380,6 +518,7 @@ impl NativeToolEngine {
                     request,
                     duration_ms: Some(0),
                     response: None,
+                    prompt_response: None,
                     response_original_bytes: None,
                     response_stored_bytes: None,
                     response_truncated: false,
@@ -409,4 +548,50 @@ impl NativeToolEngine {
 
         self.execute_action_trace(call_id, action, ctx)
     }
+}
+
+fn recovery_hint_for_tool_error(
+    action: &NativeToolAction,
+    error: &NativeToolEngineError,
+) -> Option<String> {
+    let message = error.message.to_ascii_lowercase();
+    match action.name.as_str() {
+        "read_file" | "list_files" | "write_file" => {
+            if error.code == "native_tool_input_invalid" && message.contains("relative path") {
+                return Some(
+                    "Use repository-relative paths like `src/native/turn_items.rs`, not absolute sandbox or worktree paths."
+                        .to_string(),
+                );
+            }
+            if error.code == "native_tool_execution_failed"
+                && (message.contains("no such file")
+                    || message.contains("not found")
+                    || message.contains("not a directory")
+                    || message.contains("is a directory"))
+            {
+                return Some(
+                    "Check the repository-relative path first. If the target might be a directory, use `list_files`; if it should be a file, use `read_file`."
+                        .to_string(),
+                );
+            }
+        }
+        "run_command" | "exec_command" => {
+            if error.code == "native_policy_violation" && message.contains("grep") {
+                return Some(
+                    "Use `rg` instead of `grep`, and prefer repository-relative paths under `src/`."
+                        .to_string(),
+                );
+            }
+        }
+        "graph_query" => {
+            if error.code == "native_tool_execution_failed" && message.contains("broken pipe") {
+                return Some(
+                    "If `graph_query` fails, fall back to `list_files`, `read_file`, or `run_command` with allowlisted tools like `rg`."
+                        .to_string(),
+                );
+            }
+        }
+        _ => {}
+    }
+    None
 }
