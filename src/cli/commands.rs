@@ -24,5 +24,7 @@ mod task_flow;
 pub use task_flow::*;
 mod project;
 pub use project::*;
+mod workflow;
+pub use workflow::*;
 mod verify_merge_attempt;
 pub use verify_merge_attempt::*;

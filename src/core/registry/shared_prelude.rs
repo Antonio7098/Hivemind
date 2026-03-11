@@ -37,6 +37,10 @@ pub use crate::core::state::{
     AppState, AttemptCheckpoint, AttemptCheckpointState, AttemptState, Project,
     ProjectRuntimeConfig, RuntimeRoleDefaults, Task, TaskRuntimeConfig, TaskState,
 };
+pub use crate::core::workflow::{
+    WorkflowDefinition, WorkflowError, WorkflowRun, WorkflowRunState, WorkflowStepDefinition,
+    WorkflowStepKind, WorkflowStepRun, WorkflowStepState,
+};
 pub use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
 pub use crate::native::adapter::{NativeAdapterConfig, NativeRuntimeAdapter};
 pub use crate::native::NativeRuntimeConfig;

@@ -10,6 +10,7 @@ use crate::core::flow::{RetryMode, RunMode, TaskExecState};
 use crate::core::graph::GraphTask;
 use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::verification::CheckConfig;
+use crate::core::workflow::{WorkflowDefinition, WorkflowRun, WorkflowStepState};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -31,6 +32,10 @@ pub use model::*;
 mod tests {
     use super::*;
     use crate::core::flow::RetryMode;
+    use crate::core::workflow::{
+        WorkflowDefinition, WorkflowRun, WorkflowStepDefinition, WorkflowStepKind,
+        WorkflowStepState,
+    };
 
     #[test]
     fn event_id_is_unique() {
@@ -65,6 +70,18 @@ mod tests {
     }
 
     #[test]
+    fn correlation_ids_for_workflow_run_include_workflow_lineage() {
+        let project_id = Uuid::new_v4();
+        let workflow_id = Uuid::new_v4();
+        let workflow_run_id = Uuid::new_v4();
+        let corr = CorrelationIds::for_workflow_run(project_id, workflow_id, workflow_run_id);
+        assert_eq!(corr.project_id, Some(project_id));
+        assert_eq!(corr.workflow_id, Some(workflow_id));
+        assert_eq!(corr.workflow_run_id, Some(workflow_run_id));
+        assert_eq!(corr.root_workflow_run_id, Some(workflow_run_id));
+    }
+
+    #[test]
     fn task_retry_payload_uses_task_retried_type_and_accepts_legacy_alias() {
         let payload = EventPayload::TaskRetryRequested {
             task_id: Uuid::new_v4(),
@@ -95,5 +112,57 @@ mod tests {
                 retry_mode: RetryMode::Clean
             } if id == task_id
         ));
+    }
+
+    #[test]
+    fn workflow_payloads_roundtrip_through_serde() {
+        let project_id = Uuid::new_v4();
+        let mut definition = WorkflowDefinition::new(project_id, "demo-workflow", None);
+        let step = WorkflowStepDefinition::new("root", WorkflowStepKind::Task);
+        let step_id = step.id;
+        definition.add_step(step);
+        let run = WorkflowRun::new_root(&definition);
+        let step_run_id = run.step_runs.get(&step_id).unwrap().id;
+
+        let payloads = vec![
+            EventPayload::WorkflowDefinitionCreated {
+                definition: definition.clone(),
+            },
+            EventPayload::WorkflowDefinitionUpdated {
+                definition: definition.clone(),
+            },
+            EventPayload::WorkflowRunCreated { run: run.clone() },
+            EventPayload::WorkflowRunStarted {
+                workflow_run_id: run.id,
+            },
+            EventPayload::WorkflowRunPaused {
+                workflow_run_id: run.id,
+            },
+            EventPayload::WorkflowRunResumed {
+                workflow_run_id: run.id,
+            },
+            EventPayload::WorkflowRunCompleted {
+                workflow_run_id: run.id,
+            },
+            EventPayload::WorkflowRunAborted {
+                workflow_run_id: run.id,
+                reason: Some("manual".to_string()),
+                forced: true,
+            },
+            EventPayload::WorkflowStepStateChanged {
+                workflow_run_id: run.id,
+                step_id,
+                step_run_id,
+                state: WorkflowStepState::Succeeded,
+                reason: Some("done".to_string()),
+            },
+        ];
+
+        for payload in payloads {
+            let json = serde_json::to_string(&payload).expect("serialize workflow payload");
+            let restored: EventPayload =
+                serde_json::from_str(&json).expect("deserialize workflow payload");
+            assert_eq!(payload, restored);
+        }
     }
 }

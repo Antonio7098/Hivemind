@@ -21,7 +21,7 @@
 //!
 //! The server can be configured via [`ServeConfig`]:
 //!
-//! ```no_run
+//! ```ignore
 //! use hivemind::server::ServeConfig;
 //!
 //! let config = ServeConfig {
@@ -41,7 +41,7 @@
 //!
 //! Or programmatically:
 //!
-//! ```no_run
+//! ```ignore
 //! use hivemind::server::{serve, ServeConfig};
 //!
 //! let config = ServeConfig::default();

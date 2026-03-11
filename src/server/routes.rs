@@ -8,6 +8,7 @@ mod operations;
 mod projects;
 mod queries;
 mod tasks;
+mod workflows;
 
 const GET_ONLY_PATHS: &[&str] = &[
     "/health",
@@ -20,6 +21,10 @@ const GET_ONLY_PATHS: &[&str] = &[
     "/api/tasks",
     "/api/graphs",
     "/api/flows",
+    "/api/workflows",
+    "/api/workflows/inspect",
+    "/api/workflow-runs",
+    "/api/workflow-runs/inspect",
     "/api/merges",
     "/api/runtimes",
     "/api/runtimes/health",
@@ -79,6 +84,16 @@ const POST_ONLY_PATHS: &[&str] = &[
     "/api/flows/run-mode",
     "/api/flows/dependencies/add",
     "/api/flows/runtime",
+    "/api/workflows/create",
+    "/api/workflows/update",
+    "/api/workflows/steps/add",
+    "/api/workflow-runs/create",
+    "/api/workflow-runs/start",
+    "/api/workflow-runs/complete",
+    "/api/workflow-runs/pause",
+    "/api/workflow-runs/resume",
+    "/api/workflow-runs/abort",
+    "/api/workflow-runs/steps/state",
     "/api/verify/override",
     "/api/verify/run",
     "/api/merge/prepare",
@@ -139,6 +154,9 @@ pub(super) fn handle_api_request_inner(
                 return Ok(resp);
             }
             if let Some(resp) = flows::handle_post(path, body, registry)? {
+                return Ok(resp);
+            }
+            if let Some(resp) = workflows::handle_post(path, body, registry)? {
                 return Ok(resp);
             }
             if let Some(resp) = operations::handle_post(path, body, registry)? {

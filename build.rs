@@ -5,6 +5,7 @@ const FRAGMENTS: &[&str] = &[
     "src/core/events/payload/fragments/project_task_repo_runtime.rs",
     "src/core/events/payload/fragments/governance_graph_context.rs",
     "src/core/events/payload/fragments/graph_flow_execution.rs",
+    "src/core/events/payload/fragments/workflow_execution.rs",
     "src/core/events/payload/fragments/attempt_merge_retry.rs",
     "src/core/events/payload/fragments/runtime_native_unknown.rs",
 ];

@@ -4665,3 +4665,184 @@ fn cli_governance_replay_verify_and_diagnose_detect_missing_artifact_files() {
         "{diagnose_out}"
     );
 }
+
+#[allow(clippy::too_many_lines)]
+#[test]
+fn cli_workflow_commands_support_step_authoring_and_event_filters() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let repo_path = tmp.path().join("repo");
+    std::fs::create_dir_all(&repo_path).expect("create repo dir");
+    init_git_repo(&repo_path);
+
+    let repo_path = repo_path.to_string_lossy().to_string();
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, create_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "create",
+            "proj",
+            "demo-workflow",
+            "--description",
+            "cli smoke",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let create_json: serde_json::Value =
+        serde_json::from_str(&create_out).expect("workflow create json");
+    let workflow_id = create_json
+        .get("data")
+        .and_then(|d| d.get("workflow_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow id")
+        .to_string();
+
+    let (code, step_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "step-add",
+            &workflow_id,
+            "root-step",
+            "--kind",
+            "task",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let step_json: serde_json::Value = serde_json::from_str(&step_out).expect("workflow step json");
+    let step_id = step_json
+        .get("data")
+        .and_then(|d| d.get("steps"))
+        .and_then(serde_json::Value::as_object)
+        .and_then(|steps| steps.values().next())
+        .and_then(|step| step.get("id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("step id")
+        .to_string();
+
+    let (code, run_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "run-create", &workflow_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let run_json: serde_json::Value = serde_json::from_str(&run_out).expect("run create json");
+    let workflow_run_id = run_json
+        .get("data")
+        .and_then(|d| d.get("workflow_run_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow run id")
+        .to_string();
+
+    for args in [
+        vec!["-f", "json", "workflow", "start", &workflow_run_id],
+        vec![
+            "-f",
+            "json",
+            "workflow",
+            "step-set-state",
+            &workflow_run_id,
+            &step_id,
+            "running",
+        ],
+        vec![
+            "-f",
+            "json",
+            "workflow",
+            "step-set-state",
+            &workflow_run_id,
+            &step_id,
+            "succeeded",
+        ],
+        vec!["-f", "json", "workflow", "complete", &workflow_run_id],
+    ] {
+        let (code, _out, err) = run_hivemind(tmp.path(), &args);
+        assert_eq!(code, 0, "{err}");
+    }
+
+    let (code, status_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "status", &workflow_run_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let status_json: serde_json::Value =
+        serde_json::from_str(&status_out).expect("workflow status json");
+    assert_eq!(
+        status_json
+            .get("data")
+            .and_then(|d| d.get("state"))
+            .and_then(serde_json::Value::as_str),
+        Some("completed"),
+        "{status_out}"
+    );
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--workflow-run",
+            &workflow_run_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let events_json: serde_json::Value = serde_json::from_str(&events_out).expect("events json");
+    let events = events_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .expect("workflow events array");
+    assert!(events.iter().any(|event| {
+        event
+            .get("payload")
+            .and_then(|payload| payload.get("type"))
+            .and_then(serde_json::Value::as_str)
+            == Some("workflow_run_completed")
+    }));
+    assert!(events.iter().all(|event| {
+        event
+            .get("metadata")
+            .and_then(|metadata| metadata.get("correlation"))
+            .and_then(|corr| corr.get("workflow_run_id"))
+            .and_then(serde_json::Value::as_str)
+            == Some(workflow_run_id.as_str())
+    }));
+
+    let (code, step_events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--step",
+            &step_id,
+            "--workflow-run",
+            &workflow_run_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let step_events_json: serde_json::Value =
+        serde_json::from_str(&step_events_out).expect("step events json");
+    let step_events = step_events_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .expect("step events array");
+    assert_eq!(step_events.len(), 2, "{step_events_out}");
+    assert!(step_events.iter().all(|event| {
+        event
+            .get("payload")
+            .and_then(|payload| payload.get("type"))
+            .and_then(serde_json::Value::as_str)
+            == Some("workflow_step_state_changed")
+    }));
+}
