@@ -4,6 +4,10 @@ use super::*;
 
 pub(super) fn payload_pascal_type(payload: &EventPayload) -> &'static str {
     match payload {
+        EventPayload::ChatSessionCreated { .. } => "ChatSessionCreated",
+        EventPayload::ChatSessionTitleUpdated { .. } => "ChatSessionTitleUpdated",
+        EventPayload::ChatMessageAppended { .. } => "ChatMessageAppended",
+        EventPayload::ChatStreamChunkAppended { .. } => "ChatStreamChunkAppended",
         EventPayload::ErrorOccurred { .. } => "ErrorOccurred",
         EventPayload::ProjectCreated { .. } => "ProjectCreated",
         EventPayload::ProjectUpdated { .. } => "ProjectUpdated",

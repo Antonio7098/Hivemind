@@ -1,5 +1,6 @@
 use super::*;
 
+pub(super) mod chat;
 mod flows;
 mod governance;
 mod graphs;
@@ -14,6 +15,8 @@ const GET_ONLY_PATHS: &[&str] = &[
     "/api/version",
     "/api/catalog",
     "/api/state",
+    "/api/chat/sessions",
+    "/api/chat/sessions/inspect",
     "/api/projects",
     "/api/tasks",
     "/api/graphs",
@@ -46,6 +49,9 @@ const GET_ONLY_PATHS: &[&str] = &[
 ];
 
 const POST_ONLY_PATHS: &[&str] = &[
+    "/api/chat/invoke",
+    "/api/chat/sessions/create",
+    "/api/chat/sessions/send",
     "/api/projects/create",
     "/api/projects/update",
     "/api/projects/delete",
@@ -117,6 +123,9 @@ pub(super) fn handle_api_request_inner(
 
     match method {
         ApiMethod::Get => {
+            if let Some(resp) = chat::handle_get(path, url, registry)? {
+                return Ok(resp);
+            }
             if let Some(resp) = queries::handle_get(path, url, default_events_limit, registry)? {
                 return Ok(resp);
             }
@@ -132,6 +141,9 @@ pub(super) fn handle_api_request_inner(
             not_found(path)
         }
         ApiMethod::Post => {
+            if let Some(resp) = chat::handle_post(path, body, registry)? {
+                return Ok(resp);
+            }
             if let Some(resp) = projects::handle_post(path, body, registry)? {
                 return Ok(resp);
             }

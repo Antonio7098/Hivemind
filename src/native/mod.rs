@@ -131,6 +131,10 @@ pub trait AgentLoopObserver {
         Ok(())
     }
 
+    fn on_turn_completed(&mut self, _turn: &AgentLoopTurn) -> Result<(), NativeRuntimeError> {
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn on_history_compacted(
         &mut self,

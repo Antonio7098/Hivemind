@@ -2,6 +2,10 @@
 pub(super) fn event_type_label(payload: &crate::core::events::EventPayload) -> &'static str {
     use crate::core::events::EventPayload;
     match payload {
+        EventPayload::ChatSessionCreated { .. } => "chat_session_created",
+        EventPayload::ChatSessionTitleUpdated { .. } => "chat_session_title_updated",
+        EventPayload::ChatMessageAppended { .. } => "chat_message_appended",
+        EventPayload::ChatStreamChunkAppended { .. } => "chat_stream_chunk_appended",
         EventPayload::ErrorOccurred { .. } => "error_occurred",
         EventPayload::ProjectCreated { .. } => "project_created",
         EventPayload::ProjectUpdated { .. } => "project_updated",

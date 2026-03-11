@@ -11,6 +11,9 @@ pub(crate) fn api_catalog() -> ApiCatalog {
         read_endpoints: vec![
             "/api/version",
             "/api/state",
+            "/api/chat/sessions",
+            "/api/chat/sessions/inspect?session_id=<id>",
+            "/api/chat/sessions/stream?session_id=<id?>",
             "/api/projects",
             "/api/tasks",
             "/api/graphs",
@@ -42,6 +45,9 @@ pub(crate) fn api_catalog() -> ApiCatalog {
             "/api/governance/global/templates/inspect?template_id=<id>",
         ],
         write_endpoints: vec![
+            "/api/chat/invoke",
+            "/api/chat/sessions/create",
+            "/api/chat/sessions/send",
             "/api/projects/create",
             "/api/projects/update",
             "/api/projects/delete",

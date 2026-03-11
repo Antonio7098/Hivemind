@@ -3,6 +3,11 @@ use super::*;
 #[allow(clippy::too_many_lines)]
 pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
     match payload {
+        EventPayload::ChatSessionCreated { .. }
+        | EventPayload::ChatSessionTitleUpdated { .. }
+        | EventPayload::ChatMessageAppended { .. }
+        | EventPayload::ChatStreamChunkAppended { .. } => "chat",
+
         EventPayload::ErrorOccurred { .. } => "error",
 
         EventPayload::ProjectCreated { .. }
