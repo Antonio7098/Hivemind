@@ -3,6 +3,19 @@ use crate::native::tool_engine::NativeToolAction;
 use crate::native::turn_items::{TurnItemKind, TurnItemOutcome};
 use serde_json::Value;
 
+struct TurnCallbackObserver<F> {
+    on_turn: F,
+}
+
+impl<F> AgentLoopObserver for TurnCallbackObserver<F>
+where
+    F: FnMut(&AgentLoopTurn) -> Result<(), NativeRuntimeError>,
+{
+    fn on_turn_completed(&mut self, turn: &AgentLoopTurn) -> Result<(), NativeRuntimeError> {
+        (self.on_turn)(turn)
+    }
+}
+
 impl<M: ModelClient> AgentLoop<M> {
     const MAX_MALFORMED_DIRECTIVE_RECOVERY_ATTEMPTS: u8 = 4;
     const MAX_TOKEN_BUDGET_RECOVERY_ATTEMPTS: u8 = 3;
@@ -795,6 +808,11 @@ impl<M: ModelClient> AgentLoop<M> {
             self.history_items = history.clone();
             self.completed_turns.push(turn.clone());
             turns.push(turn);
+            if let Some(observer) = observer.as_deref_mut() {
+                if let Some(turn) = turns.last() {
+                    observer.on_turn_completed(turn)?;
+                }
+            }
             self.next_turn_index = self.next_turn_index.saturating_add(1);
         }
 
@@ -803,6 +821,55 @@ impl<M: ModelClient> AgentLoop<M> {
         self.completed_turns = turns;
 
         Ok(self.snapshot_result(invocation_id))
+    }
+
+    /// Execute the loop while surfacing each completed turn to a callback.
+    pub fn run_with_turn_callback<F>(
+        &mut self,
+        prompt: impl Into<String>,
+        context: Option<&str>,
+        on_turn: F,
+    ) -> Result<AgentLoopResult, NativeRuntimeError>
+    where
+        F: FnMut(&AgentLoopTurn) -> Result<(), NativeRuntimeError>,
+    {
+        let prompt = prompt.into();
+        let context = context.map(ToString::to_string);
+        let mode = self.config.agent_mode;
+        let mut initial_items = vec![user_input_item(
+            "native-loop",
+            1,
+            "prompt",
+            prompt.clone(),
+            "runtime.prompt",
+        )];
+        if let Some(context_text) = context.clone() {
+            initial_items.push(user_input_item(
+                "native-loop",
+                2,
+                "context",
+                context_text,
+                "runtime.context",
+            ));
+        }
+
+        let mut observer = TurnCallbackObserver { on_turn };
+        self.run_with_history_observed(
+            "native-loop",
+            initial_items,
+            move |turn_index, state, _history| {
+                Ok(ModelTurnRequest {
+                    turn_index,
+                    state,
+                    agent_mode: mode,
+                    prompt: prompt.clone(),
+                    context: context.clone(),
+                    prompt_assembly: None,
+                })
+            },
+            |_turn_index, _action| Vec::new(),
+            Some(&mut observer),
+        )
     }
 
     /// Execute the loop deterministically until `done` or a hard budget/error boundary.

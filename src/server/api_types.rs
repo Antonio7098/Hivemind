@@ -1,6 +1,7 @@
 use super::*;
 
 mod catalog;
+mod chat;
 mod flows;
 mod governance;
 mod graphs;
@@ -10,6 +11,12 @@ mod tasks;
 mod views;
 
 pub(crate) use catalog::api_catalog;
+pub(crate) use chat::{
+    ChatHistoryMessageInput, ChatHistoryRole, ChatInvokeRequest, ChatInvokeResponse,
+    ChatInvokeTurnView, ChatMode, ChatSessionCreateRequest, ChatSessionInspectView,
+    ChatSessionMessageView, ChatSessionSendRequest, ChatSessionSendResponse,
+    ChatSessionSummaryView, ChatStreamChunkView, ChatStreamEnvelope, ChatStreamEvent,
+};
 pub(crate) use flows::{
     FlowAbortRequest, FlowAddDependencyRequest, FlowCreateRequest, FlowDeleteRequest,
     FlowIdRequest, FlowRuntimeSetRequest, FlowSetRunModeRequest, FlowTickRequest,

@@ -251,6 +251,25 @@ pub fn serve(config: &ServeConfig) -> Result<()> {
             continue;
         }
 
+        if method == ApiMethod::Get && url.starts_with("/api/chat/sessions/stream") {
+            match Registry::open()
+                .and_then(|registry| build_chat_stream_sse_response(&url, &registry))
+            {
+                Ok(response) => {
+                    let _ = req.respond(response);
+                }
+                Err(e) => {
+                    let wrapped = CliResponse::<()>::error(&e);
+                    let mut response = ApiResponse::json(500, &wrapped).unwrap_or_else(|_| {
+                        ApiResponse::text(500, "text/plain", "internal error\n")
+                    });
+                    response.extra_headers.extend(cors_headers());
+                    let _ = req.respond(api_response_to_tiny(response));
+                }
+            }
+            continue;
+        }
+
         let mut request_body = Vec::new();
         if method == ApiMethod::Post {
             let _ = req.as_reader().read_to_end(&mut request_body);
@@ -347,6 +366,73 @@ fn build_runtime_stream_sse_response(
                     Ok(json) => {
                         if tx
                             .send(format!("event: runtime\ndata: {json}\n\n").into_bytes())
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        if tx.send(b"event: error\ndata: {}\n\n".to_vec()).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    let mut headers = cors_headers();
+    headers.push(
+        tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/event-stream"[..])
+            .expect("sse content-type header"),
+    );
+    headers.push(
+        tiny_http::Header::from_bytes(&b"Cache-Control"[..], &b"no-cache"[..])
+            .expect("sse cache-control header"),
+    );
+    headers.push(
+        tiny_http::Header::from_bytes(&b"Connection"[..], &b"keep-alive"[..])
+            .expect("sse connection header"),
+    );
+
+    Ok(tiny_http::Response::new(
+        tiny_http::StatusCode(200),
+        headers,
+        ChannelReader::new(rx),
+        None,
+        None,
+    ))
+}
+
+fn build_chat_stream_sse_response(
+    url: &str,
+    registry: &Registry,
+) -> Result<tiny_http::Response<ChannelReader>> {
+    let query = parse_query(url);
+    let session_id = query
+        .get("session_id")
+        .map(|value| {
+            Uuid::parse_str(value).map_err(|e| {
+                HivemindError::user(
+                    "invalid_chat_session_id",
+                    format!("Invalid session_id: {e}"),
+                    "server:chat_stream:sse",
+                )
+            })
+        })
+        .transpose()?;
+
+    let rx_events = registry.stream_events(&EventFilter::all())?;
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    let _ = tx.send(b": connected\n\n".to_vec());
+
+    std::thread::spawn(move || {
+        while let Ok(event) = rx_events.recv() {
+            if let Some(payload) = routes::chat::stream_envelope(&event, session_id) {
+                match serde_json::to_string(&payload) {
+                    Ok(json) => {
+                        if tx
+                            .send(format!("event: chat\ndata: {json}\n\n").into_bytes())
                             .is_err()
                         {
                             break;

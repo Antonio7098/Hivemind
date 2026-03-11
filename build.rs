@@ -1,6 +1,7 @@
 use std::{env, fs, path::PathBuf};
 
 const FRAGMENTS: &[&str] = &[
+    "src/core/events/payload/fragments/chat_sessions.rs",
     "src/core/events/payload/fragments/project_task_repo_runtime.rs",
     "src/core/events/payload/fragments/governance_graph_context.rs",
     "src/core/events/payload/fragments/graph_flow_execution.rs",
