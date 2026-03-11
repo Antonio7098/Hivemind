@@ -1,7 +1,24 @@
 #![allow(clippy::too_many_lines)]
 
 use super::*;
-use uuid::Uuid;
+use std::str::FromStr;
+
+fn parse_runtime_stream_detail(
+    query: &std::collections::HashMap<String, String>,
+) -> Result<crate::core::registry::shared_types::RuntimeStreamDetailLevel> {
+    let Some(raw) = query.get("detail") else {
+        return Ok(crate::core::registry::shared_types::RuntimeStreamDetailLevel::Telemetry);
+    };
+    crate::core::registry::shared_types::RuntimeStreamDetailLevel::from_str(raw).map_err(|_| {
+        HivemindError::user(
+            "invalid_runtime_stream_detail",
+            format!(
+                "Unsupported runtime stream detail '{raw}'. Expected summary, observability, or telemetry"
+            ),
+            "server/runtime-stream",
+        )
+    })
+}
 
 pub(super) fn handle_get(
     path: &str,
@@ -71,32 +88,11 @@ pub(super) fn handle_get(
                 .get("limit")
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(default_events_limit);
-            let flow_id = query
-                .get("flow_id")
-                .map(|value| {
-                    Uuid::parse_str(value).map_err(|e| {
-                        HivemindError::user(
-                            "invalid_flow_id",
-                            format!("Invalid flow_id: {e}"),
-                            "server:runtime_stream",
-                        )
-                    })
-                })
-                .transpose()?;
-            let attempt_id = query
-                .get("attempt_id")
-                .map(|value| {
-                    Uuid::parse_str(value).map_err(|e| {
-                        HivemindError::user(
-                            "invalid_attempt_id",
-                            format!("Invalid attempt_id: {e}"),
-                            "server:runtime_stream",
-                        )
-                    })
-                })
-                .transpose()?;
-            super::json_ok(list_runtime_stream_items(
-                registry, flow_id, attempt_id, limit,
+            super::json_ok(registry.runtime_stream_items_with_detail(
+                query.get("flow_id").map(String::as_str),
+                query.get("attempt_id").map(String::as_str),
+                limit,
+                parse_runtime_stream_detail(&query)?,
             )?)?
         }
         "/api/verify/results" => {

@@ -22,6 +22,7 @@ pub(crate) fn api_catalog() -> ApiCatalog {
             "/api/events/inspect?event_id=<id>",
             "/api/verify/results?attempt_id=<id>&output=true|false",
             "/api/attempts/inspect?attempt_id=<id>&diff=true|false",
+            "/api/runtime-stream?attempt_id=<id>&flow_id=<id>&limit=<n>&detail=summary|observability|telemetry",
             "/api/attempts/diff?attempt_id=<id>",
             "/api/flows/replay?flow_id=<id>",
             "/api/worktrees?flow_id=<id>",

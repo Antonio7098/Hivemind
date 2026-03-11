@@ -1,4 +1,12 @@
 use super::*;
+use clap::ValueEnum;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum RuntimeStreamDetailArg {
+    Summary,
+    Observability,
+    Telemetry,
+}
 
 #[derive(Subcommand)]
 pub enum TaskCommands {
@@ -103,6 +111,7 @@ pub enum RuntimeCommands {
     List,
     Health(RuntimeHealthArgs),
     DefaultsSet(RuntimeDefaultsSetArgs),
+    Stream(RuntimeStreamArgs),
 }
 
 #[derive(Args)]
@@ -135,6 +144,18 @@ pub struct RuntimeDefaultsSetArgs {
     pub timeout_ms: u64,
     #[arg(long, default_value_t = 1)]
     pub max_parallel_tasks: u16,
+}
+
+#[derive(Args)]
+pub struct RuntimeStreamArgs {
+    #[arg(long)]
+    pub flow: Option<String>,
+    #[arg(long)]
+    pub attempt: Option<String>,
+    #[arg(long, default_value_t = 200)]
+    pub limit: usize,
+    #[arg(long, value_enum, default_value = "telemetry")]
+    pub detail: RuntimeStreamDetailArg,
 }
 
 #[derive(Args)]

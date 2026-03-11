@@ -196,3 +196,31 @@ fn parses_event_native_summary_command() {
         _ => panic!("unexpected parsed command"),
     }
 }
+
+#[test]
+fn parses_runtime_stream_command() {
+    let cli = Cli::try_parse_from([
+        "hivemind",
+        "runtime",
+        "stream",
+        "--flow",
+        "flow-1",
+        "--attempt",
+        "attempt-1",
+        "--limit",
+        "50",
+        "--detail",
+        "observability",
+    ])
+    .expect("runtime stream parse");
+
+    match cli.command.expect("command") {
+        Commands::Runtime(RuntimeCommands::Stream(args)) => {
+            assert_eq!(args.flow.as_deref(), Some("flow-1"));
+            assert_eq!(args.attempt.as_deref(), Some("attempt-1"));
+            assert_eq!(args.limit, 50);
+            assert_eq!(args.detail, RuntimeStreamDetailArg::Observability);
+        }
+        _ => panic!("unexpected parsed command"),
+    }
+}

@@ -43,6 +43,7 @@ pub(super) fn list_ui_events(registry: &Registry, limit: usize) -> Result<Vec<Ui
     Ok(ui_events)
 }
 
+#[allow(dead_code)]
 pub(super) fn list_runtime_stream_items(
     registry: &Registry,
     flow_id: Option<Uuid>,
