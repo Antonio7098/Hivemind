@@ -65,6 +65,16 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::WorktreeCleanupPerformed { .. }
         | EventPayload::WorktreeTurnRefRestored { .. } => "flow",
 
+        EventPayload::WorkflowDefinitionCreated { .. }
+        | EventPayload::WorkflowDefinitionUpdated { .. }
+        | EventPayload::WorkflowRunCreated { .. }
+        | EventPayload::WorkflowRunStarted { .. }
+        | EventPayload::WorkflowRunPaused { .. }
+        | EventPayload::WorkflowRunResumed { .. }
+        | EventPayload::WorkflowRunCompleted { .. }
+        | EventPayload::WorkflowRunAborted { .. }
+        | EventPayload::WorkflowStepStateChanged { .. } => "workflow",
+
         EventPayload::TaskReady { .. }
         | EventPayload::TaskBlocked { .. }
         | EventPayload::ScopeConflictDetected { .. }

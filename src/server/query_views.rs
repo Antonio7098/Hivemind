@@ -291,7 +291,13 @@ mod tests {
                 project_id: None,
                 graph_id: None,
                 flow_id: Some(flow_id),
+                workflow_id: None,
+                workflow_run_id: None,
+                root_workflow_run_id: None,
+                parent_workflow_run_id: None,
                 task_id: Some(task_id),
+                step_id: None,
+                step_run_id: None,
                 attempt_id: Some(attempt_id),
             },
         );

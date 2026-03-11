@@ -5,6 +5,7 @@ mod flow;
 mod graph;
 mod merge;
 mod support;
+mod workflow;
 
 impl AppState {
     /// Applies an event to the state in place.
@@ -14,6 +15,7 @@ impl AppState {
         if self.apply_catalog_event(&event.payload, timestamp)
             || self.apply_graph_event(&event.payload, timestamp)
             || self.apply_flow_event(event, timestamp)
+            || self.apply_workflow_event(&event.payload, timestamp)
             || self.apply_attempt_event(&event.payload, timestamp)
             || self.apply_merge_event(&event.payload, timestamp)
             || Self::is_ignored_event(&event.payload)

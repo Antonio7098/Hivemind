@@ -23,6 +23,7 @@ Detailed specifications live elsewhere:
 - `docs/architecture/state-model.md` — persisted state model
 - `docs/architecture/event-model.md` — event taxonomy and replay guarantees
 - `docs/architecture/taskflow.md` — execution semantics and FSMs
+- `docs/architecture/workflow-foundation.md` — Phase 5 workflow domain foundation
 - `docs/architecture/scope-model.md` — safety, isolation, and parallelism rules
 - `docs/architecture/commit-branch-model.md` — execution vs integration commit lifecycle
 - `docs/architecture/runtime-adapters.md` — runtime abstraction strategy
@@ -55,7 +56,7 @@ At a high level, Hivemind consists of the following major subsystems:
 
 1. **Project & Repository Registry** — long-lived organizational context
 2. **Planning Layer (TaskGraph)** — static, deterministic intent
-3. **Execution Layer (TaskFlow Engine)** — controlled, stateful execution
+3. **Execution Layer (TaskFlow / Workflow Engine)** — controlled, stateful execution
 4. **Scope & Safety Enforcement** — parallelism and isolation guarantees
 5. **Runtime Adapters** — replaceable execution backends
 6. **Event Log & State Derivation** — single source of truth
@@ -75,7 +76,7 @@ A **Project** is a logical container defined by the user. It may include:
 - Zero or more non-repo directories
 - One mandatory constitution artifact managed by Hivemind governance storage
 - Documentation (overviews, plans, constraints)
-- TaskGraphs, TaskFlows, and free tasks
+- TaskGraphs, TaskFlows, workflow definitions/runs, and free tasks
 
 Projects are **not defined by repositories** and do not live inside them by default.
 

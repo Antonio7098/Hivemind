@@ -48,6 +48,39 @@ pub(super) fn handle_get(
         "/api/tasks" => super::json_ok(list_tasks(registry)?)?,
         "/api/graphs" => super::json_ok(list_graphs(registry)?)?,
         "/api/flows" => super::json_ok(list_flows(registry)?)?,
+        "/api/workflows" => {
+            let query = parse_query(url);
+            super::json_ok(registry.list_workflows(query.get("project").map(String::as_str))?)?
+        }
+        "/api/workflows/inspect" => {
+            let query = parse_query(url);
+            let workflow_id = query.get("workflow_id").ok_or_else(|| {
+                HivemindError::user(
+                    "missing_workflow_id",
+                    "Query parameter 'workflow_id' is required",
+                    "server:workflows:inspect",
+                )
+            })?;
+            super::json_ok(registry.get_workflow(workflow_id)?)?
+        }
+        "/api/workflow-runs" => {
+            let query = parse_query(url);
+            super::json_ok(registry.list_workflow_runs(
+                query.get("project").map(String::as_str),
+                query.get("workflow").map(String::as_str),
+            )?)?
+        }
+        "/api/workflow-runs/inspect" => {
+            let query = parse_query(url);
+            let workflow_run_id = query.get("workflow_run_id").ok_or_else(|| {
+                HivemindError::user(
+                    "missing_workflow_run_id",
+                    "Query parameter 'workflow_run_id' is required",
+                    "server:workflow-runs:inspect",
+                )
+            })?;
+            super::json_ok(registry.get_workflow_run(workflow_run_id)?)?
+        }
         "/api/merges" => super::json_ok(list_merge_states(registry)?)?,
         "/api/runtimes" => super::json_ok(registry.runtime_list())?,
         "/api/runtimes/health" => {

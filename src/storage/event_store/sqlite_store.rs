@@ -217,7 +217,13 @@ mod tests {
                     project_id: Some(Uuid::new_v4()),
                     graph_id: Some(Uuid::new_v4()),
                     flow_id: Some(Uuid::new_v4()),
+                    workflow_id: None,
+                    workflow_run_id: None,
+                    root_workflow_run_id: None,
+                    parent_workflow_run_id: None,
                     task_id: Some(Uuid::new_v4()),
+                    step_id: None,
+                    step_run_id: None,
                     attempt_id: Some(attempt_id),
                 },
             ))

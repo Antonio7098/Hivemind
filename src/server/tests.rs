@@ -447,3 +447,144 @@ fn api_runtime_stream_supports_detail_levels() {
         .iter()
         .any(|item| item["kind"] == "output"));
 }
+
+#[allow(clippy::too_many_lines)]
+#[test]
+fn workflow_endpoints_create_update_run_and_complete() {
+    let registry = test_registry();
+    let project = registry
+        .create_project("workflow-api", None)
+        .expect("project");
+
+    let create_body = serde_json::to_vec(&serde_json::json!({
+        "project": project.id.to_string(),
+        "name": "api-workflow",
+        "description": "workflow foundation"
+    }))
+    .expect("create workflow body");
+    let create_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflows/create",
+        Some(create_body.as_slice()),
+    );
+    let created_workflow = json_value(&create_resp.body);
+    let workflow_id = created_workflow["data"]["id"]
+        .as_str()
+        .expect("workflow id");
+
+    let update_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_id": workflow_id,
+        "description": "workflow updated"
+    }))
+    .expect("update workflow body");
+    let _update_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflows/update",
+        Some(update_body.as_slice()),
+    );
+
+    let step_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_id": workflow_id,
+        "name": "root-step",
+        "kind": "task"
+    }))
+    .expect("step add body");
+    let step_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflows/steps/add",
+        Some(step_body.as_slice()),
+    );
+    let step_workflow = json_value(&step_resp.body);
+    let step_id = step_workflow["data"]["steps"]
+        .as_object()
+        .and_then(|steps| steps.values().next())
+        .and_then(|step| step.get("id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("step id");
+
+    let run_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_id": workflow_id,
+    }))
+    .expect("create run body");
+    let run_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/create",
+        Some(run_body.as_slice()),
+    );
+    let created_run = json_value(&run_resp.body);
+    let run_id = created_run["data"]["id"].as_str().expect("run id");
+
+    let start_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_run_id": run_id,
+    }))
+    .expect("start run body");
+    let _start_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/start",
+        Some(start_body.as_slice()),
+    );
+
+    let list_resp = api_request(&registry, ApiMethod::Get, "/api/workflow-runs", None);
+    let listed_runs = json_value(&list_resp.body);
+    assert_eq!(listed_runs["data"].as_array().unwrap().len(), 1);
+
+    let inspect_resp = api_request(
+        &registry,
+        ApiMethod::Get,
+        &format!("/api/workflow-runs/inspect?workflow_run_id={run_id}"),
+        None,
+    );
+    let inspected_run = json_value(&inspect_resp.body);
+    assert_eq!(inspected_run["data"]["state"], "running");
+
+    let step_running_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_run_id": run_id,
+        "step_id": step_id,
+        "state": "running"
+    }))
+    .expect("step running body");
+    let _step_running_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/steps/state",
+        Some(step_running_body.as_slice()),
+    );
+
+    let step_succeeded_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_run_id": run_id,
+        "step_id": step_id,
+        "state": "succeeded"
+    }))
+    .expect("step succeeded body");
+    let _step_succeeded_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/steps/state",
+        Some(step_succeeded_body.as_slice()),
+    );
+
+    let complete_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_run_id": run_id,
+    }))
+    .expect("complete run body");
+    let _complete_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/complete",
+        Some(complete_body.as_slice()),
+    );
+
+    let completed_resp = api_request(
+        &registry,
+        ApiMethod::Get,
+        &format!("/api/workflow-runs/inspect?workflow_run_id={run_id}"),
+        None,
+    );
+    let completed_run = json_value(&completed_resp.body);
+    assert_eq!(completed_run["data"]["state"], "completed");
+}

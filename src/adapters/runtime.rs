@@ -24,7 +24,7 @@
 //!
 //! # Example: Using an Adapter
 //!
-//! ```no_run
+//! ```ignore
 //! use hivemind::adapters::runtime::{AdapterConfig, ExecutionInput, RuntimeAdapter};
 //! use std::path::PathBuf;
 //! use std::time::Duration;

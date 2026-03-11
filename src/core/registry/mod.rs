@@ -19,6 +19,7 @@ pub mod shared_types;
 pub mod tasks;
 pub mod templates;
 pub mod types;
+pub mod workflow;
 pub mod worktree;
 
 pub use context::*;
@@ -31,6 +32,7 @@ pub use runtime::*;
 pub use tasks::*;
 pub use templates::*;
 pub use types::*;
+pub use workflow::*;
 pub use worktree::*;
 
 pub const GOVERNANCE_SCHEMA_VERSION: &str = "governance.v1";

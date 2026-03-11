@@ -262,6 +262,64 @@ fn in_memory_store_filters_error_events_by_error_type() {
 }
 
 #[test]
+fn in_memory_store_filters_by_workflow_lineage() {
+    let store = InMemoryEventStore::new();
+    let project_id = Uuid::new_v4();
+    let workflow_id = Uuid::new_v4();
+    let workflow_run_id = Uuid::new_v4();
+    let root_workflow_run_id = Uuid::new_v4();
+    let parent_workflow_run_id = Uuid::new_v4();
+    let step_id = Uuid::new_v4();
+    let step_run_id = Uuid::new_v4();
+
+    store
+        .append(Event::new(
+            EventPayload::WorkflowStepStateChanged {
+                workflow_run_id,
+                step_id,
+                step_run_id,
+                state: crate::core::workflow::WorkflowStepState::Running,
+                reason: None,
+            },
+            CorrelationIds::for_workflow_step(
+                project_id,
+                workflow_id,
+                workflow_run_id,
+                root_workflow_run_id,
+                Some(parent_workflow_run_id),
+                step_id,
+                step_run_id,
+            ),
+        ))
+        .unwrap();
+    store
+        .append(Event::new(
+            EventPayload::ProjectCreated {
+                id: Uuid::new_v4(),
+                name: "other".to_string(),
+                description: None,
+            },
+            CorrelationIds::none(),
+        ))
+        .unwrap();
+
+    let mut filter = EventFilter::all();
+    filter.workflow_id = Some(workflow_id);
+    filter.workflow_run_id = Some(workflow_run_id);
+    filter.root_workflow_run_id = Some(root_workflow_run_id);
+    filter.parent_workflow_run_id = Some(parent_workflow_run_id);
+    filter.step_id = Some(step_id);
+    filter.step_run_id = Some(step_run_id);
+
+    let events = store.read(&filter).unwrap();
+    assert_eq!(events.len(), 1);
+    assert!(matches!(
+        events[0].payload,
+        EventPayload::WorkflowStepStateChanged { .. }
+    ));
+}
+
+#[test]
 fn file_store_persist_and_reload() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("events.jsonl");
