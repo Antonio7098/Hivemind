@@ -102,6 +102,8 @@ fn workflow_step_state(state: WorkflowStepStateArg) -> WorkflowStepState {
         WorkflowStepStateArg::Pending => WorkflowStepState::Pending,
         WorkflowStepStateArg::Ready => WorkflowStepState::Ready,
         WorkflowStepStateArg::Running => WorkflowStepState::Running,
+        WorkflowStepStateArg::Verifying => WorkflowStepState::Verifying,
+        WorkflowStepStateArg::Retry => WorkflowStepState::Retry,
         WorkflowStepStateArg::Waiting => WorkflowStepState::Waiting,
         WorkflowStepStateArg::Succeeded => WorkflowStepState::Succeeded,
         WorkflowStepStateArg::Failed => WorkflowStepState::Failed,
@@ -170,6 +172,7 @@ fn render_workflow_run(registry: &Registry, run: WorkflowRun, format: OutputForm
     ExitCode::Success
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode {
     let Some(registry) = get_registry(format) else {
         return ExitCode::Error;
@@ -235,6 +238,16 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
             Ok(run) => output_workflow_run_id(run.id, format),
             Err(err) => output_error(&err, format),
         },
+        WorkflowCommands::Tick(args) => {
+            match registry.tick_workflow_run(
+                &args.workflow_run_id,
+                args.interactive,
+                args.max_parallel,
+            ) {
+                Ok(run) => render_workflow_run(&registry, run, format),
+                Err(err) => output_error(&err, format),
+            }
+        }
         WorkflowCommands::Complete(args) => {
             match registry.complete_workflow_run(&args.workflow_run_id) {
                 Ok(run) => output_workflow_run_id(run.id, format),

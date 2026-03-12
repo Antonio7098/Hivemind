@@ -727,3 +727,250 @@ fn workflow_endpoints_create_update_run_and_complete() {
     let completed_run = json_value(&completed_resp.body);
     assert_eq!(completed_run["data"]["state"], "completed");
 }
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn workflow_endpoints_tick_pause_resume_and_abort() {
+    let registry = test_registry();
+    let project = registry
+        .create_project("workflow-api-lifecycle", None)
+        .expect("project");
+
+    let create_body = serde_json::to_vec(&serde_json::json!({
+        "project": project.id.to_string(),
+        "name": "api-workflow-lifecycle"
+    }))
+    .expect("create workflow body");
+    let create_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflows/create",
+        Some(create_body.as_slice()),
+    );
+    let created_workflow = json_value(&create_resp.body);
+    let workflow_id = created_workflow["data"]["id"]
+        .as_str()
+        .expect("workflow id");
+
+    let step_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_id": workflow_id,
+        "name": "root-step",
+        "kind": "task"
+    }))
+    .expect("step add body");
+    let _step_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflows/steps/add",
+        Some(step_body.as_slice()),
+    );
+
+    let run_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_id": workflow_id,
+    }))
+    .expect("create run body");
+    let run_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/create",
+        Some(run_body.as_slice()),
+    );
+    let created_run = json_value(&run_resp.body);
+    let run_id = created_run["data"]["id"].as_str().expect("run id");
+
+    let run_id_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_run_id": run_id,
+    }))
+    .expect("run id body");
+    let _start_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/start",
+        Some(run_id_body.as_slice()),
+    );
+
+    let tick_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_run_id": run_id,
+        "max_parallel": 1
+    }))
+    .expect("tick body");
+    let tick_err = handle_api_request_inner(
+        ApiMethod::Post,
+        "/api/workflow-runs/tick",
+        10,
+        Some(tick_body.as_slice()),
+        &registry,
+    )
+    .expect_err("tick should fail without runtime");
+    assert_eq!(tick_err.code, "runtime_not_configured");
+
+    let pause_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/pause",
+        Some(run_id_body.as_slice()),
+    );
+    let paused_run = json_value(&pause_resp.body);
+    assert_eq!(paused_run["data"]["state"], "paused");
+
+    let resume_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/resume",
+        Some(run_id_body.as_slice()),
+    );
+    let resumed_run = json_value(&resume_resp.body);
+    assert_eq!(resumed_run["data"]["state"], "running");
+
+    let abort_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_run_id": run_id,
+        "reason": "stop-now"
+    }))
+    .expect("abort body");
+    let abort_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/abort",
+        Some(abort_body.as_slice()),
+    );
+    let aborted_run = json_value(&abort_resp.body);
+    assert_eq!(aborted_run["data"]["state"], "aborted");
+
+    let inspect_resp = api_request(
+        &registry,
+        ApiMethod::Get,
+        &format!("/api/workflow-runs/inspect?workflow_run_id={run_id}"),
+        None,
+    );
+    let inspected_run = json_value(&inspect_resp.body);
+    assert_eq!(inspected_run["data"]["state"], "aborted");
+}
+
+#[test]
+fn workflow_endpoints_reject_unknown_step_dependency() {
+    let registry = test_registry();
+    let project = registry
+        .create_project("workflow-api-deps", None)
+        .expect("project");
+
+    let create_body = serde_json::to_vec(&serde_json::json!({
+        "project": project.id.to_string(),
+        "name": "api-workflow-deps"
+    }))
+    .expect("create workflow body");
+    let create_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflows/create",
+        Some(create_body.as_slice()),
+    );
+    let workflow_id = json_value(&create_resp.body)["data"]["id"]
+        .as_str()
+        .expect("workflow id")
+        .to_string();
+
+    let step_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_id": workflow_id,
+        "name": "dependent-step",
+        "kind": "task",
+        "depends_on": [Uuid::new_v4().to_string()]
+    }))
+    .expect("step add body");
+    let err = handle_api_request_inner(
+        ApiMethod::Post,
+        "/api/workflows/steps/add",
+        10,
+        Some(step_body.as_slice()),
+        &registry,
+    )
+    .expect_err("unknown dependency should fail");
+
+    assert_eq!(err.code, "workflow_step_dependency_not_found");
+}
+
+#[test]
+fn workflow_endpoints_reject_invalid_step_transition() {
+    let registry = test_registry();
+    let project = registry
+        .create_project("workflow-api-transition", None)
+        .expect("project");
+
+    let create_body = serde_json::to_vec(&serde_json::json!({
+        "project": project.id.to_string(),
+        "name": "api-workflow-transition"
+    }))
+    .expect("create workflow body");
+    let create_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflows/create",
+        Some(create_body.as_slice()),
+    );
+    let workflow_id = json_value(&create_resp.body)["data"]["id"]
+        .as_str()
+        .expect("workflow id")
+        .to_string();
+
+    let step_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_id": workflow_id,
+        "name": "step-a",
+        "kind": "task"
+    }))
+    .expect("step add body");
+    let step_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflows/steps/add",
+        Some(step_body.as_slice()),
+    );
+    let step_id = json_value(&step_resp.body)["data"]["steps"]
+        .as_object()
+        .and_then(|steps| steps.values().next())
+        .and_then(|step| step.get("id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("step id")
+        .to_string();
+
+    let run_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_id": workflow_id,
+    }))
+    .expect("create run body");
+    let run_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/create",
+        Some(run_body.as_slice()),
+    );
+    let run_id = json_value(&run_resp.body)["data"]["id"]
+        .as_str()
+        .expect("run id")
+        .to_string();
+
+    let start_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_run_id": run_id,
+    }))
+    .expect("start body");
+    let _start_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflow-runs/start",
+        Some(start_body.as_slice()),
+    );
+
+    let invalid_transition_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_run_id": run_id,
+        "step_id": step_id,
+        "state": "ready"
+    }))
+    .expect("invalid transition body");
+    let err = handle_api_request_inner(
+        ApiMethod::Post,
+        "/api/workflow-runs/steps/state",
+        10,
+        Some(invalid_transition_body.as_slice()),
+        &registry,
+    )
+    .expect_err("pending to ready should fail");
+
+    assert_eq!(err.code, "invalid_workflow_step_transition");
+}
