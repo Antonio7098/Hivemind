@@ -28,8 +28,7 @@ impl Registry {
                 return Err(err);
             }
         };
-        let corr_task =
-            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id);
+        let corr_task = Self::correlation_for_flow_task_event(&state, &flow, id);
         if flow.state != FlowState::Running {
             let err =
                 HivemindError::user("flow_not_running", "Flow is not in running state", origin);
@@ -63,13 +62,8 @@ impl Registry {
             self.capture_scope_baseline_for_attempt(&flow, &state, attempt_id)?;
         }
 
-        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
-            flow.project_id,
-            flow.graph_id,
-            flow.id,
-            id,
-            attempt_id,
-        );
+        let corr_attempt =
+            Self::correlation_for_flow_task_attempt_event(&state, &flow, id, attempt_id);
 
         self.append_event(
             Event::new(

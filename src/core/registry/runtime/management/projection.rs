@@ -1210,6 +1210,28 @@ mod tests {
         event
     }
 
+    fn attempt_correlation(
+        project_id: Uuid,
+        graph_id: Uuid,
+        flow_id: Uuid,
+        task_id: Uuid,
+        attempt_id: Uuid,
+    ) -> CorrelationIds {
+        CorrelationIds {
+            project_id: Some(project_id),
+            graph_id: Some(graph_id),
+            flow_id: Some(flow_id),
+            workflow_id: None,
+            workflow_run_id: None,
+            root_workflow_run_id: None,
+            parent_workflow_run_id: None,
+            task_id: Some(task_id),
+            step_id: None,
+            step_run_id: None,
+            attempt_id: Some(attempt_id),
+        }
+    }
+
     fn native_blob_ref(label: &str) -> NativeBlobRef {
         NativeBlobRef {
             digest: format!("digest-{label}"),
@@ -1227,9 +1249,7 @@ mod tests {
         let flow_id = Uuid::new_v4();
         let task_id = Uuid::new_v4();
         let attempt_id = Uuid::new_v4();
-        let correlation = CorrelationIds::for_graph_flow_task_attempt(
-            project_id, graph_id, flow_id, task_id, attempt_id,
-        );
+        let correlation = attempt_correlation(project_id, graph_id, flow_id, task_id, attempt_id);
         let events = vec![
             event(
                 1,
@@ -1349,9 +1369,7 @@ mod tests {
         let flow_id = Uuid::new_v4();
         let task_id = Uuid::new_v4();
         let attempt_id = Uuid::new_v4();
-        let correlation = CorrelationIds::for_graph_flow_task_attempt(
-            project_id, graph_id, flow_id, task_id, attempt_id,
-        );
+        let correlation = attempt_correlation(project_id, graph_id, flow_id, task_id, attempt_id);
         let events = vec![
             event(
                 1,
@@ -1404,9 +1422,7 @@ mod tests {
         let flow_id = Uuid::new_v4();
         let task_id = Uuid::new_v4();
         let attempt_id = Uuid::new_v4();
-        let correlation = CorrelationIds::for_graph_flow_task_attempt(
-            project_id, graph_id, flow_id, task_id, attempt_id,
-        );
+        let correlation = attempt_correlation(project_id, graph_id, flow_id, task_id, attempt_id);
         let native_correlation = NativeEventCorrelation {
             project_id,
             graph_id,
@@ -1522,9 +1538,7 @@ mod tests {
         let flow_id = Uuid::new_v4();
         let task_id = Uuid::new_v4();
         let attempt_id = Uuid::new_v4();
-        let correlation = CorrelationIds::for_graph_flow_task_attempt(
-            project_id, graph_id, flow_id, task_id, attempt_id,
-        );
+        let correlation = attempt_correlation(project_id, graph_id, flow_id, task_id, attempt_id);
         let native_correlation = NativeEventCorrelation {
             project_id,
             graph_id,
@@ -1585,9 +1599,7 @@ mod tests {
         let flow_id = Uuid::new_v4();
         let task_id = Uuid::new_v4();
         let attempt_id = Uuid::new_v4();
-        let correlation = CorrelationIds::for_graph_flow_task_attempt(
-            project_id, graph_id, flow_id, task_id, attempt_id,
-        );
+        let correlation = attempt_correlation(project_id, graph_id, flow_id, task_id, attempt_id);
         let native_correlation = NativeEventCorrelation {
             project_id,
             graph_id,

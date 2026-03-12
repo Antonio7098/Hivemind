@@ -22,6 +22,8 @@ pub enum WorkflowStepStateArg {
     Pending,
     Ready,
     Running,
+    Verifying,
+    Retry,
     Waiting,
     Succeeded,
     Failed,

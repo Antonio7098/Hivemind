@@ -11,6 +11,7 @@ pub enum WorkflowCommands {
     RunList(WorkflowRunListArgs),
     Status(WorkflowStatusArgs),
     Start(WorkflowRunIdArgs),
+    Tick(WorkflowTickArgs),
     Complete(WorkflowRunIdArgs),
     Pause(WorkflowRunIdArgs),
     Resume(WorkflowRunIdArgs),
@@ -81,6 +82,15 @@ pub struct WorkflowStatusArgs {
 #[derive(Args)]
 pub struct WorkflowRunIdArgs {
     pub workflow_run_id: String,
+}
+
+#[derive(Args)]
+pub struct WorkflowTickArgs {
+    pub workflow_run_id: String,
+    #[arg(long)]
+    pub interactive: bool,
+    #[arg(long)]
+    pub max_parallel: Option<u16>,
 }
 
 #[derive(Args)]

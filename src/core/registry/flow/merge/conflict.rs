@@ -8,6 +8,7 @@ impl Registry {
         details: String,
         origin: &'static str,
     ) -> Result<()> {
+        let state = self.state()?;
         self.append_event(
             Event::new(
                 EventPayload::MergeConflictDetected {
@@ -15,7 +16,10 @@ impl Registry {
                     task_id,
                     details,
                 },
-                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                task_id.map_or_else(
+                    || Self::correlation_for_flow_event(&state, flow),
+                    |task_id| Self::correlation_for_flow_task_event(&state, flow, task_id),
+                ),
             ),
             origin,
         )

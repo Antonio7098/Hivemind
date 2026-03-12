@@ -58,6 +58,8 @@ pub enum WorkflowStepState {
     Pending,
     Ready,
     Running,
+    Verifying,
+    Retry,
     Waiting,
     Succeeded,
     Failed,
@@ -70,16 +72,29 @@ impl WorkflowStepState {
     pub const fn can_transition_to(self, next: Self) -> bool {
         matches!(
             (self, next),
-            (Self::Pending | Self::Waiting | Self::Failed, Self::Ready)
-                | (Self::Pending | Self::Ready, Self::Skipped)
+            (
+                Self::Pending | Self::Waiting | Self::Failed | Self::Retry,
+                Self::Ready
+            ) | (Self::Pending | Self::Ready, Self::Skipped)
                 | (
-                    Self::Pending | Self::Ready | Self::Running | Self::Waiting | Self::Failed,
+                    Self::Pending
+                        | Self::Ready
+                        | Self::Running
+                        | Self::Verifying
+                        | Self::Retry
+                        | Self::Waiting
+                        | Self::Failed,
                     Self::Aborted,
                 )
                 | (Self::Ready, Self::Running)
+                | (Self::Retry, Self::Running | Self::Failed)
                 | (
                     Self::Running,
-                    Self::Waiting | Self::Succeeded | Self::Failed
+                    Self::Verifying | Self::Retry | Self::Waiting | Self::Succeeded | Self::Failed
+                )
+                | (
+                    Self::Verifying,
+                    Self::Retry | Self::Succeeded | Self::Failed
                 )
                 | (Self::Waiting, Self::Failed)
         )

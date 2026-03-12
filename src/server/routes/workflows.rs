@@ -42,6 +42,14 @@ pub(super) fn handle_post(
             let req: WorkflowRunIdRequest = parse_json_body(body, "server:workflow-runs:start")?;
             super::json_ok(registry.start_workflow_run(&req.workflow_run_id)?)?
         }
+        "/api/workflow-runs/tick" => {
+            let req: WorkflowTickRequest = parse_json_body(body, "server:workflow-runs:tick")?;
+            super::json_ok(registry.tick_workflow_run(
+                &req.workflow_run_id,
+                req.interactive.unwrap_or(false),
+                req.max_parallel,
+            )?)?
+        }
         "/api/workflow-runs/complete" => {
             let req: WorkflowRunIdRequest = parse_json_body(body, "server:workflow-runs:complete")?;
             super::json_ok(registry.complete_workflow_run(&req.workflow_run_id)?)?

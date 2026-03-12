@@ -184,12 +184,7 @@ impl Registry {
                                 action: "serialized".to_string(),
                                 reason: reason.clone(),
                             },
-                            CorrelationIds::for_graph_flow_task(
-                                snapshot.project_id,
-                                snapshot.graph_id,
-                                snapshot.id,
-                                candidate_id,
-                            ),
+                            Self::correlation_for_flow_task_event(&state, &snapshot, candidate_id),
                         ),
                         "registry:tick_flow",
                     )?;
@@ -201,12 +196,7 @@ impl Registry {
                                 task_id: candidate_id,
                                 reason,
                             },
-                            CorrelationIds::for_graph_flow_task(
-                                snapshot.project_id,
-                                snapshot.graph_id,
-                                snapshot.id,
-                                candidate_id,
-                            ),
+                            Self::correlation_for_flow_task_event(&state, &snapshot, candidate_id),
                         ),
                         "registry:tick_flow",
                     )?;
@@ -224,12 +214,7 @@ impl Registry {
                                 action: "warn_parallel".to_string(),
                                 reason,
                             },
-                            CorrelationIds::for_graph_flow_task(
-                                snapshot.project_id,
-                                snapshot.graph_id,
-                                snapshot.id,
-                                candidate_id,
-                            ),
+                            Self::correlation_for_flow_task_event(&state, &snapshot, candidate_id),
                         ),
                         "registry:tick_flow",
                     )?;
