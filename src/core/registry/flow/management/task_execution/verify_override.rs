@@ -79,7 +79,7 @@ impl Registry {
                 reason: reason.to_string(),
                 user,
             },
-            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
+            Self::correlation_for_flow_task_event(&state, &flow, id),
         );
 
         self.store
@@ -115,11 +115,7 @@ impl Registry {
                     EventPayload::TaskFlowCompleted {
                         flow_id: updated.id,
                     },
-                    CorrelationIds::for_graph_flow(
-                        updated.project_id,
-                        updated.graph_id,
-                        updated.id,
-                    ),
+                    Self::correlation_for_flow_event(&self.state()?, &updated),
                 );
                 let _ = self.store.append(event);
             } else if updated.run_mode == RunMode::Auto {

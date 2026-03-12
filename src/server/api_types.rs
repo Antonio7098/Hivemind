@@ -45,5 +45,5 @@ pub(crate) use views::{
 };
 pub(crate) use workflows::{
     WorkflowAbortRequest, WorkflowCreateRequest, WorkflowRunCreateRequest, WorkflowRunIdRequest,
-    WorkflowStepAddRequest, WorkflowStepStateRequest, WorkflowUpdateRequest,
+    WorkflowStepAddRequest, WorkflowStepStateRequest, WorkflowTickRequest, WorkflowUpdateRequest,
 };

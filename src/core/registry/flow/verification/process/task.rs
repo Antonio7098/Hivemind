@@ -80,8 +80,7 @@ impl Registry {
             }
         }
 
-        let corr_task =
-            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, task_id);
+        let corr_task = Self::correlation_for_flow_task_event(&state, &flow, task_id);
 
         if !verification.passed {
             if let Some(scope) = &task.scope {
@@ -96,12 +95,8 @@ impl Registry {
                             scope: scope.clone(),
                             violations: verification.violations.clone(),
                         },
-                        CorrelationIds::for_graph_flow_task_attempt(
-                            flow.project_id,
-                            flow.graph_id,
-                            flow.id,
-                            task_id,
-                            attempt.id,
+                        Self::correlation_for_flow_task_attempt_event(
+                            &state, &flow, task_id, attempt.id,
                         ),
                     ),
                     origin,
@@ -130,12 +125,8 @@ impl Registry {
                         attempt_id: Some(attempt.id),
                         reason: Some("scope_violation".to_string()),
                     },
-                    CorrelationIds::for_graph_flow_task_attempt(
-                        flow.project_id,
-                        flow.graph_id,
-                        flow.id,
-                        task_id,
-                        attempt.id,
+                    Self::correlation_for_flow_task_attempt_event(
+                        &state, &flow, task_id, attempt.id,
                     ),
                 ),
                 origin,
@@ -162,13 +153,8 @@ impl Registry {
             )));
         }
 
-        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
-            flow.project_id,
-            flow.graph_id,
-            flow.id,
-            task_id,
-            attempt.id,
-        );
+        let corr_attempt =
+            Self::correlation_for_flow_task_attempt_event(&state, &flow, task_id, attempt.id);
 
         if let Some(scope) = &task.scope {
             self.append_event(
@@ -307,11 +293,7 @@ impl Registry {
                     EventPayload::TaskFlowCompleted {
                         flow_id: updated.id,
                     },
-                    CorrelationIds::for_graph_flow(
-                        updated.project_id,
-                        updated.graph_id,
-                        updated.id,
-                    ),
+                    Self::correlation_for_flow_event(&self.state()?, &updated),
                 );
                 self.append_event(event, origin)?;
                 self.maybe_autostart_dependent_flows(updated.id)?;

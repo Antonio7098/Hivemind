@@ -599,10 +599,18 @@ mod tests {
     use std::path::Path;
     use tempfile::tempdir;
 
+    fn git_bin() -> &'static str {
+        if Path::new("/usr/bin/git").exists() {
+            "/usr/bin/git"
+        } else {
+            "git"
+        }
+    }
+
     fn init_git_repo(path: &Path) {
         std::fs::create_dir_all(path).expect("create repo dir");
         let run = |args: &[&str]| {
-            let output = Command::new("git")
+            let output = Command::new(git_bin())
                 .current_dir(path)
                 .args(args)
                 .output()

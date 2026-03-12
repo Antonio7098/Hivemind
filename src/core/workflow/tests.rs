@@ -10,6 +10,9 @@ fn workflow_run_state_transitions_are_constrained() {
 #[test]
 fn workflow_step_state_transitions_are_constrained() {
     assert!(WorkflowStepState::Pending.can_transition_to(WorkflowStepState::Ready));
+    assert!(WorkflowStepState::Running.can_transition_to(WorkflowStepState::Verifying));
+    assert!(WorkflowStepState::Verifying.can_transition_to(WorkflowStepState::Retry));
+    assert!(WorkflowStepState::Retry.can_transition_to(WorkflowStepState::Running));
     assert!(WorkflowStepState::Running.can_transition_to(WorkflowStepState::Succeeded));
     assert!(!WorkflowStepState::Succeeded.can_transition_to(WorkflowStepState::Running));
 }
@@ -56,4 +59,22 @@ fn workflow_definition_metadata_updates_in_place() {
 
     assert_eq!(definition.name, "renamed");
     assert_eq!(definition.description.as_deref(), Some("desc"));
+}
+
+#[test]
+fn workflow_definition_root_step_ids_exclude_dependent_steps() {
+    let project_id = Uuid::new_v4();
+    let mut definition = WorkflowDefinition::new(project_id, "demo", None);
+    let root = WorkflowStepDefinition::new("root", WorkflowStepKind::Task);
+    let root_id = root.id;
+    let mut dependent = WorkflowStepDefinition::new("dependent", WorkflowStepKind::Task);
+    dependent.depends_on = vec![root_id];
+    let dependent_id = dependent.id;
+    definition.add_step(root);
+    definition.add_step(dependent);
+
+    let root_ids = definition.root_step_ids();
+
+    assert_eq!(root_ids, vec![root_id]);
+    assert!(!root_ids.contains(&dependent_id));
 }

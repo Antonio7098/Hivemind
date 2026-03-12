@@ -80,7 +80,7 @@ impl Registry {
                 name: name.map(String::from),
                 task_ids,
             },
-            CorrelationIds::for_graph_flow(graph.project_id, graph.id, flow_id),
+            Self::correlation_for_graph_flow_id_event(&state, graph.project_id, graph.id, flow_id),
         );
 
         self.store.append(event).map_err(|e| {
@@ -95,12 +95,14 @@ impl Registry {
         let flow = self
             .get_flow(flow_id)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let state = self.state()?;
+        let flow_corr = Self::correlation_for_flow_event(&state, &flow);
         match flow.state {
             FlowState::Created => {}
             FlowState::Paused => {
                 let event = Event::new(
                     EventPayload::TaskFlowResumed { flow_id: flow.id },
-                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                    flow_corr,
                 );
                 self.store.append(event).map_err(|e| {
                     HivemindError::system(
@@ -121,10 +123,7 @@ impl Registry {
                     "Flow is already running",
                     "registry:start_flow",
                 );
-                self.record_error_event(
-                    &err,
-                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
-                );
+                self.record_error_event(&err, flow_corr);
                 return Err(err);
             }
             FlowState::Completed => {
@@ -133,10 +132,7 @@ impl Registry {
                     "Flow has already completed",
                     "registry:start_flow",
                 );
-                self.record_error_event(
-                    &err,
-                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
-                );
+                self.record_error_event(&err, flow_corr);
                 return Err(err);
             }
             FlowState::FrozenForMerge => {
@@ -145,10 +141,7 @@ impl Registry {
                     "Flow is frozen for merge",
                     "registry:start_flow",
                 );
-                self.record_error_event(
-                    &err,
-                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
-                );
+                self.record_error_event(&err, flow_corr);
                 return Err(err);
             }
             FlowState::Merged => {
@@ -157,24 +150,17 @@ impl Registry {
                     "Flow has already been merged",
                     "registry:start_flow",
                 );
-                self.record_error_event(
-                    &err,
-                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
-                );
+                self.record_error_event(&err, flow_corr);
                 return Err(err);
             }
             FlowState::Aborted => {
                 let err =
                     HivemindError::user("flow_aborted", "Flow was aborted", "registry:start_flow");
-                self.record_error_event(
-                    &err,
-                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
-                );
+                self.record_error_event(&err, flow_corr);
                 return Err(err);
             }
         }
 
-        let state = self.state()?;
         let unmet = Self::unmet_flow_dependencies(&state, &flow);
         if !unmet.is_empty() {
             let preview = unmet
@@ -193,10 +179,7 @@ impl Registry {
                 format!("Flow dependencies are not completed: {preview}{suffix}"),
                 "registry:start_flow",
             );
-            self.record_error_event(
-                &err,
-                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
-            );
+            self.record_error_event(&err, flow_corr);
             return Err(err);
         }
 
@@ -239,7 +222,7 @@ impl Registry {
                 flow_id: flow.id,
                 base_revision,
             },
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            flow_corr,
         );
         self.store.append(event).map_err(|e| {
             HivemindError::system("event_append_failed", e.to_string(), "registry:start_flow")
@@ -253,12 +236,7 @@ impl Registry {
                         flow_id: flow.id,
                         task_id,
                     },
-                    CorrelationIds::for_graph_flow_task(
-                        flow.project_id,
-                        flow.graph_id,
-                        flow.id,
-                        task_id,
-                    ),
+                    Self::correlation_for_flow_task_event(&state, &flow, task_id),
                 );
                 self.store.append(event).map_err(|e| {
                     HivemindError::system(

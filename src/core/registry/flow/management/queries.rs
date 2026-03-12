@@ -45,6 +45,7 @@ impl Registry {
         let flow = self
             .get_flow(flow_id)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let state = self.state()?;
 
         if matches!(
             flow.state,
@@ -56,10 +57,7 @@ impl Registry {
                 "registry:delete_flow",
             )
             .with_hint("Abort or complete the flow before deleting it");
-            self.record_error_event(
-                &err,
-                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
-            );
+            self.record_error_event(&err, Self::correlation_for_flow_event(&state, &flow));
             return Err(err);
         }
 
@@ -69,7 +67,7 @@ impl Registry {
                 graph_id: flow.graph_id,
                 project_id: flow.project_id,
             },
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            Self::correlation_for_flow_event(&state, &flow),
         );
         self.store.append(event).map_err(|e| {
             HivemindError::system("event_append_failed", e.to_string(), "registry:delete_flow")

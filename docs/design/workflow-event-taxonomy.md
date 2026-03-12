@@ -2,8 +2,9 @@
 
 ## Purpose
 
-Sprint 64 introduces the workflow domain as a new event-sourced execution surface that lives alongside legacy `TaskFlow`.
-This document defines the initial workflow event family, required lineage identifiers, and projection rules.
+Sprint 64 introduced the workflow domain as a new event-sourced execution surface that lives alongside legacy `TaskFlow`.
+Sprint 65 extends that foundation with a synthetic flow bridge for flat `task` step execution.
+This document defines the workflow event family, required lineage identifiers, and projection rules.
 
 ## Event Families
 
@@ -59,6 +60,7 @@ Rules:
 3. `parent_workflow_run_id` is `None` for root runs and reserved for nested workflows later.
 4. `step_id` and `step_run_id` are set only for step-scoped events.
 5. Legacy graph/flow/task identifiers remain available and unchanged for non-workflow events.
+6. Bridged synthetic flow/task/attempt events must preserve workflow lineage so event filters can attribute runtime activity back to the owning workflow run.
 
 ## Projection Rules
 
@@ -74,15 +76,25 @@ Replay rules:
 - start/pause/resume/complete/abort mutate the stored run only if it exists
 - step state changes mutate the matching `WorkflowStepRun` and refresh run timestamps
 - replay must remain deterministic regardless of whether legacy flow events are interleaved
+- bridged flow/task execution events may be interleaved with workflow-native events, but workflow reconciliation must still produce the same `WorkflowRun`/`WorkflowStepRun` states
 
-## Explicit Sprint 64 Non-Goals
+## Sprint 65 Bridge Notes
 
-Sprint 64 does **not** introduce:
+When `workflow tick` executes a flat workflow:
+
+- the registry creates a synthetic graph and synthetic flow keyed to the workflow run
+- each `task` step gets a synthetic task id and continues through the legacy attempt lifecycle
+- workflow-native status is recovered from the bridged task execution states during sync
+- retry currently remains operational through the synthetic task retry path rather than a dedicated workflow-native retry command
+- unsupported step kinds are rejected before synthetic execution starts
+
+## Current Non-Goals
+
+The current implementation does **not** introduce:
 
 - workflow execution scheduling beyond manual lifecycle control
 - nested child workflow execution
 - append-only workflow context/output bag behavior
-- migration of legacy `TaskFlow` history or ownership
+- full migration of legacy `TaskFlow` runtime ownership out of the synthetic bridge
 
 Those land in later Phase 5 sprints.
-

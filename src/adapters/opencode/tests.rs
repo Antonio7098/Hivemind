@@ -136,7 +136,7 @@ fn initialize_falls_back_to_help_when_version_fails() {
     let script_path = tmp.path().join("fake_runtime.sh");
     std::fs::write(
         &script_path,
-        "#!/usr/bin/env sh\nif [ \"$1\" = \"--version\" ]; then exit 1; fi\nif [ \"$1\" = \"--help\" ]; then exit 0; fi\nexit 0\n",
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then exit 1; fi\nif [ \"$1\" = \"--help\" ]; then exit 0; fi\nexit 0\n",
     )
     .unwrap();
     let mut perms = std::fs::metadata(&script_path).unwrap().permissions();

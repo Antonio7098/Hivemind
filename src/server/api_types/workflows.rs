@@ -32,6 +32,13 @@ pub(crate) struct WorkflowRunIdRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub(crate) struct WorkflowTickRequest {
+    pub(crate) workflow_run_id: String,
+    pub(crate) interactive: Option<bool>,
+    pub(crate) max_parallel: Option<u16>,
+}
+
+#[derive(Debug, Deserialize)]
 pub(crate) struct WorkflowRunCreateRequest {
     pub(crate) workflow_id: String,
 }

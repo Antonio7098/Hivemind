@@ -83,43 +83,43 @@
 **Goal:** Execute flat workflows using current attempt/worktree/verification infrastructure before introducing nesting or advanced control flow.
 
 ### 65.1 Flat workflow scheduler
-- [ ] Implement workflow scheduling for dependency-driven execution of `Task` steps only
-- [ ] Preserve deterministic release semantics already proven in current `TaskFlow` scheduling
-- [ ] Explicitly model ready/running/verifying/retry/success/failure states for workflow step runs
+- [x] Implement workflow scheduling for dependency-driven execution of `Task` steps only
+- [x] Preserve deterministic release semantics already proven in current `TaskFlow` scheduling
+- [x] Explicitly model ready/running/verifying/retry/success/failure states for workflow step runs
 
 ### 65.2 Leaf execution bridge
-- [ ] Reuse existing attempt launch, retry, verification, and checkpoint machinery for leaf `Task` steps where safe
-- [ ] Reuse existing worktree preparation and scope enforcement paths for leaf execution while making workflow ownership explicit
-- [ ] Reuse existing merge-related task output attribution where possible, but keep merge orchestration itself out of this sprint
+- [x] Reuse existing attempt launch, retry, verification, and checkpoint machinery for leaf `Task` steps where safe
+- [x] Reuse existing worktree preparation and scope enforcement paths for leaf execution while making workflow ownership explicit
+- [x] Reuse existing merge-related task output attribution where possible, but keep merge orchestration itself out of this sprint
 
 ### 65.3 Workflow-native command surface (minimal)
-- [ ] Add initial workflow CLI/API commands for `create`, `list`, `inspect`, `start`, `tick`, `pause`, `resume`, and `abort`
-- [ ] Keep contracts machine-readable and parallel to existing Hivemind command patterns
-- [ ] Do not require any conversion of existing flows/tasks to use the new path
+- [x] Add initial workflow CLI/API commands for `create`, `list`, `inspect`, `start`, `tick`, `pause`, `resume`, and `abort`
+- [x] Keep contracts machine-readable and parallel to existing Hivemind command patterns
+- [x] Do not require any conversion of existing flows/tasks to use the new path
 
 ### 65.4 Automated validation and test coverage
-- [ ] Add unit tests for flat workflow scheduling and dependency release semantics
-- [ ] Add integration tests covering workflow-run launch through leaf attempt completion, verification, and retry
-- [ ] Add regression tests proving legacy flow execution remains operational while workflow execution is introduced
-- [ ] Add replay tests for workflow step state progression through success, retry, and failure paths
+- [x] Add unit tests for flat workflow scheduling and dependency release semantics
+- [x] Add integration tests covering workflow-run launch through leaf attempt completion, verification, and retry
+- [x] Add regression tests proving legacy flow execution remains operational while workflow execution is introduced
+- [x] Add replay tests for workflow step state progression through success, retry, and failure paths
 
 ### 65.5 Documentation
-- [ ] Update CLI/API docs for the new workflow command surface
-- [ ] Add architecture notes describing the bridge from workflow step runs to attempt/worktree/verification subsystems
-- [ ] Document current limitations: flat workflows only, no child workflows, no workflow context yet
+- [x] Update CLI/API docs for the new workflow command surface
+- [x] Add architecture notes describing the bridge from workflow step runs to attempt/worktree/verification subsystems
+- [x] Document current limitations: flat workflows only, no child workflows, no workflow context yet
 
 ### 65.6 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 65 manual checklist under `@hivemind-test`
-- [ ] Smoke test a real repository workflow with at least three leaf task steps and one dependency edge
-- [ ] Smoke test pause/resume/abort and retry behavior through the workflow CLI surface
-- [ ] Validate workflow events, attempts, and verification outcomes remain attributable in CLI and event inspection paths
-- [ ] Publish Sprint 65 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 65 manual checklist under `@hivemind-test`
+- [x] Smoke test a real repository workflow with at least three leaf task steps and one dependency edge
+- [x] Smoke test pause/resume/abort and retry behavior through the workflow CLI surface
+- [x] Validate workflow events, attempts, and verification outcomes remain attributable in CLI and event inspection paths
+- [x] Publish Sprint 65 manual test report artifact in `@hivemind-test`
 
 ### 65.7 Exit Criteria
-- [ ] Flat workflows can execute real leaf work using existing runtime/attempt machinery
-- [ ] Workflow step scheduling is deterministic and replay-safe
-- [ ] New workflow CLI/API surface is usable for real smoke paths
-- [ ] Automated and manual smoke validation are completed and documented
+- [x] Flat workflows can execute real leaf work using existing runtime/attempt machinery
+- [x] Workflow step scheduling is deterministic and replay-safe
+- [x] New workflow CLI/API surface is usable for real smoke paths
+- [x] Automated and manual smoke validation are completed and documented
 
 ---
 

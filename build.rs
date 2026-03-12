@@ -1,5 +1,8 @@
 use std::{env, fs, path::PathBuf};
 
+// Keep this file content-changing when fragment membership changes so Cargo
+// rebuilds the event payload generator deterministically across cached targets.
+
 const FRAGMENTS: &[&str] = &[
     "src/core/events/payload/fragments/chat_sessions.rs",
     "src/core/events/payload/fragments/project_task_repo_runtime.rs",
