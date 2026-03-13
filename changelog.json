@@ -4,6 +4,28 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.56",
+      "date": "2026-03-13",
+      "phase": 70,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "workflow",
+          "description": "Close Phase 5 with end-to-end workflow hardening across nested lineage inspection, resume-after-partial-child-completion recovery, and workflow-correlated merge failure reporting"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 70 regressions for nested workflow recovery and workflow-native merge-boundary observability, and retain workflow-focused replay/hardening coverage"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Publish Sprint 70 and Phase 5 closeout reports, add Sprint 70 manual artifacts, and update quickstart/roadmap documentation to reflect the validated workflow-first model"
+        }
+      ]
+    },
+    {
       "version": "v0.1.55",
       "date": "2026-03-13",
       "phase": 69,
@@ -91,6 +113,33 @@
           "type": "changed",
           "area": "docs",
           "description": "Close Sprint 66 in roadmap/report/manual artifacts with real-runtime smoke evidence from post-fix `opencode/nemotron-3-super-free` runs and updated sprint execution guidance for workflow/runtime validation"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.52",
+      "date": "2026-03-13",
+      "phase": 67,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "workflow",
+          "description": "Expose nested workflow inspection through a shared CLI/API payload with a recursive `child_runs` tree, explicit workflow names, and parent-step names"
+        },
+        {
+          "type": "changed",
+          "area": "events",
+          "description": "Make `events list --workflow-run <root-run-id>` follow root workflow lineage by default so nested child events are returned without extra filter guesswork"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 67 regressions for nested workflow status inspection and workflow-run inspect API lineage output"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Close Sprint 67 roadmap/report/manual artifacts and document the final nested-lineage inspection contract"
         }
       ]
     },

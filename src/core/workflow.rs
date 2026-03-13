@@ -847,6 +847,36 @@ pub struct WorkflowRun {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Recursive lineage summary for nested workflow inspection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowRunLineageNode {
+    pub run_id: Uuid,
+    pub workflow_id: Uuid,
+    pub workflow_name: String,
+    pub state: WorkflowRunState,
+    pub root_workflow_run_id: Uuid,
+    #[serde(default)]
+    pub parent_workflow_run_id: Option<Uuid>,
+    #[serde(default)]
+    pub parent_step_id: Option<Uuid>,
+    #[serde(default)]
+    pub parent_step_name: Option<String>,
+    #[serde(default)]
+    pub children: Vec<Self>,
+}
+
+/// Workflow-run inspection payload with explicit nested lineage.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowRunInspectView {
+    #[serde(flatten)]
+    pub run: WorkflowRun,
+    pub workflow_name: String,
+    #[serde(default)]
+    pub parent_step_name: Option<String>,
+    #[serde(default)]
+    pub child_runs: Vec<WorkflowRunLineageNode>,
+}
+
 impl WorkflowRun {
     #[must_use]
     pub fn new_root(definition: &WorkflowDefinition) -> Self {

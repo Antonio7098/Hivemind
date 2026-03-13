@@ -218,8 +218,8 @@
 ### 67.7 Exit Criteria
 - [x] Child workflows can be launched and observed deterministically
 - [x] Parent/child input-output mappings are explicit and replay-safe
-- [ ] Nested lineage is inspectable from CLI/API/events without guesswork
-- [ ] Automated and manual smoke validation are completed and documented
+- [x] Nested lineage is inspectable from CLI/API/events without guesswork
+- [x] Automated and manual smoke validation are completed and documented
 
 ---
 
@@ -316,41 +316,41 @@
 **Goal:** Prove the full workflow engine under real-project, multi-step, nested, context-heavy usage before declaring the migration complete.
 
 ### 70.1 End-to-end scenario matrix
-- [ ] Validate end-to-end workflow scenarios covering at least:
-  - [ ] flat workflow with retries and verification
-  - [ ] nested workflow with child outputs
-  - [ ] parallel branches with append-only bag fan-in
-  - [ ] condition + wait/signal flow
-  - [ ] workflow-native merge path
-- [ ] Include at least one multi-repo workflow scenario if Phase 5 codepaths claim multi-repo support
+- [x] Validate end-to-end workflow scenarios covering at least:
+  - [x] flat workflow with retries and verification
+  - [x] nested workflow with child outputs
+  - [x] parallel branches with append-only bag fan-in
+  - [x] condition + wait/signal flow
+  - [x] workflow-native merge path
+- [x] Include at least one multi-repo workflow scenario if Phase 5 codepaths claim multi-repo support
 
 ### 70.2 Replay, recovery, and failure hardening
-- [ ] Prove full replay determinism across workflow, context, signal, and nested-run events
-- [ ] Add recovery tests for interrupted runs, partial child completion, and operator resume flows
-- [ ] Validate failures remain first-class and inspectable at workflow, step, attempt, and merge boundaries
+- [x] Prove full replay determinism across workflow, context, signal, and nested-run events
+- [x] Add recovery tests for interrupted runs, partial child completion, and operator resume flows
+- [x] Validate failures remain first-class and inspectable at workflow, step, attempt, and merge boundaries
 
 ### 70.3 Documentation and closeout package
-- [ ] Finalize docs across `docs/overview/`, `docs/architecture/`, `docs/design/`, and `docs/operations/` as needed
-- [ ] Update `hivemind/changelog.json` with Phase 5 deliverables
-- [ ] Add a Phase 5 validation/closeout report under `ops/reports`
+- [x] Finalize docs across `docs/overview/`, `docs/architecture/`, `docs/design/`, and `docs/operations/` as needed
+- [x] Update `hivemind/changelog.json` with Phase 5 deliverables
+- [x] Add a Phase 5 validation/closeout report under `ops/reports`
 
 ### 70.4 Automated validation and test coverage
-- [ ] Run and pass `cargo fmt --all`
-- [ ] Run and pass `cargo clippy --all-targets --all-features -- -D warnings`
-- [ ] Run and pass `cargo test --all-features`
-- [ ] Add/retain targeted stress and replay tests for nested workflows, bag fan-in, and workflow-native merge/reporting
+- [x] Run and pass `cargo fmt --all`
+- [x] Run and pass `cargo clippy --all-targets --all-features -- -D warnings`
+- [x] Run and pass `cargo test --all-features`
+- [x] Add/retain targeted stress and replay tests for nested workflows, bag fan-in, and workflow-native merge/reporting
 
 ### 70.5 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 70 manual checklist under `@hivemind-test`
-- [ ] Run at least one real-project end-to-end smoke exercise that uses the workflow system to build, modify, verify, and merge meaningful code changes
-- [ ] Validate CLI/API/docs/manual test artifacts all agree on the workflow-first operating model
-- [ ] Publish Sprint 70 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 70 manual checklist under `@hivemind-test`
+- [x] Run at least one real-project end-to-end smoke exercise that uses the workflow system to build, modify, verify, and merge meaningful code changes
+- [x] Validate CLI/API/docs/manual test artifacts all agree on the workflow-first operating model
+- [x] Publish Sprint 70 manual test report artifact in `@hivemind-test`
 
 ### 70.6 Exit Criteria
-- [ ] Workflow engine behavior is proven end-to-end on real repository smoke paths
-- [ ] Replay, recovery, and failure semantics are stable and inspectable
-- [ ] Documentation and changelog are aligned with the implemented system
-- [ ] Automated and manual smoke validation are completed and documented
+- [x] Workflow engine behavior is proven end-to-end on real repository smoke paths
+- [x] Replay, recovery, and failure semantics are stable and inspectable
+- [x] Documentation and changelog are aligned with the implemented system
+- [x] Automated and manual smoke validation are completed and documented
 
 ---
 
@@ -370,19 +370,19 @@
 
 ## Phase 5 Completion Gates
 
-- [ ] Sprint 64-70 implementation and manual test reports are present under `@hivemind-test`
-- [ ] `workflow/*` is the primary execution surface for new work in Hivemind
-- [ ] Workflow context and append-only output bag behavior are documented, inspectable, and replay-safe
-- [ ] Nested workflow lineage is queryable in CLI/API/event inspection paths
-- [ ] Runtime, verification, worktree, and merge observability remain explicit after workflow cutover
-- [ ] `hivemind/changelog.json` is updated with Phase 5 deliverables
-- [ ] Documentation is updated and aligned with implementation:
-  - [ ] `docs/overview/`
-  - [ ] `docs/architecture/`
-  - [ ] `docs/design/`
-  - [ ] `docs/operations/` (if introduced/expanded)
-- [ ] `ops/reports` contains a Phase 5 closeout validation summary
-- [ ] Roadmap checkboxes and completion status reflect final validated state
+- [x] Sprint 64-70 implementation and manual test reports are present under `@hivemind-test`
+- [x] `workflow/*` is the primary execution surface for new work in Hivemind
+- [x] Workflow context and append-only output bag behavior are documented, inspectable, and replay-safe
+- [x] Nested workflow lineage is queryable in CLI/API/event inspection paths
+- [x] Runtime, verification, worktree, and merge observability remain explicit after workflow cutover
+- [x] `hivemind/changelog.json` is updated with Phase 5 deliverables
+- [x] Documentation is updated and aligned with implementation:
+  - [x] `docs/overview/`
+  - [x] `docs/architecture/`
+  - [x] `docs/design/`
+  - [x] `docs/operations/` (if introduced/expanded)
+- [x] `ops/reports` contains a Phase 5 closeout validation summary
+- [x] Roadmap checkboxes and completion status reflect final validated state
 
 ---
 

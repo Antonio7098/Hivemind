@@ -45,7 +45,8 @@ Sprint 67 adds these guarantees:
 - child runs inherit `root_workflow_run_id`, stamp `parent_workflow_run_id` and `parent_step_id`, and remain queryable through normal workflow and event surfaces
 - parent to child input transfer is copy-in only and uses the existing deterministic step input binding model
 - child to parent output transfer is explicit through workflow-step output bindings and context patches that reference declared child context keys
-- parent `workflow status` output includes child run summaries so nested execution can be inspected without reconstructing raw events manually
+- parent `workflow status` and `/api/workflow-runs/inspect` output include an explicit recursive `child_runs` tree with workflow and parent-step names so nested execution can be inspected without reconstructing raw events manually
+- `events list --workflow-run <root-run-id>` resolves root runs to `root_workflow_run_id` filtering so subtree event inspection follows the root lineage by default
 
 Sprint 68 adds these guarantees:
 

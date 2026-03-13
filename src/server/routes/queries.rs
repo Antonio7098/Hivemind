@@ -79,7 +79,7 @@ pub(super) fn handle_get(
                     "server:workflow-runs:inspect",
                 )
             })?;
-            super::json_ok(registry.get_workflow_run(workflow_run_id)?)?
+            super::json_ok(registry.inspect_workflow_run(workflow_run_id)?)?
         }
         "/api/merges" => super::json_ok(list_merge_states(registry)?)?,
         "/api/runtimes" => super::json_ok(registry.runtime_list())?,

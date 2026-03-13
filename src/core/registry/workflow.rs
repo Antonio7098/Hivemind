@@ -11,8 +11,9 @@ use crate::core::registry::Registry;
 use crate::core::workflow::{
     WorkflowChildConfig, WorkflowChildTerminalBehavior, WorkflowConditionExpression,
     WorkflowConditionalBranch, WorkflowConditionalConfig, WorkflowDefinition, WorkflowRun,
-    WorkflowRunState, WorkflowSignal, WorkflowStepDefinition, WorkflowStepKind, WorkflowStepState,
-    WorkflowWaitCondition, WorkflowWaitConfig, WorkflowWaitStatus,
+    WorkflowRunInspectView, WorkflowRunLineageNode, WorkflowRunState, WorkflowSignal,
+    WorkflowStepDefinition, WorkflowStepKind, WorkflowStepState, WorkflowWaitCondition,
+    WorkflowWaitConfig, WorkflowWaitStatus,
 };
 use crate::core::{
     flow::{FlowState, TaskExecState, TaskFlow},
@@ -1107,6 +1108,25 @@ impl Registry {
             })
     }
 
+    pub fn inspect_workflow_run(&self, workflow_run_id: &str) -> Result<WorkflowRunInspectView> {
+        let run = self.get_workflow_run(workflow_run_id)?;
+        self.inspect_workflow_run_from_run(&run)
+    }
+
+    fn inspect_workflow_run_from_run(&self, run: &WorkflowRun) -> Result<WorkflowRunInspectView> {
+        let workflow = self.get_workflow(&run.workflow_id.to_string())?;
+        Ok(WorkflowRunInspectView {
+            run: run.clone(),
+            workflow_name: workflow.name,
+            parent_step_name: self.workflow_parent_step_name(run)?,
+            child_runs: self
+                .child_runs_for_parent(run.id)?
+                .iter()
+                .map(|child| self.workflow_run_lineage_node(child))
+                .collect::<Result<Vec<_>>>()?,
+        })
+    }
+
     pub fn start_workflow_run(&self, workflow_run_id: &str) -> Result<WorkflowRun> {
         self.transition_workflow_run(workflow_run_id, WorkflowRunState::Running, None, false)
     }
@@ -1125,6 +1145,40 @@ impl Registry {
                 .then_with(|| a.id.cmp(&b.id))
         });
         Ok(children)
+    }
+
+    fn workflow_parent_step_name(&self, run: &WorkflowRun) -> Result<Option<String>> {
+        let Some(parent_run_id) = run.parent_workflow_run_id else {
+            return Ok(None);
+        };
+        let Some(parent_step_id) = run.parent_step_id else {
+            return Ok(None);
+        };
+        let parent_run = self.get_workflow_run(&parent_run_id.to_string())?;
+        let parent_workflow = self.get_workflow(&parent_run.workflow_id.to_string())?;
+        Ok(parent_workflow
+            .steps
+            .get(&parent_step_id)
+            .map(|step| step.name.clone()))
+    }
+
+    fn workflow_run_lineage_node(&self, run: &WorkflowRun) -> Result<WorkflowRunLineageNode> {
+        let workflow = self.get_workflow(&run.workflow_id.to_string())?;
+        Ok(WorkflowRunLineageNode {
+            run_id: run.id,
+            workflow_id: run.workflow_id,
+            workflow_name: workflow.name,
+            state: run.state,
+            root_workflow_run_id: run.root_workflow_run_id,
+            parent_workflow_run_id: run.parent_workflow_run_id,
+            parent_step_id: run.parent_step_id,
+            parent_step_name: self.workflow_parent_step_name(run)?,
+            children: self
+                .child_runs_for_parent(run.id)?
+                .iter()
+                .map(|child| self.workflow_run_lineage_node(child))
+                .collect::<Result<Vec<_>>>()?,
+        })
     }
 
     pub fn tick_workflow_run(
@@ -1362,6 +1416,7 @@ impl Registry {
             .map(|flow| flow.id)
             .unwrap_or_else(|| Self::workflow_bridge_flow_uuid(run.id));
         self.merge_prepare(&flow_id.to_string(), target_branch)
+            .inspect_err(|err| self.record_error_event(err, Self::workflow_run_corr(&run)))
     }
 
     pub fn workflow_merge_approve(
@@ -1373,6 +1428,7 @@ impl Registry {
             .map(|flow| flow.id)
             .unwrap_or_else(|| Self::workflow_bridge_flow_uuid(run.id));
         self.merge_approve(&flow_id.to_string())
+            .inspect_err(|err| self.record_error_event(err, Self::workflow_run_corr(&run)))
     }
 
     pub fn workflow_merge_execute_with_options(
@@ -1385,6 +1441,7 @@ impl Registry {
             .map(|flow| flow.id)
             .unwrap_or_else(|| Self::workflow_bridge_flow_uuid(run.id));
         self.merge_execute_with_options(&flow_id.to_string(), options)
+            .inspect_err(|err| self.record_error_event(err, Self::workflow_run_corr(&run)))
     }
 
     pub fn signal_workflow_run(
