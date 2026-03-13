@@ -16,10 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check out unified-content-protocol
-        uses: actions/checkout@v4
-        with:
-          repository: Antonio7098/unified-content-protocol
-          path: ../unified-content-protocol
+        run: git clone --depth 1 https://github.com/Antonio7098/unified-content-protocol ../unified-content-protocol
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -47,10 +44,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check out unified-content-protocol
-        uses: actions/checkout@v4
-        with:
-          repository: Antonio7098/unified-content-protocol
-          path: ../unified-content-protocol
+        run: git clone --depth 1 https://github.com/Antonio7098/unified-content-protocol ../unified-content-protocol
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -79,10 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check out unified-content-protocol
-        uses: actions/checkout@v4
-        with:
-          repository: Antonio7098/unified-content-protocol
-          path: ../unified-content-protocol
+        run: git clone --depth 1 https://github.com/Antonio7098/unified-content-protocol ../unified-content-protocol
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
