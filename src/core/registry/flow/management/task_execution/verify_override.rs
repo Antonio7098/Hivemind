@@ -79,7 +79,7 @@ impl Registry {
                 reason: reason.to_string(),
                 user,
             },
-            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
+            Self::correlation_for_flow_task_event(&state, &flow, id),
         );
 
         self.store

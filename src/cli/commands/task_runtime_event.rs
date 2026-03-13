@@ -1,4 +1,35 @@
 use super::*;
+use clap::ValueEnum;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum RuntimeStreamDetailArg {
+    Summary,
+    Observability,
+    Telemetry,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum WorkflowStepKindArg {
+    Task,
+    Workflow,
+    Conditional,
+    Wait,
+    Join,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum WorkflowStepStateArg {
+    Pending,
+    Ready,
+    Running,
+    Verifying,
+    Retry,
+    Waiting,
+    Succeeded,
+    Failed,
+    Skipped,
+    Aborted,
+}
 
 #[derive(Subcommand)]
 pub enum TaskCommands {
@@ -103,6 +134,7 @@ pub enum RuntimeCommands {
     List,
     Health(RuntimeHealthArgs),
     DefaultsSet(RuntimeDefaultsSetArgs),
+    Stream(RuntimeStreamArgs),
 }
 
 #[derive(Args)]
@@ -138,6 +170,18 @@ pub struct RuntimeDefaultsSetArgs {
 }
 
 #[derive(Args)]
+pub struct RuntimeStreamArgs {
+    #[arg(long)]
+    pub flow: Option<String>,
+    #[arg(long)]
+    pub attempt: Option<String>,
+    #[arg(long, default_value_t = 200)]
+    pub limit: usize,
+    #[arg(long, value_enum, default_value = "telemetry")]
+    pub detail: RuntimeStreamDetailArg,
+}
+
+#[derive(Args)]
 pub struct TaskCloseArgs {
     pub task_id: String,
     #[arg(long)]
@@ -163,6 +207,18 @@ pub struct EventListArgs {
     pub graph: Option<String>,
     #[arg(long)]
     pub flow: Option<String>,
+    #[arg(long)]
+    pub workflow: Option<String>,
+    #[arg(long = "workflow-run")]
+    pub workflow_run: Option<String>,
+    #[arg(long = "root-workflow-run")]
+    pub root_workflow_run: Option<String>,
+    #[arg(long = "parent-workflow-run")]
+    pub parent_workflow_run: Option<String>,
+    #[arg(long = "step")]
+    pub step: Option<String>,
+    #[arg(long = "step-run")]
+    pub step_run: Option<String>,
     #[arg(long)]
     pub task: Option<String>,
     #[arg(long)]
@@ -192,6 +248,18 @@ pub struct EventInspectArgs {
 pub struct EventStreamArgs {
     #[arg(long)]
     pub flow: Option<String>,
+    #[arg(long)]
+    pub workflow: Option<String>,
+    #[arg(long = "workflow-run")]
+    pub workflow_run: Option<String>,
+    #[arg(long = "root-workflow-run")]
+    pub root_workflow_run: Option<String>,
+    #[arg(long = "parent-workflow-run")]
+    pub parent_workflow_run: Option<String>,
+    #[arg(long = "step")]
+    pub step: Option<String>,
+    #[arg(long = "step-run")]
+    pub step_run: Option<String>,
     #[arg(long)]
     pub task: Option<String>,
     #[arg(long)]

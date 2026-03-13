@@ -2163,6 +2163,8 @@ hivemind attempt inspect <attempt-id> [--context] [--diff] [--output]
 
 **Output:**
 - Attempt metadata
+- `runtime_session` when the runtime emitted a provider session identifier
+- `turn_refs[]` with ordinal, provider turn/session identifiers, hidden git ref, and commit SHA when per-turn refs were captured
 - With `--context`: assembled context object:
   - `retry`: retry context text when retry path exists
   - `manifest`: immutable attempt context manifest (ordered inputs, resolved artifacts, budget/truncation metadata, retry links)
@@ -2184,6 +2186,54 @@ hivemind attempt inspect <attempt-id> [--context] [--diff] [--output]
 - `ATTEMPT_NOT_FOUND`
 
 **Idempotence:** Idempotent.
+
+---
+
+### 6.11 worktree restore-turn
+
+**Synopsis:**
+```
+hivemind worktree restore-turn <attempt-id> --ordinal <n> --confirm [--force]
+```
+
+**Preconditions:**
+- Attempt exists
+- Attempt has a stored `turn_refs[]` entry for `<n>`
+- Owning task still has an active worktree
+- If owning flow state is RUNNING, `--force` is required
+
+**Effects:**
+- Replaces the task worktree contents with the stored transient turn snapshot
+- Keeps the task branch/HEAD unchanged
+- Removes extra untracked files except `.hivemind/`
+
+**Output:**
+- Flow ID, task ID, attempt ID, ordinal
+- Resolved hidden ref / commit SHA
+- Worktree path, branch, HEAD-before/HEAD-after, dirty-state flag
+
+**Events:**
+```
+WorktreeTurnRefRestored:
+  flow_id: <flow-id>
+  task_id: <task-id>
+  attempt_id: <attempt-id>
+  ordinal: <n>
+  git_ref: <ref> | null
+  commit_sha: <sha> | null
+  forced: <boolean>
+```
+
+**Failures:**
+- `confirmation_required`: `--confirm` missing
+- `attempt_not_found`
+- `turn_ref_not_found`: attempt has no stored turn ref for the ordinal
+- `turn_ref_missing_reference`: stored turn ref lacks both ref and commit
+- `flow_running_restore_requires_force`
+- `worktree_not_found`
+- repository/worktree git errors surfaced as worktree failures
+
+**Idempotence:** Restoring the same turn repeatedly is idempotent with respect to worktree contents, but still emits a new audit event each time.
 
 ---
 

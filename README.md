@@ -55,6 +55,7 @@ These principles are enforced through architecture, not convention.
 - Tasks and simple todos
 - Deterministic TaskGraphs (planning)
 - Executable TaskFlows (execution)
+- First-class workflow definitions, runs, and lineage-aware event inspection
 - Scoped, parallel agent execution
 - Explicit verification and retries
 - Full diff, commit, and event history

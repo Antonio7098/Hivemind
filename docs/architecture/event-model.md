@@ -242,6 +242,13 @@ Examples:
 - `RuntimeEnvironmentPrepared`
 - `RuntimeStarted`
 - `RuntimeOutputChunk`
+- `RuntimeCommandObserved`
+- `RuntimeCommandCompleted`
+- `RuntimeSessionObserved`
+- `RuntimeTurnCompleted`
+- `RuntimeToolCallObserved`
+- `RuntimeTodoSnapshotUpdated`
+- `RuntimeNarrativeOutputObserved`
 - `RuntimeInputProvided`
 - `RuntimeInterrupted`
 - `RuntimeFilesystemObserved`
@@ -250,6 +257,15 @@ Examples:
 - `RuntimeRecoveryScheduled`
 
 Wrapper runtime events are intentionally coarse-grained.
+Mechanical recovery around wrapper execution may emit adjacent worktree audit events such as `WorktreeTurnRefRestored` when an operator restores a stored transient turn snapshot.
+
+Important runtime event semantics:
+
+- `RuntimeCommandObserved` is a best-effort text-derived fallback for plain wrapper output.
+- `RuntimeCommandCompleted` is the preferred structured command record for JSON-capable wrappers and may include `exit_code` and captured command output.
+- `RuntimeSessionObserved` records the provider session identifier persisted on the attempt for resume-aware retries.
+- `RuntimeTurnCompleted` records turn ordinal, provider session/turn IDs, optional summary text, and the transient git restore point (`git_ref`, `commit_sha`) captured for that turn.
+- `RuntimeToolCallObserved`, `RuntimeTodoSnapshotUpdated`, and `RuntimeNarrativeOutputObserved` are additive projections over normalized wrapper output intended for UI/taskflow visibility rather than strict provider schemas.
 
 Runtime startup hardening failures occur before the event store is available.
 They are emitted as structured stderr JSON payloads (`startup_hardening_failed`)

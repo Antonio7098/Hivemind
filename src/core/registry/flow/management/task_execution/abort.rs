@@ -54,7 +54,7 @@ impl Registry {
                 task_id: id,
                 reason: reason.map(String::from),
             },
-            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
+            Self::correlation_for_flow_task_event(&state, &flow, id),
         );
 
         self.store.append(event).map_err(|e| {
@@ -68,7 +68,7 @@ impl Registry {
                 attempt_id: None,
                 reason: Some("aborted".to_string()),
             },
-            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
+            Self::correlation_for_flow_task_event(&state, &flow, id),
         );
         self.store.append(event).map_err(|e| {
             HivemindError::system("event_append_failed", e.to_string(), "registry:abort_task")

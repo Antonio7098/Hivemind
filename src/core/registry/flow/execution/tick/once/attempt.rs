@@ -27,13 +27,8 @@ impl Registry {
         origin: &'static str,
     ) -> Result<TickAttemptLaunch> {
         let attempt_id = self.start_task_execution(&task_id.to_string())?;
-        let attempt_corr = CorrelationIds::for_graph_flow_task_attempt(
-            flow.project_id,
-            flow.graph_id,
-            flow.id,
-            task_id,
-            attempt_id,
-        );
+        let attempt_corr =
+            Self::correlation_for_flow_task_attempt_event(state, flow, task_id, attempt_id);
 
         let task = graph.tasks.get(&task_id).ok_or_else(|| {
             HivemindError::system("task_not_found", "Task not found in graph", origin)

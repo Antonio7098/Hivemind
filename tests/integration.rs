@@ -4977,3 +4977,579 @@ fn cli_governance_replay_verify_and_diagnose_detect_missing_artifact_files() {
         "{diagnose_out}"
     );
 }
+
+#[allow(clippy::too_many_lines)]
+#[test]
+fn cli_workflow_commands_support_step_authoring_and_event_filters() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let repo_path = tmp.path().join("repo");
+    std::fs::create_dir_all(&repo_path).expect("create repo dir");
+    init_git_repo(&repo_path);
+
+    let repo_path = repo_path.to_string_lossy().to_string();
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, create_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "create",
+            "proj",
+            "demo-workflow",
+            "--description",
+            "cli smoke",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let create_json: serde_json::Value =
+        serde_json::from_str(&create_out).expect("workflow create json");
+    let workflow_id = create_json
+        .get("data")
+        .and_then(|d| d.get("workflow_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow id")
+        .to_string();
+
+    let (code, step_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "step-add",
+            &workflow_id,
+            "root-step",
+            "--kind",
+            "task",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let step_json: serde_json::Value = serde_json::from_str(&step_out).expect("workflow step json");
+    let step_id = step_json
+        .get("data")
+        .and_then(|d| d.get("steps"))
+        .and_then(serde_json::Value::as_object)
+        .and_then(|steps| steps.values().next())
+        .and_then(|step| step.get("id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("step id")
+        .to_string();
+
+    let (code, run_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "run-create", &workflow_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let run_json: serde_json::Value = serde_json::from_str(&run_out).expect("run create json");
+    let workflow_run_id = run_json
+        .get("data")
+        .and_then(|d| d.get("workflow_run_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow run id")
+        .to_string();
+
+    for args in [
+        vec!["-f", "json", "workflow", "start", &workflow_run_id],
+        vec![
+            "-f",
+            "json",
+            "workflow",
+            "step-set-state",
+            &workflow_run_id,
+            &step_id,
+            "running",
+        ],
+        vec![
+            "-f",
+            "json",
+            "workflow",
+            "step-set-state",
+            &workflow_run_id,
+            &step_id,
+            "succeeded",
+        ],
+        vec!["-f", "json", "workflow", "complete", &workflow_run_id],
+    ] {
+        let (code, _out, err) = run_hivemind(tmp.path(), &args);
+        assert_eq!(code, 0, "{err}");
+    }
+
+    let (code, status_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "status", &workflow_run_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let status_json: serde_json::Value =
+        serde_json::from_str(&status_out).expect("workflow status json");
+    assert_eq!(
+        status_json
+            .get("data")
+            .and_then(|d| d.get("state"))
+            .and_then(serde_json::Value::as_str),
+        Some("completed"),
+        "{status_out}"
+    );
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--workflow-run",
+            &workflow_run_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let events_json: serde_json::Value = serde_json::from_str(&events_out).expect("events json");
+    let events = events_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .expect("workflow events array");
+    assert!(events.iter().any(|event| {
+        event
+            .get("payload")
+            .and_then(|payload| payload.get("type"))
+            .and_then(serde_json::Value::as_str)
+            == Some("workflow_run_completed")
+    }));
+    assert!(events.iter().all(|event| {
+        event
+            .get("metadata")
+            .and_then(|metadata| metadata.get("correlation"))
+            .and_then(|corr| corr.get("workflow_run_id"))
+            .and_then(serde_json::Value::as_str)
+            == Some(workflow_run_id.as_str())
+    }));
+
+    let (code, step_events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--step",
+            &step_id,
+            "--workflow-run",
+            &workflow_run_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let step_events_json: serde_json::Value =
+        serde_json::from_str(&step_events_out).expect("step events json");
+    let step_events = step_events_json
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .expect("step events array");
+    assert_eq!(step_events.len(), 2, "{step_events_out}");
+    assert!(step_events.iter().all(|event| {
+        event
+            .get("payload")
+            .and_then(|payload| payload.get("type"))
+            .and_then(serde_json::Value::as_str)
+            == Some("workflow_step_state_changed")
+    }));
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_workflow_tick_executes_flat_task_steps() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let repo_path = tmp.path().join("repo");
+    init_git_repo(&repo_path);
+
+    let repo_path = repo_path.to_string_lossy().to_string();
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "project",
+            "runtime-set",
+            "proj",
+            "--adapter",
+            "opencode",
+            "--binary-path",
+            "/usr/bin/env",
+            "--arg",
+            "sh",
+            "--arg",
+            "-c",
+            "--arg",
+            "echo workflow_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+            "--timeout-ms",
+            "1000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, create_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "create", "proj", "tick-workflow"],
+    );
+    assert_eq!(code, 0, "{err}");
+    let workflow_id = serde_json::from_str::<serde_json::Value>(&create_out)
+        .expect("workflow create json")
+        .get("data")
+        .and_then(|d| d.get("workflow_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow id")
+        .to_string();
+
+    let (code, step_a_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "step-add",
+            &workflow_id,
+            "step-a",
+            "--kind",
+            "task",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let step_a_id = serde_json::from_str::<serde_json::Value>(&step_a_out)
+        .expect("workflow step a json")
+        .get("data")
+        .and_then(|d| d.get("steps"))
+        .and_then(serde_json::Value::as_object)
+        .and_then(|steps| {
+            steps.values().find(|step| {
+                step.get("name") == Some(&serde_json::Value::String("step-a".to_string()))
+            })
+        })
+        .and_then(|step| step.get("id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("step a id")
+        .to_string();
+
+    let (code, _step_b_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "step-add",
+            &workflow_id,
+            "step-b",
+            "--kind",
+            "task",
+            "--depends-on",
+            &step_a_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, run_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "run-create", &workflow_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let workflow_run_id = serde_json::from_str::<serde_json::Value>(&run_out)
+        .expect("workflow run json")
+        .get("data")
+        .and_then(|d| d.get("workflow_run_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow run id")
+        .to_string();
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["workflow", "start", &workflow_run_id]);
+    assert_eq!(code, 0, "{err}");
+
+    for _ in 0..2 {
+        let (code, _out, err) = run_hivemind(
+            tmp.path(),
+            &[
+                "-f",
+                "json",
+                "workflow",
+                "tick",
+                &workflow_run_id,
+                "--max-parallel",
+                "1",
+            ],
+        );
+        assert_eq!(code, 0, "{err}");
+    }
+
+    let (code, status_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "status", &workflow_run_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let status_json: serde_json::Value =
+        serde_json::from_str(&status_out).expect("workflow status json");
+    assert_eq!(status_json["data"]["state"], "completed", "{status_out}");
+    assert!(status_out.contains("succeeded"), "{status_out}");
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--workflow-run",
+            &workflow_run_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let events_json: serde_json::Value =
+        serde_json::from_str(&events_out).expect("workflow events json");
+    let attempt_started = events_json["data"]
+        .as_array()
+        .and_then(|events| {
+            events
+                .iter()
+                .find(|event| event["payload"]["type"] == "attempt_started")
+        })
+        .expect("attempt_started event");
+    assert_eq!(
+        attempt_started["metadata"]["correlation"]["workflow_run_id"],
+        workflow_run_id
+    );
+    assert_eq!(
+        attempt_started["metadata"]["correlation"]["workflow_id"],
+        workflow_id
+    );
+    assert!(attempt_started["metadata"]["correlation"]["step_id"]
+        .as_str()
+        .is_some());
+    assert!(attempt_started["metadata"]["correlation"]["step_run_id"]
+        .as_str()
+        .is_some());
+
+    let frozen = events_json["data"]
+        .as_array()
+        .and_then(|events| {
+            events
+                .iter()
+                .find(|event| event["payload"]["type"] == "task_execution_frozen")
+        })
+        .expect("task_execution_frozen event");
+    assert_eq!(
+        frozen["metadata"]["correlation"]["workflow_run_id"],
+        workflow_run_id
+    );
+    assert!(frozen["metadata"]["correlation"]["step_id"]
+        .as_str()
+        .is_some());
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn cli_workflow_lifecycle_commands_bridge_to_synthetic_flow() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, create_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "create",
+            "proj",
+            "lifecycle-workflow",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let workflow_id = serde_json::from_str::<serde_json::Value>(&create_out)
+        .expect("workflow create json")
+        .get("data")
+        .and_then(|d| d.get("workflow_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow id")
+        .to_string();
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "workflow",
+            "step-add",
+            &workflow_id,
+            "step-a",
+            "--kind",
+            "task",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, run_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "run-create", &workflow_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let workflow_run_id = serde_json::from_str::<serde_json::Value>(&run_out)
+        .expect("workflow run json")
+        .get("data")
+        .and_then(|d| d.get("workflow_run_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow run id")
+        .to_string();
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["workflow", "start", &workflow_run_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["workflow", "tick", &workflow_run_id, "--max-parallel", "1"],
+    );
+    assert_eq!(code, 1, "expected runtime configuration failure");
+    assert!(err.contains("runtime_not_configured"), "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["workflow", "pause", &workflow_run_id]);
+    assert_eq!(code, 0, "{err}");
+    let (code, paused_status, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "status", &workflow_run_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&paused_status).expect("paused status json")
+            ["data"]["state"],
+        "paused"
+    );
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["workflow", "resume", &workflow_run_id]);
+    assert_eq!(code, 0, "{err}");
+    let (code, resumed_status, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "status", &workflow_run_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&resumed_status).expect("resumed status json")
+            ["data"]["state"],
+        "running"
+    );
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "workflow",
+            "abort",
+            &workflow_run_id,
+            "--reason",
+            "stop-now",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let (code, aborted_status, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "status", &workflow_run_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&aborted_status).expect("aborted status json")
+            ["data"]["state"],
+        "aborted"
+    );
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--workflow-run",
+            &workflow_run_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let payload_types = serde_json::from_str::<serde_json::Value>(&events_out)
+        .expect("workflow events json")["data"]
+        .as_array()
+        .expect("events array")
+        .iter()
+        .filter_map(|event| event["payload"]["type"].as_str())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    assert!(payload_types.iter().any(|t| t == "task_flow_paused"));
+    assert!(payload_types.iter().any(|t| t == "task_flow_resumed"));
+    assert!(payload_types.iter().any(|t| t == "task_flow_aborted"));
+}
+
+#[test]
+fn cli_workflow_tick_rejects_unsupported_step_kinds() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, create_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "create",
+            "proj",
+            "unsupported-workflow",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let workflow_id = serde_json::from_str::<serde_json::Value>(&create_out)
+        .expect("workflow create json")
+        .get("data")
+        .and_then(|d| d.get("workflow_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow id")
+        .to_string();
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "workflow",
+            "step-add",
+            &workflow_id,
+            "nested-step",
+            "--kind",
+            "workflow",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, run_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "run-create", &workflow_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let workflow_run_id = serde_json::from_str::<serde_json::Value>(&run_out)
+        .expect("workflow run json")
+        .get("data")
+        .and_then(|d| d.get("workflow_run_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow run id")
+        .to_string();
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["workflow", "start", &workflow_run_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["workflow", "tick", &workflow_run_id, "--max-parallel", "1"],
+    );
+    assert_eq!(code, 1, "expected unsupported step kind failure");
+    assert!(err.contains("workflow_step_kind_not_supported"), "{err}");
+    assert!(
+        err.contains("flat execution currently supports only task"),
+        "{err}"
+    );
+}

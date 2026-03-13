@@ -40,6 +40,7 @@ impl Default for CodexConfig {
         let mut cfg = Self::new(PathBuf::from("codex"));
         cfg.base.args = vec![
             "exec".to_string(),
+            "--json".to_string(),
             "--skip-git-repo-check".to_string(),
             "--dangerously-bypass-approvals-and-sandbox".to_string(),
             "-c".to_string(),

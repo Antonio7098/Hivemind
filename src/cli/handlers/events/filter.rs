@@ -50,13 +50,19 @@ fn parse_non_empty_filter(
     Ok(normalized.to_string())
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub(super) fn build_event_filter(
     registry: &Registry,
     origin: &str,
     project: Option<&str>,
     graph: Option<&str>,
     flow: Option<&str>,
+    workflow: Option<&str>,
+    workflow_run: Option<&str>,
+    root_workflow_run: Option<&str>,
+    parent_workflow_run: Option<&str>,
+    step: Option<&str>,
+    step_run: Option<&str>,
     task: Option<&str>,
     attempt: Option<&str>,
     artifact_id: Option<&str>,
@@ -85,6 +91,54 @@ pub(super) fn build_event_filter(
     }
     if let Some(flow) = flow {
         filter.flow_id = Some(parse_event_uuid(flow, "invalid_flow_id", "flow", origin)?);
+    }
+    if let Some(workflow) = workflow {
+        filter.workflow_id = Some(parse_event_uuid(
+            workflow,
+            "invalid_workflow_id",
+            "workflow",
+            origin,
+        )?);
+    }
+    if let Some(workflow_run) = workflow_run {
+        filter.workflow_run_id = Some(parse_event_uuid(
+            workflow_run,
+            "invalid_workflow_run_id",
+            "workflow run",
+            origin,
+        )?);
+    }
+    if let Some(root_workflow_run) = root_workflow_run {
+        filter.root_workflow_run_id = Some(parse_event_uuid(
+            root_workflow_run,
+            "invalid_root_workflow_run_id",
+            "root workflow run",
+            origin,
+        )?);
+    }
+    if let Some(parent_workflow_run) = parent_workflow_run {
+        filter.parent_workflow_run_id = Some(parse_event_uuid(
+            parent_workflow_run,
+            "invalid_parent_workflow_run_id",
+            "parent workflow run",
+            origin,
+        )?);
+    }
+    if let Some(step) = step {
+        filter.step_id = Some(parse_event_uuid(
+            step,
+            "invalid_step_id",
+            "workflow step",
+            origin,
+        )?);
+    }
+    if let Some(step_run) = step_run {
+        filter.step_run_id = Some(parse_event_uuid(
+            step_run,
+            "invalid_step_run_id",
+            "workflow step run",
+            origin,
+        )?);
     }
     if let Some(task) = task {
         filter.task_id = Some(parse_event_uuid(task, "invalid_task_id", "task", origin)?);

@@ -20,6 +20,7 @@ impl Registry {
         }
 
         let state = self.state()?;
+        let flow_corr = Self::correlation_for_flow_event(&state, &flow);
         let mut latest_attempt_ids: HashMap<Uuid, (chrono::DateTime<Utc>, Uuid)> = HashMap::new();
         for attempt in state.attempts.values().filter(|a| a.flow_id == flow.id) {
             latest_attempt_ids
@@ -50,12 +51,7 @@ impl Registry {
                         from: exec.state,
                         to: TaskExecState::Failed,
                     },
-                    CorrelationIds::for_graph_flow_task(
-                        flow.project_id,
-                        flow.graph_id,
-                        flow.id,
-                        *task_id,
-                    ),
+                    Self::correlation_for_flow_task_event(&state, &flow, *task_id),
                 ),
                 "registry:abort_flow",
             )?;
@@ -68,21 +64,10 @@ impl Registry {
                         reason: Some("flow_aborted".to_string()),
                     },
                     attempt_id.map_or_else(
-                        || {
-                            CorrelationIds::for_graph_flow_task(
-                                flow.project_id,
-                                flow.graph_id,
-                                flow.id,
-                                *task_id,
-                            )
-                        },
+                        || Self::correlation_for_flow_task_event(&state, &flow, *task_id),
                         |aid| {
-                            CorrelationIds::for_graph_flow_task_attempt(
-                                flow.project_id,
-                                flow.graph_id,
-                                flow.id,
-                                *task_id,
-                                aid,
+                            Self::correlation_for_flow_task_attempt_event(
+                                &state, &flow, *task_id, aid,
                             )
                         },
                     ),
@@ -97,7 +82,7 @@ impl Registry {
                 reason: reason.map(String::from),
                 forced,
             },
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            flow_corr,
         );
 
         self.store.append(event).map_err(|e| {

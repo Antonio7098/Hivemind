@@ -67,7 +67,7 @@ impl Registry {
             );
             self.record_error_event(
                 &err,
-                CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
+                Self::correlation_for_flow_task_event(&state, &flow, id),
             );
             return Err(err);
         }
@@ -80,7 +80,7 @@ impl Registry {
             );
             self.record_error_event(
                 &err,
-                CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
+                Self::correlation_for_flow_task_event(&state, &flow, id),
             );
             return Err(err);
         }
@@ -116,7 +116,7 @@ impl Registry {
                 reset_count,
                 retry_mode,
             },
-            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
+            Self::correlation_for_flow_task_event(&state, &flow, id),
         );
 
         self.store.append(event).map_err(|e| {

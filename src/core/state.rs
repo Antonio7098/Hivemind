@@ -2,11 +2,12 @@
 //!
 //! All state in Hivemind is derived by replaying events. This ensures
 //! determinism, idempotency, and complete observability.
-use super::events::{Event, EventPayload, RuntimeRole};
+use super::events::{Event, EventPayload, RuntimeOutputStream, RuntimeRole};
 use super::flow::{FlowState, RetryMode, RunMode, TaskExecState, TaskExecution, TaskFlow};
 use super::graph::{GraphState, TaskGraph};
 use super::scope::{RepoAccessMode, Scope};
 use super::verification::CheckResult;
+use super::workflow::{WorkflowDefinition, WorkflowRun};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -44,6 +45,30 @@ pub struct AttemptCheckpoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttemptRuntimeSession {
+    pub adapter_name: String,
+    pub session_id: String,
+    pub discovered_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttemptTurnRef {
+    pub ordinal: u32,
+    pub adapter_name: String,
+    pub stream: RuntimeOutputStream,
+    #[serde(default)]
+    pub provider_session_id: Option<String>,
+    #[serde(default)]
+    pub provider_turn_id: Option<String>,
+    #[serde(default)]
+    pub git_ref: Option<String>,
+    #[serde(default)]
+    pub commit_sha: Option<String>,
+    #[serde(default)]
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttemptState {
     pub id: Uuid,
     pub flow_id: Uuid,
@@ -58,6 +83,10 @@ pub struct AttemptState {
     pub checkpoints: Vec<AttemptCheckpoint>,
     #[serde(default)]
     pub all_checkpoints_completed: bool,
+    #[serde(default)]
+    pub runtime_session: Option<AttemptRuntimeSession>,
+    #[serde(default)]
+    pub turn_refs: Vec<AttemptTurnRef>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,6 +173,41 @@ pub struct GovernanceMigration {
     pub schema_version: String,
     pub projection_version: u32,
     pub migrated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatMessageState {
+    pub id: Uuid,
+    pub role: String,
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+    #[serde(default)]
+    pub request_id: Option<String>,
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub final_state: Option<String>,
+    #[serde(default)]
+    pub runtime_selection_source: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatSessionState {
+    pub id: Uuid,
+    pub mode: String,
+    pub title: String,
+    #[serde(default)]
+    pub project_id: Option<Uuid>,
+    #[serde(default)]
+    pub task_id: Option<Uuid>,
+    #[serde(default)]
+    pub flow_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub messages: Vec<ChatMessageState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -242,9 +306,12 @@ pub struct AppState {
     pub governance_artifacts: HashMap<String, GovernanceArtifact>,
     pub governance_attachments: HashMap<String, GovernanceAttachment>,
     pub governance_migrations: Vec<GovernanceMigration>,
+    pub chat_sessions: HashMap<Uuid, ChatSessionState>,
     pub tasks: HashMap<Uuid, Task>,
     pub graphs: HashMap<Uuid, TaskGraph>,
     pub flows: HashMap<Uuid, TaskFlow>,
+    pub workflows: HashMap<Uuid, WorkflowDefinition>,
+    pub workflow_runs: HashMap<Uuid, WorkflowRun>,
     pub global_runtime_defaults: RuntimeRoleDefaults,
     pub flow_runtime_defaults: HashMap<Uuid, RuntimeRoleDefaults>,
     pub merge_states: HashMap<Uuid, MergeState>,

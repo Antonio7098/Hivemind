@@ -71,10 +71,9 @@ impl Registry {
             HivemindError::system("flow_not_found", "Flow not found for attempt", origin)
         })?;
 
-        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
-            flow.project_id,
-            flow.graph_id,
-            flow.id,
+        let corr_attempt = Self::correlation_for_flow_task_attempt_event(
+            &state,
+            flow,
             attempt.task_id,
             attempt.id,
         );

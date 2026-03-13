@@ -112,6 +112,8 @@ Set up the execution environment for a specific task attempt.
    HIVEMIND_ATTEMPT_ID=<attempt_id>
    HIVEMIND_PROJECT_ID=<project_id>
    HIVEMIND_WORKTREE=<worktree_path>
+   HIVEMIND_FLOW_ID=<flow_id>
+   HIVEMIND_PRIMARY_WORKTREE=<worktree_path>
    ```
    - Build protected runtime env deterministically:
      - `HIVEMIND_RUNTIME_ENV_INHERIT=all|core|none` (`core` default)
@@ -129,6 +131,13 @@ Set up the execution environment for a specific task attempt.
    - Format task description
    - Include context documents
    - Include prior attempt feedback (if retry)
+
+When continue-style retries reuse a compatible wrapper runtime session, Hivemind also injects:
+
+```text
+HIVEMIND_RUNTIME_RESUME_SESSION_ID=<provider-session-id>
+HIVEMIND_RUNTIME_RESUME_PARENT_ATTEMPT_ID=<attempt-id>
+```
 
 ### 4.3 Outputs
 
@@ -170,12 +179,79 @@ Task input is delivered via:
 
 Delivery method is adapter-specific.
 
+Current structured-wrapper conventions:
+
+- OpenCode/Kilo-family adapters invoke `run --format json` and pass the task prompt as a final CLI argument.
+- Codex adapters invoke `exec --json` and deliver the task prompt on stdin.
+- Known provider JSON events are projected back into Hivemind-friendly runtime output lines (assistant text, commands, tool calls, todos, file changes).
+- Raw provider JSON lines are still mirrored into captured output with provider-prefixed markers so unknown/new event types remain inspectable.
+- OpenCode/Kilo resume compatible sessions with `--session <session-id>` when retry policy is `continue`.
+- Codex resumes compatible sessions with `exec resume <session-id> --json`.
+- Compatible JSON streams emit additive `RuntimeSessionObserved` and `RuntimeTurnCompleted` events.
+
+### 5.3.1 JSON Projection Pipeline
+
+For structured JSON wrappers, Hivemind now treats provider output as a two-stage projection pipeline rather than a single text scrape:
+
+1. **Parse provider JSON lines**
+   - OpenCode/Kilo JSON and Codex `exec --json` records are parsed line-by-line.
+   - Every parsed JSON line is preserved in stderr with a provider tag such as `[opencode.json] ...` or `[codex.json] ...`.
+2. **Emit authoritative structured observations**
+   - explicit command/tool/session/turn facts from provider JSON become typed runtime observations
+   - today this includes `RuntimeCommandCompleted`, `RuntimeSessionObserved`, and `RuntimeTurnCompleted`
+3. **Render normalized human-readable output**
+   - provider JSON is also rendered into readable stdout lines like `Command: ...`, `Tool: ...`, `File change: ...`, `TODO: ...`, and narrative text
+4. **Project additive heuristic observations from normalized text**
+   - the runtime projector derives `RuntimeToolCallObserved`, `RuntimeTodoSnapshotUpdated`, `RuntimeNarrativeOutputObserved`, and related UI-facing signals from the normalized text stream
+
+This split keeps operator-visible output lossless while also giving downstream consumers stable typed events.
+
+Command semantics are intentionally asymmetric:
+
+- `RuntimeCommandCompleted` is the authoritative command event for structured JSON wrappers.
+- `RuntimeCommandObserved` remains available as a fallback for plain-text runtimes.
+- When a structured command completion is present, Hivemind suppresses the duplicate heuristic command-observed event for the same output stream.
+
 ### 5.4 Output Capture
 
 During execution:
 - Stream stdout to capture buffer
 - Stream stderr to capture buffer
 - Emit RuntimeOutputChunk events periodically
+
+For structured JSON adapters, stdout/stderr capture remains lossless even when Hivemind also derives higher-level observations from the JSON event stream.
+
+Current normalized projections from provider JSON include examples such as:
+
+- command execution records → `RuntimeCommandCompleted`
+- provider session identifiers → `RuntimeSessionObserved`
+- provider turn boundaries → `RuntimeTurnCompleted`
+- tool invocations / MCP calls / collaboration calls / web-search calls → normalized tool-call output plus `RuntimeToolCallObserved`
+- todo-list snapshots → normalized `TODO:` / `DONE:` lines plus `RuntimeTodoSnapshotUpdated`
+- reasoning / assistant text → narrative/output chunks plus `RuntimeNarrativeOutputObserved`
+- file change summaries → normalized `File change: ...` lines plus downstream file-change UI projection
+
+Turn-complete observations may also create transient hidden snapshot refs that point at a commit-tree snapshot of the current worktree contents without moving the task branch HEAD.
+
+Example ref layout:
+
+```text
+refs/hivemind/transient/turns/<task-id>/<attempt-id>/turn-0001
+```
+
+These refs are intended for inspection, retry continuity, and explicit operator restore workflows. They are additive and do not replace checkpoint commits.
+
+### 5.4.1 Turn Ref Restore Semantics
+
+`hivemind worktree restore-turn <attempt-id> --ordinal <n> --confirm` restores the task worktree contents to the stored turn snapshot while keeping the worktree branch/HEAD unchanged.
+
+Mechanically Hivemind:
+
+1. resolves the stored hidden ref (or commit SHA fallback)
+2. applies `git restore --source <ref> --staged --worktree :/`
+3. removes extra untracked files with `git clean -fd -e .hivemind/`
+
+Because this discards current worktree contents, confirmation is mandatory and active flows require `--force`.
 
 ### 5.5 Timeout Enforcement
 

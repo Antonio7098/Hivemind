@@ -18,6 +18,7 @@ pub mod runtime;
 pub mod serve;
 pub mod task;
 pub mod verify;
+pub mod workflow;
 pub mod worktree;
 
 // Re-export common handler utilities
@@ -34,4 +35,5 @@ pub use runtime::*;
 pub use serve::*;
 pub use task::*;
 pub use verify::*;
+pub use workflow::*;
 pub use worktree::*;

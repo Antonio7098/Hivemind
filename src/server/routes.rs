@@ -1,5 +1,6 @@
 use super::*;
 
+pub(super) mod chat;
 mod flows;
 mod governance;
 mod graphs;
@@ -7,21 +8,29 @@ mod operations;
 mod projects;
 mod queries;
 mod tasks;
+mod workflows;
 
 const GET_ONLY_PATHS: &[&str] = &[
     "/health",
     "/api/version",
     "/api/catalog",
     "/api/state",
+    "/api/chat/sessions",
+    "/api/chat/sessions/inspect",
     "/api/projects",
     "/api/tasks",
     "/api/graphs",
     "/api/flows",
+    "/api/workflows",
+    "/api/workflows/inspect",
+    "/api/workflow-runs",
+    "/api/workflow-runs/inspect",
     "/api/merges",
     "/api/runtimes",
     "/api/runtimes/health",
     "/api/events",
     "/api/events/inspect",
+    "/api/runtime-stream",
     "/api/verify/results",
     "/api/attempts/inspect",
     "/api/attempts/diff",
@@ -40,6 +49,9 @@ const GET_ONLY_PATHS: &[&str] = &[
 ];
 
 const POST_ONLY_PATHS: &[&str] = &[
+    "/api/chat/invoke",
+    "/api/chat/sessions/create",
+    "/api/chat/sessions/send",
     "/api/projects/create",
     "/api/projects/update",
     "/api/projects/delete",
@@ -72,6 +84,16 @@ const POST_ONLY_PATHS: &[&str] = &[
     "/api/flows/run-mode",
     "/api/flows/dependencies/add",
     "/api/flows/runtime",
+    "/api/workflows/create",
+    "/api/workflows/update",
+    "/api/workflows/steps/add",
+    "/api/workflow-runs/create",
+    "/api/workflow-runs/start",
+    "/api/workflow-runs/complete",
+    "/api/workflow-runs/pause",
+    "/api/workflow-runs/resume",
+    "/api/workflow-runs/abort",
+    "/api/workflow-runs/steps/state",
     "/api/verify/override",
     "/api/verify/run",
     "/api/merge/prepare",
@@ -79,6 +101,7 @@ const POST_ONLY_PATHS: &[&str] = &[
     "/api/merge/execute",
     "/api/checkpoints/complete",
     "/api/worktrees/cleanup",
+    "/api/worktrees/restore-turn",
     "/api/governance/constitution/check",
     "/api/governance/graph-snapshot/refresh",
 ];
@@ -100,6 +123,9 @@ pub(super) fn handle_api_request_inner(
 
     match method {
         ApiMethod::Get => {
+            if let Some(resp) = chat::handle_get(path, url, registry)? {
+                return Ok(resp);
+            }
             if let Some(resp) = queries::handle_get(path, url, default_events_limit, registry)? {
                 return Ok(resp);
             }
@@ -115,6 +141,9 @@ pub(super) fn handle_api_request_inner(
             not_found(path)
         }
         ApiMethod::Post => {
+            if let Some(resp) = chat::handle_post(path, body, registry)? {
+                return Ok(resp);
+            }
             if let Some(resp) = projects::handle_post(path, body, registry)? {
                 return Ok(resp);
             }
@@ -125,6 +154,9 @@ pub(super) fn handle_api_request_inner(
                 return Ok(resp);
             }
             if let Some(resp) = flows::handle_post(path, body, registry)? {
+                return Ok(resp);
+            }
+            if let Some(resp) = workflows::handle_post(path, body, registry)? {
                 return Ok(resp);
             }
             if let Some(resp) = operations::handle_post(path, body, registry)? {

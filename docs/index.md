@@ -46,3 +46,4 @@ For an end-to-end setup (project, tasks, graph, flow, merge), continue with [Qui
 - `overview/governance-runbooks.md` — governance migration/recovery/policy-change operator procedures
 - `architecture/` — system model and core invariants
 - `design/` — operational semantics for advanced usage
+- `design/runtime-stream-ui.md` — frontend/runtime-stream integration and turn-restore guidance

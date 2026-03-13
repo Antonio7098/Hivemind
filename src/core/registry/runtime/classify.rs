@@ -102,13 +102,9 @@ impl Registry {
         classified: &ClassifiedRuntimeError,
         origin: &'static str,
     ) -> Result<()> {
-        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
-            flow.project_id,
-            flow.graph_id,
-            flow.id,
-            task_id,
-            attempt_id,
-        );
+        let state = self.state()?;
+        let corr_attempt =
+            Self::correlation_for_flow_task_attempt_event(&state, flow, task_id, attempt_id);
 
         self.append_event(
             Event::new(

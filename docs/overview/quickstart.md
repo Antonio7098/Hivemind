@@ -148,6 +148,8 @@ Notes:
 - Runtime resolution precedence is: `task override -> flow default -> project default -> global default`.
 - For Codex: `gpt-5.3-codex` works with ChatGPT accounts; `gpt-5.3-codex-high` requires an API account.
 - For OpenCode: Use `opencode models` to list available models.
+- OpenCode/Kilo adapters automatically force JSON event mode (`run --format json`); Codex automatically forces JSON event mode (`exec --json`). Do not add those flags manually unless you are intentionally overriding the wrapper behavior.
+- Hivemind projects known provider JSON events back into `RuntimeOutputChunk` lines while also preserving the raw provider JSON in captured output for manual inspection/debugging.
 
 Optional global fallback defaults:
 
@@ -366,6 +368,8 @@ You should see runtime lifecycle events like:
 
 - `runtime_started`
 - `runtime_output_chunk`
+- `runtime_session_observed`
+- `runtime_turn_completed`
 - `runtime_filesystem_observed`
 - `runtime_exited`
 
@@ -375,6 +379,11 @@ You should see runtime lifecycle events like:
 $HM -f json attempt list --flow "$FLOW_ID" --limit 100
 $HM -f json attempt inspect <attempt-id> --context --diff --output
 ```
+
+`attempt inspect` also surfaces runtime continuity metadata when available:
+
+- `runtime_session` — adapter/provider session identity observed for the attempt
+- `turn_refs[]` — transient per-turn restore points with ordinal, hidden git ref, and commit SHA
 
 Context inspection includes deterministic provenance fields:
 - `context.manifest` (resolved immutable context manifest)
@@ -388,14 +397,38 @@ Checkpoint visibility for a specific attempt:
 $HM -f json checkpoint list <attempt-id>
 ```
 
-### 8.3 Worktrees
+### 8.3 Runtime stream API and SSE
+
+```bash
+curl "http://127.0.0.1:8787/api/runtime-stream?flow_id=$FLOW_ID&limit=200"
+curl -N "http://127.0.0.1:8787/api/runtime-stream/stream?attempt_id=<attempt-id>"
+```
+
+The snapshot endpoint returns a UI-friendly projection of runtime activity. The SSE endpoint emits `event: runtime` frames with a JSON envelope containing a `cursor` and a projected `item` (`kind`, `stream`, `title`, `text`, `data`, and correlation IDs).
+
+Common projected kinds include:
+
+- `output_chunk`
+- `narrative`
+- `tool_call`
+- `todo_snapshot`
+- `file_change`
+- `session`
+- `turn`
+- `checkpoint_declared`
+- `checkpoint_completed`
+
+### 8.4 Worktrees
 
 ```bash
 $HM -f json worktree list "$FLOW_ID"
 $HM -f json worktree inspect <task-id>
 $HM -f json worktree cleanup "$FLOW_ID" --dry-run
 $HM -f json worktree cleanup "$FLOW_ID" --force
+$HM -f json worktree restore-turn <attempt-id> --ordinal 1 --confirm
 ```
+
+`worktree restore-turn` restores the task worktree contents to a stored transient turn snapshot without moving the task branch HEAD. Because restore discards the current worktree contents, `--confirm` is required; if the flow is still running, add `--force`.
 
 ---
 

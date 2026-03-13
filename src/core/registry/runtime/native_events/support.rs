@@ -1,4 +1,5 @@
 use super::*;
+use crate::adapters::runtime::StructuredRuntimeObservation;
 
 const MAX_INLINE_NATIVE_BLOB_BYTES: usize = 64 * 1024;
 
@@ -42,6 +43,56 @@ impl Registry {
         }
     }
 
+    pub(crate) fn structured_runtime_event_payload(
+        attempt_id: Uuid,
+        observation: StructuredRuntimeObservation,
+    ) -> EventPayload {
+        match observation {
+            StructuredRuntimeObservation::CommandCompleted {
+                stream,
+                command,
+                exit_code,
+                output,
+            } => EventPayload::RuntimeCommandCompleted {
+                attempt_id,
+                stream,
+                command,
+                exit_code,
+                output,
+            },
+            StructuredRuntimeObservation::SessionObserved {
+                stream,
+                adapter_name,
+                session_id,
+            } => EventPayload::RuntimeSessionObserved {
+                attempt_id,
+                adapter_name,
+                stream,
+                session_id,
+            },
+            StructuredRuntimeObservation::TurnCompleted {
+                stream,
+                adapter_name,
+                ordinal,
+                provider_session_id,
+                provider_turn_id,
+                git_ref,
+                commit_sha,
+                summary,
+            } => EventPayload::RuntimeTurnCompleted {
+                attempt_id,
+                adapter_name,
+                stream,
+                ordinal,
+                provider_session_id,
+                provider_turn_id,
+                git_ref,
+                commit_sha,
+                summary,
+            },
+        }
+    }
+
     pub(crate) fn append_projected_runtime_observations(
         &self,
         attempt_id: Uuid,
@@ -52,6 +103,23 @@ impl Registry {
         for observation in observations {
             self.append_native_event(
                 Self::projected_runtime_event_payload(attempt_id, observation),
+                correlation,
+                origin,
+            )?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn append_structured_runtime_observations(
+        &self,
+        attempt_id: Uuid,
+        correlation: &CorrelationIds,
+        observations: Vec<StructuredRuntimeObservation>,
+        origin: &'static str,
+    ) -> Result<()> {
+        for observation in observations {
+            self.append_native_event(
+                Self::structured_runtime_event_payload(attempt_id, observation),
                 correlation,
                 origin,
             )?;

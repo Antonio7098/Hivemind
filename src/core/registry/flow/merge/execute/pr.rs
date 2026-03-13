@@ -9,11 +9,12 @@ impl Registry {
     ) -> Result<crate::core::state::MergeState> {
         let origin = "registry:merge_execute_via_pr";
         let flow = self.get_flow(flow_id)?;
+        let flow_corr = Self::correlation_for_flow_event(&self.state()?, &flow);
 
         let _ = self.enforce_constitution_gate(
             flow.project_id,
             "merge_execute",
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            flow_corr.clone(),
             origin,
         )?;
 
@@ -282,7 +283,7 @@ impl Registry {
                         flow_id: flow.id,
                         commits,
                     },
-                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                    flow_corr,
                 ),
                 origin,
             )?;

@@ -24,7 +24,7 @@
 //!
 //! # Example: Using an Adapter
 //!
-//! ```no_run
+//! ```ignore
 //! use hivemind::adapters::runtime::{AdapterConfig, ExecutionInput, RuntimeAdapter};
 //! use std::path::PathBuf;
 //! use std::time::Duration;
@@ -59,7 +59,7 @@ mod telemetry;
 
 pub use adapter::{
     AdapterConfig, ExecutionReport, InteractiveAdapterEvent, InteractiveExecutionResult,
-    RuntimeAdapter, RuntimeError,
+    RuntimeAdapter, RuntimeError, StructuredRuntimeObservation,
 };
 pub use env::{
     build_protected_runtime_environment, deterministic_env_pairs, ProtectedRuntimeEnvironment,

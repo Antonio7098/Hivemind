@@ -7,6 +7,7 @@ impl Registry {
         graph: &TaskGraph,
         origin: &'static str,
     ) -> Result<()> {
+        let state = self.state()?;
         let mut newly_ready = Vec::new();
         let mut newly_blocked: Vec<(Uuid, String)> = Vec::new();
         for task_id in graph.tasks.keys() {
@@ -72,12 +73,7 @@ impl Registry {
                     task_id,
                     reason: Some(reason),
                 },
-                CorrelationIds::for_graph_flow_task(
-                    flow.project_id,
-                    flow.graph_id,
-                    flow.id,
-                    task_id,
-                ),
+                Self::correlation_for_flow_task_event(&state, flow, task_id),
             );
             self.store
                 .append(event)
@@ -90,12 +86,7 @@ impl Registry {
                     flow_id: flow.id,
                     task_id,
                 },
-                CorrelationIds::for_graph_flow_task(
-                    flow.project_id,
-                    flow.graph_id,
-                    flow.id,
-                    task_id,
-                ),
+                Self::correlation_for_flow_task_event(&state, flow, task_id),
             );
             self.store
                 .append(event)
@@ -141,7 +132,7 @@ impl Registry {
 
         let event = Event::new(
             EventPayload::TaskFlowCompleted { flow_id: flow.id },
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            Self::correlation_for_flow_event(&self.state()?, flow),
         );
         self.store
             .append(event)

@@ -3,6 +3,11 @@ use super::*;
 #[allow(clippy::too_many_lines)]
 pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
     match payload {
+        EventPayload::ChatSessionCreated { .. }
+        | EventPayload::ChatSessionTitleUpdated { .. }
+        | EventPayload::ChatMessageAppended { .. }
+        | EventPayload::ChatStreamChunkAppended { .. } => "chat",
+
         EventPayload::ErrorOccurred { .. } => "error",
 
         EventPayload::ProjectCreated { .. }
@@ -62,7 +67,18 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::TaskFlowCompleted { .. }
         | EventPayload::TaskFlowAborted { .. }
         | EventPayload::TaskFlowDeleted { .. }
-        | EventPayload::WorktreeCleanupPerformed { .. } => "flow",
+        | EventPayload::WorktreeCleanupPerformed { .. }
+        | EventPayload::WorktreeTurnRefRestored { .. } => "flow",
+
+        EventPayload::WorkflowDefinitionCreated { .. }
+        | EventPayload::WorkflowDefinitionUpdated { .. }
+        | EventPayload::WorkflowRunCreated { .. }
+        | EventPayload::WorkflowRunStarted { .. }
+        | EventPayload::WorkflowRunPaused { .. }
+        | EventPayload::WorkflowRunResumed { .. }
+        | EventPayload::WorkflowRunCompleted { .. }
+        | EventPayload::WorkflowRunAborted { .. }
+        | EventPayload::WorkflowStepStateChanged { .. } => "workflow",
 
         EventPayload::TaskReady { .. }
         | EventPayload::TaskBlocked { .. }
@@ -133,6 +149,9 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::RuntimeRecoveryScheduled { .. }
         | EventPayload::RuntimeFilesystemObserved { .. }
         | EventPayload::RuntimeCommandObserved { .. }
+        | EventPayload::RuntimeCommandCompleted { .. }
+        | EventPayload::RuntimeSessionObserved { .. }
+        | EventPayload::RuntimeTurnCompleted { .. }
         | EventPayload::RuntimeToolCallObserved { .. }
         | EventPayload::RuntimeTodoSnapshotUpdated { .. }
         | EventPayload::RuntimeNarrativeOutputObserved { .. }

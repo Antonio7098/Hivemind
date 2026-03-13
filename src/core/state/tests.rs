@@ -1,5 +1,9 @@
 use super::*;
 use crate::core::events::CorrelationIds;
+use crate::core::workflow::{
+    WorkflowDefinition, WorkflowRun, WorkflowRunState, WorkflowStepDefinition, WorkflowStepKind,
+    WorkflowStepState,
+};
 
 #[test]
 fn replay_is_deterministic() {
@@ -89,4 +93,43 @@ fn task_lifecycle() {
     let task = state.tasks.get(&task_id).unwrap();
 
     assert_eq!(task.state, TaskState::Closed);
+}
+
+#[test]
+fn workflow_replay_tracks_definition_and_run_state() {
+    let project_id = Uuid::new_v4();
+    let mut workflow = WorkflowDefinition::new(project_id, "demo-workflow", None);
+    let step = WorkflowStepDefinition::new("root", WorkflowStepKind::Task);
+    let step_id = step.id;
+    workflow.add_step(step);
+    let run = WorkflowRun::new_root(&workflow);
+
+    let events = vec![
+        Event::new(
+            EventPayload::WorkflowDefinitionCreated {
+                definition: workflow.clone(),
+            },
+            CorrelationIds::for_workflow(project_id, workflow.id),
+        ),
+        Event::new(
+            EventPayload::WorkflowRunCreated { run: run.clone() },
+            CorrelationIds::for_workflow_run(project_id, workflow.id, run.id),
+        ),
+        Event::new(
+            EventPayload::WorkflowRunStarted {
+                workflow_run_id: run.id,
+            },
+            CorrelationIds::for_workflow_run(project_id, workflow.id, run.id),
+        ),
+    ];
+
+    let state = AppState::replay(&events);
+    let replayed_run = state.workflow_runs.get(&run.id).unwrap();
+
+    assert!(state.workflows.contains_key(&workflow.id));
+    assert_eq!(replayed_run.state, WorkflowRunState::Running);
+    assert_eq!(
+        replayed_run.step_runs.get(&step_id).unwrap().state,
+        WorkflowStepState::Ready
+    );
 }

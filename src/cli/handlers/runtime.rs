@@ -1,9 +1,10 @@
 //! Runtime command handlers.
 
-use crate::cli::commands::{RuntimeCommands, RuntimeRoleArg};
+use crate::cli::commands::{RuntimeCommands, RuntimeRoleArg, RuntimeStreamArgs};
 use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::error::ExitCode;
 use crate::core::events::RuntimeRole;
+use crate::core::registry::shared_types::RuntimeStreamDetailLevel;
 use crate::core::registry::Registry;
 
 fn parse_runtime_role(role: RuntimeRoleArg) -> RuntimeRole {
@@ -19,6 +20,20 @@ fn get_registry(format: OutputFormat) -> Option<Registry> {
         Err(e) => {
             output_error(&e, format);
             None
+        }
+    }
+}
+
+fn parse_runtime_stream_detail(
+    detail: crate::cli::commands::RuntimeStreamDetailArg,
+) -> RuntimeStreamDetailLevel {
+    match detail {
+        crate::cli::commands::RuntimeStreamDetailArg::Summary => RuntimeStreamDetailLevel::Summary,
+        crate::cli::commands::RuntimeStreamDetailArg::Observability => {
+            RuntimeStreamDetailLevel::Observability
+        }
+        crate::cli::commands::RuntimeStreamDetailArg::Telemetry => {
+            RuntimeStreamDetailLevel::Telemetry
         }
     }
 }
@@ -118,5 +133,50 @@ pub fn handle_runtime(cmd: RuntimeCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
+        RuntimeCommands::Stream(args) => handle_runtime_stream(&registry, &args, format),
+    }
+}
+
+fn handle_runtime_stream(
+    registry: &Registry,
+    args: &RuntimeStreamArgs,
+    format: OutputFormat,
+) -> ExitCode {
+    match registry.runtime_stream_items_with_detail(
+        args.flow.as_deref(),
+        args.attempt.as_deref(),
+        args.limit,
+        parse_runtime_stream_detail(args.detail),
+    ) {
+        Ok(items) => match format {
+            OutputFormat::Table => {
+                if items.is_empty() {
+                    println!("No runtime stream items found.");
+                } else {
+                    println!(
+                        "{:<8}  {:<20}  {:<18}  {:<10}  SUMMARY",
+                        "SEQ", "TIMESTAMP", "KIND", "STREAM"
+                    );
+                    println!("{}", "-".repeat(110));
+                    for item in items {
+                        println!(
+                            "{:<8}  {:<20}  {:<18}  {:<10}  {}",
+                            item.sequence,
+                            item.timestamp.format("%Y-%m-%d %H:%M:%S"),
+                            item.kind,
+                            item.stream.as_deref().unwrap_or("-"),
+                            item.title
+                                .or(item.text)
+                                .unwrap_or_else(|| item.event_id.clone())
+                        );
+                    }
+                }
+                ExitCode::Success
+            }
+            _ => output(&items, format)
+                .map(|()| ExitCode::Success)
+                .unwrap_or(ExitCode::Error),
+        },
+        Err(e) => output_error(&e, format),
     }
 }

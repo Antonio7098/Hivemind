@@ -59,13 +59,8 @@ impl Registry {
         };
         let backoff_ms = if classified.rate_limited { 1_000 } else { 250 };
 
-        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
-            flow.project_id,
-            flow.graph_id,
-            flow.id,
-            task_id,
-            attempt_id,
-        );
+        let corr_attempt =
+            Self::correlation_for_flow_task_attempt_event(state, flow, task_id, attempt_id);
         self.append_event(
             Event::new(
                 EventPayload::RuntimeRecoveryScheduled {
@@ -82,12 +77,7 @@ impl Registry {
         )?;
 
         if target_runtime.adapter_name != from_runtime.adapter_name {
-            let corr_task = CorrelationIds::for_graph_flow_task(
-                flow.project_id,
-                flow.graph_id,
-                flow.id,
-                task_id,
-            );
+            let corr_task = Self::correlation_for_flow_task_event(state, flow, task_id);
             self.append_event(
                 Event::new(
                     EventPayload::TaskRuntimeRoleConfigured {
@@ -125,13 +115,8 @@ impl Registry {
         stderr: &str,
         origin: &'static str,
     ) -> Result<()> {
-        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
-            flow.project_id,
-            flow.graph_id,
-            flow.id,
-            task_id,
-            attempt_id,
-        );
+        let corr_attempt =
+            Self::correlation_for_flow_task_attempt_event(state, flow, task_id, attempt_id);
 
         let reason = format!("{failure_code}: {failure_message}");
         self.append_event(

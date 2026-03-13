@@ -1,6 +1,24 @@
 #![allow(clippy::too_many_lines)]
 
 use super::*;
+use std::str::FromStr;
+
+fn parse_runtime_stream_detail(
+    query: &std::collections::HashMap<String, String>,
+) -> Result<crate::core::registry::shared_types::RuntimeStreamDetailLevel> {
+    let Some(raw) = query.get("detail") else {
+        return Ok(crate::core::registry::shared_types::RuntimeStreamDetailLevel::Telemetry);
+    };
+    crate::core::registry::shared_types::RuntimeStreamDetailLevel::from_str(raw).map_err(|_| {
+        HivemindError::user(
+            "invalid_runtime_stream_detail",
+            format!(
+                "Unsupported runtime stream detail '{raw}'. Expected summary, observability, or telemetry"
+            ),
+            "server/runtime-stream",
+        )
+    })
+}
 
 pub(super) fn handle_get(
     path: &str,
@@ -30,6 +48,39 @@ pub(super) fn handle_get(
         "/api/tasks" => super::json_ok(list_tasks(registry)?)?,
         "/api/graphs" => super::json_ok(list_graphs(registry)?)?,
         "/api/flows" => super::json_ok(list_flows(registry)?)?,
+        "/api/workflows" => {
+            let query = parse_query(url);
+            super::json_ok(registry.list_workflows(query.get("project").map(String::as_str))?)?
+        }
+        "/api/workflows/inspect" => {
+            let query = parse_query(url);
+            let workflow_id = query.get("workflow_id").ok_or_else(|| {
+                HivemindError::user(
+                    "missing_workflow_id",
+                    "Query parameter 'workflow_id' is required",
+                    "server:workflows:inspect",
+                )
+            })?;
+            super::json_ok(registry.get_workflow(workflow_id)?)?
+        }
+        "/api/workflow-runs" => {
+            let query = parse_query(url);
+            super::json_ok(registry.list_workflow_runs(
+                query.get("project").map(String::as_str),
+                query.get("workflow").map(String::as_str),
+            )?)?
+        }
+        "/api/workflow-runs/inspect" => {
+            let query = parse_query(url);
+            let workflow_run_id = query.get("workflow_run_id").ok_or_else(|| {
+                HivemindError::user(
+                    "missing_workflow_run_id",
+                    "Query parameter 'workflow_run_id' is required",
+                    "server:workflow-runs:inspect",
+                )
+            })?;
+            super::json_ok(registry.get_workflow_run(workflow_run_id)?)?
+        }
         "/api/merges" => super::json_ok(list_merge_states(registry)?)?,
         "/api/runtimes" => super::json_ok(registry.runtime_list())?,
         "/api/runtimes/health" => {
@@ -63,6 +114,19 @@ pub(super) fn handle_get(
                 )
             })?;
             super::json_ok(registry.get_event(event_id)?)?
+        }
+        "/api/runtime-stream" => {
+            let query = parse_query(url);
+            let limit = query
+                .get("limit")
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(default_events_limit);
+            super::json_ok(registry.runtime_stream_items_with_detail(
+                query.get("flow_id").map(String::as_str),
+                query.get("attempt_id").map(String::as_str),
+                limit,
+                parse_runtime_stream_detail(&query)?,
+            )?)?
         }
         "/api/verify/results" => {
             let query = parse_query(url);
@@ -124,6 +188,27 @@ pub(super) fn handle_get(
                 started_at: attempt.started_at,
                 baseline_id: attempt.baseline_id.map(|v| v.to_string()),
                 diff_id: attempt.diff_id.map(|v| v.to_string()),
+                runtime_session: attempt.runtime_session.as_ref().map(|session| {
+                    AttemptRuntimeSessionView {
+                        adapter_name: session.adapter_name.clone(),
+                        session_id: session.session_id.clone(),
+                        discovered_at: session.discovered_at,
+                    }
+                }),
+                turn_refs: attempt
+                    .turn_refs
+                    .iter()
+                    .map(|turn| AttemptTurnRefView {
+                        ordinal: turn.ordinal,
+                        adapter_name: turn.adapter_name.clone(),
+                        stream: format!("{:?}", turn.stream).to_lowercase(),
+                        provider_session_id: turn.provider_session_id.clone(),
+                        provider_turn_id: turn.provider_turn_id.clone(),
+                        git_ref: turn.git_ref.clone(),
+                        commit_sha: turn.commit_sha.clone(),
+                        summary: turn.summary.clone(),
+                    })
+                    .collect(),
                 diff,
             })?
         }
