@@ -152,7 +152,7 @@ fn render_workflow(workflow: WorkflowDefinition, format: OutputFormat) -> ExitCo
                 .collect::<Vec<_>>()
                 .join(", ");
             println!(
-                "  - {} [{}] deps={} id={}",
+                "  - {} [{}] deps={} id={}{}",
                 step.name,
                 format!("{:?}", step.kind).to_lowercase(),
                 if dependencies.is_empty() {
@@ -160,7 +160,11 @@ fn render_workflow(workflow: WorkflowDefinition, format: OutputFormat) -> ExitCo
                 } else {
                     &dependencies
                 },
-                step.id
+                step.id,
+                step.child_workflow
+                    .as_ref()
+                    .map(|child| format!(" child={}", child.workflow_id))
+                    .unwrap_or_default()
             );
         }
     } else if let Err(err) = output(&workflow, format) {
@@ -172,10 +176,17 @@ fn render_workflow(workflow: WorkflowDefinition, format: OutputFormat) -> ExitCo
 fn render_workflow_run(registry: &Registry, run: WorkflowRun, format: OutputFormat) -> ExitCode {
     if format == OutputFormat::Table {
         let workflow = registry.get_workflow(&run.workflow_id.to_string()).ok();
+        let all_runs = registry.list_workflow_runs(None, None).unwrap_or_default();
         println!("Run:      {}", run.id);
         println!("Workflow: {}", run.workflow_id);
         println!("Project:  {}", run.project_id);
         println!("Root:     {}", run.root_workflow_run_id);
+        println!(
+            "Parent:   {}",
+            run.parent_workflow_run_id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| "-".to_string())
+        );
         println!("State:    {:?}", run.state);
         println!("Steps:    {}", run.step_runs.len());
         for (step_id, step_run) in &run.step_runs {
@@ -190,6 +201,25 @@ fn render_workflow_run(registry: &Registry, run: WorkflowRun, format: OutputForm
                 step_run.step_id,
                 step_run.id
             );
+        }
+        let child_runs = all_runs
+            .iter()
+            .filter(|child| child.parent_workflow_run_id == Some(run.id))
+            .collect::<Vec<_>>();
+        if !child_runs.is_empty() {
+            println!("Children:");
+            for child in child_runs {
+                println!(
+                    "  - run={} workflow={} parent_step={} state={:?}",
+                    child.id,
+                    child.workflow_id,
+                    child
+                        .parent_step_id
+                        .map(|id| id.to_string())
+                        .unwrap_or_else(|| "-".to_string()),
+                    child.state
+                );
+            }
         }
     } else if let Err(err) = output(&run, format) {
         eprintln!("Failed to render workflow run: {err}");
@@ -249,6 +279,7 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
                 Ok(value) => value,
                 Err(code) => return code,
             },
+            args.child_workflow_id.as_deref(),
         ) {
             Ok(workflow) => render_workflow(workflow, format),
             Err(err) => output_error(&err, format),

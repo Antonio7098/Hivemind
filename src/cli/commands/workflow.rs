@@ -54,6 +54,8 @@ pub struct WorkflowStepAddArgs {
     pub output_bindings_json: Option<String>,
     #[arg(long, allow_hyphen_values = true)]
     pub context_patches_json: Option<String>,
+    #[arg(long)]
+    pub child_workflow_id: Option<String>,
 }
 
 #[derive(Args)]

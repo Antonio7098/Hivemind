@@ -149,6 +149,21 @@ fn initialize_falls_back_to_help_when_version_fails() {
 }
 
 #[test]
+fn initialize_health_probe_respects_timeout() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let script_path = tmp.path().join("slow_runtime.sh");
+    write_executable(&script_path, "#!/bin/sh\nsleep 2\nexit 0\n");
+
+    let mut cfg = OpenCodeConfig::new(script_path);
+    cfg.base.timeout = Duration::from_millis(50);
+    let mut adapter = OpenCodeAdapter::new(cfg);
+
+    let err = adapter.initialize().unwrap_err();
+    assert_eq!(err.code, "health_check_failed");
+    assert!(err.message.contains("Timed out"));
+}
+
+#[test]
 fn execute_success_captures_stdout_and_stderr() {
     let tmp = tempfile::tempdir().expect("tempdir");
 

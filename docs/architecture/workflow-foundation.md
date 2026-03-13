@@ -6,7 +6,7 @@ order: 8
 
 # Workflow Foundation
 
-This document describes the Phase 5 workflow domain introduced in Sprint 64, extended in Sprint 65 with a flat execution bridge, and extended in Sprint 66 with a deterministic workflow data plane on top of the legacy `TaskFlow` attempt machinery.
+This document describes the Phase 5 workflow domain introduced in Sprint 64, extended in Sprint 65 with a flat execution bridge, extended in Sprint 66 with a deterministic workflow data plane, and extended in Sprint 67 with explicit nested child workflows and lineage.
 
 ## Purpose
 
@@ -39,11 +39,18 @@ Sprint 66 adds these guarantees:
 - join steps can consume bag entries through selectors and reducers, emit new bag outputs, and patch workflow context explicitly at step-completion boundaries
 - attempt-context assembly now injects a workflow-derived manifest section with workflow run ids and workflow/step hash references
 
+Sprint 67 adds these guarantees:
+
+- `workflow` steps launch explicit child `WorkflowRun` records rather than hidden scheduler internals
+- child runs inherit `root_workflow_run_id`, stamp `parent_workflow_run_id` and `parent_step_id`, and remain queryable through normal workflow and event surfaces
+- parent to child input transfer is copy-in only and uses the existing deterministic step input binding model
+- child to parent output transfer is explicit through workflow-step output bindings and context patches that reference declared child context keys
+- parent `workflow status` output includes child run summaries so nested execution can be inspected without reconstructing raw events manually
+
 ## Explicit Non-Goals
 
 The current implementation still does **not** add:
 
-- nested child workflow execution
 - signal/wait orchestration
 - workflow-native runtime/worktree/merge ownership without the synthetic flow bridge
 - a dedicated workflow-native retry command
@@ -94,7 +101,7 @@ Sprint 65 exposes a usable workflow-facing control surface:
   - `/api/workflow-runs/abort`
   - `/api/workflow-runs/steps/state`
 
-The surface remains intentionally narrow: workflow execution currently supports flat `task` and `join` steps only, and retry is still bridged through the synthetic task path.
+The surface remains intentionally narrow: nested child workflows are now supported, but retry is still bridged through explicit step-state transitions and the synthetic task path for leaf execution.
 
 ## Sprint 65 Execution Bridge
 

@@ -5709,21 +5709,19 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
     let (code, _out, err) = run_hivemind(tmp.path(), &["workflow", "start", &workflow_run_id]);
     assert_eq!(code, 0, "{err}");
 
-    for _ in 0..2 {
-        let (code, _out, err) = run_hivemind(
-            tmp.path(),
-            &[
-                "-f",
-                "json",
-                "workflow",
-                "tick",
-                &workflow_run_id,
-                "--max-parallel",
-                "2",
-            ],
-        );
-        assert_eq!(code, 0, "{err}");
-    }
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "tick",
+            &workflow_run_id,
+            "--max-parallel",
+            "2",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
 
     let (code, status_out, err) = run_hivemind(
         tmp.path(),
@@ -5736,20 +5734,9 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
     let output_entries = status_json["data"]["output_bag"]["entries"]
         .as_array()
         .expect("output bag entries");
-    let expected_joined = output_entries
-        .iter()
-        .filter(|entry| entry["output_name"] == "branch")
-        .map(|entry| {
-            entry["payload"]["value"]
-                .as_str()
-                .expect("branch output payload")
-                .to_string()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
     assert_eq!(
         status_json["data"]["context"]["current_snapshot"]["values"]["joined_summary"]["value"],
-        expected_joined,
+        "alpha\nbeta",
         "{status_out}"
     );
     assert_eq!(output_entries.len(), 3, "{status_out}");
@@ -5773,6 +5760,7 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
     let events_json: serde_json::Value =
         serde_json::from_str(&events_out).expect("workflow events json");
     let events = events_json["data"].as_array().expect("events array");
+    let expected_joined = serde_json::Value::String("alpha\nbeta".to_string());
     let join_inputs_resolved = events
         .iter()
         .find(|event| {
@@ -6200,34 +6188,8 @@ fn cli_workflow_tick_rejects_unsupported_step_kinds() {
             "workflow",
         ],
     );
-    assert_eq!(code, 0, "{err}");
-
-    let (code, run_out, err) = run_hivemind(
-        tmp.path(),
-        &["-f", "json", "workflow", "run-create", &workflow_id],
-    );
-    assert_eq!(code, 0, "{err}");
-    let workflow_run_id = serde_json::from_str::<serde_json::Value>(&run_out)
-        .expect("workflow run json")
-        .get("data")
-        .and_then(|d| d.get("workflow_run_id"))
-        .and_then(serde_json::Value::as_str)
-        .expect("workflow run id")
-        .to_string();
-
-    let (code, _out, err) = run_hivemind(tmp.path(), &["workflow", "start", &workflow_run_id]);
-    assert_eq!(code, 0, "{err}");
-
-    let (code, _out, err) = run_hivemind(
-        tmp.path(),
-        &["workflow", "tick", &workflow_run_id, "--max-parallel", "1"],
-    );
-    assert_eq!(code, 1, "expected unsupported step kind failure");
-    assert!(err.contains("workflow_step_kind_not_supported"), "{err}");
-    assert!(
-        err.contains("Sprint 66 execution currently supports task and join workflow steps"),
-        "{err}"
-    );
+    assert_eq!(code, 1, "expected missing child workflow failure");
+    assert!(err.contains("workflow_child_workflow_required"), "{err}");
 }
 
 #[test]

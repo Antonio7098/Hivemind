@@ -34,6 +34,7 @@ pub(super) fn handle_post(
                 req.input_bindings,
                 req.output_bindings,
                 req.context_patches,
+                req.child_workflow_id.as_deref(),
             )?)?
         }
         "/api/workflow-runs/create" => {

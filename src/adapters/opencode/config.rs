@@ -3,21 +3,39 @@ use super::*;
 pub(super) fn status_with_retry(
     binary: &std::path::Path,
     arg: &str,
+    timeout: Duration,
 ) -> std::io::Result<std::process::ExitStatus> {
     let mut last_err: Option<std::io::Error> = None;
     for _ in 0..50 {
-        match Command::new(binary)
+        let mut child = match Command::new(binary)
             .arg(arg)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .status()
+            .spawn()
         {
-            Ok(status) => return Ok(status),
+            Ok(child) => child,
             Err(e) if e.raw_os_error() == Some(26) => {
                 last_err = Some(e);
                 std::thread::sleep(Duration::from_millis(5));
+                continue;
             }
             Err(e) => return Err(e),
+        };
+
+        let start = std::time::Instant::now();
+        loop {
+            match child.try_wait()? {
+                Some(status) => return Ok(status),
+                None if start.elapsed() >= timeout => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        format!("Timed out waiting for {} {}", binary.display(), arg),
+                    ));
+                }
+                None => std::thread::sleep(Duration::from_millis(10)),
+            }
         }
     }
 

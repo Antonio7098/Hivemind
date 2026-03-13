@@ -96,7 +96,7 @@ impl WorkflowStepState {
                         | Self::Retry
                         | Self::Waiting
                         | Self::Failed,
-                    Self::Aborted,
+                    Self::Aborted
                 )
                 | (Self::Ready, Self::Running)
                 | (Self::Retry, Self::Running | Self::Failed)
@@ -104,11 +104,11 @@ impl WorkflowStepState {
                     Self::Running,
                     Self::Verifying | Self::Retry | Self::Waiting | Self::Succeeded | Self::Failed
                 )
+                | (Self::Waiting, Self::Succeeded | Self::Failed)
                 | (
                     Self::Verifying,
                     Self::Retry | Self::Succeeded | Self::Failed
                 )
-                | (Self::Waiting, Self::Failed)
         )
     }
 
@@ -285,6 +285,7 @@ pub enum WorkflowBagReducer {
 pub enum WorkflowValueSource {
     Literal { value: WorkflowDataValue },
     InputBinding { binding: String },
+    ChildContextKey { key: String },
 }
 
 /// A declarative output emitted on successful step completion.
@@ -303,6 +304,43 @@ pub struct WorkflowContextPatchBinding {
     pub source: WorkflowValueSource,
 }
 
+/// Parent behavior when a child workflow step reaches a terminal outcome.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowChildTerminalBehavior {
+    Complete,
+    FailStep,
+    AbortParent,
+}
+
+/// Configurable policy for child workflow terminal outcomes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowChildFailurePolicy {
+    pub on_success: WorkflowChildTerminalBehavior,
+    pub on_failure: WorkflowChildTerminalBehavior,
+    pub on_cancellation: WorkflowChildTerminalBehavior,
+    pub on_timeout: WorkflowChildTerminalBehavior,
+}
+
+impl Default for WorkflowChildFailurePolicy {
+    fn default() -> Self {
+        Self {
+            on_success: WorkflowChildTerminalBehavior::Complete,
+            on_failure: WorkflowChildTerminalBehavior::FailStep,
+            on_cancellation: WorkflowChildTerminalBehavior::FailStep,
+            on_timeout: WorkflowChildTerminalBehavior::FailStep,
+        }
+    }
+}
+
+/// Child-workflow launch configuration for workflow steps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowChildConfig {
+    pub workflow_id: Uuid,
+    #[serde(default)]
+    pub failure_policy: WorkflowChildFailurePolicy,
+}
+
 /// Static step definition within a workflow definition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowStepDefinition {
@@ -319,6 +357,8 @@ pub struct WorkflowStepDefinition {
     pub output_bindings: Vec<WorkflowStepOutputBinding>,
     #[serde(default)]
     pub context_patches: Vec<WorkflowContextPatchBinding>,
+    #[serde(default)]
+    pub child_workflow: Option<WorkflowChildConfig>,
 }
 
 impl WorkflowStepDefinition {
@@ -333,6 +373,7 @@ impl WorkflowStepDefinition {
             input_bindings: Vec::new(),
             output_bindings: Vec::new(),
             context_patches: Vec::new(),
+            child_workflow: None,
         }
     }
 }
@@ -742,6 +783,20 @@ impl WorkflowRun {
             completed_at: None,
             updated_at: now,
         }
+    }
+
+    #[must_use]
+    pub fn new_child(
+        definition: &WorkflowDefinition,
+        root_workflow_run_id: Uuid,
+        parent_workflow_run_id: Uuid,
+        parent_step_id: Uuid,
+    ) -> Self {
+        let mut run = Self::new_root(definition);
+        run.root_workflow_run_id = root_workflow_run_id;
+        run.parent_workflow_run_id = Some(parent_workflow_run_id);
+        run.parent_step_id = Some(parent_step_id);
+        run
     }
 
     #[must_use]
