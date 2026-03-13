@@ -1330,6 +1330,7 @@ mod tests {
                     tool_result_items_visible: 0,
                     latest_tool_result_turn_index: None,
                     latest_tool_names_visible: vec![],
+                    active_code_window_trace: Vec::new(),
                     tool_call_count: 0,
                     tool_failure_count: 0,
                     model_latency_ms: 0,

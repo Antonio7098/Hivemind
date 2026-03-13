@@ -405,6 +405,7 @@ impl Registry {
                 origin,
             )?;
         }
+        let has_structured_command_events = !report.structured_runtime_observations.is_empty();
 
         if let Ok(state) = self.state() {
             if let Some(attempt) = state.attempts.get(&attempt_id) {

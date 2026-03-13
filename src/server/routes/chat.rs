@@ -411,14 +411,11 @@ where
     let model_client = build_model_client(&config, origin)?;
     let mut loop_driver = AgentLoop::new(config.native.clone(), model_client);
     let result = loop_driver
-        .run_with_turn_callback(prompt, Some(context.as_str()), |turn| {
-            on_turn(turn).map_err(|e| crate::native::NativeRuntimeError::ModelRequestFailed {
-                code: e.code.clone(),
-                message: e.message.clone(),
-                recoverable: e.recoverable,
-            })
-        })
+        .run(prompt, Some(context.as_str()))
         .map_err(|error| error.to_hivemind_error(origin))?;
+    for turn in &result.turns {
+        on_turn(turn)?;
+    }
     let transport = loop_driver.take_transport_telemetry();
     let turns = map_turns(&result);
     let assistant_message = result
