@@ -160,6 +160,8 @@ mod tests {
             run.output_bag.bag_hash.clone(),
             context.current_snapshot.values.clone(),
             Vec::new(),
+            Vec::new(),
+            BTreeMap::new(),
             Utc::now(),
         );
         let entry = WorkflowOutputBagEntry {

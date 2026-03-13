@@ -1,6 +1,6 @@
 use super::*;
 use crate::core::workflow::{
-    WorkflowConditionalConfig, WorkflowContextPatchBinding, WorkflowDataValue,
+    WorkflowConditionalConfig, WorkflowContextPatchBinding, WorkflowDataValue, WorkflowSpecBinding,
     WorkflowStepInputBinding, WorkflowStepKind, WorkflowStepOutputBinding, WorkflowStepState,
     WorkflowWaitConfig,
 };
@@ -38,6 +38,12 @@ pub(crate) struct WorkflowStepAddRequest {
     pub(crate) child_workflow_id: Option<String>,
     pub(crate) conditional: Option<WorkflowConditionalConfig>,
     pub(crate) wait: Option<WorkflowWaitConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct WorkflowSpecRequest {
+    pub(crate) workflow_id: String,
+    pub(crate) spec: WorkflowSpecBinding,
 }
 
 #[derive(Debug, Deserialize)]

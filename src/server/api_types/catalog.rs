@@ -83,6 +83,8 @@ pub(crate) fn api_catalog() -> ApiCatalog {
             "/api/workflows/create",
             "/api/workflows/update",
             "/api/workflows/steps/add",
+            "/api/workflows/spec/validate",
+            "/api/workflows/spec/bind",
             "/api/workflow-runs/create",
             "/api/workflow-runs/start",
             "/api/workflow-runs/complete",

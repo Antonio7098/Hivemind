@@ -774,6 +774,100 @@ fn workflow_endpoints_create_update_run_and_complete() {
 }
 
 #[test]
+fn workflow_spec_endpoints_validate_and_bind() {
+    let registry = test_registry();
+    let project = registry
+        .create_project("workflow-api-spec", None)
+        .expect("project");
+    let workflow = registry
+        .create_workflow(&project.id.to_string(), "api-spec-workflow", Some("spec"))
+        .expect("workflow");
+    let workflow = registry
+        .workflow_add_step(
+            &workflow.id.to_string(),
+            "leaf",
+            WorkflowStepKind::Task,
+            None,
+            &[],
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            None,
+            None,
+            None,
+        )
+        .expect("step");
+    let step_id = workflow.steps.values().next().unwrap().id;
+
+    let spec = serde_json::json!({
+        "schema": "workflow_spec",
+        "schema_version": 1,
+        "root": {
+            "id": "root-spec",
+            "kind": "workflow",
+            "title": "Root",
+            "intent": "Describe the workflow",
+            "workflow_id": workflow.id,
+            "acceptance_criteria": ["Workflow succeeds"],
+            "verification": {
+                "posture": "manual"
+            },
+            "children": [
+                {
+                    "id": "leaf-spec",
+                    "kind": "task",
+                    "title": "Leaf",
+                    "intent": "Handle the leaf step",
+                    "workflow_id": workflow.id,
+                    "step_id": step_id,
+                    "acceptance_criteria": ["Leaf succeeds"],
+                    "verification": {
+                        "posture": "worker_output"
+                    }
+                }
+            ]
+        }
+    });
+
+    let validate_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_id": workflow.id.to_string(),
+        "spec": spec
+    }))
+    .expect("validate body");
+    let validate_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflows/spec/validate",
+        Some(validate_body.as_slice()),
+    );
+    assert_eq!(validate_resp.status_code, 200);
+    let validated = json_value(&validate_resp.body);
+    assert_eq!(validated["data"]["root"]["id"], "root-spec");
+
+    let bind_body = serde_json::to_vec(&serde_json::json!({
+        "workflow_id": workflow.id.to_string(),
+        "spec": spec
+    }))
+    .expect("bind body");
+    let bind_resp = api_request(
+        &registry,
+        ApiMethod::Post,
+        "/api/workflows/spec/bind",
+        Some(bind_body.as_slice()),
+    );
+    assert_eq!(bind_resp.status_code, 200);
+
+    let inspect_resp = api_request(
+        &registry,
+        ApiMethod::Get,
+        &format!("/api/workflows/inspect?workflow_id={}", workflow.id),
+        None,
+    );
+    let inspected = json_value(&inspect_resp.body);
+    assert_eq!(inspected["data"]["spec"]["root"]["id"], "root-spec");
+}
+
+#[test]
 #[allow(clippy::too_many_lines)]
 fn workflow_endpoints_tick_pause_resume_and_abort() {
     let registry = test_registry();

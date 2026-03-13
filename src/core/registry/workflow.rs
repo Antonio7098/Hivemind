@@ -23,6 +23,12 @@ use crate::core::{
 };
 use sha2::{Digest, Sha256};
 
+type WorkflowSpecContextBinding = (
+    Option<String>,
+    Vec<String>,
+    BTreeMap<String, WorkflowDataValue>,
+);
+
 impl Registry {
     fn child_run_events(&self, workflow_run_id: Uuid) -> Result<Vec<Event>> {
         self.read_events(&EventFilter {
@@ -264,6 +270,484 @@ impl Registry {
         )?;
 
         self.get_workflow(&workflow.id.to_string())
+    }
+
+    pub fn validate_workflow_spec_binding(
+        &self,
+        workflow_id_or_name: &str,
+        spec: WorkflowSpecBinding,
+    ) -> Result<WorkflowSpecBinding> {
+        let workflow = self
+            .get_workflow(workflow_id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        self.normalize_workflow_spec_binding(&workflow, spec, "registry:validate_workflow_spec")
+    }
+
+    pub fn bind_workflow_spec(
+        &self,
+        workflow_id_or_name: &str,
+        spec: WorkflowSpecBinding,
+    ) -> Result<WorkflowDefinition> {
+        let workflow = self
+            .get_workflow(workflow_id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let spec =
+            self.normalize_workflow_spec_binding(&workflow, spec, "registry:bind_workflow_spec")?;
+        let mut updated = workflow.clone();
+        updated.spec = Some(spec);
+        updated.updated_at = Utc::now();
+
+        self.append_event(
+            Event::new(
+                EventPayload::WorkflowDefinitionUpdated {
+                    definition: updated,
+                },
+                CorrelationIds::for_workflow(workflow.project_id, workflow.id),
+            ),
+            "registry:bind_workflow_spec",
+        )?;
+
+        self.get_workflow(&workflow.id.to_string())
+    }
+
+    pub fn clear_workflow_spec(&self, workflow_id_or_name: &str) -> Result<WorkflowDefinition> {
+        let workflow = self
+            .get_workflow(workflow_id_or_name)
+            .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
+        let mut updated = workflow.clone();
+        updated.spec = None;
+        updated.updated_at = Utc::now();
+
+        self.append_event(
+            Event::new(
+                EventPayload::WorkflowDefinitionUpdated {
+                    definition: updated,
+                },
+                CorrelationIds::for_workflow(workflow.project_id, workflow.id),
+            ),
+            "registry:clear_workflow_spec",
+        )?;
+
+        self.get_workflow(&workflow.id.to_string())
+    }
+
+    fn normalize_workflow_spec_binding(
+        &self,
+        workflow: &WorkflowDefinition,
+        spec: WorkflowSpecBinding,
+        origin: &'static str,
+    ) -> Result<WorkflowSpecBinding> {
+        let normalized_root =
+            self.normalize_workflow_spec_node_for_workflow(workflow, None, spec.root, origin)?;
+        WorkflowSpecBinding::new(spec.schema, spec.schema_version, normalized_root).map_err(|err| {
+            HivemindError::user("invalid_workflow_spec_binding", err.to_string(), origin)
+        })
+    }
+
+    fn normalize_workflow_spec_node_for_workflow(
+        &self,
+        workflow: &WorkflowDefinition,
+        parent_step_id: Option<Uuid>,
+        node: WorkflowSpecNode,
+        origin: &'static str,
+    ) -> Result<WorkflowSpecNode> {
+        let node_id = node.id.trim().to_string();
+        if node_id.is_empty() {
+            return Err(HivemindError::user(
+                "workflow_spec_node_id_invalid",
+                "Workflow spec node id cannot be empty",
+                origin,
+            ));
+        }
+        let title = node.title.trim().to_string();
+        if title.is_empty() {
+            return Err(HivemindError::user(
+                "workflow_spec_title_invalid",
+                format!("Workflow spec node '{node_id}' title cannot be empty"),
+                origin,
+            ));
+        }
+        let intent = node.intent.trim().to_string();
+        if intent.is_empty() {
+            return Err(HivemindError::user(
+                "workflow_spec_intent_invalid",
+                format!("Workflow spec node '{node_id}' intent cannot be empty"),
+                origin,
+            ));
+        }
+        let acceptance_criteria = node
+            .acceptance_criteria
+            .into_iter()
+            .map(|item| item.trim().to_string())
+            .filter(|item| !item.is_empty())
+            .collect::<Vec<_>>();
+        if acceptance_criteria.is_empty() {
+            return Err(HivemindError::user(
+                "workflow_spec_acceptance_criteria_missing",
+                format!(
+                    "Workflow spec node '{node_id}' must declare at least one acceptance criterion"
+                ),
+                origin,
+            ));
+        }
+        let verification_posture = node
+            .verification
+            .posture
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                HivemindError::user(
+                    "workflow_spec_verification_posture_missing",
+                    format!("Workflow spec node '{node_id}' must declare a verification posture"),
+                    origin,
+                )
+            })?;
+        let execution_context =
+            Self::normalize_workflow_context_inputs(node.execution_context, origin)?;
+        let workflow_id = node.workflow_id.ok_or_else(|| {
+            HivemindError::user(
+                "workflow_spec_workflow_binding_missing",
+                format!("Workflow spec node '{node_id}' is missing a workflow_id binding"),
+                origin,
+            )
+        })?;
+        if workflow_id != workflow.id {
+            return Err(HivemindError::user(
+                "workflow_spec_workflow_binding_mismatch",
+                format!(
+                    "Workflow spec node '{node_id}' binds to workflow '{}' but expected '{}'",
+                    workflow_id, workflow.id
+                ),
+                origin,
+            ));
+        }
+
+        let normalized_scope = node
+            .scope
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let normalized_constraints = node
+            .constraints
+            .into_iter()
+            .map(|item| item.trim().to_string())
+            .filter(|item| !item.is_empty())
+            .collect::<Vec<_>>();
+        let normalized_verification = WorkflowSpecVerification {
+            posture: Some(verification_posture),
+            instructions: node
+                .verification
+                .instructions
+                .into_iter()
+                .map(|item| item.trim().to_string())
+                .filter(|item| !item.is_empty())
+                .collect(),
+            checkpoints: node
+                .verification
+                .checkpoints
+                .into_iter()
+                .map(|item| item.trim().to_string())
+                .filter(|item| !item.is_empty())
+                .collect(),
+        };
+        let normalized_attached_artifacts = node
+            .attached_artifacts
+            .into_iter()
+            .map(|item| item.trim().to_string())
+            .filter(|item| !item.is_empty())
+            .collect::<Vec<_>>();
+        let normalized_deviation_notes = node
+            .deviation_notes
+            .into_iter()
+            .map(|item| item.trim().to_string())
+            .filter(|item| !item.is_empty())
+            .collect::<Vec<_>>();
+
+        match node.kind {
+            WorkflowSpecNodeKind::Workflow => {
+                if node.step_id != parent_step_id {
+                    return Err(HivemindError::user(
+                        "workflow_spec_workflow_step_binding_mismatch",
+                        format!(
+                            "Workflow spec node '{node_id}' must bind step_id '{}' for this topology position",
+                            parent_step_id
+                                .map(|id| id.to_string())
+                                .unwrap_or_else(|| "<root>".to_string())
+                        ),
+                        origin,
+                    ));
+                }
+
+                let mut child_by_step = BTreeMap::new();
+                for child in node.children {
+                    let step_id = child.step_id.ok_or_else(|| {
+                        HivemindError::user(
+                            "workflow_spec_step_binding_missing",
+                            format!("Workflow spec child of '{node_id}' is missing a step_id"),
+                            origin,
+                        )
+                    })?;
+                    if child_by_step.insert(step_id, child).is_some() {
+                        return Err(HivemindError::user(
+                            "workflow_spec_duplicate_step_binding",
+                            format!(
+                                "Workflow spec node '{node_id}' binds multiple children to step '{step_id}'"
+                            ),
+                            origin,
+                        ));
+                    }
+                }
+
+                let mut normalized_children = Vec::with_capacity(workflow.steps.len());
+                for step in workflow.steps.values() {
+                    let child = child_by_step.remove(&step.id).ok_or_else(|| {
+                        HivemindError::user(
+                            "workflow_spec_step_binding_missing",
+                            format!(
+                                "Workflow spec node '{node_id}' is missing topology binding for step '{}' ({})",
+                                step.name, step.id
+                            ),
+                            origin,
+                        )
+                    })?;
+                    let normalized_child = if step.kind == WorkflowStepKind::Workflow {
+                        if child.kind != WorkflowSpecNodeKind::Workflow {
+                            return Err(HivemindError::user(
+                                "workflow_spec_kind_mismatch",
+                                format!(
+                                    "Workflow step '{}' must bind to a nested workflow spec node",
+                                    step.name
+                                ),
+                                origin,
+                            ));
+                        }
+                        let child_workflow_id = step
+                            .child_workflow
+                            .as_ref()
+                            .map(|cfg| cfg.workflow_id)
+                            .ok_or_else(|| {
+                                HivemindError::system(
+                                    "workflow_child_config_missing",
+                                    format!(
+                                        "Workflow step '{}' is missing child workflow config",
+                                        step.name
+                                    ),
+                                    origin,
+                                )
+                            })?;
+                        if child.workflow_id != Some(child_workflow_id) {
+                            return Err(HivemindError::user(
+                                "workflow_spec_child_workflow_binding_mismatch",
+                                format!(
+                                    "Nested workflow spec for step '{}' must bind workflow_id '{}'",
+                                    step.name, child_workflow_id
+                                ),
+                                origin,
+                            ));
+                        }
+                        let child_workflow = self.get_workflow(&child_workflow_id.to_string())?;
+                        self.normalize_workflow_spec_node_for_workflow(
+                            &child_workflow,
+                            Some(step.id),
+                            child,
+                            origin,
+                        )?
+                    } else {
+                        if child.kind != WorkflowSpecNodeKind::Task {
+                            return Err(HivemindError::user(
+                                "workflow_spec_kind_mismatch",
+                                format!(
+                                    "Workflow step '{}' must bind to a task spec node",
+                                    step.name
+                                ),
+                                origin,
+                            ));
+                        }
+                        if child.workflow_id != Some(workflow.id) {
+                            return Err(HivemindError::user(
+                                "workflow_spec_step_workflow_binding_mismatch",
+                                format!(
+                                    "Task spec for step '{}' must bind workflow_id '{}'",
+                                    step.name, workflow.id
+                                ),
+                                origin,
+                            ));
+                        }
+                        if !child.children.is_empty() {
+                            return Err(HivemindError::user(
+                                "workflow_spec_task_children_invalid",
+                                format!(
+                                    "Task spec node '{}' cannot declare child spec nodes",
+                                    child.id
+                                ),
+                                origin,
+                            ));
+                        }
+                        let child_step_id = child.step_id.ok_or_else(|| {
+                            HivemindError::user(
+                                "workflow_spec_step_binding_missing",
+                                format!(
+                                    "Task spec node '{}' is missing a step_id binding",
+                                    child.id
+                                ),
+                                origin,
+                            )
+                        })?;
+                        if child_step_id != step.id {
+                            return Err(HivemindError::user(
+                                "workflow_spec_step_binding_mismatch",
+                                format!(
+                                    "Task spec node '{}' must bind step '{}' ({})",
+                                    child.id, step.name, step.id
+                                ),
+                                origin,
+                            ));
+                        }
+                        WorkflowSpecNode {
+                            id: child.id.trim().to_string(),
+                            kind: WorkflowSpecNodeKind::Task,
+                            title: child.title.trim().to_string(),
+                            intent: child.intent.trim().to_string(),
+                            workflow_id: child.workflow_id,
+                            step_id: child.step_id,
+                            scope: child
+                                .scope
+                                .map(|value| value.trim().to_string())
+                                .filter(|value| !value.is_empty()),
+                            constraints: child
+                                .constraints
+                                .into_iter()
+                                .map(|item| item.trim().to_string())
+                                .filter(|item| !item.is_empty())
+                                .collect(),
+                            acceptance_criteria: child
+                                .acceptance_criteria
+                                .into_iter()
+                                .map(|item| item.trim().to_string())
+                                .filter(|item| !item.is_empty())
+                                .collect(),
+                            verification: WorkflowSpecVerification {
+                                posture: child
+                                    .verification
+                                    .posture
+                                    .map(|value| value.trim().to_string())
+                                    .filter(|value| !value.is_empty()),
+                                instructions: child
+                                    .verification
+                                    .instructions
+                                    .into_iter()
+                                    .map(|item| item.trim().to_string())
+                                    .filter(|item| !item.is_empty())
+                                    .collect(),
+                                checkpoints: child
+                                    .verification
+                                    .checkpoints
+                                    .into_iter()
+                                    .map(|item| item.trim().to_string())
+                                    .filter(|item| !item.is_empty())
+                                    .collect(),
+                            },
+                            execution_context: Self::normalize_workflow_context_inputs(
+                                child.execution_context,
+                                origin,
+                            )?,
+                            attached_artifacts: child
+                                .attached_artifacts
+                                .into_iter()
+                                .map(|item| item.trim().to_string())
+                                .filter(|item| !item.is_empty())
+                                .collect(),
+                            deviation_notes: child
+                                .deviation_notes
+                                .into_iter()
+                                .map(|item| item.trim().to_string())
+                                .filter(|item| !item.is_empty())
+                                .collect(),
+                            children: Vec::new(),
+                        }
+                    };
+                    normalized_children.push(normalized_child);
+                }
+                if let Some(extra_step_id) = child_by_step.into_keys().next() {
+                    return Err(HivemindError::user(
+                        "workflow_spec_step_binding_unknown",
+                        format!(
+                            "Workflow spec node '{node_id}' references unknown step binding '{}'",
+                            extra_step_id
+                        ),
+                        origin,
+                    ));
+                }
+
+                Ok(WorkflowSpecNode {
+                    id: node_id,
+                    kind: WorkflowSpecNodeKind::Workflow,
+                    title,
+                    intent,
+                    workflow_id: Some(workflow.id),
+                    step_id: parent_step_id,
+                    scope: normalized_scope,
+                    constraints: normalized_constraints,
+                    acceptance_criteria,
+                    verification: normalized_verification,
+                    execution_context,
+                    attached_artifacts: normalized_attached_artifacts,
+                    deviation_notes: normalized_deviation_notes,
+                    children: normalized_children,
+                })
+            }
+            WorkflowSpecNodeKind::Task => {
+                let step_id = node.step_id.ok_or_else(|| {
+                    HivemindError::user(
+                        "workflow_spec_step_binding_missing",
+                        format!("Task spec node '{node_id}' is missing a step_id binding"),
+                        origin,
+                    )
+                })?;
+                let step = workflow.steps.get(&step_id).ok_or_else(|| {
+                    HivemindError::user(
+                        "workflow_spec_step_binding_unknown",
+                        format!(
+                            "Task spec node '{node_id}' references unknown step '{}'",
+                            step_id
+                        ),
+                        origin,
+                    )
+                })?;
+                if step.kind == WorkflowStepKind::Workflow {
+                    return Err(HivemindError::user(
+                        "workflow_spec_kind_mismatch",
+                        format!(
+                            "Task spec node '{node_id}' cannot bind to workflow-launch step '{}'",
+                            step.name
+                        ),
+                        origin,
+                    ));
+                }
+                if !node.children.is_empty() {
+                    return Err(HivemindError::user(
+                        "workflow_spec_task_children_invalid",
+                        format!("Task spec node '{node_id}' cannot declare child spec nodes"),
+                        origin,
+                    ));
+                }
+                Ok(WorkflowSpecNode {
+                    id: node_id,
+                    kind: WorkflowSpecNodeKind::Task,
+                    title,
+                    intent,
+                    workflow_id: Some(workflow.id),
+                    step_id: Some(step_id),
+                    scope: normalized_scope,
+                    constraints: normalized_constraints,
+                    acceptance_criteria,
+                    verification: normalized_verification,
+                    execution_context,
+                    attached_artifacts: normalized_attached_artifacts,
+                    deviation_notes: normalized_deviation_notes,
+                    children: Vec::new(),
+                })
+            }
+        }
     }
 
     pub fn workflow_add_step(
@@ -1115,16 +1599,60 @@ impl Registry {
 
     fn inspect_workflow_run_from_run(&self, run: &WorkflowRun) -> Result<WorkflowRunInspectView> {
         let workflow = self.get_workflow(&run.workflow_id.to_string())?;
+        let workflow_spec = self.workflow_spec_node_for_run(run)?;
+        let workflow_spec_binding_hash = self
+            .workflow_spec_binding_for_run(run)?
+            .map(|binding| binding.binding_hash);
         Ok(WorkflowRunInspectView {
             run: run.clone(),
             workflow_name: workflow.name,
             parent_step_name: self.workflow_parent_step_name(run)?,
+            workflow_spec,
+            workflow_spec_binding_hash,
             child_runs: self
                 .child_runs_for_parent(run.id)?
                 .iter()
                 .map(|child| self.workflow_run_lineage_node(child))
                 .collect::<Result<Vec<_>>>()?,
         })
+    }
+
+    fn workflow_spec_binding_for_run(
+        &self,
+        run: &WorkflowRun,
+    ) -> Result<Option<WorkflowSpecBinding>> {
+        let root_run = self.get_workflow_run(&run.root_workflow_run_id.to_string())?;
+        let root_workflow = self.get_workflow(&root_run.workflow_id.to_string())?;
+        Ok(root_workflow.spec)
+    }
+
+    fn workflow_spec_node_for_run(&self, run: &WorkflowRun) -> Result<Option<WorkflowSpecNode>> {
+        let Some(binding) = self.workflow_spec_binding_for_run(run)? else {
+            return Ok(None);
+        };
+        Ok(binding
+            .find_workflow_path(run.workflow_id, run.parent_step_id)
+            .and_then(|path| path.last().cloned())
+            .cloned())
+    }
+
+    fn workflow_spec_context_for_step(
+        &self,
+        run: &WorkflowRun,
+        step: &WorkflowStepDefinition,
+    ) -> Result<WorkflowSpecContextBinding> {
+        let Some(binding) = self.workflow_spec_binding_for_run(run)? else {
+            return Ok((None, Vec::new(), BTreeMap::new()));
+        };
+        let binding_hash = binding.binding_hash.clone();
+        let Some(path) = binding.find_task_path(run.workflow_id, step.id) else {
+            return Ok((Some(binding_hash), Vec::new(), BTreeMap::new()));
+        };
+        Ok((
+            Some(binding_hash),
+            path.iter().map(|node| node.id.clone()).collect(),
+            WorkflowSpecBinding::merged_execution_context(&path),
+        ))
     }
 
     pub fn start_workflow_run(&self, workflow_run_id: &str) -> Result<WorkflowRun> {
@@ -1931,6 +2459,9 @@ impl Registry {
             });
         }
 
+        let (_spec_binding_hash, spec_node_ids, spec_context) =
+            self.workflow_spec_context_for_step(run, step)?;
+
         Ok(WorkflowStepContextSnapshot::new(
             run.id,
             step.id,
@@ -1939,6 +2470,8 @@ impl Registry {
             run.output_bag.bag_hash.clone(),
             inputs,
             resolutions,
+            spec_node_ids,
+            spec_context,
             Utc::now(),
         ))
     }
@@ -2787,6 +3320,10 @@ impl Registry {
             .iter()
             .flat_map(|item| item.selected_entry_ids.iter().copied())
             .collect::<Vec<_>>();
+        let spec_binding_hash = workflow
+            .spec
+            .as_ref()
+            .map(|binding| binding.binding_hash.clone());
         let manifest = AttemptContextWorkflowManifest {
             workflow_run_id: run.id,
             step_id,
@@ -2797,17 +3334,39 @@ impl Registry {
             step_input_snapshot_hash: snapshot.snapshot_hash.clone(),
             output_bag_hash: run.output_bag.bag_hash.clone(),
             output_entry_ids,
+            spec_binding_hash,
+            spec_node_ids: snapshot.spec_node_ids.clone(),
+            spec_context_hash: snapshot.spec_context_hash.clone(),
         };
         let section = format!(
-            "Workflow Step Context:\n- workflow_run_id: {}\n- step_id: {}\n- step_run_id: {}\n- context_snapshot_hash: {}\n- output_bag_hash: {}\n- step_input_snapshot_hash: {}\n- inputs:\n{}",
+            "Workflow Step Context:\n- workflow_run_id: {}\n- step_id: {}\n- step_run_id: {}\n- context_snapshot_hash: {}\n- output_bag_hash: {}\n- step_input_snapshot_hash: {}\n- spec_binding_hash: {}\n- spec_node_ids: {}\n- spec_context_hash: {}\n- inputs:\n{}\n- spec_context:\n{}",
             run.id,
             step_id,
             step_run_id,
             run.context.current_snapshot.snapshot_hash,
             run.output_bag.bag_hash,
             snapshot.snapshot_hash,
+            workflow
+                .spec
+                .as_ref()
+                .map(|binding| binding.binding_hash.as_str())
+                .unwrap_or("-"),
+            if snapshot.spec_node_ids.is_empty() {
+                "-".to_string()
+            } else {
+                snapshot.spec_node_ids.join(", ")
+            },
+            snapshot
+                .spec_context_hash
+                .as_deref()
+                .unwrap_or("-"),
             serde_yaml::to_string(&snapshot.inputs).map_err(|err| HivemindError::system(
                 "workflow_step_context_render_failed",
+                err.to_string(),
+                origin,
+            ))?,
+            serde_yaml::to_string(&snapshot.spec_context).map_err(|err| HivemindError::system(
+                "workflow_spec_context_render_failed",
                 err.to_string(),
                 origin,
             ))?
@@ -4952,6 +5511,282 @@ mod tests {
         assert!(events
             .iter()
             .any(|event| matches!(event.payload, EventPayload::WorkflowWaitCompleted { .. })));
+    }
+
+    #[test]
+    fn workflow_spec_binding_validates_topology_and_persists() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry =
+            Registry::open_with_config(RegistryConfig::with_dir(dir.path().to_path_buf())).unwrap();
+        let project = registry.create_project("workflow-project", None).unwrap();
+
+        let child = registry
+            .create_workflow(&project.id.to_string(), "child-workflow", Some("child"))
+            .unwrap();
+        let child = registry
+            .workflow_add_step(
+                &child.id.to_string(),
+                "child-task",
+                WorkflowStepKind::Task,
+                None,
+                &[],
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let child_task_id = child.steps.values().next().unwrap().id;
+
+        let parent = registry
+            .create_workflow(&project.id.to_string(), "parent-workflow", Some("parent"))
+            .unwrap();
+        let parent = registry
+            .workflow_add_step(
+                &parent.id.to_string(),
+                "plan",
+                WorkflowStepKind::Task,
+                None,
+                &[],
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let plan_step_id = parent
+            .steps
+            .values()
+            .find(|step| step.name == "plan")
+            .unwrap()
+            .id;
+        let parent = registry
+            .workflow_add_step(
+                &parent.id.to_string(),
+                "delegate",
+                WorkflowStepKind::Workflow,
+                None,
+                &[plan_step_id.to_string()],
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Some(&child.id.to_string()),
+                None,
+                None,
+            )
+            .unwrap();
+        let delegate_step_id = parent
+            .steps
+            .values()
+            .find(|step| step.name == "delegate")
+            .unwrap()
+            .id;
+
+        let mut root = WorkflowSpecNode::new(
+            "root-spec",
+            WorkflowSpecNodeKind::Workflow,
+            "Parent Intent",
+            "Coordinate planning and delegated execution",
+        );
+        root.workflow_id = Some(parent.id);
+        root.acceptance_criteria = vec!["Parent workflow completes".to_string()];
+        root.verification.posture = Some("manual_and_automated".to_string());
+        root.execution_context.insert(
+            "global_goal".to_string(),
+            WorkflowDataValue::new("application/json", 1, serde_json::json!("ship feature"))
+                .unwrap(),
+        );
+
+        let mut plan = WorkflowSpecNode::new(
+            "plan-spec",
+            WorkflowSpecNodeKind::Task,
+            "Plan Task",
+            "Draft the execution plan",
+        );
+        plan.workflow_id = Some(parent.id);
+        plan.step_id = Some(plan_step_id);
+        plan.acceptance_criteria = vec!["Plan step succeeds".to_string()];
+        plan.verification.posture = Some("worker_output".to_string());
+
+        let mut child_spec = WorkflowSpecNode::new(
+            "child-spec",
+            WorkflowSpecNodeKind::Workflow,
+            "Child Intent",
+            "Execute delegated work",
+        );
+        child_spec.workflow_id = Some(child.id);
+        child_spec.step_id = Some(delegate_step_id);
+        child_spec.acceptance_criteria = vec!["Child workflow completes".to_string()];
+        child_spec.verification.posture = Some("child_run".to_string());
+        child_spec.execution_context.insert(
+            "delegation_mode".to_string(),
+            WorkflowDataValue::new("application/json", 1, serde_json::json!("remote")).unwrap(),
+        );
+
+        let mut child_task = WorkflowSpecNode::new(
+            "child-task-spec",
+            WorkflowSpecNodeKind::Task,
+            "Child Task",
+            "Implement the delegated work",
+        );
+        child_task.workflow_id = Some(child.id);
+        child_task.step_id = Some(child_task_id);
+        child_task.acceptance_criteria = vec!["Child task succeeds".to_string()];
+        child_task.verification.posture = Some("worker_output".to_string());
+        child_spec.children.push(child_task);
+
+        root.children = vec![plan, child_spec];
+
+        let binding = WorkflowSpecBinding::new("workflow_spec", 1, root).unwrap();
+        let bound = registry
+            .bind_workflow_spec(&parent.id.to_string(), binding)
+            .unwrap();
+        assert!(bound.spec.is_some());
+
+        let run = registry
+            .create_workflow_run(&parent.id.to_string(), None, None, BTreeMap::new())
+            .unwrap();
+        let inspected = registry.inspect_workflow_run(&run.id.to_string()).unwrap();
+        assert_eq!(
+            inspected.workflow_spec.unwrap().id,
+            "root-spec",
+            "root workflow run should expose bound root spec"
+        );
+        assert!(inspected.workflow_spec_binding_hash.is_some());
+    }
+
+    #[test]
+    fn workflow_spec_binding_rejects_missing_topology_step_binding() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry =
+            Registry::open_with_config(RegistryConfig::with_dir(dir.path().to_path_buf())).unwrap();
+        let project = registry.create_project("workflow-project", None).unwrap();
+        let workflow = registry
+            .create_workflow(&project.id.to_string(), "demo-workflow", Some("demo"))
+            .unwrap();
+        let workflow = registry
+            .workflow_add_step(
+                &workflow.id.to_string(),
+                "leaf",
+                WorkflowStepKind::Task,
+                None,
+                &[],
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+
+        let mut root = WorkflowSpecNode::new(
+            "root-spec",
+            WorkflowSpecNodeKind::Workflow,
+            "Root",
+            "Describe the workflow",
+        );
+        root.workflow_id = Some(workflow.id);
+        root.acceptance_criteria = vec!["Workflow described".to_string()];
+        root.verification.posture = Some("manual".to_string());
+
+        let err = registry
+            .bind_workflow_spec(
+                &workflow.id.to_string(),
+                WorkflowSpecBinding::new("workflow_spec", 1, root).unwrap(),
+            )
+            .expect_err("binding should fail when a workflow step is not represented");
+        assert_eq!(err.code, "workflow_spec_step_binding_missing");
+    }
+
+    #[test]
+    fn workflow_attempt_context_includes_bound_spec_context() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry =
+            Registry::open_with_config(RegistryConfig::with_dir(dir.path().to_path_buf())).unwrap();
+        let project = registry.create_project("workflow-project", None).unwrap();
+        let workflow = registry
+            .create_workflow(&project.id.to_string(), "demo-workflow", Some("demo"))
+            .unwrap();
+        let workflow = registry
+            .workflow_add_step(
+                &workflow.id.to_string(),
+                "leaf",
+                WorkflowStepKind::Task,
+                None,
+                &[],
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let step_id = workflow.steps.values().next().unwrap().id;
+
+        let mut root = WorkflowSpecNode::new(
+            "root-spec",
+            WorkflowSpecNodeKind::Workflow,
+            "Root",
+            "Drive the workflow",
+        );
+        root.workflow_id = Some(workflow.id);
+        root.acceptance_criteria = vec!["Workflow succeeds".to_string()];
+        root.verification.posture = Some("manual".to_string());
+        root.execution_context.insert(
+            "global_goal".to_string(),
+            WorkflowDataValue::new("application/json", 1, serde_json::json!("complete run"))
+                .unwrap(),
+        );
+
+        let mut task = WorkflowSpecNode::new(
+            "leaf-spec",
+            WorkflowSpecNodeKind::Task,
+            "Leaf",
+            "Handle the leaf step",
+        );
+        task.workflow_id = Some(workflow.id);
+        task.step_id = Some(step_id);
+        task.acceptance_criteria = vec!["Leaf succeeds".to_string()];
+        task.verification.posture = Some("worker_output".to_string());
+        task.execution_context.insert(
+            "step_goal".to_string(),
+            WorkflowDataValue::new("application/json", 1, serde_json::json!("write change"))
+                .unwrap(),
+        );
+        root.children.push(task);
+
+        let workflow = registry
+            .bind_workflow_spec(
+                &workflow.id.to_string(),
+                WorkflowSpecBinding::new("workflow_spec", 1, root).unwrap(),
+            )
+            .unwrap();
+        let run = registry
+            .create_workflow_run(&workflow.id.to_string(), None, None, BTreeMap::new())
+            .unwrap();
+        let run = registry.start_workflow_run(&run.id.to_string()).unwrap();
+        let flow_id = registry
+            .ensure_synthetic_flow_for_workflow_run(&run, &workflow)
+            .unwrap();
+        let state = registry.state().unwrap();
+        let flow = state.flows.get(&flow_id).unwrap();
+        let task_id = Registry::workflow_bridge_task_id(run.id, step_id);
+        let (manifest, section) = registry
+            .workflow_attempt_context_for_task(&state, flow, task_id, "test:workflow_spec_context")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(manifest.spec_node_ids, vec!["root-spec", "leaf-spec"]);
+        assert!(manifest.spec_binding_hash.is_some());
+        assert!(manifest.spec_context_hash.is_some());
+        assert!(section.contains("global_goal"));
+        assert!(section.contains("step_goal"));
     }
 
     #[test]

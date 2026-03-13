@@ -10,10 +10,12 @@ use crate::core::registry::shared_types::RuntimeStreamDetailLevel;
 use crate::core::registry::{MergeExecuteMode, MergeExecuteOptions, Registry};
 use crate::core::workflow::{
     WorkflowConditionalConfig, WorkflowContextPatchBinding, WorkflowDataValue, WorkflowDefinition,
-    WorkflowRun, WorkflowRunInspectView, WorkflowRunLineageNode, WorkflowStepInputBinding,
-    WorkflowStepKind, WorkflowStepOutputBinding, WorkflowStepState, WorkflowWaitConfig,
+    WorkflowRun, WorkflowRunInspectView, WorkflowRunLineageNode, WorkflowSpecBinding,
+    WorkflowStepInputBinding, WorkflowStepKind, WorkflowStepOutputBinding, WorkflowStepState,
+    WorkflowWaitConfig,
 };
 use std::collections::BTreeMap;
+use std::fs;
 
 fn get_registry(format: OutputFormat) -> Option<Registry> {
     match Registry::open() {
@@ -145,7 +147,34 @@ fn parse_json_arg<T: serde::de::DeserializeOwned + Default>(
         return Ok(T::default());
     };
 
-    serde_json::from_str(value).map_err(|err| {
+    parse_required_json_arg(value, field, format)
+}
+
+fn parse_required_json_arg<T: serde::de::DeserializeOwned>(
+    value: &str,
+    field: &str,
+    format: OutputFormat,
+) -> std::result::Result<T, ExitCode> {
+    let raw = if let Some(path) = value.strip_prefix('@') {
+        match fs::read_to_string(path) {
+            Ok(contents) => contents,
+            Err(err) => {
+                output_error(
+                    &crate::core::error::HivemindError::user(
+                        "workflow_cli_json_file_read_failed",
+                        format!("failed to read {field} from '{path}': {err}"),
+                        "cli:workflow",
+                    ),
+                    format,
+                );
+                return Err(ExitCode::Error);
+            }
+        }
+    } else {
+        value.to_string()
+    };
+
+    serde_json::from_str(&raw).map_err(|err| {
         output_error(
             &crate::core::error::HivemindError::user(
                 "workflow_cli_json_invalid",
@@ -163,6 +192,14 @@ fn render_workflow(workflow: WorkflowDefinition, format: OutputFormat) -> ExitCo
         println!("Project:     {}", workflow.project_id);
         println!("Name:        {}", workflow.name);
         println!("Description: {}", workflow.description.unwrap_or_default());
+        println!(
+            "Spec:        {}",
+            workflow
+                .spec
+                .as_ref()
+                .map(|spec| format!("{} ({})", spec.root.title, spec.binding_hash))
+                .unwrap_or_else(|| "-".to_string())
+        );
         println!("Steps:       {}", workflow.steps.len());
         for step in workflow.steps.values() {
             let dependencies = step
@@ -233,6 +270,21 @@ fn render_workflow_run(
         println!(
             "Parent Step: {}",
             inspected.parent_step_name.as_deref().unwrap_or("-")
+        );
+        println!(
+            "Spec:     {}",
+            inspected
+                .workflow_spec
+                .as_ref()
+                .map(|node| format!(
+                    "{} ({})",
+                    node.title,
+                    inspected
+                        .workflow_spec_binding_hash
+                        .as_deref()
+                        .unwrap_or("-")
+                ))
+                .unwrap_or_else(|| "-".to_string())
         );
         println!("State:    {:?}", run.state);
         println!("Steps:    {}", run.step_runs.len());
@@ -332,6 +384,64 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
             Ok(workflow) => render_workflow(workflow, format),
             Err(err) => output_error(&err, format),
         },
+        WorkflowCommands::SpecValidate(args) => {
+            let spec = match parse_required_json_arg::<WorkflowSpecBinding>(
+                args.spec_json.as_str(),
+                "spec_json",
+                format,
+            ) {
+                Ok(value) => value,
+                Err(code) => return code,
+            };
+            match registry.validate_workflow_spec_binding(&args.workflow_id, spec) {
+                Ok(spec) => {
+                    if let Err(err) = output(&spec, format) {
+                        eprintln!("Failed to render workflow spec: {err}");
+                    }
+                    ExitCode::Success
+                }
+                Err(err) => output_error(&err, format),
+            }
+        }
+        WorkflowCommands::SpecInspect(args) => {
+            let spec = match parse_required_json_arg::<WorkflowSpecBinding>(
+                args.spec_json.as_str(),
+                "spec_json",
+                format,
+            ) {
+                Ok(value) => value,
+                Err(code) => return code,
+            };
+            match registry.validate_workflow_spec_binding(&args.workflow_id, spec) {
+                Ok(spec) => {
+                    if let Err(err) = output(&spec, format) {
+                        eprintln!("Failed to render normalized workflow spec: {err}");
+                    }
+                    ExitCode::Success
+                }
+                Err(err) => output_error(&err, format),
+            }
+        }
+        WorkflowCommands::SpecBind(args) => {
+            let spec = match parse_required_json_arg::<WorkflowSpecBinding>(
+                args.spec_json.as_str(),
+                "spec_json",
+                format,
+            ) {
+                Ok(value) => value,
+                Err(code) => return code,
+            };
+            match registry.bind_workflow_spec(&args.workflow_id, spec) {
+                Ok(workflow) => render_workflow(workflow, format),
+                Err(err) => output_error(&err, format),
+            }
+        }
+        WorkflowCommands::SpecClear(args) => {
+            match registry.clear_workflow_spec(&args.workflow_id) {
+                Ok(workflow) => render_workflow(workflow, format),
+                Err(err) => output_error(&err, format),
+            }
+        }
         WorkflowCommands::List(args) => match registry.list_workflows(args.project.as_deref()) {
             Ok(workflows) => {
                 print_workflows(&workflows, format);

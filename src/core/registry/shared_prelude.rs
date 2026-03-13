@@ -41,7 +41,8 @@ pub use crate::core::workflow::{
     WorkflowBagKeyField, WorkflowBagReducer, WorkflowBagSelector, WorkflowContextPatchBinding,
     WorkflowContextSnapshot, WorkflowContextState, WorkflowDataValue, WorkflowDefinition,
     WorkflowError, WorkflowInputBindingResolution, WorkflowOutputBag, WorkflowOutputBagEntry,
-    WorkflowReduceFunction, WorkflowRun, WorkflowRunState, WorkflowStepContextSnapshot,
+    WorkflowReduceFunction, WorkflowRun, WorkflowRunState, WorkflowSpecBinding, WorkflowSpecNode,
+    WorkflowSpecNodeKind, WorkflowSpecVerification, WorkflowStepContextSnapshot,
     WorkflowStepDefinition, WorkflowStepInputBinding, WorkflowStepInputSource, WorkflowStepKind,
     WorkflowStepOutputBinding, WorkflowStepRun, WorkflowStepState, WorkflowValueSource,
 };

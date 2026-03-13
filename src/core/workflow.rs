@@ -216,6 +216,219 @@ impl WorkflowDataValue {
     }
 }
 
+/// Spec node kind for topology-aligned workflow intent trees.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowSpecNodeKind {
+    Workflow,
+    Task,
+}
+
+/// Verification posture and instructions for a workflow spec node.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct WorkflowSpecVerification {
+    #[serde(default)]
+    pub posture: Option<String>,
+    #[serde(default)]
+    pub instructions: Vec<String>,
+    #[serde(default)]
+    pub checkpoints: Vec<String>,
+}
+
+/// A topology-bound intent/governance node attached to workflow execution.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowSpecNode {
+    pub id: String,
+    pub kind: WorkflowSpecNodeKind,
+    pub title: String,
+    pub intent: String,
+    #[serde(default)]
+    pub workflow_id: Option<Uuid>,
+    #[serde(default)]
+    pub step_id: Option<Uuid>,
+    #[serde(default)]
+    pub scope: Option<String>,
+    #[serde(default)]
+    pub constraints: Vec<String>,
+    #[serde(default)]
+    pub acceptance_criteria: Vec<String>,
+    #[serde(default)]
+    pub verification: WorkflowSpecVerification,
+    #[serde(default)]
+    pub execution_context: BTreeMap<String, WorkflowDataValue>,
+    #[serde(default)]
+    pub attached_artifacts: Vec<String>,
+    #[serde(default)]
+    pub deviation_notes: Vec<String>,
+    #[serde(default)]
+    pub children: Vec<Self>,
+}
+
+impl WorkflowSpecNode {
+    #[must_use]
+    pub fn new(
+        id: impl Into<String>,
+        kind: WorkflowSpecNodeKind,
+        title: impl Into<String>,
+        intent: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            kind,
+            title: title.into(),
+            intent: intent.into(),
+            workflow_id: None,
+            step_id: None,
+            scope: None,
+            constraints: Vec::new(),
+            acceptance_criteria: Vec::new(),
+            verification: WorkflowSpecVerification::default(),
+            execution_context: BTreeMap::new(),
+            attached_artifacts: Vec::new(),
+            deviation_notes: Vec::new(),
+            children: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn content_hash(&self) -> String {
+        let json = serde_json::to_value(self).unwrap_or(JsonValue::Null);
+        sha256_hex(canonical_json(&json).as_bytes())
+    }
+
+    fn find_task_path<'a>(
+        &'a self,
+        workflow_id: Uuid,
+        step_id: Uuid,
+        path: &mut Vec<&'a Self>,
+    ) -> bool {
+        path.push(self);
+        if self.kind == WorkflowSpecNodeKind::Task
+            && self.workflow_id == Some(workflow_id)
+            && self.step_id == Some(step_id)
+        {
+            return true;
+        }
+        for child in &self.children {
+            if child.find_task_path(workflow_id, step_id, path) {
+                return true;
+            }
+        }
+        path.pop();
+        false
+    }
+
+    fn find_workflow_path<'a>(
+        &'a self,
+        workflow_id: Uuid,
+        step_id: Option<Uuid>,
+        path: &mut Vec<&'a Self>,
+    ) -> bool {
+        path.push(self);
+        if self.kind == WorkflowSpecNodeKind::Workflow
+            && self.workflow_id == Some(workflow_id)
+            && self.step_id == step_id
+        {
+            return true;
+        }
+        for child in &self.children {
+            if child.find_workflow_path(workflow_id, step_id, path) {
+                return true;
+            }
+        }
+        path.pop();
+        false
+    }
+}
+
+/// Canonical spec binding attached to a workflow topology.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowSpecBinding {
+    pub schema: String,
+    pub schema_version: u32,
+    #[serde(default)]
+    pub binding_hash: String,
+    pub root: WorkflowSpecNode,
+}
+
+impl WorkflowSpecBinding {
+    pub fn new(
+        schema: impl Into<String>,
+        schema_version: u32,
+        root: WorkflowSpecNode,
+    ) -> Result<Self, WorkflowError> {
+        let schema = schema.into().trim().to_string();
+        if schema.is_empty() {
+            return Err(WorkflowError::InvalidSchema(
+                "Workflow spec schema cannot be empty".to_string(),
+            ));
+        }
+        if schema_version == 0 {
+            return Err(WorkflowError::InvalidSchema(
+                "Workflow spec schema version must be >= 1".to_string(),
+            ));
+        }
+        let binding_hash = sha256_hex(
+            canonical_json(&serde_json::json!({
+                "schema": schema,
+                "schema_version": schema_version,
+                "root": root,
+            }))
+            .as_bytes(),
+        );
+        Ok(Self {
+            schema,
+            schema_version,
+            binding_hash,
+            root,
+        })
+    }
+
+    #[must_use]
+    pub fn find_task_path(
+        &self,
+        workflow_id: Uuid,
+        step_id: Uuid,
+    ) -> Option<Vec<&WorkflowSpecNode>> {
+        let mut path = Vec::new();
+        if self.root.find_task_path(workflow_id, step_id, &mut path) {
+            Some(path)
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn find_workflow_path(
+        &self,
+        workflow_id: Uuid,
+        step_id: Option<Uuid>,
+    ) -> Option<Vec<&WorkflowSpecNode>> {
+        let mut path = Vec::new();
+        if self
+            .root
+            .find_workflow_path(workflow_id, step_id, &mut path)
+        {
+            Some(path)
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn merged_execution_context(
+        path: &[&WorkflowSpecNode],
+    ) -> BTreeMap<String, WorkflowDataValue> {
+        let mut merged = BTreeMap::new();
+        for node in path {
+            for (key, value) in &node.execution_context {
+                merged.insert(key.clone(), value.clone());
+            }
+        }
+        merged
+    }
+}
+
 /// The source for a workflow step input binding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -486,6 +699,8 @@ pub struct WorkflowDefinition {
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
+    pub spec: Option<WorkflowSpecBinding>,
+    #[serde(default)]
     pub steps: BTreeMap<Uuid, WorkflowStepDefinition>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -500,6 +715,7 @@ impl WorkflowDefinition {
             project_id,
             name: name.into(),
             description,
+            spec: None,
             steps: BTreeMap::new(),
             created_at: now,
             updated_at: now,
@@ -759,6 +975,12 @@ pub struct WorkflowStepContextSnapshot {
     pub inputs: BTreeMap<String, WorkflowDataValue>,
     #[serde(default)]
     pub resolutions: Vec<WorkflowInputBindingResolution>,
+    #[serde(default)]
+    pub spec_node_ids: Vec<String>,
+    #[serde(default)]
+    pub spec_context: BTreeMap<String, WorkflowDataValue>,
+    #[serde(default)]
+    pub spec_context_hash: Option<String>,
     pub snapshot_hash: String,
     pub resolved_at: DateTime<Utc>,
 }
@@ -773,8 +995,15 @@ impl WorkflowStepContextSnapshot {
         output_bag_hash: String,
         inputs: BTreeMap<String, WorkflowDataValue>,
         resolutions: Vec<WorkflowInputBindingResolution>,
+        spec_node_ids: Vec<String>,
+        spec_context: BTreeMap<String, WorkflowDataValue>,
         resolved_at: DateTime<Utc>,
     ) -> Self {
+        let spec_context_hash = if spec_context.is_empty() {
+            None
+        } else {
+            Some(snapshot_hash_for_values(&spec_context))
+        };
         let snapshot_hash = sha256_hex(
             canonical_json(&serde_json::json!({
                 "workflow_run_id": workflow_run_id,
@@ -784,6 +1013,8 @@ impl WorkflowStepContextSnapshot {
                 "output_bag_hash": output_bag_hash,
                 "inputs": inputs,
                 "resolutions": resolutions,
+                "spec_node_ids": spec_node_ids,
+                "spec_context_hash": spec_context_hash,
             }))
             .as_bytes(),
         );
@@ -798,6 +1029,9 @@ impl WorkflowStepContextSnapshot {
             output_bag_hash,
             inputs,
             resolutions,
+            spec_node_ids,
+            spec_context,
+            spec_context_hash,
             snapshot_hash,
             resolved_at,
         }
@@ -873,6 +1107,10 @@ pub struct WorkflowRunInspectView {
     pub workflow_name: String,
     #[serde(default)]
     pub parent_step_name: Option<String>,
+    #[serde(default)]
+    pub workflow_spec: Option<WorkflowSpecNode>,
+    #[serde(default)]
+    pub workflow_spec_binding_hash: Option<String>,
     #[serde(default)]
     pub child_runs: Vec<WorkflowRunLineageNode>,
 }

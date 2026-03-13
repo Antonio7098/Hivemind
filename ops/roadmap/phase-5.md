@@ -354,6 +354,106 @@
 
 ---
 
+## Sprint 71: Workflow Spec Tree, Intent Layer, And Topology Wiring
+
+**Goal:** Add a canonical workflow-spec tree on top of the validated Phase 5 engine so operators define recursive intent/governance/execution context in a spec tree that shares topology with workflows, while the workflow domain remains the executable structure and runtime owner.
+
+**Extension note:** Sprint 71 is a post-closeout extension to the Phase 5 workflow engine, not a prerequisite for the validated Sprint 64-70 completion gates. It must attach to and enrich the existing workflow runtime rather than redefining workflow structure or inventing a second orchestration substrate.
+
+**Implementation evidence to build on:**
+
+- `src/core/workflow.rs` already provides the executable recursive topology Sprint 71 must align to rather than replace: `WorkflowDefinition`, `WorkflowStepDefinition`, `WorkflowChildConfig`, `WorkflowRun`, `WorkflowRunInspectView`, deterministic context snapshots, and append-only output bag state.
+- `src/core/registry/workflow.rs` already validates and executes explicit child-workflow boundaries, step input/output bindings, context patches, typed conditionals, wait/signal steps, and nested lineage inspection; Sprint 71 should inject intent/context into these contracts rather than compiling a separate workflow model.
+- `docs/architecture/workflow-foundation.md`, `docs/design/workflow-context-data-plane.md`, `docs/design/nested-workflow-lineage.md`, and `docs/design/workflow-control-plane.md` already define the runtime guarantees Sprint 71 must preserve: replay-safe events, copy-in child context, append-only bag fan-in, typed control flow, and workflow-run-owned CLI/API/runtime/worktree/merge surfaces.
+- Current workflow authoring is imperative (`workflow create|update|step-add`) and stores execution structure plus bindings, but not a first-class recursive intent/spec layer. Sprint 71 closes that gap without moving topology ownership out of workflows.
+
+### 71.1 Recursive workflow-spec domain model
+- [x] Introduce a canonical spec-tree model for workflow authoring with explicit node identity and minimal node kinds:
+  - [x] root/nested `workflow` spec nodes
+  - [x] leaf `task` spec nodes
+- [x] Require every spec node to carry stable ids plus the minimum governance fields needed for attributable execution/reporting:
+  - [x] title
+  - [x] intent
+  - [x] scope/constraints
+  - [x] completion/acceptance criteria
+  - [x] verification posture
+- [x] Allow nested workflow specs to contain child task specs and/or child workflow specs without introducing a separate "subtask system"
+- [x] Keep the spec tree as the canonical intent/governance structure while keeping workflow definitions/runs as the canonical executable topology and runtime abstraction
+- [x] Require spec nodes to bind to existing workflow identities and step identities so spec topology mirrors workflow topology instead of redefining it
+
+### 71.2 Inheritance and governance wiring
+- [ ] Define explicit inheritance rules from parent workflow specs into nested workflow specs for:
+  - [ ] constitution/project governance attachment
+  - [ ] global objective/intent
+  - [ ] constraints and scope limits unless narrowed locally
+  - [ ] attached documents/artifacts unless narrowed locally
+  - [ ] verification posture unless refined locally
+- [ ] Define which fields remain local to a nested workflow spec:
+  - [ ] local objective/title
+  - [ ] local task decomposition
+  - [ ] local acceptance criteria
+  - [ ] local verifier instructions/checkpoints
+  - [ ] local deviation notes
+- [ ] Make inheritance and override behavior explicit, inspectable, and evented where it affects workflow execution context or operator interpretation
+- [ ] Preserve human authority at constitution/deviation/merge boundaries; Sprint 71 must not turn spec attachment or context propagation into a hidden policy bypass
+
+### 71.3 Spec-to-workflow topology binding
+- [x] Add a deterministic binding/normalization layer that attaches a recursive workflow spec tree to an existing workflow topology:
+  - [x] workflow spec nodes bind to `WorkflowDefinition` records
+  - [x] task spec nodes bind to executable workflow steps
+  - [x] nested workflow spec nodes bind to explicit child-workflow steps and child workflow definitions
+- [x] Preserve one shared topology across both layers so parent/child workflow boundaries, step dependencies, and join/control-flow structure come from workflow definitions, not duplicated spec-only structure
+- [x] Reuse existing Phase 5 execution features rather than re-specifying them:
+  - [ ] explicit input/output bindings and context patching
+  - [ ] append-only output bag selectors/reducers for fan-in
+  - [ ] typed conditionals and wait/signal control flow
+  - [ ] workflow-run-owned runtime/worktree/merge inspection and operations
+- [ ] Ensure spec-bound intent, constraints, and verification context are available during workflow execution, inspection, reporting, and manual operations without mutating the underlying execution topology
+- [x] Preserve existing lineage contracts so reports/events/runtime artifacts remain attributable to both spec-node identity and concrete workflow/step execution identity
+- [x] Fail loudly when spec authoring is ambiguous or non-bindable (topology mismatch, missing step bindings, duplicate node ids, invalid inheritance, unverifiable acceptance criteria)
+
+### 71.4 Authoring, inspection, and public surface
+- [x] Add a workflow-spec authoring surface that complements the current imperative commands with file/schema-backed operations for at least:
+  - [x] validate
+  - [x] inspect/normalize
+  - [x] bind/attach
+  - [x] create/update bound spec metadata
+- [x] Make topology bindings inspectable so operators can see:
+  - [x] spec node id -> workflow definition id mapping
+  - [x] spec node id -> step id / child workflow linkage
+  - [ ] inherited governance inputs and narrowed overrides
+- [x] Keep workflow-native CLI/API surfaces primary for execution after spec attachment; Sprint 71 must not introduce a competing runtime control path
+- [ ] Document how reports, checkpoints, and deviations reference spec nodes alongside workflow-run lineage
+
+### 71.5 Automated validation and test coverage
+- [ ] Add schema/serde/normalization roundtrips for the workflow-spec model
+- [x] Add binding tests proving the same spec tree always attaches to the same workflow definitions, step ids, lineage mappings, and execution-relevant context hashes
+- [ ] Add integration tests proving spec-bound nested workflows execute through the existing workflow engine with correct:
+  - [ ] child lineage
+  - [ ] context initialization and step-input snapshots
+  - [ ] append-only bag fan-in
+  - [ ] conditional/wait/signal behavior
+  - [ ] workflow-owned merge/runtime/worktree operations
+- [x] Add negative tests for invalid inheritance, topology mismatches, missing bound workflow/step references, duplicate node ids, and non-deterministic authoring constructs
+- [ ] Add replay tests proving spec-bound execution remains fully reconstructable from the existing event model plus explicit spec-binding/materialization events
+
+### 71.6 Manual Testing (`@hivemind-test`)
+- [ ] Add/update Sprint 71 manual checklist under `@hivemind-test`
+- [ ] Smoke test a real repository using a file-backed root workflow spec that binds onto a workflow topology containing both:
+  - [ ] leaf task specs
+  - [ ] at least one nested workflow spec
+- [ ] Validate that execution still uses normal `workflow/*`, `events/*`, runtime, worktree, and merge surfaces rather than hidden internal paths
+- [ ] Validate operator inspection can explain spec-node intent, inherited constraints, child lineage, and downstream bag/join behavior without reading compiler internals
+- [ ] Publish Sprint 71 manual test report artifact in `@hivemind-test`
+
+### 71.7 Exit Criteria
+- [ ] Workflow specs become the canonical recursive authoring/governance document for new workflow-first work
+- [ ] Recursive spec trees bind deterministically onto the existing workflow topology without creating a second runtime model
+- [ ] Spec-node identity, inheritance, and execution mappings are inspectable in CLI/API/reporting surfaces
+- [ ] Automated and manual smoke validation are completed and documented
+
+---
+
 ## Summary: Phase 5 Capability Coverage
 
 | Capability | Target Sprint |
@@ -365,6 +465,7 @@
 | Conditionals + waits + signals | 68 |
 | Workflow-native runtime/worktree/merge/public surface | 69 |
 | End-to-end hardening and phase closeout | 70 |
+| Workflow spec tree + intent/topology wiring (post-closeout extension) | 71 |
 
 ---
 
