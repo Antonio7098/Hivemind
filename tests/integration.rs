@@ -6247,7 +6247,14 @@ fn cli_flow_tick_auto_completes_checkpoint_from_external_runtime_directive() {
 
     let (code, task_out, err) = run_hivemind(
         tmp.path(),
-        &["-f", "json", "task", "create", "proj", "external-checkpoint-task"],
+        &[
+            "-f",
+            "json",
+            "task",
+            "create",
+            "proj",
+            "external-checkpoint-task",
+        ],
     );
     assert_eq!(code, 0, "{err}");
     let task_id = serde_json::from_str::<serde_json::Value>(&task_out)
@@ -6284,14 +6291,7 @@ fn cli_flow_tick_auto_completes_checkpoint_from_external_runtime_directive() {
 
     let (code, graph_out, err) = run_hivemind(
         tmp.path(),
-        &[
-            "graph",
-            "create",
-            "proj",
-            "graph",
-            "--from-tasks",
-            &task_id,
-        ],
+        &["graph", "create", "proj", "graph", "--from-tasks", &task_id],
     );
     assert_eq!(code, 0, "{err}");
     let graph_id = graph_out
@@ -6314,9 +6314,11 @@ fn cli_flow_tick_auto_completes_checkpoint_from_external_runtime_directive() {
     let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
     assert_eq!(code, 0, "{err}");
 
-    let (code, inspect_out, err) = run_hivemind(tmp.path(), &["-f", "json", "flow", "status", &flow_id]);
+    let (code, inspect_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "flow", "status", &flow_id]);
     assert_eq!(code, 0, "{err}");
-    let inspect_json = serde_json::from_str::<serde_json::Value>(&inspect_out).expect("flow inspect json");
+    let inspect_json =
+        serde_json::from_str::<serde_json::Value>(&inspect_out).expect("flow inspect json");
     let flow_state = inspect_json
         .get("data")
         .and_then(|d| d.get("state"))
@@ -6339,9 +6341,14 @@ fn cli_flow_tick_auto_completes_checkpoint_from_external_runtime_directive() {
 
     let (code, events_out, err) = run_hivemind(
         tmp.path(),
-        &["-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "200"],
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "200",
+        ],
     );
     assert_eq!(code, 0, "{err}");
     assert!(events_out.contains("checkpoint_completed"), "{events_out}");
-    assert!(events_out.contains("task_execution_succeeded"), "{events_out}");
+    assert!(
+        events_out.contains("task_execution_succeeded"),
+        "{events_out}"
+    );
 }

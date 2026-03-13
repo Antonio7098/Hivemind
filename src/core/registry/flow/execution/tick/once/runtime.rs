@@ -628,7 +628,10 @@ impl Registry {
                 Err(error) => {
                     return Err((
                         "external_runtime_directive_invalid".to_string(),
-                        format!("Failed to parse external runtime directive '{trimmed}': {}", error.message),
+                        format!(
+                            "Failed to parse external runtime directive '{trimmed}': {}",
+                            error.message
+                        ),
                         false,
                     ));
                 }
@@ -659,7 +662,8 @@ impl Registry {
                         .and_then(serde_json::Value::as_str)
                         .map(str::trim)
                         .filter(|summary| !summary.is_empty());
-                    match self.checkpoint_complete(&attempt_id.to_string(), checkpoint_id, summary) {
+                    match self.checkpoint_complete(&attempt_id.to_string(), checkpoint_id, summary)
+                    {
                         Ok(_) => {}
                         Err(err)
                             if err.code == "checkpoint_already_completed"

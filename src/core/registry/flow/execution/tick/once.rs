@@ -114,8 +114,8 @@ impl Registry {
             return self.get_flow(flow_id);
         };
 
-        if let Err((failure_code, failure_message, recoverable)) =
-            self.apply_external_runtime_tool_directives(
+        if let Err((failure_code, failure_message, recoverable)) = self
+            .apply_external_runtime_tool_directives(
                 attempt_id,
                 &execution.runtime_for_adapter,
                 &execution.report.stdout,
