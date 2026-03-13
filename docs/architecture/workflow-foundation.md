@@ -17,7 +17,7 @@ The workflow domain introduces a new orchestration model built around explicit, 
 - `WorkflowStepDefinition` — static step metadata and dependency edges
 - `WorkflowStepRun` — per-run step lifecycle state
 
-This foundation is intentionally additive. `TaskFlow` remains present while workflows are introduced as a parallel bounded domain.
+This foundation is intentionally additive. `TaskFlow` remains present as a compatibility layer, but Sprint 69 promotes workflows to the primary execution surface for new runs.
 
 ## Current Guarantees
 
@@ -60,7 +60,7 @@ Sprint 68 adds these guarantees:
 
 The current implementation still does **not** add:
 
-- workflow-native runtime/worktree/merge ownership without the synthetic flow bridge
+- historical migration of legacy `TaskFlow` runs into workflow runs
 - a dedicated workflow-native retry command
 
 Those capabilities are layered in later Phase 5 sprints.
@@ -96,6 +96,8 @@ Sprint 65 exposes a usable workflow-facing control surface:
 - CLI:
   - `hivemind workflow create|update|step-add|list|inspect`
   - `hivemind workflow run-create|run-list|status|start|tick|complete|pause|resume|signal|abort|step-set-state`
+  - `hivemind workflow runtime-stream|worktree-list|worktree-inspect|worktree-cleanup`
+  - `hivemind workflow merge-prepare|merge-approve|merge-execute`
 - API:
   - `/api/workflows`
   - `/api/workflows/inspect`
@@ -113,6 +115,10 @@ Sprint 65 exposes a usable workflow-facing control surface:
   - `/api/workflow-runs/signal`
   - `/api/workflow-runs/abort`
   - `/api/workflow-runs/steps/state`
+  - `/api/runtime-stream?workflow_run_id=<id>`
+  - `/api/worktrees?workflow_run_id=<id>`
+  - `/api/worktrees/inspect?workflow_run_id=<id>&step_id=<id>`
+  - `/api/merge/*` with `workflow_run_id` as the primary owner selector
 
 The surface remains intentionally narrow: nested child workflows are now supported, but retry is still bridged through explicit step-state transitions and the synthetic task path for leaf execution.
 
@@ -128,6 +134,7 @@ Operationally this means:
 - dependency edges are mirrored into the synthetic graph so legacy release semantics still drive readiness
 - workflow status is reconciled from bridged task execution state during tick/lifecycle sync
 - bridged flow/task/attempt events are stamped with workflow correlation ids so event inspection can attribute work back to the workflow run
+- runtime stream, worktree inspection, and merge preparation can now be driven directly by `workflow_run_id` without requiring operators to discover the internal synthetic `flow_id`
 
 This keeps the execution path replayable while avoiding a second runtime/worktree stack during Sprint 65.
 

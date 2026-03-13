@@ -18,6 +18,13 @@ pub enum WorkflowCommands {
     Signal(WorkflowSignalArgs),
     Abort(WorkflowAbortArgs),
     StepSetState(WorkflowStepSetStateArgs),
+    RuntimeStream(WorkflowRuntimeStreamArgs),
+    WorktreeList(WorkflowRunIdArgs),
+    WorktreeInspect(WorkflowWorktreeInspectArgs),
+    WorktreeCleanup(WorkflowWorktreeCleanupArgs),
+    MergePrepare(WorkflowMergePrepareArgs),
+    MergeApprove(WorkflowRunIdArgs),
+    MergeExecute(WorkflowMergeExecuteArgs),
 }
 
 #[derive(Args)]
@@ -143,4 +150,50 @@ pub struct WorkflowStepSetStateArgs {
     pub state: WorkflowStepStateArg,
     #[arg(long)]
     pub reason: Option<String>,
+}
+
+#[derive(Args)]
+pub struct WorkflowRuntimeStreamArgs {
+    pub workflow_run_id: String,
+    #[arg(long)]
+    pub attempt: Option<String>,
+    #[arg(long, default_value = "50")]
+    pub limit: usize,
+    #[arg(long, value_enum, default_value = "telemetry")]
+    pub detail: RuntimeStreamDetailArg,
+}
+
+#[derive(Args)]
+pub struct WorkflowWorktreeInspectArgs {
+    pub workflow_run_id: String,
+    pub step_id: String,
+}
+
+#[derive(Args)]
+pub struct WorkflowWorktreeCleanupArgs {
+    pub workflow_run_id: String,
+    #[arg(long, default_value_t = false)]
+    pub force: bool,
+    #[arg(long, default_value_t = false)]
+    pub dry_run: bool,
+}
+
+#[derive(Args)]
+pub struct WorkflowMergePrepareArgs {
+    pub workflow_run_id: String,
+    #[arg(long)]
+    pub target: Option<String>,
+}
+
+#[derive(Args)]
+pub struct WorkflowMergeExecuteArgs {
+    pub workflow_run_id: String,
+    #[arg(long, value_enum, default_value = "local")]
+    pub mode: MergeExecuteModeArg,
+    #[arg(long)]
+    pub monitor_ci: bool,
+    #[arg(long)]
+    pub auto_merge: bool,
+    #[arg(long)]
+    pub pull_after: bool,
 }

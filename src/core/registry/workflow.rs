@@ -3,7 +3,10 @@
 #![allow(clippy::wildcard_imports, unused_imports)]
 
 use crate::core::registry::shared_prelude::*;
-use crate::core::registry::shared_types::AttemptContextWorkflowManifest;
+use crate::core::registry::shared_types::{
+    AttemptContextWorkflowManifest, RuntimeStreamDetailLevel, RuntimeStreamItemView,
+};
+use crate::core::registry::MergeExecuteOptions;
 use crate::core::registry::Registry;
 use crate::core::workflow::{
     WorkflowChildConfig, WorkflowChildTerminalBehavior, WorkflowConditionExpression,
@@ -1334,6 +1337,56 @@ impl Registry {
         Ok(aborted)
     }
 
+    pub fn workflow_runtime_stream_items_with_detail(
+        &self,
+        workflow_run_id: &str,
+        attempt_id: Option<&str>,
+        limit: usize,
+        detail: RuntimeStreamDetailLevel,
+    ) -> Result<Vec<RuntimeStreamItemView>> {
+        let (run, _workflow, flow) = self.workflow_run_bridge_flow(workflow_run_id)?;
+        let Some(flow) = flow else {
+            return Ok(Vec::new());
+        };
+        let _ = run;
+        self.runtime_stream_items_with_detail(Some(&flow.id.to_string()), attempt_id, limit, detail)
+    }
+
+    pub fn workflow_merge_prepare(
+        &self,
+        workflow_run_id: &str,
+        target_branch: Option<&str>,
+    ) -> Result<crate::core::state::MergeState> {
+        let (run, _workflow, flow) = self.workflow_run_bridge_flow(workflow_run_id)?;
+        let flow_id = flow
+            .map(|flow| flow.id)
+            .unwrap_or_else(|| Self::workflow_bridge_flow_uuid(run.id));
+        self.merge_prepare(&flow_id.to_string(), target_branch)
+    }
+
+    pub fn workflow_merge_approve(
+        &self,
+        workflow_run_id: &str,
+    ) -> Result<crate::core::state::MergeState> {
+        let (run, _workflow, flow) = self.workflow_run_bridge_flow(workflow_run_id)?;
+        let flow_id = flow
+            .map(|flow| flow.id)
+            .unwrap_or_else(|| Self::workflow_bridge_flow_uuid(run.id));
+        self.merge_approve(&flow_id.to_string())
+    }
+
+    pub fn workflow_merge_execute_with_options(
+        &self,
+        workflow_run_id: &str,
+        options: MergeExecuteOptions,
+    ) -> Result<crate::core::state::MergeState> {
+        let (run, _workflow, flow) = self.workflow_run_bridge_flow(workflow_run_id)?;
+        let flow_id = flow
+            .map(|flow| flow.id)
+            .unwrap_or_else(|| Self::workflow_bridge_flow_uuid(run.id));
+        self.merge_execute_with_options(&flow_id.to_string(), options)
+    }
+
     pub fn signal_workflow_run(
         &self,
         workflow_run_id: &str,
@@ -1477,7 +1530,7 @@ impl Registry {
         Self::workflow_bridge_uuid(&format!("workflow-flow:{run_id}"))
     }
 
-    fn workflow_bridge_task_id(run_id: Uuid, step_id: Uuid) -> Uuid {
+    pub(crate) fn workflow_bridge_task_id(run_id: Uuid, step_id: Uuid) -> Uuid {
         Self::workflow_bridge_uuid(&format!("workflow-task:{run_id}:{step_id}"))
     }
 
@@ -1488,7 +1541,10 @@ impl Registry {
             .find(|run| Self::workflow_bridge_flow_id(run.id) == flow_id)
     }
 
-    fn workflow_bridge_step_for_task(run: &WorkflowRun, task_id: Uuid) -> Option<(Uuid, Uuid)> {
+    pub(crate) fn workflow_bridge_step_for_task(
+        run: &WorkflowRun,
+        task_id: Uuid,
+    ) -> Option<(Uuid, Uuid)> {
         run.step_runs.iter().find_map(|(step_id, step_run)| {
             (Self::workflow_bridge_task_id(run.id, *step_id) == task_id)
                 .then_some((*step_id, step_run.id))
@@ -1615,6 +1671,24 @@ impl Registry {
             step_run_id: None,
             attempt_id: None,
         }
+    }
+
+    pub(crate) fn workflow_bridge_flow_uuid(workflow_run_id: Uuid) -> Uuid {
+        Self::workflow_bridge_flow_id(workflow_run_id)
+    }
+
+    pub(crate) fn workflow_run_bridge_flow(
+        &self,
+        workflow_run_id: &str,
+    ) -> Result<(WorkflowRun, WorkflowDefinition, Option<TaskFlow>)> {
+        let run = self.get_workflow_run(workflow_run_id)?;
+        let workflow = self.get_workflow(&run.workflow_id.to_string())?;
+        let flow = self
+            .state()?
+            .flows
+            .get(&Self::workflow_bridge_flow_id(run.id))
+            .cloned();
+        Ok((run, workflow, flow))
     }
 
     fn workflow_bridge_graph_task(step: &WorkflowStepDefinition, task_id: Uuid) -> GraphTask {

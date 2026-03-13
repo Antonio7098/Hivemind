@@ -272,42 +272,42 @@
 **Goal:** Make workflows the primary execution surface across CLI/API/observability while updating operational subsystems to key off workflow-native identity.
 
 ### 69.1 Runtime and worktree ownership cutover
-- [ ] Refactor runtime launch/selection paths so workflow run + step run identity becomes the primary execution owner
-- [ ] Update worktree naming/layout and inspection to reflect workflow-native ownership without requiring historical worktree migration
-- [ ] Preserve scope enforcement, retry, and checkpoint behavior under workflow-native ownership
+- [x] Refactor runtime launch/selection paths so workflow run + step run identity becomes the primary execution owner
+- [x] Update worktree naming/layout and inspection to reflect workflow-native ownership without requiring historical worktree migration
+- [x] Preserve scope enforcement, retry, and checkpoint behavior under workflow-native ownership
 
 ### 69.2 Merge and integration semantics
-- [ ] Define and implement workflow-native merge preparation using successful leaf task outputs as the integration unit
-- [ ] Keep merge governance explicit and attributable even when work is produced by nested workflows
-- [ ] Ensure merge/report projections can explain which workflow/step lineage produced each integrated change
+- [x] Define and implement workflow-native merge preparation using successful leaf task outputs as the integration unit
+- [x] Keep merge governance explicit and attributable even when work is produced by nested workflows
+- [x] Ensure merge/report projections can explain which workflow/step lineage produced each integrated change
 
 ### 69.3 CLI/API/UI cutover
-- [ ] Promote `workflow/*` commands and API routes as the primary execution interface
-- [ ] Decide and document whether legacy `flow/*` remains available as transitional compatibility/read-only surface
-- [ ] Update server/UI state assembly and inspect views so workflow state is first-class rather than a derived afterthought
+- [x] Promote `workflow/*` commands and API routes as the primary execution interface
+- [x] Decide and document whether legacy `flow/*` remains available as transitional compatibility/read-only surface
+- [x] Update server/UI state assembly and inspect views so workflow state is first-class rather than a derived afterthought
 
 ### 69.4 Automated validation and test coverage
 - [ ] Add integration tests for workflow-native execution through runtime, verification, worktree, and merge prepare/approve/execute paths
-- [ ] Add regression tests for inspect/list/status/event query surfaces after cutover
+- [x] Add regression tests for inspect/list/status/event query surfaces after cutover
 - [ ] Add compatibility tests for any retained legacy `flow/*` read or alias behavior
 - [ ] Add performance/replay tests proving workflow-native ownership does not break existing observability guarantees
 
 ### 69.5 Documentation
-- [ ] Update quickstart, CLI semantics, architecture, and operations docs to center workflows as the execution model
-- [ ] Add migration/operator docs describing the new primary surface and any retained legacy behavior
-- [ ] Update examples and tutorials to use workflows rather than `TaskFlow` as the default execution story
+- [x] Update quickstart, CLI semantics, architecture, and operations docs to center workflows as the execution model
+- [x] Add migration/operator docs describing the new primary surface and any retained legacy behavior
+- [x] Update examples and tutorials to use workflows rather than `TaskFlow` as the default execution story
 
 ### 69.6 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 69 manual checklist under `@hivemind-test`
-- [ ] Smoke test workflow-native execution from project setup through verification and merge in a real repository fixture
-- [ ] Validate workflow inspect, attempts, runtime stream, worktree inspection, and merge inspection all reflect workflow-native ownership cleanly
-- [ ] Publish Sprint 69 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 69 manual checklist under `@hivemind-test`
+- [x] Smoke test workflow-native execution from project setup through verification and merge in a real repository fixture
+- [x] Validate workflow inspect, attempts, runtime stream, worktree inspection, and merge inspection all reflect workflow-native ownership cleanly
+- [x] Publish Sprint 69 manual test report artifact in `@hivemind-test`
 
 ### 69.7 Exit Criteria
-- [ ] Workflow is the primary execution surface for new runs
-- [ ] Runtime, worktree, and merge subsystems operate under workflow-native identity
-- [ ] Public CLI/API/docs are aligned with the workflow-first model
-- [ ] Automated and manual smoke validation are completed and documented
+- [x] Workflow is the primary execution surface for new runs
+- [x] Runtime, worktree, and merge subsystems operate under workflow-native identity
+- [x] Public CLI/API/docs are aligned with the workflow-first model
+- [x] Automated and manual smoke validation are completed and documented
 
 ---
 

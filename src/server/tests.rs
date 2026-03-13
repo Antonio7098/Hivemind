@@ -5,7 +5,10 @@ use crate::core::events::{
 };
 use crate::core::registry::{Registry, RegistryConfig};
 use chrono::Utc;
+use std::collections::BTreeMap;
 use std::mem;
+use std::path::Path;
+use std::process::Command;
 use uuid::Uuid;
 
 fn test_registry() -> Registry {
@@ -27,6 +30,46 @@ fn api_request(
     body: Option<&[u8]>,
 ) -> ApiResponse {
     handle_api_request_inner(method, url, 10, body, registry).expect("api response")
+}
+
+fn init_git_repo(repo_dir: &Path) {
+    std::fs::create_dir_all(repo_dir).expect("create repo dir");
+    assert!(Command::new("git")
+        .args(["init"])
+        .current_dir(repo_dir)
+        .output()
+        .expect("git init")
+        .status
+        .success());
+    assert!(Command::new("git")
+        .args(["config", "user.name", "Hivemind"])
+        .current_dir(repo_dir)
+        .output()
+        .expect("git config name")
+        .status
+        .success());
+    assert!(Command::new("git")
+        .args(["config", "user.email", "hivemind@example.com"])
+        .current_dir(repo_dir)
+        .output()
+        .expect("git config email")
+        .status
+        .success());
+    std::fs::write(repo_dir.join("README.md"), "test\n").expect("write readme");
+    assert!(Command::new("git")
+        .args(["add", "."])
+        .current_dir(repo_dir)
+        .output()
+        .expect("git add")
+        .status
+        .success());
+    assert!(Command::new("git")
+        .args(["commit", "-m", "init"])
+        .current_dir(repo_dir)
+        .output()
+        .expect("git commit")
+        .status
+        .success());
 }
 
 fn native_blob_ref(label: &str) -> NativeBlobRef {
@@ -974,4 +1017,123 @@ fn workflow_endpoints_reject_invalid_step_transition() {
     .expect_err("pending to ready should fail");
 
     assert_eq!(err.code, "invalid_workflow_step_transition");
+}
+
+#[test]
+fn api_runtime_stream_accepts_workflow_run_id() {
+    let registry = test_registry();
+    let project = registry
+        .create_project("workflow-api-runtime-stream", None)
+        .expect("project");
+
+    let workflow = registry
+        .create_workflow(&project.id.to_string(), "runtime-stream", None)
+        .expect("workflow");
+    registry
+        .workflow_add_step(
+            &workflow.id.to_string(),
+            "step-a",
+            crate::core::workflow::WorkflowStepKind::Task,
+            None,
+            &[],
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            None,
+            None,
+            None,
+        )
+        .expect("step");
+
+    let run = registry
+        .create_workflow_run(&workflow.id.to_string(), None, None, BTreeMap::new())
+        .expect("run");
+    registry
+        .start_workflow_run(&run.id.to_string())
+        .expect("start workflow");
+    let _ = registry.tick_workflow_run(&run.id.to_string(), false, Some(1));
+
+    let resp = api_request(
+        &registry,
+        ApiMethod::Get,
+        &format!(
+            "/api/runtime-stream?workflow_run_id={}&limit=5&detail=summary",
+            run.id
+        ),
+        None,
+    );
+    let json = json_value(&resp.body);
+    assert!(json["data"].is_array());
+}
+
+#[test]
+fn api_worktrees_accept_workflow_run_id_and_step_id() {
+    let registry = test_registry();
+    let project = registry
+        .create_project("workflow-api-worktrees", None)
+        .expect("project");
+    let repo_tmp = tempfile::tempdir().expect("tempdir");
+    let repo_dir = repo_tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+    registry
+        .attach_repo(
+            &project.id.to_string(),
+            repo_dir.to_str().expect("repo path"),
+            Some("primary"),
+            crate::core::scope::RepoAccessMode::ReadWrite,
+        )
+        .expect("attach repo");
+
+    let workflow = registry
+        .create_workflow(&project.id.to_string(), "worktrees", None)
+        .expect("workflow");
+    let workflow = registry
+        .workflow_add_step(
+            &workflow.id.to_string(),
+            "step-a",
+            crate::core::workflow::WorkflowStepKind::Task,
+            None,
+            &[],
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            None,
+            None,
+            None,
+        )
+        .expect("step");
+    let step_id = workflow.steps.values().next().expect("step exists").id;
+
+    let run = registry
+        .create_workflow_run(&workflow.id.to_string(), None, None, BTreeMap::new())
+        .expect("run");
+    registry
+        .start_workflow_run(&run.id.to_string())
+        .expect("start workflow");
+    let _ = registry.tick_workflow_run(&run.id.to_string(), false, Some(1));
+
+    let list_resp = api_request(
+        &registry,
+        ApiMethod::Get,
+        &format!("/api/worktrees?workflow_run_id={}", run.id),
+        None,
+    );
+    let listed = json_value(&list_resp.body);
+    let statuses = listed["data"].as_array().expect("status array");
+    assert_eq!(statuses.len(), 1);
+    assert_eq!(statuses[0]["workflow_run_id"], run.id.to_string());
+    assert_eq!(statuses[0]["step_id"], step_id.to_string());
+
+    let inspect_resp = api_request(
+        &registry,
+        ApiMethod::Get,
+        &format!(
+            "/api/worktrees/inspect?workflow_run_id={}&step_id={}",
+            run.id, step_id
+        ),
+        None,
+    );
+    let inspected = json_value(&inspect_resp.body);
+    assert_eq!(inspected["data"]["workflow_run_id"], run.id.to_string());
+    assert_eq!(inspected["data"]["step_id"], step_id.to_string());
 }

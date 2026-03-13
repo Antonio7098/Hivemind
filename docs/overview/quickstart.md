@@ -13,7 +13,7 @@ Hivemind is **local-first** and **event-sourced**:
 - Canonical orchestration state lives in `db.sqlite` under `HIVEMIND_DATA_DIR` (default: `~/.hivemind`).
 - `events.jsonl` is an append-only compatibility mirror for manual inspection/tools.
 - All derived state is reconstructed from events.
-- Code changes happen in **git worktrees/branches** owned by the flow engine.
+- Code changes happen in **git worktrees/branches** owned by workflow runs. Legacy flows remain available as a compatibility surface.
 
 ---
 
@@ -58,6 +58,20 @@ for k in ("project_id","task_id","graph_id","flow_id","attempt_id"):
     raise SystemExit(0)
 
 raise SystemExit("no known id field found")
+PY
+}
+```
+
+For workflow-first automation, capture workflow-run ids explicitly:
+
+```bash
+hm_workflow_run_id() {
+  python3 - <<'PY'
+import json,sys
+obj=json.load(sys.stdin)
+if isinstance(obj, dict) and "data" in obj and isinstance(obj["data"], dict):
+  obj=obj["data"]
+print(obj["workflow_run_id"] if "workflow_run_id" in obj else obj["id"])
 PY
 }
 ```
@@ -400,7 +414,7 @@ $HM -f json checkpoint list <attempt-id>
 ### 8.3 Runtime stream API and SSE
 
 ```bash
-curl "http://127.0.0.1:8787/api/runtime-stream?flow_id=$FLOW_ID&limit=200"
+curl "http://127.0.0.1:8787/api/runtime-stream?workflow_run_id=$WORKFLOW_RUN_ID&limit=200"
 curl -N "http://127.0.0.1:8787/api/runtime-stream/stream?attempt_id=<attempt-id>"
 ```
 
@@ -421,10 +435,10 @@ Common projected kinds include:
 ### 8.4 Worktrees
 
 ```bash
-$HM -f json worktree list "$FLOW_ID"
-$HM -f json worktree inspect <task-id>
-$HM -f json worktree cleanup "$FLOW_ID" --dry-run
-$HM -f json worktree cleanup "$FLOW_ID" --force
+$HM -f json workflow worktree-list "$WORKFLOW_RUN_ID"
+$HM -f json workflow worktree-inspect "$WORKFLOW_RUN_ID" <step-id>
+$HM -f json workflow worktree-cleanup "$WORKFLOW_RUN_ID" --dry-run
+$HM -f json workflow worktree-cleanup "$WORKFLOW_RUN_ID" --force
 $HM -f json worktree restore-turn <attempt-id> --ordinal 1 --confirm
 ```
 
@@ -448,25 +462,25 @@ $HM -f json constitution check --project "$PROJECT_ID"
 ```bash
 # Use --target to explicitly select the integration target branch.
 # This matters if your repo default branch is not "main".
-$HM -f json merge prepare "$FLOW_ID" --target master
+$HM -f json workflow merge-prepare "$WORKFLOW_RUN_ID" --target master
 ```
 
 2) Approve
 
 ```bash
-$HM -f json merge approve "$FLOW_ID"
+$HM -f json workflow merge-approve "$WORKFLOW_RUN_ID"
 ```
 
 3) Execute
 
 ```bash
-$HM -f json merge execute "$FLOW_ID" --mode local
+$HM -f json workflow merge-execute "$WORKFLOW_RUN_ID" --mode local
 ```
 
 Or execute via GitHub PR automation:
 
 ```bash
-$HM -f json merge execute "$FLOW_ID" \
+$HM -f json workflow merge-execute "$WORKFLOW_RUN_ID" \
   --mode pr \
   --monitor-ci \
   --auto-merge \

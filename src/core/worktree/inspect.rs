@@ -15,6 +15,10 @@ impl WorktreeManager {
             return Ok(WorktreeStatus {
                 flow_id,
                 task_id,
+                workflow_id: None,
+                workflow_run_id: None,
+                step_id: None,
+                step_run_id: None,
                 path,
                 is_worktree: false,
                 head_commit: None,
@@ -46,6 +50,10 @@ impl WorktreeManager {
         Ok(WorktreeStatus {
             flow_id,
             task_id,
+            workflow_id: None,
+            workflow_run_id: None,
+            step_id: None,
+            step_run_id: None,
             path,
             is_worktree,
             head_commit,

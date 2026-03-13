@@ -13,6 +13,15 @@ This document specifies the **operational semantics** of Hivemind CLI commands: 
 
 The CLI is the authoritative interface. These semantics are the contract.
 
+## Workflow-First Execution Note
+
+For new execution in Phase 5, `workflow/*` is the primary orchestration surface.
+Legacy `flow/*`, `merge`, `runtime`, and `worktree` commands remain available for compatibility and low-level inspection, but workflow-owned commands and `workflow_run_id` selectors are the preferred operator contract for:
+
+- runtime stream inspection
+- worktree inspection and cleanup
+- merge prepare, approve, and execute
+
 ---
 
 ## 1. Semantic Structure

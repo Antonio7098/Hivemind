@@ -121,12 +121,22 @@ pub(super) fn handle_get(
                 .get("limit")
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(default_events_limit);
-            super::json_ok(registry.runtime_stream_items_with_detail(
-                query.get("flow_id").map(String::as_str),
-                query.get("attempt_id").map(String::as_str),
-                limit,
-                parse_runtime_stream_detail(&query)?,
-            )?)?
+            let detail = parse_runtime_stream_detail(&query)?;
+            if let Some(workflow_run_id) = query.get("workflow_run_id") {
+                super::json_ok(registry.workflow_runtime_stream_items_with_detail(
+                    workflow_run_id,
+                    query.get("attempt_id").map(String::as_str),
+                    limit,
+                    detail,
+                )?)?
+            } else {
+                super::json_ok(registry.runtime_stream_items_with_detail(
+                    query.get("flow_id").map(String::as_str),
+                    query.get("attempt_id").map(String::as_str),
+                    limit,
+                    detail,
+                )?)?
+            }
         }
         "/api/verify/results" => {
             let query = parse_query(url);
@@ -239,25 +249,40 @@ pub(super) fn handle_get(
         }
         "/api/worktrees" => {
             let query = parse_query(url);
-            let flow_id = query.get("flow_id").ok_or_else(|| {
-                HivemindError::user(
-                    "missing_flow_id",
-                    "Query parameter 'flow_id' is required",
-                    "server:worktrees:list",
-                )
-            })?;
-            super::json_ok(registry.worktree_list(flow_id)?)?
+            if let Some(workflow_run_id) = query.get("workflow_run_id") {
+                super::json_ok(registry.workflow_worktree_list(workflow_run_id)?)?
+            } else {
+                let flow_id = query.get("flow_id").ok_or_else(|| {
+                    HivemindError::user(
+                        "missing_flow_id",
+                        "Query parameter 'flow_id' or 'workflow_run_id' is required",
+                        "server:worktrees:list",
+                    )
+                })?;
+                super::json_ok(registry.worktree_list(flow_id)?)?
+            }
         }
         "/api/worktrees/inspect" => {
             let query = parse_query(url);
-            let task_id = query.get("task_id").ok_or_else(|| {
-                HivemindError::user(
-                    "missing_task_id",
-                    "Query parameter 'task_id' is required",
-                    "server:worktrees:inspect",
-                )
-            })?;
-            super::json_ok(registry.worktree_inspect(task_id)?)?
+            if let Some(workflow_run_id) = query.get("workflow_run_id") {
+                let step_id = query.get("step_id").ok_or_else(|| {
+                    HivemindError::user(
+                        "missing_step_id",
+                        "Query parameter 'step_id' is required when using 'workflow_run_id'",
+                        "server:worktrees:inspect",
+                    )
+                })?;
+                super::json_ok(registry.workflow_worktree_inspect(workflow_run_id, step_id)?)?
+            } else {
+                let task_id = query.get("task_id").ok_or_else(|| {
+                    HivemindError::user(
+                        "missing_task_id",
+                        "Query parameter 'task_id' is required",
+                        "server:worktrees:inspect",
+                    )
+                })?;
+                super::json_ok(registry.worktree_inspect(task_id)?)?
+            }
         }
         _ => return Ok(None),
     };
