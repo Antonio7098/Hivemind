@@ -31,12 +31,20 @@ pub(super) fn handle_post(
                 req.kind,
                 req.description.as_deref(),
                 &req.depends_on,
+                req.input_bindings,
+                req.output_bindings,
+                req.context_patches,
             )?)?
         }
         "/api/workflow-runs/create" => {
             let req: WorkflowRunCreateRequest =
                 parse_json_body(body, "server:workflow-runs:create")?;
-            super::json_ok(registry.create_workflow_run(&req.workflow_id)?)?
+            super::json_ok(registry.create_workflow_run(
+                &req.workflow_id,
+                req.context_schema.as_deref(),
+                req.context_schema_version,
+                req.context_inputs,
+            )?)?
         }
         "/api/workflow-runs/start" => {
             let req: WorkflowRunIdRequest = parse_json_body(body, "server:workflow-runs:start")?;

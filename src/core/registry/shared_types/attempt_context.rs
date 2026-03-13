@@ -61,6 +61,19 @@ pub(crate) struct AttemptContextBudgetManifest {
     pub(crate) policy: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct AttemptContextWorkflowManifest {
+    pub(crate) workflow_run_id: Uuid,
+    pub(crate) step_id: Uuid,
+    pub(crate) step_run_id: Uuid,
+    pub(crate) context_schema: String,
+    pub(crate) context_schema_version: u32,
+    pub(crate) context_snapshot_hash: String,
+    pub(crate) step_input_snapshot_hash: String,
+    pub(crate) output_bag_hash: String,
+    #[serde(default)]
+    pub(crate) output_entry_ids: Vec<Uuid>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct AttemptContextManifest {
     pub(crate) schema_version: String,
     pub(crate) manifest_version: u32,
@@ -81,6 +94,8 @@ pub(crate) struct AttemptContextManifest {
     pub(crate) skills: Vec<AttemptContextSkillManifest>,
     #[serde(default)]
     pub(crate) documents: Vec<AttemptContextDocumentManifest>,
+    #[serde(default)]
+    pub(crate) workflow: Option<AttemptContextWorkflowManifest>,
     pub(crate) graph_summary: AttemptContextGraphManifest,
     #[serde(default)]
     pub(crate) retry_links: Vec<AttemptContextRetryLink>,

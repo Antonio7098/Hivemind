@@ -128,53 +128,53 @@
 **Goal:** Add deterministic workflow-scoped context and solve parallel output composition with an append-only output bag rather than shared mutable writes.
 
 ### 66.1 Workflow context model
-- [ ] Introduce a typed workflow context model with explicit initialization inputs, schema/version markers, and deterministic snapshot hashes
-- [ ] Define the three-layer contract explicitly:
-  - [ ] workflow context = run-scoped data plane
-  - [ ] step context = resolved per-step deterministic input snapshot
-  - [ ] attempt context = rendered runtime input delivered to a worker
-- [ ] Restrict context mutation to explicit event boundaries (step completion, child completion, signal receipt, human override, or other declared workflow actions)
+- [x] Introduce a typed workflow context model with explicit initialization inputs, schema/version markers, and deterministic snapshot hashes
+- [x] Define the three-layer contract explicitly:
+  - [x] workflow context = run-scoped data plane
+  - [x] step context = resolved per-step deterministic input snapshot
+  - [x] attempt context = rendered runtime input delivered to a worker
+- [x] Restrict context mutation to explicit event boundaries (step completion, child completion, signal receipt, human override, or other declared workflow actions)
 
 ### 66.2 Append-only output bag semantics
-- [ ] Introduce an append-only workflow output bag for step-produced outputs, with each entry carrying:
-  - [ ] producer `step_run_id`
-  - [ ] `workflow_run_id`
-  - [ ] optional branch/join lineage
-  - [ ] typed payload or blob reference
-  - [ ] schema version / output name / tags
-  - [ ] event sequence ordering
-- [ ] Disallow direct parallel mutation of shared named context keys by default
-- [ ] Require downstream steps to consume bag entries via explicit selectors, reducers, or join-step bindings
-- [ ] Define deterministic reducer rules for common fan-in patterns (single producer required, ordered list collect, keyed map collect, explicit reduce function)
+- [x] Introduce an append-only workflow output bag for step-produced outputs, with each entry carrying:
+  - [x] producer `step_run_id`
+  - [x] `workflow_run_id`
+  - [x] optional branch/join lineage
+  - [x] typed payload or blob reference
+  - [x] schema version / output name / tags
+  - [x] event sequence ordering
+- [x] Disallow direct parallel mutation of shared named context keys by default
+- [x] Require downstream steps to consume bag entries via explicit selectors, reducers, or join-step bindings
+- [x] Define deterministic reducer rules for common fan-in patterns (single producer required, ordered list collect, keyed map collect, explicit reduce function)
 
 ### 66.3 Attempt-context integration
-- [ ] Extend attempt-context assembly so workflow-derived step input is injected as an explicit, hashed section of the attempt manifest
-- [ ] Keep current constitution/prompt/skills/documents/graph-summary inputs deterministic and additive, not replaced
-- [ ] Emit explicit events for workflow context initialization, step input resolution, output-bag append, and context snapshotting
+- [x] Extend attempt-context assembly so workflow-derived step input is injected as an explicit, hashed section of the attempt manifest
+- [x] Keep current constitution/prompt/skills/documents/graph-summary inputs deterministic and additive, not replaced
+- [x] Emit explicit events for workflow context initialization, step input resolution, output-bag append, and context snapshotting
 
 ### 66.4 Automated validation and test coverage
-- [ ] Add unit tests for context initialization, patching, snapshot hashing, and schema validation
-- [ ] Add property/integration tests for parallel append ordering and reducer determinism
-- [ ] Add tests proving no hidden last-writer-wins semantics exist for parallel outputs
-- [ ] Add attempt-manifest tests proving workflow context becomes part of deterministic attempt input hashes
+- [x] Add unit tests for context initialization, patching, snapshot hashing, and schema validation
+- [x] Add property/integration tests for parallel append ordering and reducer determinism
+- [x] Add tests proving no hidden last-writer-wins semantics exist for parallel outputs
+- [x] Add attempt-manifest tests proving workflow context becomes part of deterministic attempt input hashes
 
 ### 66.5 Documentation
-- [ ] Add design docs for workflow context lifecycle, bag semantics, reducer rules, and step input resolution
-- [ ] Update architecture docs to explain how workflow context feeds the existing attempt-context system
-- [ ] Add operator-facing guidance on how to inspect context snapshots and bag entries during debugging
+- [x] Add design docs for workflow context lifecycle, bag semantics, reducer rules, and step input resolution
+- [x] Update architecture docs to explain how workflow context feeds the existing attempt-context system
+- [x] Add operator-facing guidance on how to inspect context snapshots and bag entries during debugging
 
 ### 66.6 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 66 manual checklist under `@hivemind-test`
-- [ ] Smoke test a workflow with parallel branches that each append outputs to the bag and a downstream join that consumes them deterministically
-- [ ] Validate workflow context inspection and attempt-context inspection show attributable workflow-derived inputs
-- [ ] Validate failure behavior for invalid reducers, duplicate single-producer expectations, and schema mismatches
-- [ ] Publish Sprint 66 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 66 manual checklist under `@hivemind-test`
+- [x] Smoke test a workflow with parallel branches that each append outputs to the bag and a downstream join that consumes them deterministically
+- [x] Validate workflow context inspection and attempt-context inspection show attributable workflow-derived inputs
+- [x] Validate failure behavior for invalid reducers, duplicate single-producer expectations, and schema mismatches
+- [x] Publish Sprint 66 manual test report artifact in `@hivemind-test`
 
 ### 66.7 Exit Criteria
-- [ ] Workflow context is evented, inspectable, and replay-safe
-- [ ] Parallel branches write only through append-only bag semantics
-- [ ] Downstream step inputs are deterministic and hashable
-- [ ] Automated and manual smoke validation are completed and documented
+- [x] Workflow context is evented, inspectable, and replay-safe
+- [x] Parallel branches write only through append-only bag semantics
+- [x] Downstream step inputs are deterministic and hashable
+- [x] Automated and manual smoke validation are completed and documented
 
 ---
 

@@ -337,6 +337,22 @@ impl Registry {
                         );
                         self.store.append(event).map_err(|e| e.to_string())?;
                     }
+                    InteractiveAdapterEvent::FilesystemObserved {
+                        files_created,
+                        files_modified,
+                        files_deleted,
+                    } => {
+                        let event = Event::new(
+                            EventPayload::RuntimeFilesystemObserved {
+                                attempt_id,
+                                files_created,
+                                files_modified,
+                                files_deleted,
+                            },
+                            attempt_corr.clone(),
+                        );
+                        self.store.append(event).map_err(|e| e.to_string())?;
+                    }
                     InteractiveAdapterEvent::Interrupted => {
                         let event = Event::new(
                             EventPayload::RuntimeInterrupted { attempt_id },
@@ -578,6 +594,104 @@ fn filter_projected_runtime_observations(
             )
         })
         .collect()
+}
+
+impl Registry {
+    pub(super) fn apply_external_runtime_tool_directives(
+        &self,
+        attempt_id: Uuid,
+        runtime_for_adapter: &ProjectRuntimeConfig,
+        stdout: &str,
+        stderr: &str,
+        origin: &'static str,
+    ) -> std::result::Result<(), (String, String, bool)> {
+        if runtime_for_adapter.adapter_name == "native" {
+            return Ok(());
+        }
+
+        let mut completed_checkpoint_ids = std::collections::BTreeSet::new();
+        for line in stdout.lines().chain(stderr.lines()) {
+            let trimmed = line.trim();
+            let Some(action) = trimmed.strip_prefix("ACT:") else {
+                continue;
+            };
+
+            let tool_action = match crate::native::tool_engine::NativeToolAction::parse(action) {
+                Ok(Some(action)) => action,
+                Ok(None) => {
+                    return Err((
+                        "external_runtime_directive_invalid".to_string(),
+                        format!("Unsupported external runtime directive line: {trimmed}"),
+                        false,
+                    ));
+                }
+                Err(error) => {
+                    return Err((
+                        "external_runtime_directive_invalid".to_string(),
+                        format!("Failed to parse external runtime directive '{trimmed}': {}", error.message),
+                        false,
+                    ));
+                }
+            };
+
+            match tool_action.name.as_str() {
+                "checkpoint_complete" => {
+                    let checkpoint_id = tool_action
+                        .input
+                        .get("id")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::trim)
+                        .filter(|id| !id.is_empty())
+                        .ok_or_else(|| {
+                            (
+                                "external_runtime_directive_invalid".to_string(),
+                                "checkpoint_complete directive requires a non-empty 'id'"
+                                    .to_string(),
+                                false,
+                            )
+                        })?;
+                    if !completed_checkpoint_ids.insert(checkpoint_id.to_string()) {
+                        continue;
+                    }
+                    let summary = tool_action
+                        .input
+                        .get("summary")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::trim)
+                        .filter(|summary| !summary.is_empty());
+                    match self.checkpoint_complete(&attempt_id.to_string(), checkpoint_id, summary) {
+                        Ok(_) => {}
+                        Err(err)
+                            if err.code == "checkpoint_already_completed"
+                                || err.code == "all_checkpoints_completed" => {}
+                        Err(err) => {
+                            self.record_error_event(&err, CorrelationIds::none());
+                            return Err((
+                                "external_runtime_directive_execution_failed".to_string(),
+                                format!(
+                                    "External runtime directive checkpoint_complete failed: {}",
+                                    err.message
+                                ),
+                                false,
+                            ));
+                        }
+                    }
+                }
+                tool_name => {
+                    return Err((
+                        "external_runtime_directive_unsupported".to_string(),
+                        format!(
+                            "External runtime requested unsupported built-in tool '{tool_name}'"
+                        ),
+                        false,
+                    ));
+                }
+            }
+        }
+
+        let _ = origin;
+        Ok(())
+    }
 }
 
 fn attach_resume_session_if_supported(

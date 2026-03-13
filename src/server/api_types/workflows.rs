@@ -1,5 +1,9 @@
 use super::*;
-use crate::core::workflow::{WorkflowStepKind, WorkflowStepState};
+use crate::core::workflow::{
+    WorkflowContextPatchBinding, WorkflowDataValue, WorkflowStepInputBinding, WorkflowStepKind,
+    WorkflowStepOutputBinding, WorkflowStepState,
+};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct WorkflowCreateRequest {
@@ -24,6 +28,12 @@ pub(crate) struct WorkflowStepAddRequest {
     pub(crate) description: Option<String>,
     #[serde(default)]
     pub(crate) depends_on: Vec<String>,
+    #[serde(default)]
+    pub(crate) input_bindings: Vec<WorkflowStepInputBinding>,
+    #[serde(default)]
+    pub(crate) output_bindings: Vec<WorkflowStepOutputBinding>,
+    #[serde(default)]
+    pub(crate) context_patches: Vec<WorkflowContextPatchBinding>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,6 +51,10 @@ pub(crate) struct WorkflowTickRequest {
 #[derive(Debug, Deserialize)]
 pub(crate) struct WorkflowRunCreateRequest {
     pub(crate) workflow_id: String,
+    pub(crate) context_schema: Option<String>,
+    pub(crate) context_schema_version: Option<u32>,
+    #[serde(default)]
+    pub(crate) context_inputs: BTreeMap<String, WorkflowDataValue>,
 }
 
 #[derive(Debug, Deserialize)]

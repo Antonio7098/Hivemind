@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.53",
+      "date": "2026-03-13",
+      "phase": 66,
+      "changes": [
+        {
+          "type": "added",
+          "area": "workflow",
+          "description": "Complete Sprint 66 with typed workflow context snapshots, deterministic step input resolution, append-only workflow output bag entries, workflow-derived attempt manifest hashes, and native join-step fan-in on top of the Sprint 65 bridge"
+        },
+        {
+          "type": "changed",
+          "area": "runtime",
+          "description": "Add a shared external-runtime no-progress watchdog plus orchestration-level handling of emitted `ACT:tool:checkpoint_complete` directives so non-native runtimes fail loudly when silent and can complete workflow checkpoints without adapter-specific hacks"
+        },
+        {
+          "type": "changed",
+          "area": "workflow",
+          "description": "Make workflow bag reducers deterministic by honoring declared `producer_step_ids`, complete workflow runs as soon as all workflow steps become terminal, and force synthetic join steps onto the native runtime even when branch tasks use external runtimes"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 66 regression coverage for live-style external checkpoint directive bridging, recovered join completion, deterministic join ordering, workflow attempt-manifest hashing, and shared no-progress watchdog behavior"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Close Sprint 66 in roadmap/report/manual artifacts with real-runtime smoke evidence from post-fix `opencode/nemotron-3-super-free` runs and updated sprint execution guidance for workflow/runtime validation"
+        }
+      ]
+    },
+    {
       "version": "v0.1.51",
       "date": "2026-03-09",
       "phase": 58,

@@ -6,11 +6,23 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
 #[cfg(test)]
 mod tests;
+
+const WORKFLOW_CONTEXT_SCHEMA: &str = "workflow_context";
+const WORKFLOW_CONTEXT_SCHEMA_VERSION: u32 = 1;
+const WORKFLOW_STEP_CONTEXT_SCHEMA: &str = "workflow_step_context";
+const WORKFLOW_STEP_CONTEXT_SCHEMA_VERSION: u32 = 1;
+const WORKFLOW_OUTPUT_BAG_SCHEMA: &str = "workflow_output_bag";
+const WORKFLOW_OUTPUT_BAG_SCHEMA_VERSION: u32 = 1;
+const WORKFLOW_LIST_SCHEMA: &str = "workflow_output_list";
+const WORKFLOW_KEYED_MAP_SCHEMA: &str = "workflow_output_map";
+const WORKFLOW_REDUCED_TEXT_SCHEMA: &str = "workflow_output_text";
 
 /// Supported workflow step kinds for the workflow engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,6 +121,188 @@ impl WorkflowStepState {
     }
 }
 
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut out = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}
+
+fn canonical_json(value: &JsonValue) -> String {
+    match value {
+        JsonValue::Null => "null".to_string(),
+        JsonValue::Bool(flag) => flag.to_string(),
+        JsonValue::Number(number) => number.to_string(),
+        JsonValue::String(text) => {
+            serde_json::to_string(text).unwrap_or_else(|_| "\"\"".to_string())
+        }
+        JsonValue::Array(items) => {
+            let rendered = items.iter().map(canonical_json).collect::<Vec<_>>();
+            format!("[{}]", rendered.join(","))
+        }
+        JsonValue::Object(map) => {
+            let mut keys = map.keys().collect::<Vec<_>>();
+            keys.sort_unstable();
+            let rendered = keys
+                .into_iter()
+                .map(|key| {
+                    let value = map.get(key).expect("object key present");
+                    format!(
+                        "{}:{}",
+                        serde_json::to_string(key).unwrap_or_else(|_| "\"\"".to_string()),
+                        canonical_json(value)
+                    )
+                })
+                .collect::<Vec<_>>();
+            format!("{{{}}}", rendered.join(","))
+        }
+    }
+}
+
+fn snapshot_hash_for_values(values: &BTreeMap<String, WorkflowDataValue>) -> String {
+    let json = serde_json::to_value(values).unwrap_or(JsonValue::Null);
+    sha256_hex(canonical_json(&json).as_bytes())
+}
+
+/// A typed workflow value with explicit schema attribution.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowDataValue {
+    pub schema: String,
+    pub schema_version: u32,
+    pub value: JsonValue,
+    #[serde(default)]
+    pub content_hash: String,
+}
+
+impl WorkflowDataValue {
+    pub fn new(
+        schema: impl Into<String>,
+        schema_version: u32,
+        value: JsonValue,
+    ) -> Result<Self, WorkflowError> {
+        let schema = schema.into();
+        if schema.trim().is_empty() {
+            return Err(WorkflowError::InvalidSchema(
+                "Workflow value schema cannot be empty".to_string(),
+            ));
+        }
+        if schema_version == 0 {
+            return Err(WorkflowError::InvalidSchema(
+                "Workflow value schema version must be >= 1".to_string(),
+            ));
+        }
+
+        let content_hash = sha256_hex(
+            canonical_json(&serde_json::json!({
+                "schema": schema,
+                "schema_version": schema_version,
+                "value": value,
+            }))
+            .as_bytes(),
+        );
+
+        Ok(Self {
+            schema,
+            schema_version,
+            value,
+            content_hash,
+        })
+    }
+
+    pub fn normalized(self) -> Result<Self, WorkflowError> {
+        Self::new(self.schema, self.schema_version, self.value)
+    }
+}
+
+/// The source for a workflow step input binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum WorkflowStepInputSource {
+    ContextKey {
+        key: String,
+    },
+    Bag {
+        selector: WorkflowBagSelector,
+        reducer: WorkflowBagReducer,
+    },
+    Literal {
+        value: WorkflowDataValue,
+    },
+}
+
+/// Per-step input binding definition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowStepInputBinding {
+    pub name: String,
+    pub source: WorkflowStepInputSource,
+}
+
+/// A reusable selector over the append-only workflow output bag.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowBagSelector {
+    pub output_name: String,
+    #[serde(default)]
+    pub producer_step_ids: Vec<Uuid>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub expected_schema: Option<String>,
+    #[serde(default)]
+    pub expected_schema_version: Option<u32>,
+}
+
+/// Key strategy used for deterministic keyed-map reducers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowBagKeyField {
+    ProducerStepId,
+    ProducerStepName,
+    OutputName,
+}
+
+/// Explicit reducer functions for bag fan-in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReduceFunction {
+    ConcatTextNewline,
+}
+
+/// Deterministic reducers over selected output bag entries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum WorkflowBagReducer {
+    Single,
+    OrderedList,
+    KeyedMap { key_field: WorkflowBagKeyField },
+    ReduceFunction { function: WorkflowReduceFunction },
+}
+
+/// A reusable value source for step outputs and context patches.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum WorkflowValueSource {
+    Literal { value: WorkflowDataValue },
+    InputBinding { binding: String },
+}
+
+/// A declarative output emitted on successful step completion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowStepOutputBinding {
+    pub name: String,
+    pub source: WorkflowValueSource,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+/// A declarative workflow-context patch applied on successful step completion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowContextPatchBinding {
+    pub key: String,
+    pub source: WorkflowValueSource,
+}
+
 /// Static step definition within a workflow definition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowStepDefinition {
@@ -119,6 +313,12 @@ pub struct WorkflowStepDefinition {
     pub description: Option<String>,
     #[serde(default)]
     pub depends_on: Vec<Uuid>,
+    #[serde(default)]
+    pub input_bindings: Vec<WorkflowStepInputBinding>,
+    #[serde(default)]
+    pub output_bindings: Vec<WorkflowStepOutputBinding>,
+    #[serde(default)]
+    pub context_patches: Vec<WorkflowContextPatchBinding>,
 }
 
 impl WorkflowStepDefinition {
@@ -130,6 +330,9 @@ impl WorkflowStepDefinition {
             kind,
             description: None,
             depends_on: Vec::new(),
+            input_bindings: Vec::new(),
+            output_bindings: Vec::new(),
+            context_patches: Vec::new(),
         }
     }
 }
@@ -193,6 +396,274 @@ impl WorkflowDefinition {
     }
 }
 
+/// A point-in-time workflow-context snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowContextSnapshot {
+    pub revision: u64,
+    pub snapshot_hash: String,
+    #[serde(default)]
+    pub values: BTreeMap<String, WorkflowDataValue>,
+    pub created_at: DateTime<Utc>,
+    pub reason: String,
+    #[serde(default)]
+    pub trigger_step_id: Option<Uuid>,
+    #[serde(default)]
+    pub trigger_step_run_id: Option<Uuid>,
+}
+
+impl WorkflowContextSnapshot {
+    #[must_use]
+    pub fn new(
+        revision: u64,
+        values: BTreeMap<String, WorkflowDataValue>,
+        reason: impl Into<String>,
+        trigger_step_id: Option<Uuid>,
+        trigger_step_run_id: Option<Uuid>,
+        created_at: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            revision,
+            snapshot_hash: snapshot_hash_for_values(&values),
+            values,
+            created_at,
+            reason: reason.into(),
+            trigger_step_id,
+            trigger_step_run_id,
+        }
+    }
+}
+
+/// Workflow-scoped mutable data plane, mutated only by explicit events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowContextState {
+    pub schema: String,
+    pub schema_version: u32,
+    #[serde(default)]
+    pub initialization_inputs: BTreeMap<String, WorkflowDataValue>,
+    pub current_snapshot: WorkflowContextSnapshot,
+    #[serde(default)]
+    pub snapshots: Vec<WorkflowContextSnapshot>,
+}
+
+impl Default for WorkflowContextState {
+    fn default() -> Self {
+        Self::initialize(
+            WORKFLOW_CONTEXT_SCHEMA.to_string(),
+            WORKFLOW_CONTEXT_SCHEMA_VERSION,
+            BTreeMap::new(),
+            Utc::now(),
+            "workflow_run_initialized",
+        )
+    }
+}
+
+impl WorkflowContextState {
+    #[must_use]
+    pub fn initialize(
+        schema: String,
+        schema_version: u32,
+        initialization_inputs: BTreeMap<String, WorkflowDataValue>,
+        created_at: DateTime<Utc>,
+        reason: impl Into<String>,
+    ) -> Self {
+        let snapshot = WorkflowContextSnapshot::new(
+            1,
+            initialization_inputs.clone(),
+            reason,
+            None,
+            None,
+            created_at,
+        );
+
+        Self {
+            schema,
+            schema_version,
+            initialization_inputs,
+            current_snapshot: snapshot.clone(),
+            snapshots: vec![snapshot],
+        }
+    }
+
+    pub fn apply_patches(
+        &self,
+        patches: BTreeMap<String, WorkflowDataValue>,
+        created_at: DateTime<Utc>,
+        reason: impl Into<String>,
+        trigger_step_id: Option<Uuid>,
+        trigger_step_run_id: Option<Uuid>,
+    ) -> Result<Self, WorkflowError> {
+        if self.schema.trim().is_empty() {
+            return Err(WorkflowError::InvalidSchema(
+                "Workflow context schema cannot be empty".to_string(),
+            ));
+        }
+        if self.schema_version == 0 {
+            return Err(WorkflowError::InvalidSchema(
+                "Workflow context schema version must be >= 1".to_string(),
+            ));
+        }
+
+        let mut values = self.current_snapshot.values.clone();
+        for (key, value) in patches {
+            if key.trim().is_empty() {
+                return Err(WorkflowError::InvalidContextKey(
+                    "Workflow context key cannot be empty".to_string(),
+                ));
+            }
+            values.insert(key, value);
+        }
+
+        let snapshot = WorkflowContextSnapshot::new(
+            self.current_snapshot.revision.saturating_add(1),
+            values,
+            reason,
+            trigger_step_id,
+            trigger_step_run_id,
+            created_at,
+        );
+
+        let mut history = self.snapshots.clone();
+        history.push(snapshot.clone());
+
+        Ok(Self {
+            schema: self.schema.clone(),
+            schema_version: self.schema_version,
+            initialization_inputs: self.initialization_inputs.clone(),
+            current_snapshot: snapshot,
+            snapshots: history,
+        })
+    }
+}
+
+/// An append-only workflow output bag entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowOutputBagEntry {
+    pub entry_id: Uuid,
+    pub workflow_run_id: Uuid,
+    pub producer_step_id: Uuid,
+    pub producer_step_run_id: Uuid,
+    #[serde(default)]
+    pub branch_step_id: Option<Uuid>,
+    #[serde(default)]
+    pub join_step_id: Option<Uuid>,
+    pub output_name: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub payload: WorkflowDataValue,
+    pub event_sequence: u64,
+    pub appended_at: DateTime<Utc>,
+}
+
+/// Append-only workflow output bag projection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowOutputBag {
+    pub schema: String,
+    pub schema_version: u32,
+    pub bag_hash: String,
+    pub next_sequence: u64,
+    #[serde(default)]
+    pub entries: Vec<WorkflowOutputBagEntry>,
+}
+
+impl Default for WorkflowOutputBag {
+    fn default() -> Self {
+        Self {
+            schema: WORKFLOW_OUTPUT_BAG_SCHEMA.to_string(),
+            schema_version: WORKFLOW_OUTPUT_BAG_SCHEMA_VERSION,
+            bag_hash: sha256_hex(b"[]"),
+            next_sequence: 1,
+            entries: Vec::new(),
+        }
+    }
+}
+
+impl WorkflowOutputBag {
+    #[must_use]
+    pub fn append(&self, entry: WorkflowOutputBagEntry) -> Self {
+        let mut entries = self.entries.clone();
+        entries.push(entry);
+        let json = serde_json::to_value(&entries).unwrap_or(JsonValue::Array(Vec::new()));
+        Self {
+            schema: self.schema.clone(),
+            schema_version: self.schema_version,
+            bag_hash: sha256_hex(canonical_json(&json).as_bytes()),
+            next_sequence: entries.last().map_or(self.next_sequence, |item| {
+                item.event_sequence.saturating_add(1)
+            }),
+            entries,
+        }
+    }
+}
+
+/// Resolved metadata for a single step input binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowInputBindingResolution {
+    pub binding: String,
+    pub source: WorkflowStepInputSource,
+    #[serde(default)]
+    pub selected_entry_ids: Vec<Uuid>,
+    pub value: WorkflowDataValue,
+}
+
+/// Deterministic step-scoped input snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowStepContextSnapshot {
+    pub schema: String,
+    pub schema_version: u32,
+    pub workflow_run_id: Uuid,
+    pub step_id: Uuid,
+    pub step_run_id: Uuid,
+    pub context_snapshot_hash: String,
+    pub output_bag_hash: String,
+    #[serde(default)]
+    pub inputs: BTreeMap<String, WorkflowDataValue>,
+    #[serde(default)]
+    pub resolutions: Vec<WorkflowInputBindingResolution>,
+    pub snapshot_hash: String,
+    pub resolved_at: DateTime<Utc>,
+}
+
+impl WorkflowStepContextSnapshot {
+    #[must_use]
+    pub fn new(
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+        context_snapshot_hash: String,
+        output_bag_hash: String,
+        inputs: BTreeMap<String, WorkflowDataValue>,
+        resolutions: Vec<WorkflowInputBindingResolution>,
+        resolved_at: DateTime<Utc>,
+    ) -> Self {
+        let snapshot_hash = sha256_hex(
+            canonical_json(&serde_json::json!({
+                "workflow_run_id": workflow_run_id,
+                "step_id": step_id,
+                "step_run_id": step_run_id,
+                "context_snapshot_hash": context_snapshot_hash,
+                "output_bag_hash": output_bag_hash,
+                "inputs": inputs,
+                "resolutions": resolutions,
+            }))
+            .as_bytes(),
+        );
+
+        Self {
+            schema: WORKFLOW_STEP_CONTEXT_SCHEMA.to_string(),
+            schema_version: WORKFLOW_STEP_CONTEXT_SCHEMA_VERSION,
+            workflow_run_id,
+            step_id,
+            step_run_id,
+            context_snapshot_hash,
+            output_bag_hash,
+            inputs,
+            resolutions,
+            snapshot_hash,
+            resolved_at,
+        }
+    }
+}
+
 /// Runtime state of a single step within a workflow run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowStepRun {
@@ -218,6 +689,12 @@ pub struct WorkflowRun {
     pub state: WorkflowRunState,
     #[serde(default)]
     pub step_runs: BTreeMap<Uuid, WorkflowStepRun>,
+    #[serde(default)]
+    pub step_contexts: BTreeMap<Uuid, WorkflowStepContextSnapshot>,
+    #[serde(default)]
+    pub context: WorkflowContextState,
+    #[serde(default)]
+    pub output_bag: WorkflowOutputBag,
     pub created_at: DateTime<Utc>,
     #[serde(default)]
     pub started_at: Option<DateTime<Utc>>,
@@ -257,6 +734,9 @@ impl WorkflowRun {
             parent_step_id: None,
             state: WorkflowRunState::Created,
             step_runs,
+            step_contexts: BTreeMap::new(),
+            context: WorkflowContextState::default(),
+            output_bag: WorkflowOutputBag::default(),
             created_at: now,
             started_at: None,
             completed_at: None,
@@ -284,6 +764,16 @@ pub enum WorkflowError {
         to: WorkflowStepState,
     },
     StepNotFound(Uuid),
+    InvalidSchema(String),
+    InvalidContextKey(String),
+    MissingContextKey(String),
+    UnknownInputBinding(String),
+    InvalidReducer(String),
+    ReducerConflict(String),
+    SchemaMismatch {
+        expected: String,
+        actual: String,
+    },
 }
 
 impl std::fmt::Display for WorkflowError {
@@ -299,8 +789,88 @@ impl std::fmt::Display for WorkflowError {
                 )
             }
             Self::StepNotFound(id) => write!(f, "Workflow step not found: {id}"),
+            Self::InvalidSchema(message)
+            | Self::InvalidContextKey(message)
+            | Self::MissingContextKey(message)
+            | Self::UnknownInputBinding(message)
+            | Self::InvalidReducer(message)
+            | Self::ReducerConflict(message) => write!(f, "{message}"),
+            Self::SchemaMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "Workflow schema mismatch: expected {expected}, got {actual}"
+                )
+            }
         }
     }
 }
 
 impl std::error::Error for WorkflowError {}
+
+impl WorkflowBagReducer {
+    pub fn reduce(
+        &self,
+        selector: &WorkflowBagSelector,
+        entries: &[WorkflowOutputBagEntry],
+        step_names: &BTreeMap<Uuid, String>,
+    ) -> Result<WorkflowDataValue, WorkflowError> {
+        match self {
+            Self::Single => {
+                if entries.len() != 1 {
+                    return Err(WorkflowError::ReducerConflict(format!(
+                        "single reducer expected exactly one output entry for '{}', found {}",
+                        selector.output_name,
+                        entries.len()
+                    )));
+                }
+                Ok(entries[0].payload.clone())
+            }
+            Self::OrderedList => WorkflowDataValue::new(
+                WORKFLOW_LIST_SCHEMA,
+                1,
+                JsonValue::Array(
+                    entries
+                        .iter()
+                        .map(|item| item.payload.value.clone())
+                        .collect(),
+                ),
+            ),
+            Self::KeyedMap { key_field } => {
+                let mut map = serde_json::Map::new();
+                for entry in entries {
+                    let key = match key_field {
+                        WorkflowBagKeyField::ProducerStepId => entry.producer_step_id.to_string(),
+                        WorkflowBagKeyField::ProducerStepName => step_names
+                            .get(&entry.producer_step_id)
+                            .cloned()
+                            .unwrap_or_else(|| entry.producer_step_id.to_string()),
+                        WorkflowBagKeyField::OutputName => entry.output_name.clone(),
+                    };
+                    map.insert(key, entry.payload.value.clone());
+                }
+                WorkflowDataValue::new(WORKFLOW_KEYED_MAP_SCHEMA, 1, JsonValue::Object(map))
+            }
+            Self::ReduceFunction { function } => match function {
+                WorkflowReduceFunction::ConcatTextNewline => {
+                    let mut chunks = Vec::with_capacity(entries.len());
+                    for entry in entries {
+                        match &entry.payload.value {
+                            JsonValue::String(text) => chunks.push(text.clone()),
+                            other => {
+                                return Err(WorkflowError::InvalidReducer(format!(
+                                    "concat_text_newline requires string payloads, got {}",
+                                    canonical_json(other)
+                                )));
+                            }
+                        }
+                    }
+                    WorkflowDataValue::new(
+                        WORKFLOW_REDUCED_TEXT_SCHEMA,
+                        1,
+                        JsonValue::String(chunks.join("\n")),
+                    )
+                }
+            },
+        }
+    }
+}

@@ -5,11 +5,41 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use signal_hook::consts::SIGINT;
 use signal_hook::iterator::Signals;
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
+use std::sync::Arc;
 mod raw_mode;
 use raw_mode::*;
 
 impl OpenCodeAdapter {
+    pub(super) fn no_progress_timeout(&self) -> Option<Duration> {
+        let timeout = self.config.base.timeout;
+        if timeout.is_zero() {
+            return None;
+        }
+
+        if let Some(raw) = self
+            .config
+            .base
+            .env
+            .get("HIVEMIND_RUNTIME_NO_PROGRESS_TIMEOUT_MS")
+            .map(String::as_str)
+        {
+            let trimmed = raw.trim();
+            if trimmed == "0" {
+                return None;
+            }
+            if let Ok(ms) = trimmed.parse::<u64>() {
+                return Some(Duration::from_millis(ms));
+            }
+        }
+
+        Some(std::cmp::min(
+            Duration::from_secs(45),
+            std::cmp::max(Duration::from_secs(5), timeout / 4),
+        ))
+    }
+
     #[allow(clippy::too_many_lines)]
     pub fn execute_interactive<F>(
         &mut self,
@@ -21,6 +51,11 @@ impl OpenCodeAdapter {
     {
         enum Msg {
             Output(String),
+            FilesystemProgress {
+                created: Vec<PathBuf>,
+                modified: Vec<PathBuf>,
+                deleted: Vec<PathBuf>,
+            },
             Interrupt,
             Exit(portable_pty::ExitStatus),
             OutputDone,
@@ -33,6 +68,7 @@ impl OpenCodeAdapter {
 
         let start = Instant::now();
         let timeout = self.config.base.timeout;
+        let no_progress_timeout = self.no_progress_timeout();
         let formatted_input = self.format_input(input);
 
         let pty_system = native_pty_system();
@@ -151,6 +187,30 @@ impl OpenCodeAdapter {
             let _ = output_tx.send(Msg::OutputDone);
         });
 
+        let filesystem_tx = tx.clone();
+        let filesystem_worktree = worktree.clone();
+        let stop_filesystem_poll = Arc::new(AtomicBool::new(false));
+        let filesystem_stop_flag = Arc::clone(&stop_filesystem_poll);
+        let filesystem_handle = std::thread::spawn(move || {
+            let mut previous = OpenCodeAdapter::capture_worktree_state(&filesystem_worktree);
+            while !filesystem_stop_flag.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_secs(1));
+                let current = OpenCodeAdapter::capture_worktree_state(&filesystem_worktree);
+                let delta = OpenCodeAdapter::diff_worktree_state(&previous, &current);
+                if !delta.created.is_empty()
+                    || !delta.modified.is_empty()
+                    || !delta.deleted.is_empty()
+                {
+                    let _ = filesystem_tx.send(Msg::FilesystemProgress {
+                        created: delta.created,
+                        modified: delta.modified,
+                        deleted: delta.deleted,
+                    });
+                }
+                previous = current;
+            }
+        });
+
         let mut killer = child.clone_killer();
         let wait_tx = tx.clone();
         let mut wait_child = child;
@@ -180,6 +240,7 @@ impl OpenCodeAdapter {
         let mut stdout = String::new();
         let mut exit_status: Option<portable_pty::ExitStatus> = None;
         let mut output_done = false;
+        let mut last_progress_at = Instant::now();
 
         let mut input_line = String::new();
         let mut grace_deadline: Option<Instant> = None;
@@ -187,6 +248,14 @@ impl OpenCodeAdapter {
         loop {
             if terminated_reason.is_none() && start.elapsed() > timeout {
                 terminated_reason = Some("timeout".to_string());
+                grace_deadline = Some(Instant::now() + Duration::from_millis(200));
+                let _ = writer.write_all(b"\x03");
+                let _ = writer.flush();
+            }
+            if terminated_reason.is_none()
+                && no_progress_timeout.is_some_and(|limit| last_progress_at.elapsed() > limit)
+            {
+                terminated_reason = Some("no_observable_progress_timeout".to_string());
                 grace_deadline = Some(Instant::now() + Duration::from_millis(200));
                 let _ = writer.write_all(b"\x03");
                 let _ = writer.flush();
@@ -201,10 +270,24 @@ impl OpenCodeAdapter {
             while let Ok(msg) = rx.try_recv() {
                 match msg {
                     Msg::Output(chunk) => {
+                        last_progress_at = Instant::now();
                         stdout.push_str(&chunk);
                         on_event(InteractiveAdapterEvent::Output { content: chunk }).map_err(
                             |e| RuntimeError::new("interactive_callback_failed", e, false),
                         )?;
+                    }
+                    Msg::FilesystemProgress {
+                        created,
+                        modified,
+                        deleted,
+                    } => {
+                        last_progress_at = Instant::now();
+                        on_event(InteractiveAdapterEvent::FilesystemObserved {
+                            files_created: created,
+                            files_modified: modified,
+                            files_deleted: deleted,
+                        })
+                        .map_err(|e| RuntimeError::new("interactive_callback_failed", e, false))?;
                     }
                     Msg::Interrupt => {
                         if terminated_reason.is_none() {
@@ -332,7 +415,9 @@ impl OpenCodeAdapter {
             }
         }
 
+        stop_filesystem_poll.store(true, Ordering::Relaxed);
         let _ = output_handle.join();
+        let _ = filesystem_handle.join();
         let _ = wait_handle.join();
 
         let exit_code = exit_status
@@ -340,7 +425,31 @@ impl OpenCodeAdapter {
             .map_or(-1, |s| i32::try_from(s.exit_code()).unwrap_or(-1));
         let duration = start.elapsed();
 
-        let report = if exit_code == 0 {
+        let report = if let Some(reason) = terminated_reason.as_deref() {
+            let failure_exit_code = if exit_code == 0 { -1 } else { exit_code };
+            let error = match reason {
+                "timeout" => RuntimeError::timeout(duration),
+                "no_observable_progress_timeout" => RuntimeError::new(
+                    "no_observable_progress_timeout",
+                    format!(
+                        "Runtime produced no observable progress for {:?}",
+                        no_progress_timeout.unwrap_or(duration)
+                    ),
+                    true,
+                ),
+                "interrupted" => {
+                    RuntimeError::new("interrupted", "Runtime execution was interrupted", true)
+                }
+                other => RuntimeError::new(other, format!("Runtime terminated: {other}"), true),
+            };
+            ExecutionReport::failure_with_output(
+                failure_exit_code,
+                duration,
+                error,
+                stdout,
+                String::new(),
+            )
+        } else if exit_code == 0 {
             ExecutionReport::success(duration, stdout, String::new())
         } else {
             ExecutionReport {

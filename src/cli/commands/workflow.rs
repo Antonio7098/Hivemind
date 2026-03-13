@@ -48,6 +48,12 @@ pub struct WorkflowStepAddArgs {
     pub description: Option<String>,
     #[arg(long = "depends-on")]
     pub depends_on: Vec<String>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub input_bindings_json: Option<String>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub output_bindings_json: Option<String>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub context_patches_json: Option<String>,
 }
 
 #[derive(Args)]
@@ -64,6 +70,12 @@ pub struct WorkflowInspectArgs {
 #[derive(Args)]
 pub struct WorkflowRunCreateArgs {
     pub workflow_id: String,
+    #[arg(long)]
+    pub context_schema: Option<String>,
+    #[arg(long)]
+    pub context_schema_version: Option<u32>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub context_inputs_json: Option<String>,
 }
 
 #[derive(Args)]

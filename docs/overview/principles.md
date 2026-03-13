@@ -49,6 +49,7 @@ Correctness matters more than novelty.
 * Explicit rules over implicit behavior
 * Bounded retries over infinite loops
 * Safe defaults over permissive ones
+* Workflow and attempt data exchange remains typed, hashed, and attributable
 
 A boring system that works is better than a clever system that surprises.
 

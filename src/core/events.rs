@@ -10,7 +10,10 @@ use crate::core::flow::{RetryMode, RunMode, TaskExecState};
 use crate::core::graph::GraphTask;
 use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::verification::CheckConfig;
-use crate::core::workflow::{WorkflowDefinition, WorkflowRun, WorkflowStepState};
+use crate::core::workflow::{
+    WorkflowContextSnapshot, WorkflowContextState, WorkflowDefinition, WorkflowOutputBagEntry,
+    WorkflowRun, WorkflowStepContextSnapshot, WorkflowStepState,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -33,8 +36,9 @@ mod tests {
     use super::*;
     use crate::core::flow::RetryMode;
     use crate::core::workflow::{
-        WorkflowDefinition, WorkflowRun, WorkflowStepDefinition, WorkflowStepKind,
-        WorkflowStepState,
+        WorkflowContextSnapshot, WorkflowContextState, WorkflowDataValue, WorkflowDefinition,
+        WorkflowOutputBagEntry, WorkflowRun, WorkflowStepContextSnapshot, WorkflowStepDefinition,
+        WorkflowStepKind, WorkflowStepState,
     };
 
     #[test]
@@ -123,6 +127,57 @@ mod tests {
         definition.add_step(step);
         let run = WorkflowRun::new_root(&definition);
         let step_run_id = run.step_runs.get(&step_id).unwrap().id;
+        let context = WorkflowContextState::initialize(
+            "test_context".to_string(),
+            1,
+            BTreeMap::from([(
+                "goal".to_string(),
+                WorkflowDataValue::new(
+                    "text/plain",
+                    1,
+                    serde_json::Value::String("demo".to_string()),
+                )
+                .unwrap(),
+            )]),
+            Utc::now(),
+            "test_init",
+        );
+        let snapshot = WorkflowContextSnapshot::new(
+            2,
+            context.current_snapshot.values.clone(),
+            "test_snapshot",
+            Some(step_id),
+            Some(step_run_id),
+            Utc::now(),
+        );
+        let step_snapshot = WorkflowStepContextSnapshot::new(
+            run.id,
+            step_id,
+            step_run_id,
+            context.current_snapshot.snapshot_hash.clone(),
+            run.output_bag.bag_hash.clone(),
+            context.current_snapshot.values.clone(),
+            Vec::new(),
+            Utc::now(),
+        );
+        let entry = WorkflowOutputBagEntry {
+            entry_id: Uuid::new_v4(),
+            workflow_run_id: run.id,
+            producer_step_id: step_id,
+            producer_step_run_id: step_run_id,
+            branch_step_id: Some(step_id),
+            join_step_id: None,
+            output_name: "result".to_string(),
+            tags: vec!["test".to_string()],
+            payload: WorkflowDataValue::new(
+                "text/plain",
+                1,
+                serde_json::Value::String("ok".to_string()),
+            )
+            .unwrap(),
+            event_sequence: 1,
+            appended_at: Utc::now(),
+        };
 
         let payloads = vec![
             EventPayload::WorkflowDefinitionCreated {
@@ -148,6 +203,26 @@ mod tests {
                 workflow_run_id: run.id,
                 reason: Some("manual".to_string()),
                 forced: true,
+            },
+            EventPayload::WorkflowContextInitialized {
+                workflow_run_id: run.id,
+                context,
+            },
+            EventPayload::WorkflowContextSnapshotCaptured {
+                workflow_run_id: run.id,
+                snapshot,
+            },
+            EventPayload::WorkflowStepInputsResolved {
+                workflow_run_id: run.id,
+                step_id,
+                step_run_id,
+                snapshot: step_snapshot,
+            },
+            EventPayload::WorkflowOutputAppended {
+                workflow_run_id: run.id,
+                step_id,
+                step_run_id,
+                entry,
             },
             EventPayload::WorkflowStepStateChanged {
                 workflow_run_id: run.id,

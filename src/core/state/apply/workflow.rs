@@ -1,5 +1,8 @@
 use super::*;
-use crate::core::workflow::{WorkflowRunState, WorkflowStepState};
+use crate::core::workflow::{
+    WorkflowContextSnapshot, WorkflowContextState, WorkflowOutputBagEntry, WorkflowRunState,
+    WorkflowStepContextSnapshot, WorkflowStepState,
+};
 
 impl AppState {
     pub(super) fn apply_workflow_event(
@@ -34,6 +37,42 @@ impl AppState {
                 reason,
                 ..
             } => self.apply_run_abort(workflow_run_id, reason.as_ref(), timestamp),
+            EventPayload::WorkflowContextInitialized {
+                workflow_run_id,
+                context,
+            } => self.apply_workflow_context_initialization(
+                workflow_run_id,
+                context.clone(),
+                timestamp,
+            ),
+            EventPayload::WorkflowContextSnapshotCaptured {
+                workflow_run_id,
+                snapshot,
+            } => self.apply_workflow_context_snapshot(workflow_run_id, snapshot.clone(), timestamp),
+            EventPayload::WorkflowStepInputsResolved {
+                workflow_run_id,
+                step_id,
+                step_run_id,
+                snapshot,
+            } => self.apply_step_inputs_resolved(
+                workflow_run_id,
+                step_id,
+                step_run_id,
+                snapshot.clone(),
+                timestamp,
+            ),
+            EventPayload::WorkflowOutputAppended {
+                workflow_run_id,
+                step_id,
+                step_run_id,
+                entry,
+            } => self.apply_workflow_output_append(
+                workflow_run_id,
+                step_id,
+                step_run_id,
+                entry.clone(),
+                timestamp,
+            ),
             EventPayload::WorkflowStepStateChanged {
                 workflow_run_id,
                 step_id,
@@ -147,6 +186,93 @@ impl AppState {
         step_run.state = state;
         step_run.reason.clone_from(&reason.cloned());
         step_run.updated_at = timestamp;
+        run.updated_at = timestamp;
+        true
+    }
+
+    fn apply_workflow_context_initialization(
+        &mut self,
+        workflow_run_id: &Uuid,
+        context: WorkflowContextState,
+        timestamp: DateTime<Utc>,
+    ) -> bool {
+        let Some(run) = self.workflow_runs.get_mut(workflow_run_id) else {
+            return false;
+        };
+        run.context = context;
+        run.updated_at = timestamp;
+        true
+    }
+
+    fn apply_workflow_context_snapshot(
+        &mut self,
+        workflow_run_id: &Uuid,
+        snapshot: WorkflowContextSnapshot,
+        timestamp: DateTime<Utc>,
+    ) -> bool {
+        let Some(run) = self.workflow_runs.get_mut(workflow_run_id) else {
+            return false;
+        };
+        if let Some(existing) = run
+            .context
+            .snapshots
+            .iter_mut()
+            .find(|item| item.revision == snapshot.revision)
+        {
+            *existing = snapshot.clone();
+        } else {
+            run.context.snapshots.push(snapshot.clone());
+            run.context.snapshots.sort_by(|a, b| {
+                a.revision
+                    .cmp(&b.revision)
+                    .then_with(|| a.created_at.cmp(&b.created_at))
+            });
+        }
+        run.context.current_snapshot = snapshot;
+        run.updated_at = timestamp;
+        true
+    }
+
+    fn apply_step_inputs_resolved(
+        &mut self,
+        workflow_run_id: &Uuid,
+        step_id: &Uuid,
+        step_run_id: &Uuid,
+        snapshot: WorkflowStepContextSnapshot,
+        timestamp: DateTime<Utc>,
+    ) -> bool {
+        let Some(run) = self.workflow_runs.get_mut(workflow_run_id) else {
+            return false;
+        };
+        let Some(step_run) = run.step_runs.get(step_id) else {
+            return false;
+        };
+        if step_run.id != *step_run_id {
+            return false;
+        }
+        run.step_contexts.insert(*step_id, snapshot);
+        run.updated_at = timestamp;
+        true
+    }
+
+    fn apply_workflow_output_append(
+        &mut self,
+        workflow_run_id: &Uuid,
+        step_id: &Uuid,
+        step_run_id: &Uuid,
+        entry: WorkflowOutputBagEntry,
+        timestamp: DateTime<Utc>,
+    ) -> bool {
+        let Some(run) = self.workflow_runs.get_mut(workflow_run_id) else {
+            return false;
+        };
+        let Some(step_run) = run.step_runs.get(step_id) else {
+            return false;
+        };
+        if step_run.id != *step_run_id {
+            return false;
+        }
+        run.output_bag = run.output_bag.append(entry);
         run.updated_at = timestamp;
         true
     }
