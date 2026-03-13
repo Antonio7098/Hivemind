@@ -11,8 +11,9 @@ use crate::core::graph::GraphTask;
 use crate::core::scope::{RepoAccessMode, Scope};
 use crate::core::verification::CheckConfig;
 use crate::core::workflow::{
-    WorkflowContextSnapshot, WorkflowContextState, WorkflowDefinition, WorkflowOutputBagEntry,
-    WorkflowRun, WorkflowStepContextSnapshot, WorkflowStepState,
+    WorkflowContextSnapshot, WorkflowContextState, WorkflowDataValue, WorkflowDefinition,
+    WorkflowOutputBagEntry, WorkflowRun, WorkflowSignal, WorkflowStepContextSnapshot,
+    WorkflowStepState, WorkflowWaitStatus,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -37,8 +38,9 @@ mod tests {
     use crate::core::flow::RetryMode;
     use crate::core::workflow::{
         WorkflowContextSnapshot, WorkflowContextState, WorkflowDataValue, WorkflowDefinition,
-        WorkflowOutputBagEntry, WorkflowRun, WorkflowStepContextSnapshot, WorkflowStepDefinition,
-        WorkflowStepKind, WorkflowStepState,
+        WorkflowOutputBagEntry, WorkflowRun, WorkflowSignal, WorkflowStepContextSnapshot,
+        WorkflowStepDefinition, WorkflowStepKind, WorkflowStepState, WorkflowWaitCondition,
+        WorkflowWaitStatus,
     };
 
     #[test]
@@ -182,6 +184,49 @@ mod tests {
         let payloads = vec![
             EventPayload::WorkflowDefinitionCreated {
                 definition: definition.clone(),
+            },
+            EventPayload::WorkflowConditionEvaluated {
+                workflow_run_id: run.id,
+                step_id,
+                step_run_id,
+                inputs: BTreeMap::new(),
+                result: true,
+                chosen_path: Some("yes".to_string()),
+            },
+            EventPayload::WorkflowWaitActivated {
+                workflow_run_id: run.id,
+                step_id,
+                step_run_id,
+                wait_status: WorkflowWaitCondition::Signal {
+                    signal_name: "resume".to_string(),
+                    payload_schema: Some("text/plain".to_string()),
+                    payload_schema_version: Some(1),
+                }
+                .to_wait_status(Utc::now()),
+            },
+            EventPayload::WorkflowWaitCompleted {
+                workflow_run_id: run.id,
+                step_id,
+                step_run_id,
+                wait_status: WorkflowWaitStatus {
+                    condition: WorkflowWaitCondition::Timer { duration_secs: 1 },
+                    activated_at: Utc::now(),
+                    resume_at: Some(Utc::now()),
+                    completed_at: Some(Utc::now()),
+                    completion_reason: Some("timer_elapsed".to_string()),
+                    signal: None,
+                },
+            },
+            EventPayload::WorkflowSignalReceived {
+                workflow_run_id: run.id,
+                signal: WorkflowSignal {
+                    signal_name: "resume".to_string(),
+                    idempotency_key: "key-1".to_string(),
+                    payload: None,
+                    step_id: Some(step_id),
+                    emitted_at: Utc::now(),
+                    emitted_by: "test".to_string(),
+                },
             },
             EventPayload::WorkflowDefinitionUpdated {
                 definition: definition.clone(),

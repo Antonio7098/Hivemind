@@ -5,8 +5,9 @@ use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::error::ExitCode;
 use crate::core::registry::Registry;
 use crate::core::workflow::{
-    WorkflowContextPatchBinding, WorkflowDataValue, WorkflowDefinition, WorkflowRun,
-    WorkflowStepInputBinding, WorkflowStepKind, WorkflowStepOutputBinding, WorkflowStepState,
+    WorkflowConditionalConfig, WorkflowContextPatchBinding, WorkflowDataValue, WorkflowDefinition,
+    WorkflowRun, WorkflowStepInputBinding, WorkflowStepKind, WorkflowStepOutputBinding,
+    WorkflowStepState, WorkflowWaitConfig,
 };
 use std::collections::BTreeMap;
 
@@ -280,6 +281,22 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
                 Err(code) => return code,
             },
             args.child_workflow_id.as_deref(),
+            match parse_json_arg::<Option<WorkflowConditionalConfig>>(
+                args.conditional_json.as_deref(),
+                "conditional_json",
+                format,
+            ) {
+                Ok(value) => value,
+                Err(code) => return code,
+            },
+            match parse_json_arg::<Option<WorkflowWaitConfig>>(
+                args.wait_json.as_deref(),
+                "wait_json",
+                format,
+            ) {
+                Ok(value) => value,
+                Err(code) => return code,
+            },
         ) {
             Ok(workflow) => render_workflow(workflow, format),
             Err(err) => output_error(&err, format),
@@ -356,6 +373,27 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
             Ok(run) => output_workflow_run_id(run.id, format),
             Err(err) => output_error(&err, format),
         },
+        WorkflowCommands::Signal(args) => {
+            let payload = match parse_json_arg::<Option<WorkflowDataValue>>(
+                args.payload_json.as_deref(),
+                "payload_json",
+                format,
+            ) {
+                Ok(value) => value,
+                Err(code) => return code,
+            };
+            match registry.signal_workflow_run(
+                &args.workflow_run_id,
+                &args.signal_name,
+                &args.idempotency_key,
+                payload,
+                args.step_id.as_deref(),
+                &args.emitted_by,
+            ) {
+                Ok(run) => render_workflow_run(&registry, run, format),
+                Err(err) => output_error(&err, format),
+            }
+        }
         WorkflowCommands::Abort(args) => {
             match registry.abort_workflow_run(
                 &args.workflow_run_id,

@@ -72,6 +72,10 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
 
         EventPayload::WorkflowDefinitionCreated { .. }
         | EventPayload::WorkflowDefinitionUpdated { .. }
+        | EventPayload::WorkflowConditionEvaluated { .. }
+        | EventPayload::WorkflowWaitActivated { .. }
+        | EventPayload::WorkflowWaitCompleted { .. }
+        | EventPayload::WorkflowSignalReceived { .. }
         | EventPayload::WorkflowRunCreated { .. }
         | EventPayload::WorkflowRunStarted { .. }
         | EventPayload::WorkflowRunPaused { .. }

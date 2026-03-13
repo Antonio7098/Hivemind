@@ -6,7 +6,7 @@ order: 8
 
 # Workflow Foundation
 
-This document describes the Phase 5 workflow domain introduced in Sprint 64, extended in Sprint 65 with a flat execution bridge, extended in Sprint 66 with a deterministic workflow data plane, and extended in Sprint 67 with explicit nested child workflows and lineage.
+This document describes the Phase 5 workflow domain introduced in Sprint 64, extended in Sprint 65 with a flat execution bridge, extended in Sprint 66 with a deterministic workflow data plane, extended in Sprint 67 with explicit nested child workflows and lineage, and extended in Sprint 68 with typed control-flow and workflow signals.
 
 ## Purpose
 
@@ -47,11 +47,19 @@ Sprint 67 adds these guarantees:
 - child to parent output transfer is explicit through workflow-step output bindings and context patches that reference declared child context keys
 - parent `workflow status` output includes child run summaries so nested execution can be inspected without reconstructing raw events manually
 
+Sprint 68 adds these guarantees:
+
+- `conditional` steps evaluate only typed workflow context values or explicit bag reductions
+- condition results are evented with attributable inputs and chosen branch names
+- `wait` steps enter a durable waiting state with explicit activation metadata rather than hidden scheduler sleep
+- workflow signals are append-only, idempotent by explicit key, and queryable on the workflow run
+- wait completion by signal or timer is evented and replay-safe
+- workflow pause/resume/abort operations recurse through child workflow subtrees explicitly
+
 ## Explicit Non-Goals
 
 The current implementation still does **not** add:
 
-- signal/wait orchestration
 - workflow-native runtime/worktree/merge ownership without the synthetic flow bridge
 - a dedicated workflow-native retry command
 
@@ -63,6 +71,10 @@ The initial workflow event family includes:
 
 - `WorkflowDefinitionCreated`
 - `WorkflowDefinitionUpdated`
+- `WorkflowConditionEvaluated`
+- `WorkflowWaitActivated`
+- `WorkflowWaitCompleted`
+- `WorkflowSignalReceived`
 - `WorkflowRunCreated`
 - `WorkflowRunStarted`
 - `WorkflowRunPaused`
@@ -83,7 +95,7 @@ Sprint 65 exposes a usable workflow-facing control surface:
 
 - CLI:
   - `hivemind workflow create|update|step-add|list|inspect`
-  - `hivemind workflow run-create|run-list|status|start|tick|complete|pause|resume|abort|step-set-state`
+  - `hivemind workflow run-create|run-list|status|start|tick|complete|pause|resume|signal|abort|step-set-state`
 - API:
   - `/api/workflows`
   - `/api/workflows/inspect`
@@ -98,6 +110,7 @@ Sprint 65 exposes a usable workflow-facing control surface:
   - `/api/workflow-runs/complete`
   - `/api/workflow-runs/pause`
   - `/api/workflow-runs/resume`
+  - `/api/workflow-runs/signal`
   - `/api/workflow-runs/abort`
   - `/api/workflow-runs/steps/state`
 
@@ -191,6 +204,12 @@ During debugging, operators should inspect three surfaces together:
 - attempt context inspection for workflow-backed attempts to confirm the immutable attempt manifest includes the expected workflow hashes
 
 If a join step fails, inspect the reducer error together with the bag entry list. The system is designed to fail explicitly on duplicate single-producer expectations and schema mismatches rather than silently choosing a winner.
+
+If a wait step appears stuck, inspect:
+
+- `workflow status` for the current `wait_status` and recorded `signals`
+- `events list --workflow-run <run-id>` for `workflow_wait_activated`, `workflow_signal_received`, and `workflow_wait_completed`
+- the signal idempotency key to confirm whether the signal was rejected as a duplicate or simply targeted at a different step
 
 ## Design Constraint
 

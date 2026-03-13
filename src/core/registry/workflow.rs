@@ -6,8 +6,10 @@ use crate::core::registry::shared_prelude::*;
 use crate::core::registry::shared_types::AttemptContextWorkflowManifest;
 use crate::core::registry::Registry;
 use crate::core::workflow::{
-    WorkflowChildConfig, WorkflowChildTerminalBehavior, WorkflowDefinition, WorkflowRun,
-    WorkflowRunState, WorkflowStepDefinition, WorkflowStepKind, WorkflowStepState,
+    WorkflowChildConfig, WorkflowChildTerminalBehavior, WorkflowConditionExpression,
+    WorkflowConditionalBranch, WorkflowConditionalConfig, WorkflowDefinition, WorkflowRun,
+    WorkflowRunState, WorkflowSignal, WorkflowStepDefinition, WorkflowStepKind, WorkflowStepState,
+    WorkflowWaitCondition, WorkflowWaitConfig, WorkflowWaitStatus,
 };
 use crate::core::{
     flow::{FlowState, TaskExecState, TaskFlow},
@@ -271,6 +273,8 @@ impl Registry {
         output_bindings: Vec<WorkflowStepOutputBinding>,
         context_patches: Vec<WorkflowContextPatchBinding>,
         child_workflow_id: Option<&str>,
+        conditional: Option<WorkflowConditionalConfig>,
+        wait: Option<WorkflowWaitConfig>,
     ) -> Result<WorkflowDefinition> {
         let workflow = self
             .get_workflow(workflow_id_or_name)
@@ -349,6 +353,12 @@ impl Registry {
             child_workflow_id,
             "registry:workflow_add_step",
         )?;
+        let conditional = Self::normalize_workflow_conditional_config(
+            kind,
+            conditional,
+            "registry:workflow_add_step",
+        )?;
+        let wait = Self::normalize_workflow_wait_config(kind, wait, "registry:workflow_add_step")?;
 
         let mut step = WorkflowStepDefinition::new(step_name, kind);
         step.description = description.map(str::to_string);
@@ -357,6 +367,8 @@ impl Registry {
         step.output_bindings = output_bindings;
         step.context_patches = context_patches;
         step.child_workflow = child_workflow;
+        step.conditional = conditional;
+        step.wait = wait;
 
         let mut updated = workflow.clone();
         updated.add_step(step);
@@ -420,6 +432,232 @@ impl Registry {
             workflow_id: child.id,
             failure_policy: Default::default(),
         }))
+    }
+
+    fn normalize_selector(
+        selector: WorkflowBagSelector,
+        origin: &'static str,
+    ) -> Result<WorkflowBagSelector> {
+        let output_name = selector.output_name.trim().to_string();
+        if output_name.is_empty() {
+            return Err(HivemindError::user(
+                "invalid_workflow_output_selector",
+                "Workflow bag selector output_name cannot be empty",
+                origin,
+            ));
+        }
+        if selector.expected_schema_version == Some(0) {
+            return Err(HivemindError::user(
+                "invalid_workflow_output_selector_schema_version",
+                "Workflow bag selector expected_schema_version must be >= 1",
+                origin,
+            ));
+        }
+        Ok(WorkflowBagSelector {
+            output_name,
+            producer_step_ids: selector.producer_step_ids,
+            tags: selector.tags,
+            expected_schema: selector
+                .expected_schema
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
+            expected_schema_version: selector.expected_schema_version,
+        })
+    }
+
+    fn normalize_workflow_conditional_config(
+        kind: WorkflowStepKind,
+        conditional: Option<WorkflowConditionalConfig>,
+        origin: &'static str,
+    ) -> Result<Option<WorkflowConditionalConfig>> {
+        let Some(conditional) = conditional else {
+            if kind == WorkflowStepKind::Conditional {
+                return Err(HivemindError::user(
+                    "workflow_conditional_config_required",
+                    "Conditional steps require explicit conditional config",
+                    origin,
+                ));
+            }
+            return Ok(None);
+        };
+        if kind != WorkflowStepKind::Conditional {
+            return Err(HivemindError::user(
+                "workflow_conditional_config_invalid_kind",
+                "Conditional config is allowed only on conditional steps",
+                origin,
+            ));
+        }
+        if conditional.branches.is_empty() {
+            return Err(HivemindError::user(
+                "workflow_conditional_branch_required",
+                "Conditional steps require at least one branch",
+                origin,
+            ));
+        }
+        let mut names = BTreeSet::new();
+        let mut branches = Vec::with_capacity(conditional.branches.len());
+        for branch in conditional.branches {
+            let name = branch.name.trim().to_string();
+            if name.is_empty() {
+                return Err(HivemindError::user(
+                    "workflow_conditional_branch_invalid",
+                    "Conditional branch name cannot be empty",
+                    origin,
+                ));
+            }
+            if !names.insert(name.clone()) {
+                return Err(HivemindError::user(
+                    "workflow_conditional_branch_duplicate",
+                    format!("Conditional branch '{name}' is duplicated"),
+                    origin,
+                ));
+            }
+            let condition = match branch.condition {
+                WorkflowConditionExpression::ContextKeyExists { key } => {
+                    let key = key.trim().to_string();
+                    if key.is_empty() {
+                        return Err(HivemindError::user(
+                            "workflow_condition_invalid_key",
+                            "Conditional context key cannot be empty",
+                            origin,
+                        ));
+                    }
+                    WorkflowConditionExpression::ContextKeyExists { key }
+                }
+                WorkflowConditionExpression::ContextValueEquals { key, value } => {
+                    let key = key.trim().to_string();
+                    if key.is_empty() {
+                        return Err(HivemindError::user(
+                            "workflow_condition_invalid_key",
+                            "Conditional context key cannot be empty",
+                            origin,
+                        ));
+                    }
+                    WorkflowConditionExpression::ContextValueEquals {
+                        key,
+                        value: Self::normalize_workflow_value(value, origin)?,
+                    }
+                }
+                WorkflowConditionExpression::BagCountAtLeast { selector, count } => {
+                    if count == 0 {
+                        return Err(HivemindError::user(
+                            "workflow_condition_invalid_count",
+                            "Conditional bag count must be >= 1",
+                            origin,
+                        ));
+                    }
+                    WorkflowConditionExpression::BagCountAtLeast {
+                        selector: Self::normalize_selector(selector, origin)?,
+                        count,
+                    }
+                }
+                WorkflowConditionExpression::BagValueEquals {
+                    selector,
+                    reducer,
+                    value,
+                } => WorkflowConditionExpression::BagValueEquals {
+                    selector: Self::normalize_selector(selector, origin)?,
+                    reducer,
+                    value: Self::normalize_workflow_value(value, origin)?,
+                },
+            };
+            branches.push(WorkflowConditionalBranch {
+                name,
+                condition,
+                activate_step_ids: branch.activate_step_ids,
+            });
+        }
+        let default_branch = conditional
+            .default_branch
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        if let Some(default_branch) = &default_branch {
+            if !names.contains(default_branch) {
+                return Err(HivemindError::user(
+                    "workflow_conditional_default_branch_unknown",
+                    format!("Default branch '{default_branch}' does not exist"),
+                    origin,
+                ));
+            }
+        }
+        Ok(Some(WorkflowConditionalConfig {
+            branches,
+            default_branch,
+        }))
+    }
+
+    fn normalize_workflow_wait_config(
+        kind: WorkflowStepKind,
+        wait: Option<WorkflowWaitConfig>,
+        origin: &'static str,
+    ) -> Result<Option<WorkflowWaitConfig>> {
+        let Some(wait) = wait else {
+            if kind == WorkflowStepKind::Wait {
+                return Err(HivemindError::user(
+                    "workflow_wait_config_required",
+                    "Wait steps require explicit wait config",
+                    origin,
+                ));
+            }
+            return Ok(None);
+        };
+        if kind != WorkflowStepKind::Wait {
+            return Err(HivemindError::user(
+                "workflow_wait_config_invalid_kind",
+                "Wait config is allowed only on wait steps",
+                origin,
+            ));
+        }
+        let condition = match wait.condition {
+            WorkflowWaitCondition::Signal {
+                signal_name,
+                payload_schema,
+                payload_schema_version,
+            } => {
+                let signal_name = signal_name.trim().to_string();
+                if signal_name.is_empty() {
+                    return Err(HivemindError::user(
+                        "workflow_signal_name_invalid",
+                        "Signal wait requires a non-empty signal name",
+                        origin,
+                    ));
+                }
+                if payload_schema_version == Some(0) {
+                    return Err(HivemindError::user(
+                        "workflow_signal_schema_version_invalid",
+                        "Signal payload schema version must be >= 1",
+                        origin,
+                    ));
+                }
+                WorkflowWaitCondition::Signal {
+                    signal_name,
+                    payload_schema: payload_schema.filter(|value| !value.trim().is_empty()),
+                    payload_schema_version,
+                }
+            }
+            WorkflowWaitCondition::Timer { duration_secs } => {
+                if duration_secs == 0 {
+                    return Err(HivemindError::user(
+                        "workflow_wait_duration_invalid",
+                        "Timer waits require duration_secs >= 1",
+                        origin,
+                    ));
+                }
+                WorkflowWaitCondition::Timer { duration_secs }
+            }
+            WorkflowWaitCondition::HumanSignal { signal_name } => {
+                let signal_name = signal_name.trim().to_string();
+                if signal_name.is_empty() {
+                    return Err(HivemindError::user(
+                        "workflow_signal_name_invalid",
+                        "Human-signal wait requires a non-empty signal name",
+                        origin,
+                    ));
+                }
+                WorkflowWaitCondition::HumanSignal { signal_name }
+            }
+        };
+        Ok(Some(WorkflowWaitConfig { condition }))
     }
 
     pub fn list_workflows(
@@ -870,6 +1108,22 @@ impl Registry {
         self.transition_workflow_run(workflow_run_id, WorkflowRunState::Running, None, false)
     }
 
+    fn child_runs_for_parent(&self, workflow_run_id: Uuid) -> Result<Vec<WorkflowRun>> {
+        let mut children = self
+            .state()?
+            .workflow_runs
+            .values()
+            .filter(|run| run.parent_workflow_run_id == Some(workflow_run_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        children.sort_by(|a, b| {
+            a.created_at
+                .cmp(&b.created_at)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        Ok(children)
+    }
+
     pub fn tick_workflow_run(
         &self,
         workflow_run_id: &str,
@@ -898,12 +1152,24 @@ impl Registry {
             return self.complete_workflow_run(workflow_run_id);
         }
         let _ = self.apply_workflow_dependency_releases(workflow_run_id, &workflow)?;
+        self.process_ready_conditional_steps(
+            workflow_run_id,
+            &workflow,
+            "registry:tick_workflow_run",
+        )?;
+        self.process_wait_steps(workflow_run_id, &workflow, "registry:tick_workflow_run")?;
         let _ = self.process_workflow_child_steps(
             workflow_run_id,
             &workflow,
             "registry:tick_workflow_run",
         )?;
         let _ = self.apply_workflow_dependency_releases(workflow_run_id, &workflow)?;
+        self.process_ready_conditional_steps(
+            workflow_run_id,
+            &workflow,
+            "registry:tick_workflow_run",
+        )?;
+        self.process_wait_steps(workflow_run_id, &workflow, "registry:tick_workflow_run")?;
         run = self.get_workflow_run(workflow_run_id)?;
         let has_task_bridge_steps = workflow
             .steps
@@ -936,12 +1202,24 @@ impl Registry {
         let tick_result = self.tick_flow(&flow_id_str, interactive, max_parallel);
         let _ = self.sync_workflow_run_from_synthetic_flow(workflow_run_id, &workflow)?;
         let _ = self.apply_workflow_dependency_releases(workflow_run_id, &workflow)?;
+        self.process_ready_conditional_steps(
+            workflow_run_id,
+            &workflow,
+            "registry:tick_workflow_run",
+        )?;
+        self.process_wait_steps(workflow_run_id, &workflow, "registry:tick_workflow_run")?;
         let _ = self.process_workflow_child_steps(
             workflow_run_id,
             &workflow,
             "registry:tick_workflow_run",
         )?;
         self.process_ready_join_steps(workflow_run_id, &workflow, "registry:tick_workflow_run")?;
+        self.process_ready_conditional_steps(
+            workflow_run_id,
+            &workflow,
+            "registry:tick_workflow_run",
+        )?;
+        self.process_wait_steps(workflow_run_id, &workflow, "registry:tick_workflow_run")?;
         let synced = self.sync_workflow_run_from_synthetic_flow(workflow_run_id, &workflow)?;
         tick_result.map(|_| synced)
     }
@@ -984,7 +1262,14 @@ impl Registry {
                 }
             }
         }
-        self.transition_workflow_run(workflow_run_id, WorkflowRunState::Paused, None, false)
+        let paused =
+            self.transition_workflow_run(workflow_run_id, WorkflowRunState::Paused, None, false)?;
+        for child in self.child_runs_for_parent(paused.id)? {
+            if !child.state.is_terminal() && child.state != WorkflowRunState::Paused {
+                let _ = self.pause_workflow_run(&child.id.to_string())?;
+            }
+        }
+        Ok(paused)
     }
 
     pub fn resume_workflow_run(&self, workflow_run_id: &str) -> Result<WorkflowRun> {
@@ -1005,7 +1290,14 @@ impl Registry {
                 }
             }
         }
-        self.transition_workflow_run(workflow_run_id, WorkflowRunState::Running, None, false)
+        let resumed =
+            self.transition_workflow_run(workflow_run_id, WorkflowRunState::Running, None, false)?;
+        for child in self.child_runs_for_parent(resumed.id)? {
+            if child.state == WorkflowRunState::Paused {
+                let _ = self.resume_workflow_run(&child.id.to_string())?;
+            }
+        }
+        Ok(resumed)
     }
 
     pub fn abort_workflow_run(
@@ -1028,7 +1320,80 @@ impl Registry {
                 }
             }
         }
-        self.transition_workflow_run(workflow_run_id, WorkflowRunState::Aborted, reason, forced)
+        let aborted = self.transition_workflow_run(
+            workflow_run_id,
+            WorkflowRunState::Aborted,
+            reason,
+            forced,
+        )?;
+        for child in self.child_runs_for_parent(aborted.id)? {
+            if !child.state.is_terminal() {
+                let _ = self.abort_workflow_run(&child.id.to_string(), reason, forced)?;
+            }
+        }
+        Ok(aborted)
+    }
+
+    pub fn signal_workflow_run(
+        &self,
+        workflow_run_id: &str,
+        signal_name: &str,
+        idempotency_key: &str,
+        payload: Option<WorkflowDataValue>,
+        step_id: Option<&str>,
+        emitted_by: &str,
+    ) -> Result<WorkflowRun> {
+        let run = self.get_workflow_run(workflow_run_id)?;
+        let signal_name = signal_name.trim();
+        let idempotency_key = idempotency_key.trim();
+        if signal_name.is_empty() || idempotency_key.is_empty() {
+            return Err(HivemindError::user(
+                "workflow_signal_invalid",
+                "Signal name and idempotency key must be non-empty",
+                "registry:signal_workflow_run",
+            ));
+        }
+        if run
+            .signals
+            .iter()
+            .any(|signal| signal.idempotency_key == idempotency_key)
+        {
+            return Err(HivemindError::user(
+                "workflow_signal_duplicate",
+                format!("Signal idempotency key '{idempotency_key}' has already been used"),
+                "registry:signal_workflow_run",
+            ));
+        }
+        let step_uuid = step_id.map(Uuid::parse_str).transpose().map_err(|_| {
+            HivemindError::user(
+                "invalid_workflow_step_id",
+                "Signal step id must be a valid UUID",
+                "registry:signal_workflow_run",
+            )
+        })?;
+        let signal = WorkflowSignal {
+            signal_name: signal_name.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+            payload: payload
+                .map(|value| Self::normalize_workflow_value(value, "registry:signal_workflow_run"))
+                .transpose()?,
+            step_id: step_uuid,
+            emitted_at: Utc::now(),
+            emitted_by: emitted_by.to_string(),
+        };
+        self.append_event(
+            Event::new(
+                EventPayload::WorkflowSignalReceived {
+                    workflow_run_id: run.id,
+                    signal,
+                },
+                CorrelationIds::for_workflow_run(run.project_id, run.workflow_id, run.id),
+            ),
+            "registry:signal_workflow_run",
+        )?;
+        let workflow = self.get_workflow(&run.workflow_id.to_string())?;
+        self.process_wait_steps(workflow_run_id, &workflow, "registry:signal_workflow_run")?;
+        self.apply_workflow_dependency_releases(workflow_run_id, &workflow)
     }
 
     pub fn workflow_step_set_state(
@@ -1694,6 +2059,391 @@ impl Registry {
             })
     }
 
+    fn selected_entries_for_selector<'a>(
+        run: &'a WorkflowRun,
+        selector: &WorkflowBagSelector,
+    ) -> Vec<&'a WorkflowOutputBagEntry> {
+        run.output_bag
+            .entries
+            .iter()
+            .filter(|entry| entry.output_name == selector.output_name)
+            .filter(|entry| {
+                selector.producer_step_ids.is_empty()
+                    || selector.producer_step_ids.contains(&entry.producer_step_id)
+            })
+            .filter(|entry| {
+                selector.tags.is_empty()
+                    || selector
+                        .tags
+                        .iter()
+                        .all(|tag| entry.tags.iter().any(|item| item == tag))
+            })
+            .filter(|entry| {
+                selector
+                    .expected_schema
+                    .as_ref()
+                    .is_none_or(|schema| entry.payload.schema == *schema)
+            })
+            .filter(|entry| {
+                selector
+                    .expected_schema_version
+                    .is_none_or(|version| entry.payload.schema_version == version)
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn evaluate_condition_expression(
+        run: &WorkflowRun,
+        workflow: &WorkflowDefinition,
+        condition: &WorkflowConditionExpression,
+    ) -> Result<(bool, BTreeMap<String, WorkflowDataValue>)> {
+        let step_names = workflow
+            .steps
+            .values()
+            .map(|step| (step.id, step.name.clone()))
+            .collect::<BTreeMap<_, _>>();
+        match condition {
+            WorkflowConditionExpression::ContextKeyExists { key } => Ok((
+                run.context.current_snapshot.values.contains_key(key),
+                BTreeMap::from([(
+                    "context_value".to_string(),
+                    run.context
+                        .current_snapshot
+                        .values
+                        .get(key)
+                        .cloned()
+                        .unwrap_or_else(|| {
+                            WorkflowDataValue::new("application/null", 1, serde_json::Value::Null)
+                                .expect("static null value")
+                        }),
+                )]),
+            )),
+            WorkflowConditionExpression::ContextValueEquals { key, value } => Ok((
+                run.context.current_snapshot.values.get(key) == Some(value),
+                BTreeMap::from([("expected".to_string(), value.clone())]),
+            )),
+            WorkflowConditionExpression::BagCountAtLeast { selector, count } => {
+                let selected = Self::selected_entries_for_selector(run, selector);
+                Ok((
+                    selected.len() >= (*count as usize),
+                    BTreeMap::from([(
+                        "match_count".to_string(),
+                        WorkflowDataValue::new(
+                            "application/json",
+                            1,
+                            serde_json::json!(selected.len()),
+                        )
+                        .expect("static count value"),
+                    )]),
+                ))
+            }
+            WorkflowConditionExpression::BagValueEquals {
+                selector,
+                reducer,
+                value,
+            } => {
+                let selected = Self::selected_entries_for_selector(run, selector);
+                let selected = selected.into_iter().cloned().collect::<Vec<_>>();
+                let reduced = reducer
+                    .reduce(selector, &selected, &step_names)
+                    .map_err(|err| {
+                        HivemindError::user(
+                            "workflow_condition_invalid",
+                            err.to_string(),
+                            "registry:evaluate_condition_expression",
+                        )
+                    })?;
+                Ok((
+                    reduced == *value,
+                    BTreeMap::from([
+                        ("expected".to_string(), value.clone()),
+                        ("actual".to_string(), reduced),
+                    ]),
+                ))
+            }
+        }
+    }
+
+    fn skip_branch_subtree(
+        &self,
+        workflow_run_id: &str,
+        workflow: &WorkflowDefinition,
+        root_step_ids: &[Uuid],
+    ) -> Result<()> {
+        let mut queue = root_step_ids.to_vec();
+        let mut visited = BTreeSet::new();
+        while let Some(step_id) = queue.pop() {
+            if !visited.insert(step_id) {
+                continue;
+            }
+            let run = self.get_workflow_run(workflow_run_id)?;
+            let Some(step_run) = run.step_runs.get(&step_id) else {
+                continue;
+            };
+            if matches!(
+                step_run.state,
+                WorkflowStepState::Pending | WorkflowStepState::Ready
+            ) {
+                let _ = self.workflow_step_set_state(
+                    workflow_run_id,
+                    &step_id.to_string(),
+                    WorkflowStepState::Skipped,
+                    Some("conditional_branch_not_selected"),
+                )?;
+            }
+            for child in workflow.steps.values().filter(|candidate| {
+                candidate.depends_on.contains(&step_id)
+                    && candidate.kind != WorkflowStepKind::Workflow
+            }) {
+                queue.push(child.id);
+            }
+        }
+        Ok(())
+    }
+
+    fn process_ready_conditional_steps(
+        &self,
+        workflow_run_id: &str,
+        workflow: &WorkflowDefinition,
+        origin: &'static str,
+    ) -> Result<()> {
+        loop {
+            let run = self.get_workflow_run(workflow_run_id)?;
+            let Some(step) = workflow.steps.values().find(|step| {
+                step.kind == WorkflowStepKind::Conditional
+                    && run
+                        .step_runs
+                        .get(&step.id)
+                        .is_some_and(|step_run| step_run.state == WorkflowStepState::Ready)
+            }) else {
+                break;
+            };
+            let step = step.clone();
+            let step_run = run
+                .step_runs
+                .get(&step.id)
+                .cloned()
+                .expect("ready step run exists");
+            let conditional = step.conditional.clone().ok_or_else(|| {
+                HivemindError::system(
+                    "workflow_conditional_config_missing",
+                    format!("Conditional step '{}' is missing config", step.name),
+                    origin,
+                )
+            })?;
+            let mut chosen_branch = None;
+            for branch in &conditional.branches {
+                let (result, inputs) =
+                    Self::evaluate_condition_expression(&run, workflow, &branch.condition)?;
+                self.append_event(
+                    Event::new(
+                        EventPayload::WorkflowConditionEvaluated {
+                            workflow_run_id: run.id,
+                            step_id: step.id,
+                            step_run_id: step_run.id,
+                            inputs,
+                            result,
+                            chosen_path: result.then(|| branch.name.clone()),
+                        },
+                        CorrelationIds::for_workflow_step(
+                            run.project_id,
+                            run.workflow_id,
+                            run.id,
+                            run.root_workflow_run_id,
+                            run.parent_workflow_run_id,
+                            step.id,
+                            step_run.id,
+                        ),
+                    ),
+                    origin,
+                )?;
+                if result {
+                    chosen_branch = Some(branch.name.clone());
+                    break;
+                }
+            }
+            let chosen_branch = chosen_branch
+                .or(conditional.default_branch.clone())
+                .ok_or_else(|| {
+                    HivemindError::user(
+                        "workflow_condition_no_branch_selected",
+                        format!("Conditional step '{}' matched no branch", step.name),
+                        origin,
+                    )
+                })?;
+            let non_selected = conditional
+                .branches
+                .iter()
+                .filter(|branch| branch.name != chosen_branch)
+                .flat_map(|branch| branch.activate_step_ids.iter().copied())
+                .collect::<Vec<_>>();
+            self.workflow_step_set_state(
+                workflow_run_id,
+                &step.id.to_string(),
+                WorkflowStepState::Running,
+                Some("condition_evaluating"),
+            )?;
+            self.workflow_step_set_state(
+                workflow_run_id,
+                &step.id.to_string(),
+                WorkflowStepState::Succeeded,
+                Some(&format!("branch:{chosen_branch}")),
+            )?;
+            self.skip_branch_subtree(workflow_run_id, workflow, &non_selected)?;
+        }
+        Ok(())
+    }
+
+    fn signal_matches_wait(signal: &WorkflowSignal, condition: &WorkflowWaitCondition) -> bool {
+        match condition {
+            WorkflowWaitCondition::Signal { signal_name, .. }
+            | WorkflowWaitCondition::HumanSignal { signal_name } => {
+                signal.signal_name == *signal_name
+            }
+            WorkflowWaitCondition::Timer { .. } => false,
+        }
+    }
+
+    fn process_wait_steps(
+        &self,
+        workflow_run_id: &str,
+        workflow: &WorkflowDefinition,
+        origin: &'static str,
+    ) -> Result<()> {
+        let now = Utc::now();
+        let run = self.get_workflow_run(workflow_run_id)?;
+        for step in workflow
+            .steps
+            .values()
+            .filter(|step| step.kind == WorkflowStepKind::Wait)
+        {
+            let Some(step_run) = run.step_runs.get(&step.id).cloned() else {
+                continue;
+            };
+            let wait_cfg = step.wait.clone().ok_or_else(|| {
+                HivemindError::system(
+                    "workflow_wait_config_missing",
+                    format!("Wait step '{}' is missing config", step.name),
+                    origin,
+                )
+            })?;
+            if step_run.state == WorkflowStepState::Ready {
+                self.workflow_step_set_state(
+                    workflow_run_id,
+                    &step.id.to_string(),
+                    WorkflowStepState::Running,
+                    Some("wait_armed"),
+                )?;
+                let status = wait_cfg.condition.to_wait_status(now);
+                self.append_event(
+                    Event::new(
+                        EventPayload::WorkflowWaitActivated {
+                            workflow_run_id: run.id,
+                            step_id: step.id,
+                            step_run_id: step_run.id,
+                            wait_status: status.clone(),
+                        },
+                        CorrelationIds::for_workflow_step(
+                            run.project_id,
+                            run.workflow_id,
+                            run.id,
+                            run.root_workflow_run_id,
+                            run.parent_workflow_run_id,
+                            step.id,
+                            step_run.id,
+                        ),
+                    ),
+                    origin,
+                )?;
+                self.workflow_step_set_state(
+                    workflow_run_id,
+                    &step.id.to_string(),
+                    WorkflowStepState::Waiting,
+                    Some("waiting"),
+                )?;
+                continue;
+            }
+            if step_run.state != WorkflowStepState::Waiting {
+                continue;
+            }
+            let Some(wait_status) = step_run.wait_status.clone() else {
+                continue;
+            };
+            let completion = match &wait_status.condition {
+                WorkflowWaitCondition::Timer { .. } => wait_status
+                    .resume_at
+                    .filter(|resume_at| *resume_at <= now)
+                    .map(|_| ("timer_elapsed".to_string(), None)),
+                WorkflowWaitCondition::Signal {
+                    payload_schema,
+                    payload_schema_version,
+                    ..
+                } => run
+                    .signals
+                    .iter()
+                    .find(|signal| {
+                        signal.step_id.is_none_or(|id| id == step.id)
+                            && Self::signal_matches_wait(signal, &wait_status.condition)
+                    })
+                    .and_then(|signal| {
+                        if let Some(schema) = payload_schema {
+                            let payload = signal.payload.as_ref()?;
+                            if payload.schema != *schema
+                                || payload_schema_version
+                                    .is_some_and(|version| payload.schema_version != version)
+                            {
+                                return None;
+                            }
+                        }
+                        Some(("signal_received".to_string(), Some(signal.clone())))
+                    }),
+                WorkflowWaitCondition::HumanSignal { .. } => run
+                    .signals
+                    .iter()
+                    .find(|signal| {
+                        signal.step_id.is_none_or(|id| id == step.id)
+                            && signal.emitted_by == "human"
+                            && Self::signal_matches_wait(signal, &wait_status.condition)
+                    })
+                    .map(|signal| ("human_signal_received".to_string(), Some(signal.clone()))),
+            };
+            let Some((completion_reason, signal)) = completion else {
+                continue;
+            };
+            let mut completed = wait_status.clone();
+            completed.completed_at = Some(now);
+            completed.completion_reason = Some(completion_reason.clone());
+            completed.signal = signal;
+            self.append_event(
+                Event::new(
+                    EventPayload::WorkflowWaitCompleted {
+                        workflow_run_id: run.id,
+                        step_id: step.id,
+                        step_run_id: step_run.id,
+                        wait_status: completed,
+                    },
+                    CorrelationIds::for_workflow_step(
+                        run.project_id,
+                        run.workflow_id,
+                        run.id,
+                        run.root_workflow_run_id,
+                        run.parent_workflow_run_id,
+                        step.id,
+                        step_run.id,
+                    ),
+                ),
+                origin,
+            )?;
+            self.workflow_step_set_state(
+                workflow_run_id,
+                &step.id.to_string(),
+                WorkflowStepState::Succeeded,
+                Some(&completion_reason),
+            )?;
+        }
+        Ok(())
+    }
+
     fn apply_workflow_dependency_releases(
         &self,
         workflow_run_id: &str,
@@ -2167,7 +2917,11 @@ impl Registry {
         if let Some(step) = workflow.steps.values().find(|step| {
             !matches!(
                 step.kind,
-                WorkflowStepKind::Task | WorkflowStepKind::Join | WorkflowStepKind::Workflow
+                WorkflowStepKind::Task
+                    | WorkflowStepKind::Join
+                    | WorkflowStepKind::Workflow
+                    | WorkflowStepKind::Conditional
+                    | WorkflowStepKind::Wait
             )
         }) {
             let step_run_id = run.step_runs.get(&step.id).map(|step_run| step_run.id);
@@ -2179,7 +2933,7 @@ impl Registry {
                 ),
                 "registry:tick_workflow_run",
             )
-            .with_hint("Sprint 66 execution currently supports task and join workflow steps");
+            .with_hint("Unsupported workflow step kind for Phase 5 execution");
             self.record_error_event(
                 &err,
                 CorrelationIds::for_workflow_step(
@@ -2216,7 +2970,10 @@ impl Registry {
         }
 
         for step in workflow.steps.values() {
-            if step.kind == WorkflowStepKind::Workflow {
+            if matches!(
+                step.kind,
+                WorkflowStepKind::Workflow | WorkflowStepKind::Conditional | WorkflowStepKind::Wait
+            ) {
                 continue;
             }
             let task_id = Self::workflow_bridge_task_id(run.id, step.id);
@@ -2288,7 +3045,10 @@ impl Registry {
 
         let graph = self.get_graph(&graph_id.to_string())?;
         for step in workflow.steps.values() {
-            if step.kind == WorkflowStepKind::Workflow {
+            if matches!(
+                step.kind,
+                WorkflowStepKind::Workflow | WorkflowStepKind::Conditional | WorkflowStepKind::Wait
+            ) {
                 continue;
             }
             let to_task = Self::workflow_bridge_task_id(run.id, step.id);
@@ -2372,6 +3132,12 @@ impl Registry {
                             .steps
                             .values()
                             .filter(|step| step.kind != WorkflowStepKind::Workflow)
+                            .filter(|step| {
+                                !matches!(
+                                    step.kind,
+                                    WorkflowStepKind::Conditional | WorkflowStepKind::Wait
+                                )
+                            })
                             .map(|step| Self::workflow_bridge_task_id(run.id, step.id))
                             .collect(),
                     },
@@ -2475,6 +3241,12 @@ impl Registry {
         };
 
         for step in workflow.steps.values() {
+            if matches!(
+                step.kind,
+                WorkflowStepKind::Conditional | WorkflowStepKind::Wait
+            ) {
+                continue;
+            }
             let task_id = Self::workflow_bridge_task_id(run.id, step.id);
             let Some(exec) = flow.task_executions.get(&task_id) else {
                 continue;
@@ -2700,6 +3472,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 None,
+                None,
+                None,
             )
             .unwrap();
         let step_id = workflow.steps.values().next().unwrap().id;
@@ -2759,6 +3533,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 None,
+                None,
+                None,
             )
             .unwrap();
         let step_a = workflow
@@ -2777,6 +3553,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
+                None,
                 None,
             )
             .unwrap();
@@ -2939,6 +3717,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 None,
+                None,
+                None,
             )
             .unwrap();
         let workflow = registry
@@ -2951,6 +3731,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
+                None,
                 None,
             )
             .unwrap();
@@ -3009,6 +3791,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 None,
+                None,
+                None,
             )
             .unwrap();
         let branch_a = workflow
@@ -3027,6 +3811,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
+                None,
                 None,
             )
             .unwrap();
@@ -3071,6 +3857,8 @@ mod tests {
                         binding: "combined".to_string(),
                     },
                 }],
+                None,
+                None,
                 None,
             )
             .unwrap();
@@ -3190,6 +3978,8 @@ mod tests {
                 }],
                 Vec::new(),
                 None,
+                None,
+                None,
             )
             .unwrap();
         let branch_a = workflow
@@ -3219,6 +4009,8 @@ mod tests {
                     tags: vec!["branch".to_string()],
                 }],
                 Vec::new(),
+                None,
+                None,
                 None,
             )
             .unwrap();
@@ -3263,6 +4055,8 @@ mod tests {
                         binding: "combined".to_string(),
                     },
                 }],
+                None,
+                None,
                 None,
             )
             .unwrap();
@@ -3369,6 +4163,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 None,
+                None,
+                None,
             )
             .unwrap();
         let root_step_id = workflow
@@ -3388,6 +4184,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
+                None,
                 None,
             )
             .unwrap();
@@ -3421,6 +4219,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 None,
+                None,
+                None,
             )
             .expect_err("unknown dependency should fail");
 
@@ -3446,6 +4246,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
+                None,
                 None,
             )
             .expect_err("workflow step should require child target");
@@ -3494,6 +4296,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
+                None,
                 None,
             )
             .unwrap();
@@ -3562,6 +4366,8 @@ mod tests {
                     },
                 }],
                 Some(&child_id),
+                None,
+                None,
             )
             .unwrap();
         let step_id = parent.steps.values().next().unwrap().id;
@@ -3650,6 +4456,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Some(&child_id),
+                None,
+                None,
             )
             .unwrap();
         let step_id = parent.steps.values().next().unwrap().id;
@@ -3749,6 +4557,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 None,
+                None,
+                None,
             )
             .unwrap();
         let parent = registry
@@ -3766,6 +4576,8 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Some(&child_id),
+                None,
+                None,
             )
             .unwrap();
         let step_id = parent.steps.values().next().unwrap().id;
@@ -3870,5 +4682,181 @@ mod tests {
             )
             .unwrap();
         assert_eq!(aborted_parent.state, WorkflowRunState::Aborted);
+    }
+
+    #[test]
+    fn conditional_and_wait_steps_are_typed_and_signal_driven() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry =
+            Registry::open_with_config(RegistryConfig::with_dir(dir.path().to_path_buf())).unwrap();
+        let project = registry.create_project("workflow-project", None).unwrap();
+        let workflow = registry
+            .create_workflow(&project.id.to_string(), "control-workflow", Some("control"))
+            .unwrap();
+        let workflow = registry
+            .workflow_add_step(
+                &workflow.id.to_string(),
+                "gate",
+                WorkflowStepKind::Conditional,
+                None,
+                &[],
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                None,
+                Some(WorkflowConditionalConfig {
+                    branches: vec![WorkflowConditionalBranch {
+                        name: "approved".to_string(),
+                        condition: WorkflowConditionExpression::ContextValueEquals {
+                            key: "approved".to_string(),
+                            value: WorkflowDataValue::new(
+                                "application/json",
+                                1,
+                                serde_json::Value::Bool(true),
+                            )
+                            .unwrap(),
+                        },
+                        activate_step_ids: Vec::new(),
+                    }],
+                    default_branch: Some("approved".to_string()),
+                }),
+                None,
+            )
+            .unwrap();
+        let gate_id = workflow.steps.values().next().unwrap().id;
+        let workflow = registry
+            .workflow_add_step(
+                &workflow.id.to_string(),
+                "approval-wait",
+                WorkflowStepKind::Wait,
+                None,
+                &[gate_id.to_string()],
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                None,
+                None,
+                Some(WorkflowWaitConfig {
+                    condition: WorkflowWaitCondition::HumanSignal {
+                        signal_name: "approve".to_string(),
+                    },
+                }),
+            )
+            .unwrap();
+        let wait_id = workflow
+            .steps
+            .values()
+            .find(|step| step.name == "approval-wait")
+            .unwrap()
+            .id;
+
+        let run = registry
+            .create_workflow_run(
+                &workflow.id.to_string(),
+                None,
+                None,
+                BTreeMap::from([(
+                    "approved".to_string(),
+                    WorkflowDataValue::new("application/json", 1, serde_json::Value::Bool(true))
+                        .unwrap(),
+                )]),
+            )
+            .unwrap();
+        registry.start_workflow_run(&run.id.to_string()).unwrap();
+
+        let waiting = registry
+            .tick_workflow_run(&run.id.to_string(), false, Some(1))
+            .unwrap();
+        assert_eq!(
+            waiting.step_runs.get(&gate_id).unwrap().state,
+            WorkflowStepState::Succeeded
+        );
+        assert_eq!(
+            waiting.step_runs.get(&wait_id).unwrap().state,
+            WorkflowStepState::Waiting
+        );
+        assert!(waiting
+            .step_runs
+            .get(&wait_id)
+            .unwrap()
+            .wait_status
+            .is_some());
+
+        let signaled = registry
+            .signal_workflow_run(
+                &run.id.to_string(),
+                "approve",
+                "approval-1",
+                None,
+                Some(&wait_id.to_string()),
+                "human",
+            )
+            .unwrap();
+        assert_eq!(
+            signaled.step_runs.get(&wait_id).unwrap().state,
+            WorkflowStepState::Succeeded
+        );
+
+        let completed = registry
+            .tick_workflow_run(&run.id.to_string(), false, Some(1))
+            .unwrap();
+        assert_eq!(completed.state, WorkflowRunState::Completed);
+
+        let events = registry
+            .read_events(&EventFilter {
+                workflow_run_id: Some(run.id),
+                ..EventFilter::default()
+            })
+            .unwrap();
+        assert!(events.iter().any(|event| matches!(
+            event.payload,
+            EventPayload::WorkflowConditionEvaluated { .. }
+        )));
+        assert!(events
+            .iter()
+            .any(|event| matches!(event.payload, EventPayload::WorkflowWaitActivated { .. })));
+        assert!(events
+            .iter()
+            .any(|event| matches!(event.payload, EventPayload::WorkflowSignalReceived { .. })));
+        assert!(events
+            .iter()
+            .any(|event| matches!(event.payload, EventPayload::WorkflowWaitCompleted { .. })));
+    }
+
+    #[test]
+    fn duplicate_workflow_signal_idempotency_key_fails_loudly() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry =
+            Registry::open_with_config(RegistryConfig::with_dir(dir.path().to_path_buf())).unwrap();
+        let project = registry.create_project("workflow-project", None).unwrap();
+        let workflow = registry
+            .create_workflow(&project.id.to_string(), "signal-workflow", Some("signal"))
+            .unwrap();
+        let run = registry
+            .create_workflow_run(&workflow.id.to_string(), None, None, BTreeMap::new())
+            .unwrap();
+        registry.start_workflow_run(&run.id.to_string()).unwrap();
+
+        registry
+            .signal_workflow_run(
+                &run.id.to_string(),
+                "resume",
+                "dup-key",
+                None,
+                None,
+                "human",
+            )
+            .unwrap();
+        let err = registry
+            .signal_workflow_run(
+                &run.id.to_string(),
+                "resume",
+                "dup-key",
+                None,
+                None,
+                "human",
+            )
+            .expect_err("duplicate idempotency key should fail");
+        assert_eq!(err.code, "workflow_signal_duplicate");
     }
 }

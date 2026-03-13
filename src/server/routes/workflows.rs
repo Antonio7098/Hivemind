@@ -35,6 +35,8 @@ pub(super) fn handle_post(
                 req.output_bindings,
                 req.context_patches,
                 req.child_workflow_id.as_deref(),
+                req.conditional,
+                req.wait,
             )?)?
         }
         "/api/workflow-runs/create" => {
@@ -77,6 +79,17 @@ pub(super) fn handle_post(
                 &req.workflow_run_id,
                 req.reason.as_deref(),
                 req.force.unwrap_or(false),
+            )?)?
+        }
+        "/api/workflow-runs/signal" => {
+            let req: WorkflowSignalRequest = parse_json_body(body, "server:workflow-runs:signal")?;
+            super::json_ok(registry.signal_workflow_run(
+                &req.workflow_run_id,
+                &req.signal_name,
+                &req.idempotency_key,
+                req.payload,
+                req.step_id.as_deref(),
+                req.emitted_by.as_deref().unwrap_or("human"),
             )?)?
         }
         "/api/workflow-runs/steps/state" => {

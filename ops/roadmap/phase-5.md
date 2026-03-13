@@ -228,42 +228,42 @@
 **Goal:** Add deterministic control-flow primitives driven by typed/evented data rather than implicit runtime output parsing.
 
 ### 68.1 Conditional execution
-- [ ] Implement `Conditional` step evaluation against typed workflow context and/or append-only bag reductions only
-- [ ] Reject branch conditions that depend on opaque free-text runtime output without explicit typed projection
-- [ ] Emit explicit events for condition evaluation inputs, result, and chosen path
+- [x] Implement `Conditional` step evaluation against typed workflow context and/or append-only bag reductions only
+- [x] Reject branch conditions that depend on opaque free-text runtime output without explicit typed projection
+- [x] Emit explicit events for condition evaluation inputs, result, and chosen path
 
 ### 68.2 Wait and signal model
-- [ ] Implement `Wait` step semantics for explicit workflow signals, bounded timers, or human/operator events
-- [ ] Add signal event contracts with dedupe/idempotency keys where needed
-- [ ] Ensure wait/resume behavior remains replay-safe and attributable
+- [x] Implement `Wait` step semantics for explicit workflow signals, bounded timers, or human/operator events
+- [x] Add signal event contracts with dedupe/idempotency keys where needed
+- [x] Ensure wait/resume behavior remains replay-safe and attributable
 
 ### 68.3 Control-plane safety
-- [ ] Support subtree pause/resume/abort behavior with explicit state transitions and no hidden scheduler wakeups
-- [ ] Preserve human authority at signal/override boundaries
-- [ ] Ensure signal handling cannot bypass scope, verification, or merge governance
+- [x] Support subtree pause/resume/abort behavior with explicit state transitions and no hidden scheduler wakeups
+- [x] Preserve human authority at signal/override boundaries
+- [x] Ensure signal handling cannot bypass scope, verification, or merge governance
 
 ### 68.4 Automated validation and test coverage
-- [ ] Add unit tests for condition evaluation and signal/wait transition guards
-- [ ] Add integration tests for signal-driven resume, timer expiry, and human override paths
-- [ ] Add negative tests proving invalid conditions and duplicate/late signals fail loudly with explicit errors
-- [ ] Add replay tests for conditional and wait-heavy workflow graphs
+- [x] Add unit tests for condition evaluation and signal/wait transition guards
+- [x] Add integration tests for signal-driven resume, timer expiry, and human override paths
+- [x] Add negative tests proving invalid conditions and duplicate/late signals fail loudly with explicit errors
+- [x] Add replay tests for conditional and wait-heavy workflow graphs
 
 ### 68.5 Documentation
-- [ ] Add design docs for condition syntax, allowed data sources, signal contracts, and wait semantics
-- [ ] Update CLI/API docs for raising signals and inspecting blocked/waiting workflow state
-- [ ] Add operator guidance for debugging stuck waits, duplicate signals, and branch selection
+- [x] Add design docs for condition syntax, allowed data sources, signal contracts, and wait semantics
+- [x] Update CLI/API docs for raising signals and inspecting blocked/waiting workflow state
+- [x] Add operator guidance for debugging stuck waits, duplicate signals, and branch selection
 
 ### 68.6 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 68 manual checklist under `@hivemind-test`
-- [ ] Smoke test a workflow that exercises both conditional branching and a wait-for-signal path in a real repository fixture
-- [ ] Validate pause/resume/abort and signal delivery remain visible and attributable in CLI/API/event inspection paths
-- [ ] Publish Sprint 68 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 68 manual checklist under `@hivemind-test`
+- [x] Smoke test a workflow that exercises both conditional branching and a wait-for-signal path in a real repository fixture
+- [x] Validate pause/resume/abort and signal delivery remain visible and attributable in CLI/API/event inspection paths
+- [x] Publish Sprint 68 manual test report artifact in `@hivemind-test`
 
 ### 68.7 Exit Criteria
-- [ ] Conditional and wait semantics are explicit, typed, and replay-safe
-- [ ] Signals resume workflows without hidden state or scheduler ambiguity
-- [ ] Human/operator interventions remain bounded and attributable
-- [ ] Automated and manual smoke validation are completed and documented
+- [x] Conditional and wait semantics are explicit, typed, and replay-safe
+- [x] Signals resume workflows without hidden state or scheduler ambiguity
+- [x] Human/operator interventions remain bounded and attributable
+- [x] Automated and manual smoke validation are completed and documented
 
 ---
 
