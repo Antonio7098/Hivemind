@@ -272,13 +272,13 @@ impl RuntimeAdapter for OpenCodeAdapter {
         let binary = &self.config.base.binary_path;
 
         // Try to run with --version or --help
-        let result = status_with_retry(binary, "--version");
+        let result = status_with_retry(binary, "--version", self.config.base.timeout);
 
         match result {
             Ok(status) if status.success() => Ok(()),
             Ok(_) => {
                 // Try --help as fallback
-                let help_result = status_with_retry(binary, "--help");
+                let help_result = status_with_retry(binary, "--help", self.config.base.timeout);
 
                 match help_result {
                     Ok(status) if status.success() => Ok(()),
@@ -289,11 +289,18 @@ impl RuntimeAdapter for OpenCodeAdapter {
                     )),
                 }
             }
-            Err(e) => Err(RuntimeError::new(
-                "binary_not_found",
-                format!("Cannot execute {}: {e}", binary.display()),
-                false,
-            )),
+            Err(e) => {
+                let code = if e.kind() == std::io::ErrorKind::TimedOut {
+                    "health_check_failed"
+                } else {
+                    "binary_not_found"
+                };
+                Err(RuntimeError::new(
+                    code,
+                    format!("Cannot execute {}: {e}", binary.display()),
+                    false,
+                ))
+            }
         }
     }
 

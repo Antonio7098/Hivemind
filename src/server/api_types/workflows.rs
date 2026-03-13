@@ -34,6 +34,7 @@ pub(crate) struct WorkflowStepAddRequest {
     pub(crate) output_bindings: Vec<WorkflowStepOutputBinding>,
     #[serde(default)]
     pub(crate) context_patches: Vec<WorkflowContextPatchBinding>,
+    pub(crate) child_workflow_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -183,41 +183,41 @@
 **Goal:** Support workflow steps that launch child workflows with explicit input/output mappings and full lineage visibility.
 
 ### 67.1 Child workflow execution
-- [ ] Add `Workflow` step kind that launches a child workflow run from a parent workflow step
-- [ ] Require explicit input binding from parent workflow context/bag into child initialization inputs
-- [ ] Default to copy-in child context rather than live shared mutable state
+- [x] Add `Workflow` step kind that launches a child workflow run from a parent workflow step
+- [x] Require explicit input binding from parent workflow context/bag into child initialization inputs
+- [x] Default to copy-in child context rather than live shared mutable state
 
 ### 67.2 Parent/child output and failure policy
-- [ ] Add explicit child completion output mapping back into the parent context/bag
-- [ ] Add configurable parent behavior for child success/failure/cancellation/timeout
-- [ ] Preserve explicit retry semantics for child workflow invocation without inventing hidden cross-run recovery state
+- [x] Add explicit child completion output mapping back into the parent context/bag
+- [x] Add configurable parent behavior for child success/failure/cancellation/timeout
+- [x] Preserve explicit retry semantics for child workflow invocation without inventing hidden cross-run recovery state
 
 ### 67.3 Observability and queryability
-- [ ] Extend event/UI/query surfaces to inspect parent/child workflow lineage and subtree state
-- [ ] Ensure runtime/native event correlation remains attributable through nested workflow execution
-- [ ] Add workflow tree inspection output that makes nesting understandable without reading raw events only
+- [x] Extend event/UI/query surfaces to inspect parent/child workflow lineage and subtree state
+- [x] Ensure runtime/native event correlation remains attributable through nested workflow execution
+- [x] Add workflow tree inspection output that makes nesting understandable without reading raw events only
 
 ### 67.4 Automated validation and test coverage
-- [ ] Add integration tests for parent launching child workflows and consuming child outputs
-- [ ] Add replay tests for nested workflows across success, retry, and failure branches
-- [ ] Add regression tests for lineage queries, filtering, and inspect views on nested runs
-- [ ] Add tests proving child context isolation from parent mutable state outside declared output mappings
+- [x] Add integration tests for parent launching child workflows and consuming child outputs
+- [x] Add replay tests for nested workflows across success, retry, and failure branches
+- [x] Add regression tests for lineage queries, filtering, and inspect views on nested runs
+- [x] Add tests proving child context isolation from parent mutable state outside declared output mappings
 
 ### 67.5 Documentation
-- [ ] Add architecture/design docs for nested workflow lineage, inheritance, and failure propagation
-- [ ] Update operator docs for nested workflow inspection, debugging, and replay expectations
-- [ ] Document the rule that child workflows are explicit orchestration boundaries, not hidden scheduler implementation details
+- [x] Add architecture/design docs for nested workflow lineage, inheritance, and failure propagation
+- [x] Update operator docs for nested workflow inspection, debugging, and replay expectations
+- [x] Document the rule that child workflows are explicit orchestration boundaries, not hidden scheduler implementation details
 
 ### 67.6 Manual Testing (`@hivemind-test`)
-- [ ] Add/update Sprint 67 manual checklist under `@hivemind-test`
-- [ ] Smoke test a parent workflow that launches at least two child workflows and joins their outputs
-- [ ] Validate parent/child lineage in inspect commands, event streams, and runtime attribution paths
-- [ ] Validate child failure handling and retry semantics in a real repository scenario
-- [ ] Publish Sprint 67 manual test report artifact in `@hivemind-test`
+- [x] Add/update Sprint 67 manual checklist under `@hivemind-test`
+- [x] Smoke test a parent workflow that launches at least two child workflows and joins their outputs
+- [x] Validate parent/child lineage in inspect commands, event streams, and runtime attribution paths
+- [x] Validate child failure handling and retry semantics in a real repository scenario
+- [x] Publish Sprint 67 manual test report artifact in `@hivemind-test`
 
 ### 67.7 Exit Criteria
-- [ ] Child workflows can be launched and observed deterministically
-- [ ] Parent/child input-output mappings are explicit and replay-safe
+- [x] Child workflows can be launched and observed deterministically
+- [x] Parent/child input-output mappings are explicit and replay-safe
 - [ ] Nested lineage is inspectable from CLI/API/events without guesswork
 - [ ] Automated and manual smoke validation are completed and documented
 

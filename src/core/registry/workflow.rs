@@ -6,8 +6,8 @@ use crate::core::registry::shared_prelude::*;
 use crate::core::registry::shared_types::AttemptContextWorkflowManifest;
 use crate::core::registry::Registry;
 use crate::core::workflow::{
-    WorkflowDefinition, WorkflowRun, WorkflowRunState, WorkflowStepDefinition, WorkflowStepKind,
-    WorkflowStepState,
+    WorkflowChildConfig, WorkflowChildTerminalBehavior, WorkflowDefinition, WorkflowRun,
+    WorkflowRunState, WorkflowStepDefinition, WorkflowStepKind, WorkflowStepState,
 };
 use crate::core::{
     flow::{FlowState, TaskExecState, TaskFlow},
@@ -18,6 +18,125 @@ use crate::core::{
 use sha2::{Digest, Sha256};
 
 impl Registry {
+    fn child_run_events(&self, workflow_run_id: Uuid) -> Result<Vec<Event>> {
+        self.read_events(&EventFilter {
+            workflow_run_id: Some(workflow_run_id),
+            ..EventFilter::default()
+        })
+    }
+
+    fn child_run_aborted_reason(events: &[Event], workflow_run_id: Uuid) -> Option<String> {
+        events.iter().find_map(|event| match &event.payload {
+            EventPayload::WorkflowRunAborted {
+                workflow_run_id: id,
+                reason,
+                ..
+            } if *id == workflow_run_id => reason.clone(),
+            _ => None,
+        })
+    }
+
+    fn child_run_has_timeout_signal(events: &[Event]) -> bool {
+        events.iter().any(|event| match &event.payload {
+            EventPayload::RuntimeTerminated { reason, .. } => {
+                reason.contains("timeout") || reason.contains("no_observable_progress_timeout")
+            }
+            EventPayload::RuntimeErrorClassified { category, code, .. } => {
+                category == "timeout"
+                    || code == "timeout"
+                    || code == "no_observable_progress_timeout"
+            }
+            _ => false,
+        })
+    }
+
+    fn child_run_terminal_behavior(
+        &self,
+        child_run: &WorkflowRun,
+    ) -> Result<WorkflowChildTerminalBehavior> {
+        let events = self.child_run_events(child_run.id)?;
+        if Self::child_workflow_succeeded(child_run) {
+            let step = child_run.parent_step_id.ok_or_else(|| {
+                HivemindError::system(
+                    "workflow_parent_step_missing",
+                    format!(
+                        "Child workflow run '{}' is missing parent step id",
+                        child_run.id
+                    ),
+                    "registry:child_run_terminal_behavior",
+                )
+            })?;
+            let parent_run_id = child_run.parent_workflow_run_id.ok_or_else(|| {
+                HivemindError::system(
+                    "workflow_parent_run_missing",
+                    format!(
+                        "Child workflow run '{}' is missing parent workflow run id",
+                        child_run.id
+                    ),
+                    "registry:child_run_terminal_behavior",
+                )
+            })?;
+            let parent_run = self.get_workflow_run(&parent_run_id.to_string())?;
+            let parent_workflow = self.get_workflow(&parent_run.workflow_id.to_string())?;
+            let parent_step = Self::workflow_step_for_definition(
+                &parent_workflow,
+                step,
+                "registry:child_run_terminal_behavior",
+            )?;
+            let policy = parent_step
+                .child_workflow
+                .as_ref()
+                .map(|config| config.failure_policy.clone())
+                .unwrap_or_default();
+            return Ok(policy.on_success);
+        }
+
+        let step = child_run.parent_step_id.ok_or_else(|| {
+            HivemindError::system(
+                "workflow_parent_step_missing",
+                format!(
+                    "Child workflow run '{}' is missing parent step id",
+                    child_run.id
+                ),
+                "registry:child_run_terminal_behavior",
+            )
+        })?;
+        let parent_run_id = child_run.parent_workflow_run_id.ok_or_else(|| {
+            HivemindError::system(
+                "workflow_parent_run_missing",
+                format!(
+                    "Child workflow run '{}' is missing parent workflow run id",
+                    child_run.id
+                ),
+                "registry:child_run_terminal_behavior",
+            )
+        })?;
+        let parent_run = self.get_workflow_run(&parent_run_id.to_string())?;
+        let parent_workflow = self.get_workflow(&parent_run.workflow_id.to_string())?;
+        let parent_step = Self::workflow_step_for_definition(
+            &parent_workflow,
+            step,
+            "registry:child_run_terminal_behavior",
+        )?;
+        let policy = parent_step
+            .child_workflow
+            .as_ref()
+            .map(|config| config.failure_policy.clone())
+            .unwrap_or_default();
+
+        if Self::child_run_has_timeout_signal(&events) {
+            return Ok(policy.on_timeout);
+        }
+        if child_run.state == WorkflowRunState::Aborted
+            && !Self::child_run_aborted_reason(&events, child_run.id)
+                .as_deref()
+                .is_some_and(|reason| reason.contains("timeout"))
+        {
+            return Ok(policy.on_cancellation);
+        }
+        Ok(policy.on_failure)
+    }
+
     pub fn create_workflow(
         &self,
         project_id_or_name: &str,
@@ -151,6 +270,7 @@ impl Registry {
         input_bindings: Vec<WorkflowStepInputBinding>,
         output_bindings: Vec<WorkflowStepOutputBinding>,
         context_patches: Vec<WorkflowContextPatchBinding>,
+        child_workflow_id: Option<&str>,
     ) -> Result<WorkflowDefinition> {
         let workflow = self
             .get_workflow(workflow_id_or_name)
@@ -212,6 +332,7 @@ impl Registry {
         let input_bindings =
             Self::normalize_workflow_input_bindings(input_bindings, "registry:workflow_add_step")?;
         let output_bindings = Self::normalize_workflow_output_bindings(
+            kind,
             output_bindings,
             &input_bindings,
             "registry:workflow_add_step",
@@ -222,6 +343,12 @@ impl Registry {
             &input_bindings,
             "registry:workflow_add_step",
         )?;
+        let child_workflow = self.normalize_child_workflow_config(
+            &workflow,
+            kind,
+            child_workflow_id,
+            "registry:workflow_add_step",
+        )?;
 
         let mut step = WorkflowStepDefinition::new(step_name, kind);
         step.description = description.map(str::to_string);
@@ -229,6 +356,7 @@ impl Registry {
         step.input_bindings = input_bindings;
         step.output_bindings = output_bindings;
         step.context_patches = context_patches;
+        step.child_workflow = child_workflow;
 
         let mut updated = workflow.clone();
         updated.add_step(step);
@@ -244,6 +372,54 @@ impl Registry {
         )?;
 
         self.get_workflow(&workflow.id.to_string())
+    }
+
+    fn normalize_child_workflow_config(
+        &self,
+        workflow: &WorkflowDefinition,
+        kind: WorkflowStepKind,
+        child_workflow_id: Option<&str>,
+        origin: &'static str,
+    ) -> Result<Option<WorkflowChildConfig>> {
+        let Some(child_workflow_id) = child_workflow_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            if kind == WorkflowStepKind::Workflow {
+                return Err(HivemindError::user(
+                    "workflow_child_workflow_required",
+                    "Workflow steps require an explicit child workflow id",
+                    origin,
+                ));
+            }
+            return Ok(None);
+        };
+        if kind != WorkflowStepKind::Workflow {
+            return Err(HivemindError::user(
+                "workflow_child_workflow_invalid_kind",
+                "Only workflow steps may declare a child workflow id",
+                origin,
+            ));
+        }
+        let child = self.get_workflow(child_workflow_id)?;
+        if child.project_id != workflow.project_id {
+            return Err(HivemindError::user(
+                "workflow_child_project_mismatch",
+                "Child workflow must belong to the same project as the parent workflow",
+                origin,
+            ));
+        }
+        if child.id == workflow.id {
+            return Err(HivemindError::user(
+                "workflow_child_self_reference",
+                "Workflow step cannot launch its own definition as a direct child",
+                origin,
+            ));
+        }
+        Ok(Some(WorkflowChildConfig {
+            workflow_id: child.id,
+            failure_policy: Default::default(),
+        }))
     }
 
     pub fn list_workflows(
@@ -402,6 +578,7 @@ impl Registry {
     }
 
     fn normalize_workflow_output_bindings(
+        kind: WorkflowStepKind,
         output_bindings: Vec<WorkflowStepOutputBinding>,
         input_bindings: &[WorkflowStepInputBinding],
         origin: &'static str,
@@ -442,6 +619,18 @@ impl Registry {
                     }
                     WorkflowValueSource::InputBinding { binding }
                 }
+                WorkflowValueSource::ChildContextKey { key } => {
+                    if kind != WorkflowStepKind::Workflow {
+                        return Err(HivemindError::user(
+                            "workflow_child_context_output_invalid_kind",
+                            "Child context output bindings are allowed only on workflow steps",
+                            origin,
+                        ));
+                    }
+                    WorkflowValueSource::ChildContextKey {
+                        key: key.trim().to_string(),
+                    }
+                }
             };
             normalized.push(WorkflowStepOutputBinding {
                 name,
@@ -458,10 +647,12 @@ impl Registry {
         input_bindings: &[WorkflowStepInputBinding],
         origin: &'static str,
     ) -> Result<Vec<WorkflowContextPatchBinding>> {
-        if kind != WorkflowStepKind::Join && !context_patches.is_empty() {
+        if !matches!(kind, WorkflowStepKind::Join | WorkflowStepKind::Workflow)
+            && !context_patches.is_empty()
+        {
             return Err(HivemindError::user(
                 "workflow_context_patch_requires_join_step",
-                "Workflow context patches are allowed only on join steps in Sprint 66",
+                "Workflow context patches are allowed only on join or workflow steps",
                 origin,
             ));
         }
@@ -502,6 +693,18 @@ impl Registry {
                     }
                     WorkflowValueSource::InputBinding { binding }
                 }
+                WorkflowValueSource::ChildContextKey { key } => {
+                    if kind != WorkflowStepKind::Workflow {
+                        return Err(HivemindError::user(
+                            "workflow_child_context_patch_invalid_kind",
+                            "Child context patches are allowed only on workflow steps",
+                            origin,
+                        ));
+                    }
+                    WorkflowValueSource::ChildContextKey {
+                        key: key.trim().to_string(),
+                    }
+                }
             };
             normalized.push(WorkflowContextPatchBinding { key, source });
         }
@@ -518,18 +721,43 @@ impl Registry {
         let workflow = self
             .get_workflow(workflow_id_or_name)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
-        let run = WorkflowRun::new_root(&workflow);
+        self.create_workflow_run_internal(
+            &workflow,
+            context_schema,
+            context_schema_version,
+            context_inputs,
+            None,
+            None,
+            None,
+            "registry:create_workflow_run",
+        )
+    }
+
+    fn create_workflow_run_internal(
+        &self,
+        workflow: &WorkflowDefinition,
+        context_schema: Option<&str>,
+        context_schema_version: Option<u32>,
+        context_inputs: BTreeMap<String, WorkflowDataValue>,
+        root_workflow_run_id: Option<Uuid>,
+        parent_workflow_run_id: Option<Uuid>,
+        parent_step_id: Option<Uuid>,
+        origin: &'static str,
+    ) -> Result<WorkflowRun> {
+        let run = match (root_workflow_run_id, parent_workflow_run_id, parent_step_id) {
+            (Some(root), Some(parent_run), Some(parent_step)) => {
+                WorkflowRun::new_child(workflow, root, parent_run, parent_step)
+            }
+            _ => WorkflowRun::new_root(workflow),
+        };
         let schema = context_schema.unwrap_or("workflow_context").trim();
         if schema.is_empty() {
             let err = HivemindError::user(
                 "invalid_workflow_context_schema",
                 "Workflow context schema cannot be empty",
-                "registry:create_workflow_run",
+                origin,
             );
-            self.record_error_event(
-                &err,
-                CorrelationIds::for_workflow_run(workflow.project_id, workflow.id, run.id),
-            );
+            self.record_error_event(&err, Self::workflow_run_corr(&run));
             return Err(err);
         }
         let schema_version = context_schema_version.unwrap_or(1);
@@ -537,18 +765,12 @@ impl Registry {
             let err = HivemindError::user(
                 "invalid_workflow_context_schema_version",
                 "Workflow context schema version must be >= 1",
-                "registry:create_workflow_run",
+                origin,
             );
-            self.record_error_event(
-                &err,
-                CorrelationIds::for_workflow_run(workflow.project_id, workflow.id, run.id),
-            );
+            self.record_error_event(&err, Self::workflow_run_corr(&run));
             return Err(err);
         }
-        let normalized_inputs = Self::normalize_workflow_context_inputs(
-            context_inputs,
-            "registry:create_workflow_run",
-        )?;
+        let normalized_inputs = Self::normalize_workflow_context_inputs(context_inputs, origin)?;
         let context = WorkflowContextState::initialize(
             schema.to_string(),
             schema_version,
@@ -559,9 +781,9 @@ impl Registry {
         self.append_event(
             Event::new(
                 EventPayload::WorkflowRunCreated { run: run.clone() },
-                CorrelationIds::for_workflow_run(workflow.project_id, workflow.id, run.id),
+                Self::workflow_run_corr(&run),
             ),
-            "registry:create_workflow_run",
+            origin,
         )?;
         self.append_event(
             Event::new(
@@ -569,9 +791,9 @@ impl Registry {
                     workflow_run_id: run.id,
                     context: context.clone(),
                 },
-                CorrelationIds::for_workflow_run(workflow.project_id, workflow.id, run.id),
+                Self::workflow_run_corr(&run),
             ),
-            "registry:create_workflow_run",
+            origin,
         )?;
         self.append_event(
             Event::new(
@@ -579,9 +801,9 @@ impl Registry {
                     workflow_run_id: run.id,
                     snapshot: context.current_snapshot.clone(),
                 },
-                CorrelationIds::for_workflow_run(workflow.project_id, workflow.id, run.id),
+                Self::workflow_run_corr(&run),
             ),
-            "registry:create_workflow_run",
+            origin,
         )?;
         self.get_workflow_run(&run.id.to_string())
     }
@@ -654,7 +876,7 @@ impl Registry {
         interactive: bool,
         max_parallel: Option<u16>,
     ) -> Result<WorkflowRun> {
-        let run = self
+        let mut run = self
             .get_workflow_run(workflow_run_id)
             .inspect_err(|err| self.record_error_event(err, CorrelationIds::none()))?;
         if run.state != WorkflowRunState::Running {
@@ -674,6 +896,24 @@ impl Registry {
         let workflow = self.get_workflow(&run.workflow_id.to_string())?;
         if workflow.steps.is_empty() {
             return self.complete_workflow_run(workflow_run_id);
+        }
+        let _ = self.apply_workflow_dependency_releases(workflow_run_id, &workflow)?;
+        let _ = self.process_workflow_child_steps(
+            workflow_run_id,
+            &workflow,
+            "registry:tick_workflow_run",
+        )?;
+        let _ = self.apply_workflow_dependency_releases(workflow_run_id, &workflow)?;
+        run = self.get_workflow_run(workflow_run_id)?;
+        let has_task_bridge_steps = workflow
+            .steps
+            .values()
+            .any(|step| matches!(step.kind, WorkflowStepKind::Task | WorkflowStepKind::Join));
+        if !has_task_bridge_steps {
+            if run.state == WorkflowRunState::Running && run.can_complete() {
+                return self.complete_workflow_run(workflow_run_id);
+            }
+            return Ok(run);
         }
 
         let flow_id = self.ensure_synthetic_flow_for_workflow_run(&run, &workflow)?;
@@ -695,6 +935,12 @@ impl Registry {
 
         let tick_result = self.tick_flow(&flow_id_str, interactive, max_parallel);
         let _ = self.sync_workflow_run_from_synthetic_flow(workflow_run_id, &workflow)?;
+        let _ = self.apply_workflow_dependency_releases(workflow_run_id, &workflow)?;
+        let _ = self.process_workflow_child_steps(
+            workflow_run_id,
+            &workflow,
+            "registry:tick_workflow_run",
+        )?;
         self.process_ready_join_steps(workflow_run_id, &workflow, "registry:tick_workflow_run")?;
         let synced = self.sync_workflow_run_from_synthetic_flow(workflow_run_id, &workflow)?;
         tick_result.map(|_| synced)
@@ -884,6 +1130,22 @@ impl Registry {
         })
     }
 
+    fn child_workflow_run_for_step(
+        state: &AppState,
+        run: &WorkflowRun,
+        step_id: Uuid,
+    ) -> Option<WorkflowRun> {
+        state
+            .workflow_runs
+            .values()
+            .filter(|child| {
+                child.parent_workflow_run_id == Some(run.id)
+                    && child.parent_step_id == Some(step_id)
+            })
+            .max_by_key(|child| child.created_at)
+            .cloned()
+    }
+
     pub(crate) fn correlation_for_flow_event(state: &AppState, flow: &TaskFlow) -> CorrelationIds {
         Self::workflow_bridge_run_for_flow_state(state, flow.id).map_or_else(
             || CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
@@ -970,6 +1232,22 @@ impl Registry {
             task_id,
             step_id,
             step_run_id,
+            attempt_id: None,
+        }
+    }
+
+    fn workflow_run_corr(run: &WorkflowRun) -> CorrelationIds {
+        CorrelationIds {
+            project_id: Some(run.project_id),
+            graph_id: None,
+            flow_id: None,
+            workflow_id: Some(run.workflow_id),
+            workflow_run_id: Some(run.id),
+            root_workflow_run_id: Some(run.root_workflow_run_id),
+            parent_workflow_run_id: run.parent_workflow_run_id,
+            task_id: None,
+            step_id: run.parent_step_id,
+            step_run_id: None,
             attempt_id: None,
         }
     }
@@ -1182,6 +1460,7 @@ impl Registry {
     fn resolve_workflow_value_source(
         source: &WorkflowValueSource,
         snapshot: &WorkflowStepContextSnapshot,
+        child_run: Option<&WorkflowRun>,
         origin: &'static str,
     ) -> Result<WorkflowDataValue> {
         match source {
@@ -1195,6 +1474,15 @@ impl Registry {
                     )
                 })
             }
+            WorkflowValueSource::ChildContextKey { key } => child_run
+                .and_then(|run| run.context.current_snapshot.values.get(key).cloned())
+                .ok_or_else(|| {
+                    HivemindError::user(
+                        "workflow_child_context_key_missing",
+                        format!("Child workflow context key '{key}' was not found"),
+                        origin,
+                    )
+                }),
         }
     }
 
@@ -1220,6 +1508,7 @@ impl Registry {
         run: &WorkflowRun,
         step: &WorkflowStepDefinition,
         snapshot: &WorkflowStepContextSnapshot,
+        child_run: Option<&WorkflowRun>,
         origin: &'static str,
     ) -> Result<()> {
         let step_run = run.step_runs.get(&step.id).ok_or_else(|| {
@@ -1237,7 +1526,8 @@ impl Registry {
             if Self::workflow_step_output_recorded(run, step_run.id, &output.name) {
                 continue;
             }
-            let payload = Self::resolve_workflow_value_source(&output.source, snapshot, origin)?;
+            let payload =
+                Self::resolve_workflow_value_source(&output.source, snapshot, child_run, origin)?;
             let entry = WorkflowOutputBagEntry {
                 entry_id: Uuid::new_v4(),
                 workflow_run_id: run.id,
@@ -1281,6 +1571,7 @@ impl Registry {
         run: &WorkflowRun,
         step: &WorkflowStepDefinition,
         snapshot: &WorkflowStepContextSnapshot,
+        child_run: Option<&WorkflowRun>,
         origin: &'static str,
     ) -> Result<()> {
         let step_run = run.step_runs.get(&step.id).ok_or_else(|| {
@@ -1303,7 +1594,7 @@ impl Registry {
         for patch in &step.context_patches {
             patches.insert(
                 patch.key.clone(),
-                Self::resolve_workflow_value_source(&patch.source, snapshot, origin)?,
+                Self::resolve_workflow_value_source(&patch.source, snapshot, child_run, origin)?,
             );
         }
 
@@ -1347,6 +1638,7 @@ impl Registry {
         workflow: &WorkflowDefinition,
         run: &WorkflowRun,
         step_id: Uuid,
+        child_run: Option<&WorkflowRun>,
         origin: &'static str,
     ) -> Result<()> {
         let step = Self::workflow_step_for_definition(workflow, step_id, origin)?;
@@ -1387,9 +1679,188 @@ impl Registry {
             snapshot
         };
 
-        self.append_workflow_step_outputs(run, step, &snapshot, origin)?;
-        self.capture_workflow_context_snapshot(run, step, &snapshot, origin)?;
+        self.append_workflow_step_outputs(run, step, &snapshot, child_run, origin)?;
+        self.capture_workflow_context_snapshot(run, step, &snapshot, child_run, origin)?;
         Ok(())
+    }
+
+    fn child_workflow_succeeded(run: &WorkflowRun) -> bool {
+        run.state == WorkflowRunState::Completed
+            && run.step_runs.values().all(|step_run| {
+                matches!(
+                    step_run.state,
+                    WorkflowStepState::Succeeded | WorkflowStepState::Skipped
+                )
+            })
+    }
+
+    fn apply_workflow_dependency_releases(
+        &self,
+        workflow_run_id: &str,
+        workflow: &WorkflowDefinition,
+    ) -> Result<WorkflowRun> {
+        let mut run = self.get_workflow_run(workflow_run_id)?;
+        for step in workflow.steps.values() {
+            let Some(step_run) = run.step_runs.get(&step.id) else {
+                continue;
+            };
+            if step_run.state != WorkflowStepState::Pending {
+                continue;
+            }
+            let ready = !step.depends_on.is_empty()
+                && step.depends_on.iter().all(|dep_step_id| {
+                    run.step_runs
+                        .get(dep_step_id)
+                        .is_some_and(|dep| dep.state == WorkflowStepState::Succeeded)
+                });
+            if ready {
+                run = self.workflow_step_set_state(
+                    workflow_run_id,
+                    &step.id.to_string(),
+                    WorkflowStepState::Ready,
+                    None,
+                )?;
+            }
+        }
+        Ok(run)
+    }
+
+    fn process_workflow_child_steps(
+        &self,
+        workflow_run_id: &str,
+        workflow: &WorkflowDefinition,
+        origin: &'static str,
+    ) -> Result<WorkflowRun> {
+        let mut run = self.get_workflow_run(workflow_run_id)?;
+        for step in workflow
+            .steps
+            .values()
+            .filter(|step| step.kind == WorkflowStepKind::Workflow)
+        {
+            let Some(step_run) = run.step_runs.get(&step.id).cloned() else {
+                continue;
+            };
+            if !matches!(
+                step_run.state,
+                WorkflowStepState::Ready | WorkflowStepState::Retry | WorkflowStepState::Waiting
+            ) {
+                continue;
+            }
+            let child_cfg = step.child_workflow.clone().ok_or_else(|| {
+                HivemindError::system(
+                    "workflow_child_config_missing",
+                    format!(
+                        "Workflow step '{}' is missing child workflow config",
+                        step.name
+                    ),
+                    origin,
+                )
+            })?;
+
+            let existing_child = Self::child_workflow_run_for_step(&self.state()?, &run, step.id);
+            if step_run.state != WorkflowStepState::Waiting && existing_child.is_none() {
+                let snapshot = self.resolve_workflow_step_inputs(&run, workflow, step, origin)?;
+                if !Self::workflow_step_input_resolution_recorded(
+                    &run,
+                    step.id,
+                    &snapshot.snapshot_hash,
+                ) {
+                    self.append_event(
+                        Event::new(
+                            EventPayload::WorkflowStepInputsResolved {
+                                workflow_run_id: run.id,
+                                step_id: step.id,
+                                step_run_id: step_run.id,
+                                snapshot: snapshot.clone(),
+                            },
+                            CorrelationIds::for_workflow_step(
+                                run.project_id,
+                                run.workflow_id,
+                                run.id,
+                                run.root_workflow_run_id,
+                                run.parent_workflow_run_id,
+                                step.id,
+                                step_run.id,
+                            ),
+                        ),
+                        origin,
+                    )?;
+                }
+                let child = self.create_workflow_run_internal(
+                    &self.get_workflow(&child_cfg.workflow_id.to_string())?,
+                    Some(&run.context.schema),
+                    Some(run.context.schema_version),
+                    snapshot.inputs.clone(),
+                    Some(run.root_workflow_run_id),
+                    Some(run.id),
+                    Some(step.id),
+                    origin,
+                )?;
+                self.start_workflow_run(&child.id.to_string())?;
+                self.workflow_step_set_state(
+                    workflow_run_id,
+                    &step.id.to_string(),
+                    WorkflowStepState::Running,
+                    None,
+                )?;
+                run = self.workflow_step_set_state(
+                    workflow_run_id,
+                    &step.id.to_string(),
+                    WorkflowStepState::Waiting,
+                    None,
+                )?;
+            }
+
+            let child = Self::child_workflow_run_for_step(&self.state()?, &run, step.id);
+            let Some(child) = child else {
+                continue;
+            };
+            if child.state == WorkflowRunState::Running {
+                let _ = self.tick_workflow_run(&child.id.to_string(), false, Some(1))?;
+            }
+            let child = self.get_workflow_run(&child.id.to_string())?;
+            if child.state == WorkflowRunState::Running || child.state == WorkflowRunState::Paused {
+                continue;
+            }
+
+            let behavior = self.child_run_terminal_behavior(&child)?;
+
+            match behavior {
+                WorkflowChildTerminalBehavior::Complete => {
+                    self.workflow_step_set_state(
+                        workflow_run_id,
+                        &step.id.to_string(),
+                        WorkflowStepState::Succeeded,
+                        None,
+                    )?;
+                    let refreshed = self.get_workflow_run(workflow_run_id)?;
+                    self.materialize_workflow_step_completion(
+                        workflow,
+                        &refreshed,
+                        step.id,
+                        Some(&child),
+                        origin,
+                    )?;
+                    run = self.get_workflow_run(workflow_run_id)?;
+                }
+                WorkflowChildTerminalBehavior::FailStep => {
+                    run = self.workflow_step_set_state(
+                        workflow_run_id,
+                        &step.id.to_string(),
+                        WorkflowStepState::Failed,
+                        Some("child_workflow_failed"),
+                    )?;
+                }
+                WorkflowChildTerminalBehavior::AbortParent => {
+                    return self.abort_workflow_run(
+                        workflow_run_id,
+                        Some("child_workflow_failed"),
+                        false,
+                    );
+                }
+            }
+        }
+        Ok(run)
     }
 
     pub(crate) fn workflow_attempt_context_for_task(
@@ -1642,7 +2113,7 @@ impl Registry {
             | TaskExecState::Escalated => {}
         }
 
-        self.materialize_workflow_step_completion(workflow, run, step.id, origin)?;
+        self.materialize_workflow_step_completion(workflow, run, step.id, None, origin)?;
         self.append_join_task_exec_transition(
             run,
             TaskExecState::Running,
@@ -1693,11 +2164,12 @@ impl Registry {
         run: &WorkflowRun,
         workflow: &WorkflowDefinition,
     ) -> Result<Uuid> {
-        if let Some(step) = workflow
-            .steps
-            .values()
-            .find(|step| !matches!(step.kind, WorkflowStepKind::Task | WorkflowStepKind::Join))
-        {
+        if let Some(step) = workflow.steps.values().find(|step| {
+            !matches!(
+                step.kind,
+                WorkflowStepKind::Task | WorkflowStepKind::Join | WorkflowStepKind::Workflow
+            )
+        }) {
             let step_run_id = run.step_runs.get(&step.id).map(|step_run| step_run.id);
             let err = HivemindError::user(
                 "workflow_step_kind_not_supported",
@@ -1744,6 +2216,9 @@ impl Registry {
         }
 
         for step in workflow.steps.values() {
+            if step.kind == WorkflowStepKind::Workflow {
+                continue;
+            }
             let task_id = Self::workflow_bridge_task_id(run.id, step.id);
             let step_run_id = run.step_runs.get(&step.id).map(|step_run| step_run.id);
             let corr = Self::workflow_bridge_corr(
@@ -1813,6 +2288,9 @@ impl Registry {
 
         let graph = self.get_graph(&graph_id.to_string())?;
         for step in workflow.steps.values() {
+            if step.kind == WorkflowStepKind::Workflow {
+                continue;
+            }
             let to_task = Self::workflow_bridge_task_id(run.id, step.id);
             let step_run_id = run.step_runs.get(&step.id).map(|step_run| step_run.id);
             let existing_deps = graph
@@ -1821,6 +2299,13 @@ impl Registry {
                 .cloned()
                 .unwrap_or_default();
             for dep_step_id in &step.depends_on {
+                if workflow
+                    .steps
+                    .get(dep_step_id)
+                    .is_some_and(|dep_step| dep_step.kind == WorkflowStepKind::Workflow)
+                {
+                    continue;
+                }
                 let from_task = Self::workflow_bridge_task_id(run.id, *dep_step_id);
                 if existing_deps.contains(&from_task) {
                     continue;
@@ -1885,8 +2370,9 @@ impl Registry {
                         name: Some(format!("workflow-run-{}", run.id)),
                         task_ids: workflow
                             .steps
-                            .keys()
-                            .map(|step_id| Self::workflow_bridge_task_id(run.id, *step_id))
+                            .values()
+                            .filter(|step| step.kind != WorkflowStepKind::Workflow)
+                            .map(|step| Self::workflow_bridge_task_id(run.id, step.id))
                             .collect(),
                     },
                     Self::workflow_bridge_corr(run, graph_id, Some(flow_id), None, None, None),
@@ -2015,6 +2501,7 @@ impl Registry {
                     workflow,
                     &refreshed,
                     step.id,
+                    None,
                     "registry:sync_workflow_run_from_synthetic_flow",
                 )?;
                 run = self.get_workflow_run(workflow_run_id)?;
@@ -2212,6 +2699,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
             .unwrap();
         let step_id = workflow.steps.values().next().unwrap().id;
@@ -2270,6 +2758,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
             .unwrap();
         let step_a = workflow
@@ -2288,6 +2777,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
             .unwrap();
         let step_b = workflow
@@ -2448,6 +2938,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
             .unwrap();
         let workflow = registry
@@ -2460,6 +2951,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
             .unwrap();
 
@@ -2516,6 +3008,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
             .unwrap();
         let branch_a = workflow
@@ -2534,6 +3027,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
             .unwrap();
         let branch_b = workflow
@@ -2577,6 +3071,7 @@ mod tests {
                         binding: "combined".to_string(),
                     },
                 }],
+                None,
             )
             .unwrap();
         let join = workflow
@@ -2694,6 +3189,7 @@ mod tests {
                     tags: vec!["branch".to_string()],
                 }],
                 Vec::new(),
+                None,
             )
             .unwrap();
         let branch_a = workflow
@@ -2723,6 +3219,7 @@ mod tests {
                     tags: vec!["branch".to_string()],
                 }],
                 Vec::new(),
+                None,
             )
             .unwrap();
         let branch_b = workflow
@@ -2766,6 +3263,7 @@ mod tests {
                         binding: "combined".to_string(),
                     },
                 }],
+                None,
             )
             .unwrap();
         let join = workflow
@@ -2870,6 +3368,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
             .unwrap();
         let root_step_id = workflow
@@ -2889,6 +3388,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
             .unwrap();
         let dependent = workflow
@@ -2920,6 +3420,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
             .expect_err("unknown dependency should fail");
 
@@ -2927,7 +3428,7 @@ mod tests {
     }
 
     #[test]
-    fn workflow_tick_rejects_unsupported_step_kinds() {
+    fn workflow_add_step_requires_child_workflow_for_workflow_steps() {
         let dir = tempfile::tempdir().unwrap();
         let registry =
             Registry::open_with_config(RegistryConfig::with_dir(dir.path().to_path_buf())).unwrap();
@@ -2940,24 +3441,16 @@ mod tests {
                 &workflow.id.to_string(),
                 "child-workflow",
                 WorkflowStepKind::Workflow,
-                Some("unsupported in sprint 65"),
+                Some("nested child"),
                 &[],
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
-            .unwrap();
+            .expect_err("workflow step should require child target");
 
-        let run = registry
-            .create_workflow_run(&workflow.id.to_string(), None, None, BTreeMap::new())
-            .unwrap();
-        registry.start_workflow_run(&run.id.to_string()).unwrap();
-
-        let err = registry
-            .tick_workflow_run(&run.id.to_string(), false, Some(1))
-            .expect_err("unsupported kind should fail");
-
-        assert_eq!(err.code, "workflow_step_kind_not_supported");
+        assert_eq!(workflow.code, "workflow_child_workflow_required");
     }
 
     #[test]
@@ -3001,6 +3494,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                None,
             )
             .unwrap();
 
@@ -3025,5 +3519,356 @@ mod tests {
         assert_eq!(corr.workflow_id, Some(workflow.id));
         assert_eq!(corr.workflow_run_id, Some(run.id));
         assert_eq!(corr.root_workflow_run_id, Some(run.root_workflow_run_id));
+    }
+
+    #[test]
+    fn workflow_tick_launches_child_workflow_and_maps_child_context_back_to_parent() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry =
+            Registry::open_with_config(RegistryConfig::with_dir(dir.path().to_path_buf())).unwrap();
+        let project = registry.create_project("workflow-project", None).unwrap();
+
+        let child = registry
+            .create_workflow(&project.id.to_string(), "child-workflow", Some("child"))
+            .unwrap();
+        let parent = registry
+            .create_workflow(&project.id.to_string(), "parent-workflow", Some("parent"))
+            .unwrap();
+        let child_id = child.id.to_string();
+        let parent = registry
+            .workflow_add_step(
+                &parent.id.to_string(),
+                "child-step",
+                WorkflowStepKind::Workflow,
+                Some("launches child"),
+                &[],
+                vec![WorkflowStepInputBinding {
+                    name: "goal".to_string(),
+                    source: WorkflowStepInputSource::ContextKey {
+                        key: "goal".to_string(),
+                    },
+                }],
+                vec![WorkflowStepOutputBinding {
+                    name: "child_goal".to_string(),
+                    source: WorkflowValueSource::ChildContextKey {
+                        key: "goal".to_string(),
+                    },
+                    tags: vec!["child".to_string()],
+                }],
+                vec![WorkflowContextPatchBinding {
+                    key: "child_goal".to_string(),
+                    source: WorkflowValueSource::ChildContextKey {
+                        key: "goal".to_string(),
+                    },
+                }],
+                Some(&child_id),
+            )
+            .unwrap();
+        let step_id = parent.steps.values().next().unwrap().id;
+
+        let run = registry
+            .create_workflow_run(
+                &parent.id.to_string(),
+                None,
+                None,
+                BTreeMap::from([(
+                    "goal".to_string(),
+                    WorkflowDataValue::new(
+                        "text/plain",
+                        1,
+                        serde_json::Value::String("ship-it".to_string()),
+                    )
+                    .unwrap(),
+                )]),
+            )
+            .unwrap();
+        registry.start_workflow_run(&run.id.to_string()).unwrap();
+
+        let completed = registry
+            .tick_workflow_run(&run.id.to_string(), false, Some(1))
+            .unwrap();
+
+        assert_eq!(completed.state, WorkflowRunState::Completed);
+        assert_eq!(
+            completed.step_runs.get(&step_id).unwrap().state,
+            WorkflowStepState::Succeeded
+        );
+        assert_eq!(
+            completed
+                .context
+                .current_snapshot
+                .values
+                .get("child_goal")
+                .unwrap()
+                .value,
+            serde_json::Value::String("ship-it".to_string())
+        );
+        assert_eq!(completed.output_bag.entries.len(), 1);
+
+        let state = registry.state().unwrap();
+        let child_run = Registry::child_workflow_run_for_step(&state, &completed, step_id).unwrap();
+        assert_eq!(child_run.parent_workflow_run_id, Some(completed.id));
+        assert_eq!(child_run.parent_step_id, Some(step_id));
+        assert_eq!(
+            child_run.root_workflow_run_id,
+            completed.root_workflow_run_id
+        );
+        assert_eq!(
+            child_run
+                .context
+                .current_snapshot
+                .values
+                .get("goal")
+                .unwrap()
+                .value,
+            serde_json::Value::String("ship-it".to_string())
+        );
+    }
+
+    #[test]
+    fn child_run_terminal_behavior_uses_timeout_policy_when_runtime_timeout_is_observed() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry =
+            Registry::open_with_config(RegistryConfig::with_dir(dir.path().to_path_buf())).unwrap();
+        let project = registry.create_project("workflow-project", None).unwrap();
+
+        let child = registry
+            .create_workflow(&project.id.to_string(), "child-workflow", Some("child"))
+            .unwrap();
+        let parent = registry
+            .create_workflow(&project.id.to_string(), "parent-workflow", Some("parent"))
+            .unwrap();
+        let child_id = child.id.to_string();
+        let parent = registry
+            .workflow_add_step(
+                &parent.id.to_string(),
+                "child-step",
+                WorkflowStepKind::Workflow,
+                None,
+                &[],
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Some(&child_id),
+            )
+            .unwrap();
+        let step_id = parent.steps.values().next().unwrap().id;
+
+        let mut updated = parent.clone();
+        updated
+            .steps
+            .get_mut(&step_id)
+            .unwrap()
+            .child_workflow
+            .as_mut()
+            .unwrap()
+            .failure_policy
+            .on_timeout = WorkflowChildTerminalBehavior::AbortParent;
+        registry
+            .append_event(
+                Event::new(
+                    EventPayload::WorkflowDefinitionUpdated {
+                        definition: updated,
+                    },
+                    CorrelationIds::for_workflow(project.id, parent.id),
+                ),
+                "test:child_run_terminal_behavior_uses_timeout_policy_when_runtime_timeout_is_observed",
+            )
+            .unwrap();
+
+        let parent_run = registry
+            .create_workflow_run(&parent.id.to_string(), None, None, BTreeMap::new())
+            .unwrap();
+        let child_run = registry
+            .create_workflow_run_internal(
+                &child,
+                None,
+                None,
+                BTreeMap::new(),
+                Some(parent_run.id),
+                Some(parent_run.id),
+                Some(step_id),
+                "test:child_run_terminal_behavior_uses_timeout_policy_when_runtime_timeout_is_observed",
+            )
+            .unwrap();
+        registry
+            .append_event(
+                Event::new(
+                    EventPayload::RuntimeTerminated {
+                        attempt_id: Uuid::new_v4(),
+                        reason: "no_observable_progress_timeout".to_string(),
+                    },
+                    CorrelationIds {
+                        project_id: Some(project.id),
+                        graph_id: None,
+                        flow_id: None,
+                        workflow_id: Some(child.id),
+                        workflow_run_id: Some(child_run.id),
+                        root_workflow_run_id: Some(parent_run.id),
+                        parent_workflow_run_id: Some(parent_run.id),
+                        task_id: None,
+                        step_id: Some(step_id),
+                        step_run_id: None,
+                        attempt_id: None,
+                    },
+                ),
+                "test:child_run_terminal_behavior_uses_timeout_policy_when_runtime_timeout_is_observed",
+            )
+            .unwrap();
+        let child_run = registry
+            .transition_workflow_run(
+                &child_run.id.to_string(),
+                WorkflowRunState::Aborted,
+                Some("synthetic_flow_aborted"),
+                false,
+            )
+            .unwrap();
+
+        let behavior = registry.child_run_terminal_behavior(&child_run).unwrap();
+        assert_eq!(behavior, WorkflowChildTerminalBehavior::AbortParent);
+    }
+
+    #[test]
+    fn workflow_child_timeout_policy_can_abort_parent_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry =
+            Registry::open_with_config(RegistryConfig::with_dir(dir.path().to_path_buf())).unwrap();
+        let project = registry.create_project("workflow-project", None).unwrap();
+
+        let child = registry
+            .create_workflow(&project.id.to_string(), "child-workflow", Some("child"))
+            .unwrap();
+        let child = registry
+            .workflow_add_step(
+                &child.id.to_string(),
+                "leaf",
+                WorkflowStepKind::Task,
+                None,
+                &[],
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                None,
+            )
+            .unwrap();
+        let parent = registry
+            .create_workflow(&project.id.to_string(), "parent-workflow", Some("parent"))
+            .unwrap();
+        let child_id = child.id.to_string();
+        let parent = registry
+            .workflow_add_step(
+                &parent.id.to_string(),
+                "child-step",
+                WorkflowStepKind::Workflow,
+                None,
+                &[],
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Some(&child_id),
+            )
+            .unwrap();
+        let step_id = parent.steps.values().next().unwrap().id;
+
+        let mut updated = parent.clone();
+        updated
+            .steps
+            .get_mut(&step_id)
+            .unwrap()
+            .child_workflow
+            .as_mut()
+            .unwrap()
+            .failure_policy
+            .on_timeout = WorkflowChildTerminalBehavior::AbortParent;
+        registry
+            .append_event(
+                Event::new(
+                    EventPayload::WorkflowDefinitionUpdated {
+                        definition: updated.clone(),
+                    },
+                    CorrelationIds::for_workflow(project.id, parent.id),
+                ),
+                "test:workflow_child_timeout_policy_can_abort_parent_run",
+            )
+            .unwrap();
+
+        let parent_run = registry
+            .create_workflow_run(&parent.id.to_string(), None, None, BTreeMap::new())
+            .unwrap();
+        let parent_run = registry
+            .start_workflow_run(&parent_run.id.to_string())
+            .unwrap();
+        registry
+            .workflow_step_set_state(
+                &parent_run.id.to_string(),
+                &step_id.to_string(),
+                WorkflowStepState::Running,
+                None,
+            )
+            .unwrap();
+        registry
+            .workflow_step_set_state(
+                &parent_run.id.to_string(),
+                &step_id.to_string(),
+                WorkflowStepState::Waiting,
+                None,
+            )
+            .unwrap();
+        let child_run = registry
+            .create_workflow_run_internal(
+                &child,
+                None,
+                None,
+                BTreeMap::new(),
+                Some(parent_run.id),
+                Some(parent_run.id),
+                Some(step_id),
+                "test:workflow_child_timeout_policy_can_abort_parent_run",
+            )
+            .unwrap();
+        let child_run = registry
+            .start_workflow_run(&child_run.id.to_string())
+            .unwrap();
+        registry
+            .append_event(
+                Event::new(
+                    EventPayload::RuntimeTerminated {
+                        attempt_id: Uuid::new_v4(),
+                        reason: "no_observable_progress_timeout".to_string(),
+                    },
+                    CorrelationIds {
+                        project_id: Some(project.id),
+                        graph_id: None,
+                        flow_id: None,
+                        workflow_id: Some(child.id),
+                        workflow_run_id: Some(child_run.id),
+                        root_workflow_run_id: Some(parent_run.id),
+                        parent_workflow_run_id: Some(parent_run.id),
+                        task_id: None,
+                        step_id: Some(step_id),
+                        step_run_id: None,
+                        attempt_id: None,
+                    },
+                ),
+                "test:workflow_child_timeout_policy_can_abort_parent_run",
+            )
+            .unwrap();
+        let _ = registry
+            .transition_workflow_run(
+                &child_run.id.to_string(),
+                WorkflowRunState::Aborted,
+                Some("synthetic_flow_aborted"),
+                false,
+            )
+            .unwrap();
+
+        let aborted_parent = registry
+            .process_workflow_child_steps(
+                &parent_run.id.to_string(),
+                &updated,
+                "test:workflow_child_timeout_policy_can_abort_parent_run",
+            )
+            .unwrap();
+        assert_eq!(aborted_parent.state, WorkflowRunState::Aborted);
     }
 }
