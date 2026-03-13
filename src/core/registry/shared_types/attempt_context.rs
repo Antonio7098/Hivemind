@@ -72,6 +72,12 @@ pub(crate) struct AttemptContextWorkflowManifest {
     pub(crate) output_bag_hash: String,
     #[serde(default)]
     pub(crate) output_entry_ids: Vec<Uuid>,
+    #[serde(default)]
+    pub(crate) spec_binding_hash: Option<String>,
+    #[serde(default)]
+    pub(crate) spec_node_ids: Vec<String>,
+    #[serde(default)]
+    pub(crate) spec_context_hash: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct AttemptContextManifest {

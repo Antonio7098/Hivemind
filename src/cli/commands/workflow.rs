@@ -5,6 +5,10 @@ pub enum WorkflowCommands {
     Create(WorkflowCreateArgs),
     Update(WorkflowUpdateArgs),
     StepAdd(WorkflowStepAddArgs),
+    SpecValidate(WorkflowSpecArgs),
+    SpecInspect(WorkflowSpecArgs),
+    SpecBind(WorkflowSpecArgs),
+    SpecClear(WorkflowInspectArgs),
     List(WorkflowListArgs),
     Inspect(WorkflowInspectArgs),
     RunCreate(WorkflowRunCreateArgs),
@@ -79,6 +83,13 @@ pub struct WorkflowListArgs {
 #[derive(Args)]
 pub struct WorkflowInspectArgs {
     pub workflow_id: String,
+}
+
+#[derive(Args)]
+pub struct WorkflowSpecArgs {
+    pub workflow_id: String,
+    #[arg(long, allow_hyphen_values = true)]
+    pub spec_json: String,
 }
 
 #[derive(Args)]

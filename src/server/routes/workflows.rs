@@ -39,6 +39,14 @@ pub(super) fn handle_post(
                 req.wait,
             )?)?
         }
+        "/api/workflows/spec/validate" => {
+            let req: WorkflowSpecRequest = parse_json_body(body, "server:workflows:spec:validate")?;
+            super::json_ok(registry.validate_workflow_spec_binding(&req.workflow_id, req.spec)?)?
+        }
+        "/api/workflows/spec/bind" => {
+            let req: WorkflowSpecRequest = parse_json_body(body, "server:workflows:spec:bind")?;
+            super::json_ok(registry.bind_workflow_spec(&req.workflow_id, req.spec)?)?
+        }
         "/api/workflow-runs/create" => {
             let req: WorkflowRunCreateRequest =
                 parse_json_body(body, "server:workflow-runs:create")?;

@@ -6,7 +6,7 @@ order: 8
 
 # Workflow Foundation
 
-This document describes the Phase 5 workflow domain introduced in Sprint 64, extended in Sprint 65 with a flat execution bridge, extended in Sprint 66 with a deterministic workflow data plane, extended in Sprint 67 with explicit nested child workflows and lineage, and extended in Sprint 68 with typed control-flow and workflow signals.
+This document describes the Phase 5 workflow domain introduced in Sprint 64, extended in Sprint 65 with a flat execution bridge, extended in Sprint 66 with a deterministic workflow data plane, extended in Sprint 67 with explicit nested child workflows and lineage, extended in Sprint 68 with typed control-flow and workflow signals, and extended in Sprint 71 with a topology-aligned workflow-spec binding layer.
 
 ## Purpose
 
@@ -57,12 +57,21 @@ Sprint 68 adds these guarantees:
 - wait completion by signal or timer is evented and replay-safe
 - workflow pause/resume/abort operations recurse through child workflow subtrees explicitly
 
+Sprint 71 adds these guarantees:
+
+- workflow topology remains owned by `WorkflowDefinition` / `WorkflowStepDefinition`; the spec tree is attached to that topology rather than redefining it
+- a `WorkflowSpecBinding` can be validated and persisted against an existing workflow plus explicit child-workflow boundaries
+- spec nodes bind explicitly to workflow ids and step ids, so the intent layer shares the same topology as execution
+- workflow-run inspection can expose the bound workflow-spec node for the current workflow subtree together with the spec binding hash
+- workflow-backed step snapshots and attempt-context manifests can include spec node ids and merged spec execution context without altering scheduler ownership or replay rules
+
 ## Explicit Non-Goals
 
 The current implementation still does **not** add:
 
 - historical migration of legacy `TaskFlow` runs into workflow runs
 - a dedicated workflow-native retry command
+- full inheritance/override propagation for all workflow-spec governance fields across nested specs
 
 Those capabilities are layered in later Phase 5 sprints.
 
@@ -96,6 +105,7 @@ Sprint 65 exposes a usable workflow-facing control surface:
 
 - CLI:
   - `hivemind workflow create|update|step-add|list|inspect`
+  - `hivemind workflow spec-validate|spec-inspect|spec-bind|spec-clear`
   - `hivemind workflow run-create|run-list|status|start|tick|complete|pause|resume|signal|abort|step-set-state`
   - `hivemind workflow runtime-stream|worktree-list|worktree-inspect|worktree-cleanup`
   - `hivemind workflow merge-prepare|merge-approve|merge-execute`
@@ -105,6 +115,8 @@ Sprint 65 exposes a usable workflow-facing control surface:
   - `/api/workflows/create`
   - `/api/workflows/update`
   - `/api/workflows/steps/add`
+  - `/api/workflows/spec/validate`
+  - `/api/workflows/spec/bind`
   - `/api/workflow-runs`
   - `/api/workflow-runs/inspect`
   - `/api/workflow-runs/create`
@@ -122,6 +134,19 @@ Sprint 65 exposes a usable workflow-facing control surface:
   - `/api/merge/*` with `workflow_run_id` as the primary owner selector
 
 The surface remains intentionally narrow: nested child workflows are now supported, but retry is still bridged through explicit step-state transitions and the synthetic task path for leaf execution.
+
+## Sprint 71 Spec Binding Layer
+
+Sprint 71 adds a first-class workflow-spec layer for intent, constraints, verification posture, and execution context.
+
+The rule is explicit:
+
+- workflow topology is still owned by workflow definitions and child-workflow steps
+- spec topology must mirror workflow topology through explicit workflow id and step id bindings
+- nested workflow spec nodes bind to existing child workflow definitions instead of implicitly creating them
+- binding validation fails loudly on missing step coverage, workflow mismatches, duplicate bindings, or invalid node governance fields
+
+This keeps the spec tree and execution tree aligned without making the spec tree the runtime scheduler authority.
 
 ## Sprint 65 Execution Bridge
 
@@ -200,6 +225,9 @@ When a workflow-backed task attempt is launched, the immutable attempt manifest 
 - `step_input_snapshot_hash`
 - `output_bag_hash`
 - selected `output_entry_ids`
+- optional `spec_binding_hash`
+- optional bound `spec_node_ids`
+- optional `spec_context_hash`
 
 That keeps workflow-derived execution input explicit and hashable without replacing the existing constitution, prompt, skills, documents, graph summary, or retry-link manifest inputs.
 

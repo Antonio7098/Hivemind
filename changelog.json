@@ -4,6 +4,33 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.57",
+      "date": "2026-03-13",
+      "phase": 71,
+      "changes": [
+        {
+          "type": "added",
+          "area": "workflow",
+          "description": "Add topology-aligned workflow spec bindings so recursive intent/spec trees can bind onto existing workflow and step identities without taking ownership of execution topology"
+        },
+        {
+          "type": "changed",
+          "area": "workflow",
+          "description": "Expose workflow spec validation and binding through workflow CLI/API surfaces and thread bound spec node ids plus merged spec execution context into workflow-backed inspection and attempt manifests"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 71 regression coverage for workflow spec topology validation, persistence, and workflow-backed spec-context propagation"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update the Phase 5 roadmap and workflow architecture/design docs to document the workflow spec binding model as an intent layer attached to the workflow engine"
+        }
+      ]
+    },
+    {
       "version": "v0.1.56",
       "date": "2026-03-13",
       "phase": 70,
