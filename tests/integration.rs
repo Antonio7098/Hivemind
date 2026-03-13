@@ -6151,6 +6151,224 @@ fn cli_workflow_lifecycle_commands_bridge_to_synthetic_flow() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
+fn cli_workflow_signal_drives_wait_step_completion() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, create_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "create",
+            "proj",
+            "signal-workflow",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let workflow_id = serde_json::from_str::<serde_json::Value>(&create_out)
+        .expect("workflow create json")
+        .get("data")
+        .and_then(|d| d.get("workflow_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow id")
+        .to_string();
+
+    let conditional_json = serde_json::json!({
+        "branches": [
+            {
+                "name": "approved",
+                "condition": {
+                    "type": "context_value_equals",
+                    "key": "approved",
+                    "value": {
+                        "schema": "application/json",
+                        "schema_version": 1,
+                        "value": true
+                    }
+                },
+                "activate_step_ids": []
+            }
+        ],
+        "default_branch": "approved"
+    })
+    .to_string();
+    let (code, gate_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "step-add",
+            &workflow_id,
+            "gate",
+            "--kind",
+            "conditional",
+            "--conditional-json",
+            &conditional_json,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let gate_id = serde_json::from_str::<serde_json::Value>(&gate_out)
+        .expect("workflow step json")
+        .get("data")
+        .and_then(|d| d.get("steps"))
+        .and_then(serde_json::Value::as_object)
+        .and_then(|steps| {
+            steps.values().find(|step| {
+                step.get("name") == Some(&serde_json::Value::String("gate".to_string()))
+            })
+        })
+        .and_then(|step| step.get("id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("gate id")
+        .to_string();
+
+    let wait_json = serde_json::json!({
+        "condition": {
+            "type": "human_signal",
+            "signal_name": "approve"
+        }
+    })
+    .to_string();
+    let (code, wait_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "step-add",
+            &workflow_id,
+            "approval",
+            "--kind",
+            "wait",
+            "--depends-on",
+            &gate_id,
+            "--wait-json",
+            &wait_json,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let wait_id = serde_json::from_str::<serde_json::Value>(&wait_out)
+        .expect("workflow step json")
+        .get("data")
+        .and_then(|d| d.get("steps"))
+        .and_then(serde_json::Value::as_object)
+        .and_then(|steps| {
+            steps.values().find(|step| {
+                step.get("name") == Some(&serde_json::Value::String("approval".to_string()))
+            })
+        })
+        .and_then(|step| step.get("id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("wait id")
+        .to_string();
+
+    let context_inputs = serde_json::json!({
+        "approved": {
+            "schema": "application/json",
+            "schema_version": 1,
+            "value": true
+        }
+    })
+    .to_string();
+    let (code, run_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "run-create",
+            &workflow_id,
+            "--context-inputs-json",
+            &context_inputs,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let workflow_run_id = serde_json::from_str::<serde_json::Value>(&run_out)
+        .expect("workflow run json")
+        .get("data")
+        .and_then(|d| d.get("workflow_run_id"))
+        .and_then(serde_json::Value::as_str)
+        .expect("workflow run id")
+        .to_string();
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["workflow", "start", &workflow_run_id]);
+    assert_eq!(code, 0, "{err}");
+    let (code, tick_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "tick", &workflow_run_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(tick_out.contains("\"waiting\""), "{tick_out}");
+
+    let (code, signal_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "workflow",
+            "signal",
+            &workflow_run_id,
+            "approve",
+            "--idempotency-key",
+            "approve-1",
+            "--step-id",
+            &wait_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(signal_out.contains("\"succeeded\""), "{signal_out}");
+
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "tick", &workflow_run_id],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, status_out, err) = run_hivemind(
+        tmp.path(),
+        &["-f", "json", "workflow", "status", &workflow_run_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let status_json: serde_json::Value =
+        serde_json::from_str(&status_out).expect("workflow status json");
+    assert_eq!(status_json["data"]["state"], "completed", "{status_out}");
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "events",
+            "list",
+            "--workflow-run",
+            &workflow_run_id,
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let events_json: serde_json::Value =
+        serde_json::from_str(&events_out).expect("workflow events json");
+    let events = events_json["data"].as_array().expect("events array");
+    assert!(events
+        .iter()
+        .any(|event| event["payload"]["type"] == "workflow_condition_evaluated"));
+    assert!(events
+        .iter()
+        .any(|event| event["payload"]["type"] == "workflow_wait_activated"));
+    assert!(events
+        .iter()
+        .any(|event| event["payload"]["type"] == "workflow_signal_received"));
+    assert!(events
+        .iter()
+        .any(|event| event["payload"]["type"] == "workflow_wait_completed"));
+}
+
+#[test]
 fn cli_workflow_tick_rejects_unsupported_step_kinds() {
     let tmp = tempfile::tempdir().expect("tempdir");
 

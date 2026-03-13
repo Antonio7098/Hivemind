@@ -1,7 +1,7 @@
 use super::*;
 use crate::core::workflow::{
     WorkflowContextSnapshot, WorkflowContextState, WorkflowOutputBagEntry, WorkflowRunState,
-    WorkflowStepContextSnapshot, WorkflowStepState,
+    WorkflowSignal, WorkflowStepContextSnapshot, WorkflowStepState, WorkflowWaitStatus,
 };
 
 impl AppState {
@@ -20,6 +20,29 @@ impl AppState {
                 self.workflow_runs.insert(run.id, run.clone());
                 true
             }
+            EventPayload::WorkflowConditionEvaluated { .. } => true,
+            EventPayload::WorkflowWaitActivated {
+                workflow_run_id,
+                step_id,
+                step_run_id,
+                wait_status,
+            }
+            | EventPayload::WorkflowWaitCompleted {
+                workflow_run_id,
+                step_id,
+                step_run_id,
+                wait_status,
+            } => self.apply_wait_status(
+                workflow_run_id,
+                step_id,
+                step_run_id,
+                Some(wait_status.clone()),
+                timestamp,
+            ),
+            EventPayload::WorkflowSignalReceived {
+                workflow_run_id,
+                signal,
+            } => self.apply_workflow_signal(workflow_run_id, signal.clone(), timestamp),
             EventPayload::WorkflowRunStarted { workflow_run_id } => {
                 self.apply_run_state_update(workflow_run_id, WorkflowRunState::Running, timestamp)
             }
@@ -185,8 +208,54 @@ impl AppState {
         }
         step_run.state = state;
         step_run.reason.clone_from(&reason.cloned());
+        if state != WorkflowStepState::Waiting {
+            step_run.wait_status = None;
+        }
         step_run.updated_at = timestamp;
         run.updated_at = timestamp;
+        true
+    }
+
+    fn apply_wait_status(
+        &mut self,
+        workflow_run_id: &Uuid,
+        step_id: &Uuid,
+        step_run_id: &Uuid,
+        wait_status: Option<WorkflowWaitStatus>,
+        timestamp: DateTime<Utc>,
+    ) -> bool {
+        let Some(run) = self.workflow_runs.get_mut(workflow_run_id) else {
+            return false;
+        };
+        let Some(step_run) = run.step_runs.get_mut(step_id) else {
+            return false;
+        };
+        if step_run.id != *step_run_id {
+            return false;
+        }
+        step_run.wait_status = wait_status;
+        step_run.updated_at = timestamp;
+        run.updated_at = timestamp;
+        true
+    }
+
+    fn apply_workflow_signal(
+        &mut self,
+        workflow_run_id: &Uuid,
+        signal: WorkflowSignal,
+        timestamp: DateTime<Utc>,
+    ) -> bool {
+        let Some(run) = self.workflow_runs.get_mut(workflow_run_id) else {
+            return false;
+        };
+        if run
+            .signals
+            .iter()
+            .all(|existing| existing.idempotency_key != signal.idempotency_key)
+        {
+            run.signals.push(signal);
+            run.updated_at = timestamp;
+        }
         true
     }
 

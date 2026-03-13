@@ -15,6 +15,7 @@ pub enum WorkflowCommands {
     Complete(WorkflowRunIdArgs),
     Pause(WorkflowRunIdArgs),
     Resume(WorkflowRunIdArgs),
+    Signal(WorkflowSignalArgs),
     Abort(WorkflowAbortArgs),
     StepSetState(WorkflowStepSetStateArgs),
 }
@@ -54,6 +55,10 @@ pub struct WorkflowStepAddArgs {
     pub output_bindings_json: Option<String>,
     #[arg(long, allow_hyphen_values = true)]
     pub context_patches_json: Option<String>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub conditional_json: Option<String>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub wait_json: Option<String>,
     #[arg(long)]
     pub child_workflow_id: Option<String>,
 }
@@ -114,6 +119,20 @@ pub struct WorkflowAbortArgs {
     pub force: bool,
     #[arg(long)]
     pub reason: Option<String>,
+}
+
+#[derive(Args)]
+pub struct WorkflowSignalArgs {
+    pub workflow_run_id: String,
+    pub signal_name: String,
+    #[arg(long)]
+    pub idempotency_key: String,
+    #[arg(long, allow_hyphen_values = true)]
+    pub payload_json: Option<String>,
+    #[arg(long)]
+    pub step_id: Option<String>,
+    #[arg(long, default_value = "human")]
+    pub emitted_by: String,
 }
 
 #[derive(Args)]

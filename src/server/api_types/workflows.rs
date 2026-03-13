@@ -1,7 +1,8 @@
 use super::*;
 use crate::core::workflow::{
-    WorkflowContextPatchBinding, WorkflowDataValue, WorkflowStepInputBinding, WorkflowStepKind,
-    WorkflowStepOutputBinding, WorkflowStepState,
+    WorkflowConditionalConfig, WorkflowContextPatchBinding, WorkflowDataValue,
+    WorkflowStepInputBinding, WorkflowStepKind, WorkflowStepOutputBinding, WorkflowStepState,
+    WorkflowWaitConfig,
 };
 use std::collections::BTreeMap;
 
@@ -35,6 +36,8 @@ pub(crate) struct WorkflowStepAddRequest {
     #[serde(default)]
     pub(crate) context_patches: Vec<WorkflowContextPatchBinding>,
     pub(crate) child_workflow_id: Option<String>,
+    pub(crate) conditional: Option<WorkflowConditionalConfig>,
+    pub(crate) wait: Option<WorkflowWaitConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -63,6 +66,16 @@ pub(crate) struct WorkflowAbortRequest {
     pub(crate) workflow_run_id: String,
     pub(crate) reason: Option<String>,
     pub(crate) force: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct WorkflowSignalRequest {
+    pub(crate) workflow_run_id: String,
+    pub(crate) signal_name: String,
+    pub(crate) idempotency_key: String,
+    pub(crate) payload: Option<WorkflowDataValue>,
+    pub(crate) step_id: Option<String>,
+    pub(crate) emitted_by: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

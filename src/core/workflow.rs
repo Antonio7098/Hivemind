@@ -279,6 +279,99 @@ pub enum WorkflowBagReducer {
     ReduceFunction { function: WorkflowReduceFunction },
 }
 
+/// Allowed typed condition expressions for conditional workflow steps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum WorkflowConditionExpression {
+    ContextKeyExists {
+        key: String,
+    },
+    ContextValueEquals {
+        key: String,
+        value: WorkflowDataValue,
+    },
+    BagCountAtLeast {
+        selector: WorkflowBagSelector,
+        count: u32,
+    },
+    BagValueEquals {
+        selector: WorkflowBagSelector,
+        reducer: WorkflowBagReducer,
+        value: WorkflowDataValue,
+    },
+}
+
+/// A named branch for conditional workflow steps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowConditionalBranch {
+    pub name: String,
+    pub condition: WorkflowConditionExpression,
+    #[serde(default)]
+    pub activate_step_ids: Vec<Uuid>,
+}
+
+/// Conditional-step execution config.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowConditionalConfig {
+    #[serde(default)]
+    pub branches: Vec<WorkflowConditionalBranch>,
+    #[serde(default)]
+    pub default_branch: Option<String>,
+}
+
+/// Wait-step trigger model.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum WorkflowWaitCondition {
+    Signal {
+        signal_name: String,
+        #[serde(default)]
+        payload_schema: Option<String>,
+        #[serde(default)]
+        payload_schema_version: Option<u32>,
+    },
+    Timer {
+        duration_secs: u64,
+    },
+    HumanSignal {
+        signal_name: String,
+    },
+}
+
+/// Wait-step execution config.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowWaitConfig {
+    pub condition: WorkflowWaitCondition,
+}
+
+/// Workflow signal emitted by operators or external systems.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowSignal {
+    pub signal_name: String,
+    pub idempotency_key: String,
+    #[serde(default)]
+    pub payload: Option<WorkflowDataValue>,
+    #[serde(default)]
+    pub step_id: Option<Uuid>,
+    pub emitted_at: DateTime<Utc>,
+    pub emitted_by: String,
+}
+
+/// Durable wait metadata for a step that is currently blocked.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowWaitStatus {
+    pub condition: WorkflowWaitCondition,
+    pub activated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub resume_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub completed_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub completion_reason: Option<String>,
+    #[serde(default)]
+    pub signal: Option<WorkflowSignal>,
+}
+
 /// A reusable value source for step outputs and context patches.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -359,6 +452,10 @@ pub struct WorkflowStepDefinition {
     pub context_patches: Vec<WorkflowContextPatchBinding>,
     #[serde(default)]
     pub child_workflow: Option<WorkflowChildConfig>,
+    #[serde(default)]
+    pub conditional: Option<WorkflowConditionalConfig>,
+    #[serde(default)]
+    pub wait: Option<WorkflowWaitConfig>,
 }
 
 impl WorkflowStepDefinition {
@@ -374,6 +471,8 @@ impl WorkflowStepDefinition {
             output_bindings: Vec::new(),
             context_patches: Vec::new(),
             child_workflow: None,
+            conditional: None,
+            wait: None,
         }
     }
 }
@@ -714,6 +813,8 @@ pub struct WorkflowStepRun {
     pub updated_at: DateTime<Utc>,
     #[serde(default)]
     pub reason: Option<String>,
+    #[serde(default)]
+    pub wait_status: Option<WorkflowWaitStatus>,
 }
 
 /// Runtime execution record for a workflow definition.
@@ -736,6 +837,8 @@ pub struct WorkflowRun {
     pub context: WorkflowContextState,
     #[serde(default)]
     pub output_bag: WorkflowOutputBag,
+    #[serde(default)]
+    pub signals: Vec<WorkflowSignal>,
     pub created_at: DateTime<Utc>,
     #[serde(default)]
     pub started_at: Option<DateTime<Utc>>,
@@ -761,6 +864,7 @@ impl WorkflowRun {
                         state: WorkflowStepState::Pending,
                         updated_at: now,
                         reason: None,
+                        wait_status: None,
                     },
                 )
             })
@@ -778,6 +882,7 @@ impl WorkflowRun {
             step_contexts: BTreeMap::new(),
             context: WorkflowContextState::default(),
             output_bag: WorkflowOutputBag::default(),
+            signals: Vec::new(),
             created_at: now,
             started_at: None,
             completed_at: None,
@@ -829,6 +934,8 @@ pub enum WorkflowError {
         expected: String,
         actual: String,
     },
+    InvalidCondition(String),
+    SignalConflict(String),
 }
 
 impl std::fmt::Display for WorkflowError {
@@ -849,7 +956,9 @@ impl std::fmt::Display for WorkflowError {
             | Self::MissingContextKey(message)
             | Self::UnknownInputBinding(message)
             | Self::InvalidReducer(message)
-            | Self::ReducerConflict(message) => write!(f, "{message}"),
+            | Self::ReducerConflict(message)
+            | Self::InvalidCondition(message)
+            | Self::SignalConflict(message) => write!(f, "{message}"),
             Self::SchemaMismatch { expected, actual } => {
                 write!(
                     f,
@@ -926,6 +1035,27 @@ impl WorkflowBagReducer {
                     )
                 }
             },
+        }
+    }
+}
+
+impl WorkflowWaitCondition {
+    #[must_use]
+    pub fn to_wait_status(&self, activated_at: DateTime<Utc>) -> WorkflowWaitStatus {
+        let resume_at = match self {
+            Self::Timer { duration_secs } => {
+                chrono::Duration::try_seconds((*duration_secs).min(i64::MAX as u64) as i64)
+                    .map(|delta| activated_at + delta)
+            }
+            Self::Signal { .. } | Self::HumanSignal { .. } => None,
+        };
+        WorkflowWaitStatus {
+            condition: self.clone(),
+            activated_at,
+            resume_at,
+            completed_at: None,
+            completion_reason: None,
+            signal: None,
         }
     }
 }

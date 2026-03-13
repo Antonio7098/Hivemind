@@ -4,6 +4,33 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.54",
+      "date": "2026-03-13",
+      "phase": 68,
+      "changes": [
+        {
+          "type": "added",
+          "area": "workflow",
+          "description": "Complete Sprint 68 with typed conditional branches, explicit wait-step state, durable workflow signals, subtree pause/resume/abort propagation, and workflow-native signal CLI/API support"
+        },
+        {
+          "type": "added",
+          "area": "events",
+          "description": "Emit attributable workflow control-plane events for condition evaluation, wait activation/completion, and signal receipt so control flow remains replay-visible"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 68 regression coverage for signal-driven wait completion, duplicate signal rejection, and end-to-end CLI control-plane behavior"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Document workflow control-plane semantics, close Sprint 68 roadmap/report state, and publish manual smoke evidence including provider-backed OpenCode runtime runs"
+        }
+      ]
+    },
+    {
       "version": "v0.1.53",
       "date": "2026-03-13",
       "phase": 66,
