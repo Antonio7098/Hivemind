@@ -224,6 +224,11 @@ Use the bundled `hivemind-test/` project to exercise real execution surfaces, ru
 
 This procedure must run against a **fresh clone in a temp directory** so the main repo stays clean and no manual cleanup is required.
 
+For workflow/runtime sprints, at least one manual smoke path must also validate:
+- real non-native runtime delivery of workflow-derived attempt context
+- fail-fast handling for remote no-progress conditions
+- checkpoint/tool-bridge behavior at the orchestration layer rather than only through adapter-specific wrappers
+
 1) Create a fresh temp clone
 
 ```bash
@@ -266,6 +271,12 @@ if test -f /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl; then
   rg '"type":"runtime_' /tmp/hivemind-test/.hm_home/.hivemind/events.jsonl | head || true
 fi
 ```
+
+For workflow-data-plane sprints, manual evidence must also capture:
+
+- at least one `workflow status` snapshot showing workflow context revision/hash and output bag contents
+- at least one `events list --workflow-run` artifact proving `workflow_context_initialized`, `workflow_step_inputs_resolved`, `workflow_output_appended`, and any workflow-derived attempt-manifest events
+- at least one negative-path artifact showing reducer or schema validation failure through the real CLI
 
 5) Inspect worktrees and filesystem changes
 

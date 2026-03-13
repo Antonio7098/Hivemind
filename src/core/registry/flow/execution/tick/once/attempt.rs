@@ -90,6 +90,13 @@ impl Registry {
             (None, Vec::new())
         };
 
+        let workflow_attempt_context =
+            self.workflow_attempt_context_for_task(state, flow, task_id, origin)?;
+        let (workflow_manifest, workflow_section) = workflow_attempt_context
+            .map_or((None, None), |(manifest, section)| {
+                (Some(manifest), Some(section))
+            });
+
         let context_build = self.assemble_attempt_context(
             state,
             flow,
@@ -97,6 +104,8 @@ impl Registry {
             attempt_id,
             &runtime.adapter_name,
             &retry_prior_attempt_ids,
+            workflow_manifest,
+            workflow_section,
             origin,
         )?;
 

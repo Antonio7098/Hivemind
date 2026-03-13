@@ -22,7 +22,7 @@ impl Registry {
             "transport_stream"
         } else if code.starts_with("native_transport_") {
             "transport"
-        } else if code == "timeout" {
+        } else if matches!(code, "timeout" | "no_observable_progress_timeout") {
             "timeout"
         } else if code == "checkpoints_incomplete" {
             "checkpoint_incomplete"

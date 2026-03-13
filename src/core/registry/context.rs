@@ -29,18 +29,25 @@ impl Registry {
         attempt_id: Uuid,
         runtime_name: &str,
         prior_attempt_ids: &[Uuid],
+        workflow_manifest: Option<AttemptContextWorkflowManifest>,
+        workflow_section: Option<String>,
         origin: &'static str,
     ) -> Result<AttemptContextBuildResult> {
-        let source_data =
+        let mut source_data =
             self.build_attempt_context_sources(state, flow, task_id, prior_attempt_ids, origin)?;
+        source_data.workflow_manifest = workflow_manifest;
+        source_data.workflow_section = workflow_section;
 
-        let ordered_inputs = vec![
+        let mut ordered_inputs = vec![
             "constitution".to_string(),
             "system_prompt".to_string(),
             "skills".to_string(),
             "project_documents".to_string(),
-            "graph_summary".to_string(),
         ];
+        if source_data.workflow_manifest.is_some() {
+            ordered_inputs.push("workflow_step".to_string());
+        }
+        ordered_inputs.push("graph_summary".to_string());
         let excluded_sources = vec![
             "project_notepad".to_string(),
             "global_notepad".to_string(),
@@ -69,6 +76,7 @@ impl Registry {
             source_data.system_prompt_section,
             &source_data.skill_sections,
             &source_data.document_sections,
+            source_data.workflow_section.clone(),
             source_data.graph_section,
             origin,
         )?;
@@ -91,6 +99,7 @@ impl Registry {
             system_prompt: source_data.system_prompt_manifest,
             skills: source_data.skill_manifest,
             documents: source_data.document_manifest,
+            workflow: source_data.workflow_manifest,
             graph_summary: source_data.graph_summary,
             retry_links: source_data.retry_links,
             budget: AttemptContextBudgetManifest {

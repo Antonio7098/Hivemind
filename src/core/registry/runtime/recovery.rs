@@ -154,7 +154,10 @@ impl Registry {
             && (classified.rate_limited
                 || matches!(
                     classified.code.as_str(),
-                    "timeout" | "wait_failed" | "stdin_write_failed"
+                    "timeout"
+                        | "no_observable_progress_timeout"
+                        | "wait_failed"
+                        | "stdin_write_failed"
                 )
                 || classified.code.starts_with("native_transport_")
                 || classified.code.starts_with("native_stream_"));

@@ -25,6 +25,26 @@
         reason: Option<String>,
         forced: bool,
     },
+    WorkflowContextInitialized {
+        workflow_run_id: Uuid,
+        context: WorkflowContextState,
+    },
+    WorkflowContextSnapshotCaptured {
+        workflow_run_id: Uuid,
+        snapshot: WorkflowContextSnapshot,
+    },
+    WorkflowStepInputsResolved {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+        snapshot: WorkflowStepContextSnapshot,
+    },
+    WorkflowOutputAppended {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+        entry: WorkflowOutputBagEntry,
+    },
     WorkflowStepStateChanged {
         workflow_run_id: Uuid,
         step_id: Uuid,

@@ -283,6 +283,18 @@ impl Registry {
             }
         }
 
+        if order == total {
+            let (exit_code, terminated_reason) = self.attempt_runtime_outcome(attempt.id)?;
+            let terminated_on_checkpoint_gate = terminated_reason
+                .as_deref()
+                .is_some_and(|reason| reason.starts_with("checkpoints_incomplete:"));
+            if exit_code == Some(0) && terminated_on_checkpoint_gate {
+                if let Err(err) = self.complete_task_execution(&attempt.task_id.to_string()) {
+                    self.record_error_event(&err, corr_attempt.clone());
+                }
+            }
+        }
+
         let _ = self.enforce_constitution_gate(
             flow.project_id,
             "checkpoint_complete",
@@ -293,6 +305,8 @@ impl Registry {
         if flow.run_mode == RunMode::Auto && flow.state == FlowState::Running {
             let _ = self.auto_progress_flow(&flow.id.to_string());
         }
+
+        let _ = self.reconcile_workflow_bridge_for_flow(flow.id, origin);
 
         Ok(CheckpointCompletionResult {
             flow_id: flow.id,

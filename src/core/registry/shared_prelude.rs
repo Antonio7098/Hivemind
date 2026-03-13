@@ -38,8 +38,12 @@ pub use crate::core::state::{
     ProjectRuntimeConfig, RuntimeRoleDefaults, Task, TaskRuntimeConfig, TaskState,
 };
 pub use crate::core::workflow::{
-    WorkflowDefinition, WorkflowError, WorkflowRun, WorkflowRunState, WorkflowStepDefinition,
-    WorkflowStepKind, WorkflowStepRun, WorkflowStepState,
+    WorkflowBagKeyField, WorkflowBagReducer, WorkflowBagSelector, WorkflowContextPatchBinding,
+    WorkflowContextSnapshot, WorkflowContextState, WorkflowDataValue, WorkflowDefinition,
+    WorkflowError, WorkflowInputBindingResolution, WorkflowOutputBag, WorkflowOutputBagEntry,
+    WorkflowReduceFunction, WorkflowRun, WorkflowRunState, WorkflowStepContextSnapshot,
+    WorkflowStepDefinition, WorkflowStepInputBinding, WorkflowStepInputSource, WorkflowStepKind,
+    WorkflowStepOutputBinding, WorkflowStepRun, WorkflowStepState, WorkflowValueSource,
 };
 pub use crate::core::worktree::{WorktreeConfig, WorktreeError, WorktreeManager, WorktreeStatus};
 pub use crate::native::adapter::{NativeAdapterConfig, NativeRuntimeAdapter};

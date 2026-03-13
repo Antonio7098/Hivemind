@@ -114,6 +114,33 @@ impl Registry {
             return self.get_flow(flow_id);
         };
 
+        if let Err((failure_code, failure_message, recoverable)) = self
+            .apply_external_runtime_tool_directives(
+                attempt_id,
+                &execution.runtime_for_adapter,
+                &execution.report.stdout,
+                &execution.report.stderr,
+                origin,
+            )
+        {
+            self.handle_runtime_failure(
+                &state,
+                &flow,
+                task_id,
+                attempt_id,
+                &execution.runtime_for_adapter,
+                launch_prereqs.next_attempt_number,
+                max_attempts,
+                &failure_code,
+                &failure_message,
+                recoverable,
+                &execution.report.stdout,
+                &execution.report.stderr,
+                origin,
+            )?;
+            return self.get_flow(flow_id);
+        }
+
         if execution.report.exit_code != 0 {
             let (failure_code, failure_message, recoverable) = execution
                 .report
@@ -149,6 +176,16 @@ impl Registry {
         }
 
         if let Err(err) = self.complete_task_execution(&task_id.to_string()) {
+            if err.code == "task_not_running" {
+                let latest = self.get_flow(flow_id)?;
+                if latest
+                    .task_executions
+                    .get(&task_id)
+                    .is_some_and(|exec| exec.state != TaskExecState::Running)
+                {
+                    return Ok(latest);
+                }
+            }
             if err.code == "checkpoints_incomplete" {
                 if let Some((failure_code, failure_message, recoverable)) =
                     Self::detect_runtime_output_failure(

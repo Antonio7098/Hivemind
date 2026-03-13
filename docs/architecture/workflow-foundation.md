@@ -6,7 +6,7 @@ order: 8
 
 # Workflow Foundation
 
-This document describes the Phase 5 workflow domain introduced in Sprint 64 and extended in Sprint 65 with a flat execution bridge on top of the legacy `TaskFlow` attempt machinery.
+This document describes the Phase 5 workflow domain introduced in Sprint 64, extended in Sprint 65 with a flat execution bridge, and extended in Sprint 66 with a deterministic workflow data plane on top of the legacy `TaskFlow` attempt machinery.
 
 ## Purpose
 
@@ -31,11 +31,18 @@ The current foundation and Sprint 65 bridge guarantee:
 - flat `task` workflow steps can execute through the existing flow/attempt/worktree/verification stack
 - bridged flow, task, and attempt events remain attributable to the owning workflow run
 
+Sprint 66 adds these guarantees:
+
+- workflow runs carry a typed `WorkflowContextState` with explicit initialization inputs and deterministic snapshot hashes
+- each step can materialize a deterministic `WorkflowStepContextSnapshot` that records the exact context hash, bag hash, resolved inputs, and selected output entry ids used for execution
+- step-produced outputs are appended to a workflow-scoped `WorkflowOutputBag` rather than mutating shared context keys implicitly
+- join steps can consume bag entries through selectors and reducers, emit new bag outputs, and patch workflow context explicitly at step-completion boundaries
+- attempt-context assembly now injects a workflow-derived manifest section with workflow run ids and workflow/step hash references
+
 ## Explicit Non-Goals
 
 The current implementation still does **not** add:
 
-- workflow-context dataflow
 - nested child workflow execution
 - signal/wait orchestration
 - workflow-native runtime/worktree/merge ownership without the synthetic flow bridge
@@ -55,6 +62,10 @@ The initial workflow event family includes:
 - `WorkflowRunResumed`
 - `WorkflowRunCompleted`
 - `WorkflowRunAborted`
+- `WorkflowContextInitialized`
+- `WorkflowContextSnapshotCaptured`
+- `WorkflowStepInputsResolved`
+- `WorkflowOutputAppended`
 - `WorkflowStepStateChanged`
 
 These events are projected into `AppState.workflows` and `AppState.workflow_runs`.
@@ -83,7 +94,7 @@ Sprint 65 exposes a usable workflow-facing control surface:
   - `/api/workflow-runs/abort`
   - `/api/workflow-runs/steps/state`
 
-The surface remains intentionally narrow: workflow execution currently supports flat `task` steps only, and retry is still bridged through the synthetic task path.
+The surface remains intentionally narrow: workflow execution currently supports flat `task` and `join` steps only, and retry is still bridged through the synthetic task path.
 
 ## Sprint 65 Execution Bridge
 
@@ -99,6 +110,80 @@ Operationally this means:
 - bridged flow/task/attempt events are stamped with workflow correlation ids so event inspection can attribute work back to the workflow run
 
 This keeps the execution path replayable while avoiding a second runtime/worktree stack during Sprint 65.
+
+## Sprint 66 Data Plane
+
+Sprint 66 layers a workflow-native data plane over the execution bridge without replacing the underlying attempt machinery.
+
+The contract is explicit:
+
+- workflow context = run-scoped mutable data plane, changed only by declared events
+- step context = deterministic resolved input snapshot for a specific step run
+- attempt context = immutable runtime input assembled for a worker attempt
+
+### Workflow context
+
+`WorkflowContextState` is initialized when the run is created and immediately emits:
+
+- `WorkflowContextInitialized`
+- `WorkflowContextSnapshotCaptured`
+
+The initial snapshot captures:
+
+- context schema and schema version
+- initialization inputs
+- snapshot revision and hash
+
+Only explicit patch application produces a new context snapshot. In Sprint 66, those patches are restricted to join-step completion.
+
+### Output bag
+
+Parallel branches do not race on shared context keys. They emit append-only bag entries with:
+
+- `workflow_run_id`
+- producer `step_id` and `step_run_id`
+- optional `branch_step_id` / `join_step_id`
+- output name, tags, schema, and schema version
+- deterministic event-sequence ordering
+
+Bag consumers must opt into explicit selectors and reducers. There is no implicit last-writer-wins merge of branch outputs.
+
+### Step input resolution
+
+Before a task attempt is launched or a join step is executed, the registry resolves all step inputs into a `WorkflowStepContextSnapshot`. That snapshot records:
+
+- the workflow context hash used
+- the output bag hash used
+- the fully resolved input map
+- the selected output entry ids for bag-derived inputs
+- a deterministic step-input snapshot hash
+
+This snapshot is emitted via `WorkflowStepInputsResolved` and then reused for output emission, join completion, and attempt-context assembly.
+
+### Attempt-context integration
+
+When a workflow-backed task attempt is launched, the immutable attempt manifest now includes a `workflow` section containing:
+
+- `workflow_run_id`
+- `step_id`
+- `step_run_id`
+- workflow context schema/version
+- `context_snapshot_hash`
+- `step_input_snapshot_hash`
+- `output_bag_hash`
+- selected `output_entry_ids`
+
+That keeps workflow-derived execution input explicit and hashable without replacing the existing constitution, prompt, skills, documents, graph summary, or retry-link manifest inputs.
+
+## Operator Inspection Guidance
+
+During debugging, operators should inspect three surfaces together:
+
+- `hivemind workflow status <run-id>` for current context snapshots, step snapshots, and output bag entries
+- `hivemind events list --workflow-run <run-id>` for the sequence of `workflow_context_*`, `workflow_step_inputs_resolved`, and `workflow_output_appended` events
+- attempt context inspection for workflow-backed attempts to confirm the immutable attempt manifest includes the expected workflow hashes
+
+If a join step fails, inspect the reducer error together with the bag entry list. The system is designed to fail explicitly on duplicate single-producer expectations and schema mismatches rather than silently choosing a winner.
 
 ## Design Constraint
 

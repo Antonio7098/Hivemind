@@ -81,6 +81,12 @@ pub(super) fn event_type_label(payload: &crate::core::events::EventPayload) -> &
         EventPayload::WorkflowRunResumed { .. } => "workflow_run_resumed",
         EventPayload::WorkflowRunCompleted { .. } => "workflow_run_completed",
         EventPayload::WorkflowRunAborted { .. } => "workflow_run_aborted",
+        EventPayload::WorkflowContextInitialized { .. } => "workflow_context_initialized",
+        EventPayload::WorkflowContextSnapshotCaptured { .. } => {
+            "workflow_context_snapshot_captured"
+        }
+        EventPayload::WorkflowStepInputsResolved { .. } => "workflow_step_inputs_resolved",
+        EventPayload::WorkflowOutputAppended { .. } => "workflow_output_appended",
         EventPayload::WorkflowStepStateChanged { .. } => "workflow_step_state_changed",
         EventPayload::TaskReady { .. } => "task_ready",
         EventPayload::TaskBlocked { .. } => "task_blocked",

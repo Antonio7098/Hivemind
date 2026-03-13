@@ -78,6 +78,10 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::WorkflowRunResumed { .. }
         | EventPayload::WorkflowRunCompleted { .. }
         | EventPayload::WorkflowRunAborted { .. }
+        | EventPayload::WorkflowContextInitialized { .. }
+        | EventPayload::WorkflowContextSnapshotCaptured { .. }
+        | EventPayload::WorkflowStepInputsResolved { .. }
+        | EventPayload::WorkflowOutputAppended { .. }
         | EventPayload::WorkflowStepStateChanged { .. } => "workflow",
 
         EventPayload::TaskReady { .. }

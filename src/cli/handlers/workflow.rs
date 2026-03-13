@@ -4,7 +4,11 @@ use crate::cli::commands::{WorkflowCommands, WorkflowStepKindArg, WorkflowStepSt
 use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::error::ExitCode;
 use crate::core::registry::Registry;
-use crate::core::workflow::{WorkflowDefinition, WorkflowRun, WorkflowStepKind, WorkflowStepState};
+use crate::core::workflow::{
+    WorkflowContextPatchBinding, WorkflowDataValue, WorkflowDefinition, WorkflowRun,
+    WorkflowStepInputBinding, WorkflowStepKind, WorkflowStepOutputBinding, WorkflowStepState,
+};
+use std::collections::BTreeMap;
 
 fn get_registry(format: OutputFormat) -> Option<Registry> {
     match Registry::open() {
@@ -112,6 +116,27 @@ fn workflow_step_state(state: WorkflowStepStateArg) -> WorkflowStepState {
     }
 }
 
+fn parse_json_arg<T: serde::de::DeserializeOwned + Default>(
+    value: Option<&str>,
+    field: &str,
+    format: OutputFormat,
+) -> std::result::Result<T, ExitCode> {
+    let Some(value) = value else {
+        return Ok(T::default());
+    };
+
+    serde_json::from_str(value).map_err(|err| {
+        output_error(
+            &crate::core::error::HivemindError::user(
+                "workflow_cli_json_invalid",
+                format!("invalid JSON for {field}: {err}"),
+                "cli:workflow",
+            ),
+            format,
+        )
+    })
+}
+
 fn render_workflow(workflow: WorkflowDefinition, format: OutputFormat) -> ExitCode {
     if format == OutputFormat::Table {
         println!("ID:          {}", workflow.id);
@@ -200,6 +225,30 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
             workflow_step_kind(args.kind),
             args.description.as_deref(),
             &args.depends_on,
+            match parse_json_arg::<Vec<WorkflowStepInputBinding>>(
+                args.input_bindings_json.as_deref(),
+                "input_bindings_json",
+                format,
+            ) {
+                Ok(value) => value,
+                Err(code) => return code,
+            },
+            match parse_json_arg::<Vec<WorkflowStepOutputBinding>>(
+                args.output_bindings_json.as_deref(),
+                "output_bindings_json",
+                format,
+            ) {
+                Ok(value) => value,
+                Err(code) => return code,
+            },
+            match parse_json_arg::<Vec<WorkflowContextPatchBinding>>(
+                args.context_patches_json.as_deref(),
+                "context_patches_json",
+                format,
+            ) {
+                Ok(value) => value,
+                Err(code) => return code,
+            },
         ) {
             Ok(workflow) => render_workflow(workflow, format),
             Err(err) => output_error(&err, format),
@@ -216,7 +265,20 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
             Err(err) => output_error(&err, format),
         },
         WorkflowCommands::RunCreate(args) => {
-            match registry.create_workflow_run(&args.workflow_id) {
+            let context_inputs = match parse_json_arg::<BTreeMap<String, WorkflowDataValue>>(
+                args.context_inputs_json.as_deref(),
+                "context_inputs_json",
+                format,
+            ) {
+                Ok(value) => value,
+                Err(code) => return code,
+            };
+            match registry.create_workflow_run(
+                &args.workflow_id,
+                args.context_schema.as_deref(),
+                args.context_schema_version,
+                context_inputs,
+            ) {
                 Ok(run) => output_workflow_run_id(run.id, format),
                 Err(err) => output_error(&err, format),
             }

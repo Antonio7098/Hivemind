@@ -133,8 +133,17 @@ impl ExecutionReport {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum InteractiveAdapterEvent {
-    Output { content: String },
-    Input { content: String },
+    Output {
+        content: String,
+    },
+    Input {
+        content: String,
+    },
+    FilesystemObserved {
+        files_created: Vec<PathBuf>,
+        files_modified: Vec<PathBuf>,
+        files_deleted: Vec<PathBuf>,
+    },
     Interrupted,
 }
 
