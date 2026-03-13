@@ -432,7 +432,7 @@ fn truncate_python_stdout(stdout: &str, limit: usize) -> String {
     format!("{retained}…")
 }
 
-const PYTHON_GRAPH_QUERY_BOOTSTRAP: &str = r#"
+const PYTHON_GRAPH_QUERY_BOOTSTRAP: &str = r"
 import json
 import sys
 import traceback
@@ -464,4 +464,4 @@ except Exception as exc:
             'traceback': traceback.format_exc(),
         }
     })
-"#;
+";

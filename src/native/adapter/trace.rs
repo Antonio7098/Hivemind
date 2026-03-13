@@ -742,18 +742,9 @@ impl NativeRuntimeAdapter {
         let lowered = command_line.trim().to_ascii_lowercase();
         matches!(
             lowered.split_whitespace().collect::<Vec<_>>().as_slice(),
-            ["cargo", "test", ..]
-                | ["cargo", "check", ..]
-                | ["cargo", "clippy", ..]
-                | ["cargo", "fmt", ..]
-                | ["pytest", ..]
-                | ["py.test", ..]
-                | ["go", "test", ..]
-                | ["just", "test", ..]
-                | ["npm", "test", ..]
-                | ["pnpm", "test", ..]
-                | ["yarn", "test", ..]
-                | ["bun", "test", ..]
+            ["cargo", "test" | "check" | "clippy" | "fmt", ..]
+                | ["go" | "just" | "npm" | "pnpm" | "yarn" | "bun", "test", ..]
+                | ["pytest" | "py.test", ..]
         )
     }
 

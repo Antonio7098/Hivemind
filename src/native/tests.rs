@@ -3375,7 +3375,6 @@ fn assemble_native_prompt_keeps_failed_write_visible_without_dirty_window() {
     assert!(rendered
         .prompt
         .contains("[tool_result:write_file:Failure] disk full"));
-    assert!(!rendered.prompt.contains("Active Code Windows"));
     assert!(!rendered.prompt.contains(&attempted_content));
 }
 

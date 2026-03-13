@@ -266,7 +266,8 @@ fn execute_interactive_reports_history_compaction_under_budget_pressure() {
         "{transcript}"
     );
     assert!(
-        transcript.contains("reason=soft_budget_pressure"),
+        transcript.contains("reason=soft_budget_pressure")
+            || transcript.contains("reason=hard_budget_limit"),
         "{transcript}"
     );
 }

@@ -109,9 +109,31 @@ fn flow_completion_allows_failed_and_escalated_tasks() {
     let mut flow = test_flow();
     flow.start().unwrap();
     let task_ids: Vec<_> = flow.task_executions.keys().copied().collect();
+    flow.transition_task(task_ids[0], TaskExecState::Ready)
+        .unwrap();
+    flow.transition_task(task_ids[0], TaskExecState::Running)
+        .unwrap();
+    flow.transition_task(task_ids[0], TaskExecState::Verifying)
+        .unwrap();
     flow.transition_task(task_ids[0], TaskExecState::Success)
         .unwrap();
+
+    flow.transition_task(task_ids[1], TaskExecState::Ready)
+        .unwrap();
+    flow.transition_task(task_ids[1], TaskExecState::Running)
+        .unwrap();
+    flow.transition_task(task_ids[1], TaskExecState::Verifying)
+        .unwrap();
     flow.transition_task(task_ids[1], TaskExecState::Failed)
+        .unwrap();
+
+    flow.transition_task(task_ids[2], TaskExecState::Ready)
+        .unwrap();
+    flow.transition_task(task_ids[2], TaskExecState::Running)
+        .unwrap();
+    flow.transition_task(task_ids[2], TaskExecState::Verifying)
+        .unwrap();
+    flow.transition_task(task_ids[2], TaskExecState::Failed)
         .unwrap();
     flow.transition_task(task_ids[2], TaskExecState::Escalated)
         .unwrap();

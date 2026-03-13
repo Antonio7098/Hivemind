@@ -899,14 +899,11 @@ fn is_validation_command(command: &str, args: &[String]) -> bool {
     matches!(
         (lowered_command.as_str(), first_arg.as_deref()),
         ("cargo", Some("test" | "check" | "clippy" | "fmt"))
-            | ("go", Some("test"))
-            | ("just", Some("test"))
-            | ("npm", Some("test"))
-            | ("pnpm", Some("test"))
-            | ("yarn", Some("test"))
-            | ("bun", Some("test"))
-            | ("pytest", _)
-            | ("py.test", _)
+            | (
+                "go" | "just" | "npm" | "pnpm" | "yarn" | "bun",
+                Some("test")
+            )
+            | ("pytest" | "py.test", _)
     )
 }
 
