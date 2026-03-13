@@ -192,11 +192,11 @@ impl OpenCodeAdapter {
         let stop_filesystem_poll = Arc::new(AtomicBool::new(false));
         let filesystem_stop_flag = Arc::clone(&stop_filesystem_poll);
         let filesystem_handle = std::thread::spawn(move || {
-            let mut previous = OpenCodeAdapter::capture_worktree_state(&filesystem_worktree);
+            let mut previous = Self::capture_worktree_state(&filesystem_worktree);
             while !filesystem_stop_flag.load(Ordering::Relaxed) {
                 std::thread::sleep(Duration::from_secs(1));
-                let current = OpenCodeAdapter::capture_worktree_state(&filesystem_worktree);
-                let delta = OpenCodeAdapter::diff_worktree_state(&previous, &current);
+                let current = Self::capture_worktree_state(&filesystem_worktree);
+                let delta = Self::diff_worktree_state(&previous, &current);
                 if !delta.created.is_empty()
                     || !delta.modified.is_empty()
                     || !delta.deleted.is_empty()

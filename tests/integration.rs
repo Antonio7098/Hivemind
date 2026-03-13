@@ -4088,7 +4088,7 @@ fn cli_attempt_inspect_context_returns_manifest_and_retry_linkage() {
         manifest
             .get("manifest_version")
             .and_then(serde_json::Value::as_u64),
-        Some(2)
+        Some(3)
     );
     let ordered_inputs = manifest
         .get("ordered_inputs")
@@ -5522,7 +5522,7 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
         .expect("workflow id")
         .to_string();
 
-    let branch_a_outputs = serde_json::json!([
+    let alpha_branch_outputs = serde_json::json!([
         {
             "name": "branch",
             "source": {
@@ -5537,7 +5537,7 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
         }
     ])
     .to_string();
-    let (code, branch_a_out, err) = run_hivemind(
+    let (code, alpha_branch_step_out, err) = run_hivemind(
         tmp.path(),
         &[
             "-f",
@@ -5549,11 +5549,11 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
             "--kind",
             "task",
             "--output-bindings-json",
-            &branch_a_outputs,
+            &alpha_branch_outputs,
         ],
     );
     assert_eq!(code, 0, "{err}");
-    let branch_a_id = serde_json::from_str::<serde_json::Value>(&branch_a_out)
+    let alpha_branch_step_id = serde_json::from_str::<serde_json::Value>(&alpha_branch_step_out)
         .expect("branch a step json")
         .get("data")
         .and_then(|d| d.get("steps"))
@@ -5568,7 +5568,7 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
         .expect("branch a id")
         .to_string();
 
-    let branch_b_outputs = serde_json::json!([
+    let beta_branch_outputs = serde_json::json!([
         {
             "name": "branch",
             "source": {
@@ -5583,7 +5583,7 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
         }
     ])
     .to_string();
-    let (code, branch_b_out, err) = run_hivemind(
+    let (code, beta_branch_step_out, err) = run_hivemind(
         tmp.path(),
         &[
             "-f",
@@ -5595,11 +5595,11 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
             "--kind",
             "task",
             "--output-bindings-json",
-            &branch_b_outputs,
+            &beta_branch_outputs,
         ],
     );
     assert_eq!(code, 0, "{err}");
-    let branch_b_id = serde_json::from_str::<serde_json::Value>(&branch_b_out)
+    let beta_branch_step_id = serde_json::from_str::<serde_json::Value>(&beta_branch_step_out)
         .expect("branch b step json")
         .get("data")
         .and_then(|d| d.get("steps"))
@@ -5621,7 +5621,7 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
                 "type": "bag",
                 "selector": {
                     "output_name": "branch",
-                    "producer_step_ids": [branch_a_id, branch_b_id],
+                    "producer_step_ids": [alpha_branch_step_id, beta_branch_step_id],
                     "tags": ["branch"],
                     "expected_schema": "text/plain",
                     "expected_schema_version": 1
@@ -5666,9 +5666,9 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
             "--kind",
             "join",
             "--depends-on",
-            &branch_a_id,
+            &alpha_branch_step_id,
             "--depends-on",
-            &branch_b_id,
+            &beta_branch_step_id,
             "--input-bindings-json",
             &join_inputs,
             "--output-bindings-json",
@@ -6297,16 +6297,14 @@ fn cli_flow_tick_auto_completes_checkpoint_from_external_runtime_directive() {
     let graph_id = graph_out
         .lines()
         .find_map(|line| line.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
-        .expect("graph id")
-        .to_string();
+        .expect("graph id");
 
     let (code, flow_out, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
     assert_eq!(code, 0, "{err}");
     let flow_id = flow_out
         .lines()
         .find_map(|line| line.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
-        .expect("flow id")
-        .to_string();
+        .expect("flow id");
 
     let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
     assert_eq!(code, 0, "{err}");

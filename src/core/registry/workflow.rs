@@ -1542,8 +1542,9 @@ impl Registry {
                             origin,
                         )?;
                     }
-                    TaskExecState::Running | TaskExecState::Verifying => {}
-                    TaskExecState::Retry
+                    TaskExecState::Running
+                    | TaskExecState::Verifying
+                    | TaskExecState::Retry
                     | TaskExecState::Success
                     | TaskExecState::Failed
                     | TaskExecState::Escalated => {}
@@ -1633,8 +1634,9 @@ impl Registry {
                     origin,
                 )?;
             }
-            TaskExecState::Running | TaskExecState::Verifying => {}
-            TaskExecState::Retry
+            TaskExecState::Running
+            | TaskExecState::Verifying
+            | TaskExecState::Retry
             | TaskExecState::Success
             | TaskExecState::Failed
             | TaskExecState::Escalated => {}
@@ -2596,10 +2598,10 @@ mod tests {
         let graph_id = flow_id;
         let corr = Registry::workflow_bridge_corr(&run, graph_id, Some(flow_id), None, None, None);
         let join_task_id = Registry::workflow_bridge_task_id(run.id, join);
-        let branch_a_task_id = Registry::workflow_bridge_task_id(run.id, branch_a);
-        let branch_b_task_id = Registry::workflow_bridge_task_id(run.id, branch_b);
+        let left_branch_task_id = Registry::workflow_bridge_task_id(run.id, branch_a);
+        let right_branch_task_id = Registry::workflow_bridge_task_id(run.id, branch_b);
 
-        for task_id in [branch_a_task_id, branch_b_task_id] {
+        for task_id in [left_branch_task_id, right_branch_task_id] {
             for (from, to) in [
                 (TaskExecState::Pending, TaskExecState::Ready),
                 (TaskExecState::Ready, TaskExecState::Running),
