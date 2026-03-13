@@ -1,9 +1,13 @@
 //! Workflow command handlers.
 
-use crate::cli::commands::{WorkflowCommands, WorkflowStepKindArg, WorkflowStepStateArg};
+use crate::cli::commands::{
+    MergeExecuteModeArg, RuntimeStreamDetailArg, WorkflowCommands, WorkflowStepKindArg,
+    WorkflowStepStateArg,
+};
 use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::error::ExitCode;
-use crate::core::registry::Registry;
+use crate::core::registry::shared_types::RuntimeStreamDetailLevel;
+use crate::core::registry::{MergeExecuteMode, MergeExecuteOptions, Registry};
 use crate::core::workflow::{
     WorkflowConditionalConfig, WorkflowContextPatchBinding, WorkflowDataValue, WorkflowDefinition,
     WorkflowRun, WorkflowStepInputBinding, WorkflowStepKind, WorkflowStepOutputBinding,
@@ -114,6 +118,21 @@ fn workflow_step_state(state: WorkflowStepStateArg) -> WorkflowStepState {
         WorkflowStepStateArg::Failed => WorkflowStepState::Failed,
         WorkflowStepStateArg::Skipped => WorkflowStepState::Skipped,
         WorkflowStepStateArg::Aborted => WorkflowStepState::Aborted,
+    }
+}
+
+fn workflow_runtime_stream_detail(detail: RuntimeStreamDetailArg) -> RuntimeStreamDetailLevel {
+    match detail {
+        RuntimeStreamDetailArg::Summary => RuntimeStreamDetailLevel::Summary,
+        RuntimeStreamDetailArg::Observability => RuntimeStreamDetailLevel::Observability,
+        RuntimeStreamDetailArg::Telemetry => RuntimeStreamDetailLevel::Telemetry,
+    }
+}
+
+fn merge_execute_mode(mode: MergeExecuteModeArg) -> MergeExecuteMode {
+    match mode {
+        MergeExecuteModeArg::Local => MergeExecuteMode::Local,
+        MergeExecuteModeArg::Pr => MergeExecuteMode::Pr,
     }
 }
 
@@ -411,6 +430,76 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
             args.reason.as_deref(),
         ) {
             Ok(run) => render_workflow_run(&registry, run, format),
+            Err(err) => output_error(&err, format),
+        },
+        WorkflowCommands::RuntimeStream(args) => match registry
+            .workflow_runtime_stream_items_with_detail(
+                &args.workflow_run_id,
+                args.attempt.as_deref(),
+                args.limit,
+                workflow_runtime_stream_detail(args.detail),
+            ) {
+            Ok(items) => output(&items, format)
+                .map(|()| ExitCode::Success)
+                .unwrap_or(ExitCode::Error),
+            Err(err) => output_error(&err, format),
+        },
+        WorkflowCommands::WorktreeList(args) => {
+            match registry.workflow_worktree_list(&args.workflow_run_id) {
+                Ok(statuses) => output(&statuses, format)
+                    .map(|()| ExitCode::Success)
+                    .unwrap_or(ExitCode::Error),
+                Err(err) => output_error(&err, format),
+            }
+        }
+        WorkflowCommands::WorktreeInspect(args) => {
+            match registry.workflow_worktree_inspect(&args.workflow_run_id, &args.step_id) {
+                Ok(status) => output(&status, format)
+                    .map(|()| ExitCode::Success)
+                    .unwrap_or(ExitCode::Error),
+                Err(err) => output_error(&err, format),
+            }
+        }
+        WorkflowCommands::WorktreeCleanup(args) => {
+            match registry.workflow_worktree_cleanup(
+                &args.workflow_run_id,
+                args.force,
+                args.dry_run,
+            ) {
+                Ok(result) => output(&result, format)
+                    .map(|()| ExitCode::Success)
+                    .unwrap_or(ExitCode::Error),
+                Err(err) => output_error(&err, format),
+            }
+        }
+        WorkflowCommands::MergePrepare(args) => {
+            match registry.workflow_merge_prepare(&args.workflow_run_id, args.target.as_deref()) {
+                Ok(state) => output(&state, format)
+                    .map(|()| ExitCode::Success)
+                    .unwrap_or(ExitCode::Error),
+                Err(err) => output_error(&err, format),
+            }
+        }
+        WorkflowCommands::MergeApprove(args) => {
+            match registry.workflow_merge_approve(&args.workflow_run_id) {
+                Ok(state) => output(&state, format)
+                    .map(|()| ExitCode::Success)
+                    .unwrap_or(ExitCode::Error),
+                Err(err) => output_error(&err, format),
+            }
+        }
+        WorkflowCommands::MergeExecute(args) => match registry.workflow_merge_execute_with_options(
+            &args.workflow_run_id,
+            MergeExecuteOptions {
+                mode: merge_execute_mode(args.mode),
+                monitor_ci: args.monitor_ci,
+                auto_merge: args.auto_merge,
+                pull_after: args.pull_after,
+            },
+        ) {
+            Ok(state) => output(&state, format)
+                .map(|()| ExitCode::Success)
+                .unwrap_or(ExitCode::Error),
             Err(err) => output_error(&err, format),
         },
     }

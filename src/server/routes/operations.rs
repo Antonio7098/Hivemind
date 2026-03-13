@@ -16,23 +16,67 @@ pub(super) fn handle_post(
         }
         "/api/merge/prepare" => {
             let req: MergePrepareRequest = parse_json_body(body, "server:merge:prepare")?;
-            super::json_ok(registry.merge_prepare(&req.flow_id, req.target.as_deref())?)?
+            super::json_ok(
+                match (req.workflow_run_id.as_deref(), req.flow_id.as_deref()) {
+                    (Some(workflow_run_id), _) => {
+                        registry.workflow_merge_prepare(workflow_run_id, req.target.as_deref())?
+                    }
+                    (None, Some(flow_id)) => {
+                        registry.merge_prepare(flow_id, req.target.as_deref())?
+                    }
+                    (None, None) => {
+                        return Err(HivemindError::user(
+                            "missing_merge_owner",
+                            "Either 'workflow_run_id' or 'flow_id' is required",
+                            "server:merge:prepare",
+                        ))
+                    }
+                },
+            )?
         }
         "/api/merge/approve" => {
             let req: MergeApproveRequest = parse_json_body(body, "server:merge:approve")?;
-            super::json_ok(registry.merge_approve(&req.flow_id)?)?
+            super::json_ok(
+                match (req.workflow_run_id.as_deref(), req.flow_id.as_deref()) {
+                    (Some(workflow_run_id), _) => {
+                        registry.workflow_merge_approve(workflow_run_id)?
+                    }
+                    (None, Some(flow_id)) => registry.merge_approve(flow_id)?,
+                    (None, None) => {
+                        return Err(HivemindError::user(
+                            "missing_merge_owner",
+                            "Either 'workflow_run_id' or 'flow_id' is required",
+                            "server:merge:approve",
+                        ))
+                    }
+                },
+            )?
         }
         "/api/merge/execute" => {
             let req: MergeExecuteRequest = parse_json_body(body, "server:merge:execute")?;
-            super::json_ok(registry.merge_execute_with_options(
-                &req.flow_id,
-                MergeExecuteOptions {
-                    mode: parse_merge_mode(req.mode.as_deref(), "server:merge:execute")?,
-                    monitor_ci: req.monitor_ci.unwrap_or(false),
-                    auto_merge: req.auto_merge.unwrap_or(false),
-                    pull_after: req.pull_after.unwrap_or(false),
+            let options = MergeExecuteOptions {
+                mode: parse_merge_mode(req.mode.as_deref(), "server:merge:execute")?,
+                monitor_ci: req.monitor_ci.unwrap_or(false),
+                auto_merge: req.auto_merge.unwrap_or(false),
+                pull_after: req.pull_after.unwrap_or(false),
+            };
+            super::json_ok(
+                match (req.workflow_run_id.as_deref(), req.flow_id.as_deref()) {
+                    (Some(workflow_run_id), _) => {
+                        registry.workflow_merge_execute_with_options(workflow_run_id, options)?
+                    }
+                    (None, Some(flow_id)) => {
+                        registry.merge_execute_with_options(flow_id, options)?
+                    }
+                    (None, None) => {
+                        return Err(HivemindError::user(
+                            "missing_merge_owner",
+                            "Either 'workflow_run_id' or 'flow_id' is required",
+                            "server:merge:execute",
+                        ))
+                    }
                 },
-            )?)?
+            )?
         }
         "/api/checkpoints/complete" => {
             let req: CheckpointCompleteRequest =
@@ -45,7 +89,25 @@ pub(super) fn handle_post(
         }
         "/api/worktrees/cleanup" => {
             let req: WorktreeCleanupRequest = parse_json_body(body, "server:worktrees:cleanup")?;
-            super::json_ok(registry.worktree_cleanup(&req.flow_id, req.force, req.dry_run)?)?
+            super::json_ok(
+                match (req.workflow_run_id.as_deref(), req.flow_id.as_deref()) {
+                    (Some(workflow_run_id), _) => registry.workflow_worktree_cleanup(
+                        workflow_run_id,
+                        req.force,
+                        req.dry_run,
+                    )?,
+                    (None, Some(flow_id)) => {
+                        registry.worktree_cleanup(flow_id, req.force, req.dry_run)?
+                    }
+                    (None, None) => {
+                        return Err(HivemindError::user(
+                            "missing_worktree_owner",
+                            "Either 'workflow_run_id' or 'flow_id' is required",
+                            "server:worktrees:cleanup",
+                        ))
+                    }
+                },
+            )?
         }
         "/api/worktrees/restore-turn" => {
             let req: WorktreeRestoreTurnRequest =

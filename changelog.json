@@ -4,6 +4,38 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.55",
+      "date": "2026-03-13",
+      "phase": 69,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "workflow",
+          "description": "Promote workflows to the primary execution surface for runtime stream inspection, worktree inspection and cleanup, and merge prepare/approve/execute via workflow-run-owned CLI and API paths"
+        },
+        {
+          "type": "changed",
+          "area": "worktree",
+          "description": "Expose workflow lineage on worktree inspection status so operators can attribute worktrees directly to workflow runs and step runs without discovering synthetic flow ids first"
+        },
+        {
+          "type": "changed",
+          "area": "server",
+          "description": "Expose workflows and workflow runs as first-class UI state projections and add workflow_run_id query support for runtime-stream and worktree API surfaces"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 69 regression coverage plus manual workflow-native happy-path, negative-case, and real opencode nemotron smoke evidence"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update workflow architecture, quickstart, CLI semantics, roadmap, and sprint reports to document the workflow-first execution model and retained legacy flow compatibility"
+        }
+      ]
+    },
+    {
       "version": "v0.1.54",
       "date": "2026-03-13",
       "phase": 68,
