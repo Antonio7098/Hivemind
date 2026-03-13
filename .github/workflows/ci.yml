@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check out unified-content-protocol
+        run: git clone --depth 1 https://github.com/Antonio7098/unified-content-protocol ../unified-content-protocol
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -41,6 +43,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Check out unified-content-protocol
+        run: git clone --depth 1 https://github.com/Antonio7098/unified-content-protocol ../unified-content-protocol
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -68,6 +72,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check out unified-content-protocol
+        run: git clone --depth 1 https://github.com/Antonio7098/unified-content-protocol ../unified-content-protocol
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1

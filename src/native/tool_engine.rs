@@ -8,7 +8,8 @@ use crate::adapters::runtime::{
 use crate::core::graph_query::{
     load_partition_paths_from_constitution, GraphQueryBounds, GraphQueryIndex,
     GraphQueryRepository, GraphQueryRequest, GraphQueryResult, GRAPH_QUERY_ENV_CONSTITUTION_PATH,
-    GRAPH_QUERY_ENV_GATE_ERROR, GRAPH_QUERY_ENV_SNAPSHOT_PATH, GRAPH_QUERY_REFRESH_HINT,
+    GRAPH_QUERY_ENV_GATE_ERROR, GRAPH_QUERY_ENV_PROJECT_ID, GRAPH_QUERY_ENV_SNAPSHOT_PATH,
+    GRAPH_QUERY_REFRESH_HINT,
 };
 use crate::core::scope::Scope;
 use jsonschema::JSONSchema;
@@ -35,6 +36,9 @@ use ucp_api::{canonical_fingerprint, PortableDocument, CODEGRAPH_PROFILE_MARKER}
 
 const TOOL_VERSION_V1: &str = "1.0.0";
 const DEFAULT_TIMEOUT_MS: u64 = 5_000;
+const CHECKPOINT_COMPLETE_TIMEOUT_MS: u64 = 20_000;
+const GRAPH_QUERY_TIMEOUT_MS: u64 = 15_000;
+const TOOL_TRACE_RESPONSE_MAX_CHARS: usize = 12_000;
 
 /// Structured native tool engine error.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,6 +176,7 @@ pub use exec_sessions::cleanup_exec_sessions;
 use exec_sessions::*;
 
 mod graph_query_tool;
+pub(crate) use graph_query_tool::mark_runtime_graph_registry_dirty;
 #[cfg(test)]
 pub(crate) use graph_query_tool::{
     aggregate_snapshot_fingerprint_registry_style, RuntimeGraphSnapshotArtifact,
@@ -187,6 +192,9 @@ use run_command_tool::*;
 
 mod checkpoint_tool;
 use checkpoint_tool::*;
+
+mod context_lease_tool;
+use context_lease_tool::*;
 
 mod filesystem_tools;
 use filesystem_tools::*;

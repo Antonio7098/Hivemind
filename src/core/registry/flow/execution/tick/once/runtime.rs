@@ -76,6 +76,10 @@ impl Registry {
             self.config.data_dir.to_string_lossy().to_string(),
         );
         runtime_for_adapter.env.insert(
+            "HIVEMIND_DATA_DIR".to_string(),
+            self.config.data_dir.to_string_lossy().to_string(),
+        );
+        runtime_for_adapter.env.insert(
             "HIVEMIND_PRIMARY_WORKTREE".to_string(),
             worktree_status.path.to_string_lossy().to_string(),
         );
@@ -290,15 +294,23 @@ impl Registry {
         }
 
         let mut runtime_projector = RuntimeEventProjector::new();
+        let stream_live_output =
+            interactive || matches!(&adapter, SelectedRuntimeAdapter::Native(_));
 
-        let (report, terminated_reason) = if interactive {
-            let mut stdout = std::io::stdout();
+        let (report, terminated_reason) = if stream_live_output {
+            let mut stdout = if interactive {
+                Some(std::io::stdout())
+            } else {
+                None
+            };
             let res = adapter.execute_interactive(&input, |evt| {
                 match evt {
                     InteractiveAdapterEvent::Output { content } => {
                         let chunk = content;
-                        let _ = stdout.write_all(chunk.as_bytes());
-                        let _ = stdout.flush();
+                        if let Some(stdout) = stdout.as_mut() {
+                            let _ = stdout.write_all(chunk.as_bytes());
+                            let _ = stdout.flush();
+                        }
                         let event = Event::new(
                             EventPayload::RuntimeOutputChunk {
                                 attempt_id,
@@ -393,6 +405,7 @@ impl Registry {
                 origin,
             )?;
         }
+        let has_structured_command_events = !report.structured_runtime_observations.is_empty();
 
         if let Ok(state) = self.state() {
             if let Some(attempt) = state.attempts.get(&attempt_id) {
@@ -428,24 +441,27 @@ impl Registry {
                                 attempt_corr.clone(),
                             );
                             let _ = self.store.append(fs_event);
+                            let dirty_paths = diff
+                                .changes
+                                .iter()
+                                .map(|change| change.path.clone())
+                                .collect::<Vec<_>>();
+                            if !dirty_paths.is_empty() {
+                                let _ = self.mark_attempt_graph_snapshot_dirty_paths(
+                                    flow.project_id,
+                                    attempt_id,
+                                    &dirty_paths,
+                                    "runtime_filesystem_observed",
+                                    origin,
+                                );
+                            }
                         }
                     }
                 }
             }
         }
 
-        let has_structured_command_events =
-            report
-                .structured_runtime_observations
-                .iter()
-                .any(|observation| {
-                    matches!(
-                        observation,
-                        StructuredRuntimeObservation::CommandCompleted { .. }
-                    )
-                });
-
-        if !interactive {
+        if !stream_live_output {
             for chunk in report.stdout.lines() {
                 let content = chunk.to_string();
                 let event = Event::new(

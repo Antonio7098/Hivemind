@@ -105,22 +105,17 @@ impl Registry {
                     }
                 }
             }
+        }
 
-            let all_success = updated
-                .task_executions
-                .values()
-                .all(|e| e.state == TaskExecState::Success);
-            if all_success {
-                let event = Event::new(
-                    EventPayload::TaskFlowCompleted {
-                        flow_id: updated.id,
-                    },
-                    Self::correlation_for_flow_event(&self.state()?, &updated),
-                );
-                let _ = self.store.append(event);
-            } else if updated.run_mode == RunMode::Auto {
-                return self.tick_flow(&updated.id.to_string(), false, None);
-            }
+        let updated_flow_id = updated.id.to_string();
+        if self
+            .maybe_complete_finished_flow(&updated, &updated_flow_id, origin)?
+            .is_some()
+        {
+            return self.get_flow(&updated_flow_id);
+        }
+        if updated.run_mode == RunMode::Auto {
+            return self.tick_flow(&updated.id.to_string(), false, None);
         }
 
         self.get_flow(&flow.id.to_string())

@@ -3,25 +3,14 @@ use crate::native::tool_engine::NativeToolAction;
 use crate::native::turn_items::{TurnItemKind, TurnItemOutcome};
 use serde_json::Value;
 
-struct TurnCallbackObserver<F> {
-    on_turn: F,
-}
-
-impl<F> AgentLoopObserver for TurnCallbackObserver<F>
-where
-    F: FnMut(&AgentLoopTurn) -> Result<(), NativeRuntimeError>,
-{
-    fn on_turn_completed(&mut self, turn: &AgentLoopTurn) -> Result<(), NativeRuntimeError> {
-        (self.on_turn)(turn)
-    }
-}
-
 impl<M: ModelClient> AgentLoop<M> {
     const MAX_MALFORMED_DIRECTIVE_RECOVERY_ATTEMPTS: u8 = 4;
     const MAX_TOKEN_BUDGET_RECOVERY_ATTEMPTS: u8 = 3;
     const MAX_CHECKPOINT_DONE_RECOVERY_ATTEMPTS: u8 = 3;
     const MAX_POST_CHECKPOINT_DONE_RECOVERY_ATTEMPTS: u8 = 1;
-    const SOFT_TOKEN_BUDGET_COMPACTION_PERCENT: usize = 60;
+    const MAX_NOOP_THINK_RECOVERY_ATTEMPTS: u8 = 2;
+    const NOOP_THINK_REPAIR_THRESHOLD: usize = 3;
+    const SOFT_TOKEN_BUDGET_COMPACTION_PERCENT: usize = 45;
 
     #[must_use]
     pub fn new(config: NativeRuntimeConfig, model_client: M) -> Self {
@@ -161,6 +150,44 @@ impl<M: ModelClient> AgentLoop<M> {
         )
     }
 
+    fn consecutive_noop_think_turns(turns: &[AgentLoopTurn]) -> usize {
+        turns
+            .iter()
+            .rev()
+            .take_while(|turn| {
+                matches!(turn.directive, ModelDirective::Think { .. }) && turn.tool_calls.is_empty()
+            })
+            .count()
+    }
+
+    fn noop_think_repair_item(
+        invocation_id: &str,
+        turn_index: u32,
+        repair_attempt: u8,
+        consecutive_thinks: usize,
+        raw_output: &str,
+    ) -> TurnItem {
+        let raw_output = if raw_output.chars().count() > 600 {
+            let mut truncated = raw_output.chars().take(600).collect::<String>();
+            truncated.push_str(" …");
+            truncated
+        } else {
+            raw_output.to_string()
+        };
+        user_input_item(
+            invocation_id,
+            turn_index
+                .saturating_mul(100)
+                .saturating_add(92)
+                .saturating_add(u32::from(repair_attempt)),
+            "controller_repair",
+            format!(
+                "Runtime repair #{repair_attempt}: you have already spent {consecutive_thinks} consecutive turns in THINK without taking a tool action. On your next response, return exactly one directive and prefer ACT:tool:<name>:<json_object> now. If the task is already complete, return DONE:<summary>. Do not return THINK again unless you are blocked by a concrete missing prerequisite. If you need repository context, call read_file or list_files immediately. Previous response:\n{raw_output}"
+            ),
+            "runtime.repair",
+        )
+    }
+
     fn checkpoint_completion_recorded(&self, history: &[TurnItem]) -> bool {
         history.iter().any(|item| {
             matches!(
@@ -276,10 +303,7 @@ impl<M: ModelClient> AgentLoop<M> {
         directive: &ModelDirective,
     ) -> bool {
         matches!(directive, ModelDirective::Done { .. })
-            && request
-                .prompt_assembly
-                .as_ref()
-                .is_some_and(|assembly| assembly.objective_state.starts_with("checkpoint"))
+            && Self::first_declared_checkpoint_id(request).is_some()
             && !self.checkpoint_completion_recorded(history)
     }
 
@@ -424,6 +448,35 @@ impl<M: ModelClient> AgentLoop<M> {
         Some(format!("tool:checkpoint_complete:{payload}"))
     }
 
+    fn exact_write_target_visible(request: &ModelTurnRequest, path: &str) -> bool {
+        let item_id = format!("code-window:{path}");
+        request.prompt_assembly.as_ref().is_some_and(|assembly| {
+            assembly
+                .active_code_windows
+                .iter()
+                .any(|item| item.kind == "code_window" && item.item_id == item_id)
+        })
+    }
+
+    fn write_visibility_promotion_action(
+        request: &ModelTurnRequest,
+        directive: &ModelDirective,
+    ) -> Option<String> {
+        let ModelDirective::Act { action } = directive else {
+            return None;
+        };
+        let tool_action = NativeToolAction::parse(action).ok().flatten()?;
+        if tool_action.name != "write_file" {
+            return None;
+        }
+        let path = tool_action.input.get("path")?.as_str()?.trim();
+        if path.is_empty() || Self::exact_write_target_visible(request, path) {
+            return None;
+        }
+        let payload = serde_json::json!({ "path": path });
+        Some(format!("tool:read_file:{payload}"))
+    }
+
     fn budget_thresholds_crossed(&mut self) -> Vec<u8> {
         if self.config.token_budget == 0 {
             return Vec::new();
@@ -494,6 +547,7 @@ impl<M: ModelClient> AgentLoop<M> {
         let mut token_budget_recovery_attempts = 0u8;
         let mut checkpoint_done_repair_attempts = 0u8;
         let mut post_checkpoint_done_repair_attempts = 0u8;
+        let mut noop_think_repair_attempts = 0u8;
 
         while self.state != AgentLoopState::Done {
             self.enforce_budgets()?;
@@ -658,6 +712,26 @@ impl<M: ModelClient> AgentLoop<M> {
                 Err(error) => return Err(error),
             };
             let mut synthetic_tool_action = None;
+            if matches!(directive, ModelDirective::Think { .. }) {
+                let noop_think_streak = Self::consecutive_noop_think_turns(&turns);
+                if noop_think_streak >= Self::NOOP_THINK_REPAIR_THRESHOLD
+                    && noop_think_repair_attempts < Self::MAX_NOOP_THINK_RECOVERY_ATTEMPTS
+                {
+                    noop_think_repair_attempts = noop_think_repair_attempts.saturating_add(1);
+                    history.push(Self::noop_think_repair_item(
+                        invocation_id,
+                        self.next_turn_index,
+                        noop_think_repair_attempts,
+                        noop_think_streak.saturating_add(1),
+                        &raw_output,
+                    ));
+                    history = normalize_turn_items(&history);
+                    self.history_items = history.clone();
+                    continue;
+                }
+            } else {
+                noop_think_repair_attempts = 0;
+            }
             if self.requires_checkpoint_completion_repair(&request, &history, &directive) {
                 if checkpoint_done_repair_attempts >= Self::MAX_CHECKPOINT_DONE_RECOVERY_ATTEMPTS {
                     synthetic_tool_action =
@@ -726,6 +800,9 @@ impl<M: ModelClient> AgentLoop<M> {
             } else {
                 post_checkpoint_done_repair_attempts = 0;
             }
+            if let Some(action) = Self::write_visibility_promotion_action(&request, &directive) {
+                directive = ModelDirective::Act { action };
+            }
             let tool_started = Instant::now();
             let tool_calls = if let Some(action) = synthetic_tool_action.as_deref() {
                 if let Some(observer) = observer.as_deref_mut() {
@@ -767,6 +844,9 @@ impl<M: ModelClient> AgentLoop<M> {
             };
             let tool_latency_ms =
                 u64::try_from(tool_started.elapsed().as_millis()).unwrap_or(u64::MAX);
+            if !matches!(directive, ModelDirective::Think { .. }) || !tool_calls.is_empty() {
+                noop_think_repair_attempts = 0;
+            }
             let to_state = directive.target_state();
             self.transition_to(to_state)?;
             let budget_used_after = self.used_tokens;
@@ -808,11 +888,6 @@ impl<M: ModelClient> AgentLoop<M> {
             self.history_items = history.clone();
             self.completed_turns.push(turn.clone());
             turns.push(turn);
-            if let Some(observer) = observer.as_deref_mut() {
-                if let Some(turn) = turns.last() {
-                    observer.on_turn_completed(turn)?;
-                }
-            }
             self.next_turn_index = self.next_turn_index.saturating_add(1);
         }
 
@@ -821,55 +896,6 @@ impl<M: ModelClient> AgentLoop<M> {
         self.completed_turns = turns;
 
         Ok(self.snapshot_result(invocation_id))
-    }
-
-    /// Execute the loop while surfacing each completed turn to a callback.
-    pub fn run_with_turn_callback<F>(
-        &mut self,
-        prompt: impl Into<String>,
-        context: Option<&str>,
-        on_turn: F,
-    ) -> Result<AgentLoopResult, NativeRuntimeError>
-    where
-        F: FnMut(&AgentLoopTurn) -> Result<(), NativeRuntimeError>,
-    {
-        let prompt = prompt.into();
-        let context = context.map(ToString::to_string);
-        let mode = self.config.agent_mode;
-        let mut initial_items = vec![user_input_item(
-            "native-loop",
-            1,
-            "prompt",
-            prompt.clone(),
-            "runtime.prompt",
-        )];
-        if let Some(context_text) = context.clone() {
-            initial_items.push(user_input_item(
-                "native-loop",
-                2,
-                "context",
-                context_text,
-                "runtime.context",
-            ));
-        }
-
-        let mut observer = TurnCallbackObserver { on_turn };
-        self.run_with_history_observed(
-            "native-loop",
-            initial_items,
-            move |turn_index, state, _history| {
-                Ok(ModelTurnRequest {
-                    turn_index,
-                    state,
-                    agent_mode: mode,
-                    prompt: prompt.clone(),
-                    context: context.clone(),
-                    prompt_assembly: None,
-                })
-            },
-            |_turn_index, _action| Vec::new(),
-            Some(&mut observer),
-        )
     }
 
     /// Execute the loop deterministically until `done` or a hard budget/error boundary.

@@ -284,20 +284,13 @@ impl Registry {
             }
 
             let updated = self.get_flow(flow_id)?;
-            let all_success = updated
-                .task_executions
-                .values()
-                .all(|e| e.state == TaskExecState::Success);
-            if all_success {
-                let event = Event::new(
-                    EventPayload::TaskFlowCompleted {
-                        flow_id: updated.id,
-                    },
-                    Self::correlation_for_flow_event(&self.state()?, &updated),
-                );
-                self.append_event(event, origin)?;
-                self.maybe_autostart_dependent_flows(updated.id)?;
-            } else if updated.run_mode == RunMode::Auto {
+            if self
+                .maybe_complete_finished_flow(&updated, flow_id, origin)?
+                .is_some()
+            {
+                return self.get_flow(flow_id);
+            }
+            if updated.run_mode == RunMode::Auto {
                 return self.tick_flow(&updated.id.to_string(), false, None);
             }
 

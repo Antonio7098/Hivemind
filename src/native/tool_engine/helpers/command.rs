@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::diff::Baseline;
 
 pub(crate) fn normalize_exec_command(command: &str, env_map: &HashMap<String, String>) -> String {
     let normalized = command.trim();
@@ -12,6 +13,21 @@ pub(crate) fn normalize_exec_command(command: &str, env_map: &HashMap<String, St
         return "python3".to_string();
     }
     normalized.to_string()
+}
+
+pub(crate) fn split_command_string(raw: &str) -> Option<(String, Vec<String>)> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || !trimmed.chars().any(char::is_whitespace) {
+        return None;
+    }
+    let mut parts = trimmed.split_whitespace();
+    let command = parts.next()?.to_string();
+    let args = parts.map(ToString::to_string).collect::<Vec<_>>();
+    if args.is_empty() {
+        None
+    } else {
+        Some((command, args))
+    }
 }
 
 pub(crate) fn command_exists_in_path(command: &str, env_map: &HashMap<String, String>) -> bool {
@@ -114,4 +130,50 @@ pub(crate) fn is_executable_path(path: &Path) -> bool {
     {
         true
     }
+}
+
+pub(crate) fn capture_worktree_baseline(worktree: &Path) -> std::io::Result<Baseline> {
+    Baseline::capture(worktree)
+}
+
+#[must_use]
+pub(crate) fn changed_worktree_file_paths(previous: &Baseline, current: &Baseline) -> Vec<PathBuf> {
+    let mut changed = Vec::new();
+
+    for (path, old_snapshot) in &previous.files {
+        match current.files.get(path) {
+            Some(new_snapshot) => {
+                if !old_snapshot.is_dir
+                    && !new_snapshot.is_dir
+                    && old_snapshot.hash != new_snapshot.hash
+                {
+                    changed.push(path.clone());
+                }
+            }
+            None => {
+                if !old_snapshot.is_dir {
+                    changed.push(path.clone());
+                }
+            }
+        }
+    }
+
+    for (path, new_snapshot) in &current.files {
+        if !previous.files.contains_key(path) && !new_snapshot.is_dir {
+            changed.push(path.clone());
+        }
+    }
+
+    changed.sort();
+    changed.dedup();
+    changed
+}
+
+pub(crate) fn capture_worktree_dirty_paths(
+    worktree: &Path,
+    previous: &Baseline,
+) -> std::io::Result<(Vec<PathBuf>, Baseline)> {
+    let current = capture_worktree_baseline(worktree)?;
+    let changed = changed_worktree_file_paths(previous, &current);
+    Ok((changed, current))
 }

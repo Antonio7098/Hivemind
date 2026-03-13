@@ -1,3 +1,4 @@
+use super::graph_query_tool::mark_runtime_graph_dirty;
 use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -157,7 +158,14 @@ pub(super) fn handle_run_command(
     input: &Value,
     default_timeout_ms: u64,
 ) -> Result<Value, NativeToolEngineError> {
-    let input = decode_input::<RunCommandInput>(input)?;
+    let worktree_baseline = capture_worktree_baseline(ctx.worktree).ok();
+    let mut input = decode_input::<RunCommandInput>(input)?;
+    if input.args.is_empty() {
+        if let Some((command, args)) = split_command_string(&input.command) {
+            input.command = command;
+            input.args = args;
+        }
+    }
     let raw_command = input.command.trim();
     if raw_command.is_empty() {
         return Err(NativeToolEngineError::validation(
@@ -289,6 +297,18 @@ pub(super) fn handle_run_command(
         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
         timed_out: false,
     };
+    if status == 0 {
+        match worktree_baseline.as_ref() {
+            Some(previous) => match capture_worktree_dirty_paths(ctx.worktree, previous) {
+                Ok((dirty_paths, _)) if !dirty_paths.is_empty() => {
+                    mark_runtime_graph_dirty(ctx.env, &dirty_paths);
+                }
+                Ok(_) => {}
+                Err(_) => mark_runtime_graph_dirty(ctx.env, &[]),
+            },
+            None => mark_runtime_graph_dirty(ctx.env, &[]),
+        }
+    }
     serde_json::to_value(result).map_err(|error| {
         NativeToolEngineError::execution(format!("failed to encode run_command output: {error}"))
     })

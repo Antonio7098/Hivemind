@@ -4,33 +4,6 @@
   "format_version": "1.0.0",
   "entries": [
     {
-      "version": "v0.1.52",
-      "date": "2026-03-11",
-      "phase": 64,
-      "changes": [
-        {
-          "type": "added",
-          "area": "core",
-          "description": "Begin Phase 5 / Sprint 64 by introducing a first-class workflow domain (`WorkflowDefinition`, `WorkflowRun`, `WorkflowStepDefinition`, `WorkflowStepRun`), workflow event family, workflow-aware correlation lineage, and deterministic replay/state projection in `AppState`"
-        },
-        {
-          "type": "added",
-          "area": "cli",
-          "description": "Add an initial workflow-native control surface with `hivemind workflow` commands for definition create/list/inspect/update, step authoring/state changes, and workflow-run create/status/start/pause/resume/abort/complete lifecycle operations plus workflow-aware event filters"
-        },
-        {
-          "type": "added",
-          "area": "tests",
-          "description": "Add Sprint 64 foundation coverage for workflow transition guards, workflow event serde roundtrips, replay projection, workflow lineage filters, workflow CLI smoke, and workflow API create/update/run inspection paths"
-        },
-        {
-          "type": "changed",
-          "area": "docs",
-          "description": "Add workflow foundation architecture/design documentation, roadmap completion details, and Sprint 64 manual validation artifacts for the new Phase 5 workflow execution domain"
-        }
-      ]
-    },
-    {
       "version": "v0.1.51",
       "date": "2026-03-09",
       "phase": 58,

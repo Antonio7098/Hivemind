@@ -119,17 +119,14 @@ impl Registry {
         })
     }
 
-    pub(super) fn maybe_complete_finished_flow(
+    pub(crate) fn maybe_complete_finished_flow(
         &self,
         flow: &TaskFlow,
         flow_id: &str,
         origin: &'static str,
     ) -> Result<Option<TaskFlow>> {
-        let all_success = flow
-            .task_executions
-            .values()
-            .all(|e| e.state == TaskExecState::Success);
-        if !all_success {
+        let all_terminal = flow.task_executions.values().all(|e| e.state.is_terminal());
+        if !all_terminal {
             return Ok(None);
         }
 

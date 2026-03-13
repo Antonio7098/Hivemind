@@ -238,6 +238,14 @@ impl Registry {
         Self::write_governance_json(&location.path, &artifact, origin).inspect_err(|err| {
             self.append_graph_snapshot_failed_event(project.id, trigger, err, origin);
         })?;
+        let constitution_path = self.constitution_path(project.id);
+        let constitution = constitution_path
+            .is_file()
+            .then_some(constitution_path.as_path());
+        self.sync_graph_snapshot_into_runtime_registry(project.id, &artifact, constitution, origin)
+            .inspect_err(|err| {
+                self.append_graph_snapshot_failed_event(project.id, trigger, err, origin);
+            })?;
 
         let state = self.state().inspect_err(|err| {
             self.append_graph_snapshot_failed_event(project.id, trigger, err, origin);
@@ -257,6 +265,11 @@ impl Registry {
 
         let diff_detected = previous_fingerprint.as_deref() != Some(canonical_fingerprint.as_str());
         if diff_detected {
+            if let Err(err) =
+                self.mark_execution_graph_snapshot_registries_freshness(project.id, "stale", origin)
+            {
+                self.record_error_event(&err, CorrelationIds::for_project(project.id));
+            }
             self.append_event(
                 Event::new(
                     EventPayload::GraphSnapshotDiffDetected {

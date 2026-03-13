@@ -295,18 +295,6 @@ pub struct EventNativeSummaryArgs {
     #[arg(long)]
     pub flow: Option<String>,
     #[arg(long)]
-    pub workflow: Option<String>,
-    #[arg(long = "workflow-run")]
-    pub workflow_run: Option<String>,
-    #[arg(long = "root-workflow-run")]
-    pub root_workflow_run: Option<String>,
-    #[arg(long = "parent-workflow-run")]
-    pub parent_workflow_run: Option<String>,
-    #[arg(long = "step")]
-    pub step: Option<String>,
-    #[arg(long = "step-run")]
-    pub step_run: Option<String>,
-    #[arg(long)]
     pub task: Option<String>,
     #[arg(long)]
     pub attempt: Option<String>,
@@ -324,6 +312,8 @@ pub struct EventNativeSummaryArgs {
     pub until: Option<String>,
     #[arg(long, default_value = "1000")]
     pub limit: usize,
+    #[arg(long, default_value_t = false)]
+    pub include_reconstructed_context: bool,
     #[arg(long, default_value_t = false)]
     pub verify: bool,
 }

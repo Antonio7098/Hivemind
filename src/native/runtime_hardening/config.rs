@@ -2,18 +2,28 @@ use super::*;
 
 impl RuntimeHardeningConfig {
     #[must_use]
+    pub(crate) fn for_state_dir(state_dir: &Path) -> Self {
+        let mut env = HashMap::new();
+        env.insert(
+            STATE_DIR_ENV.to_string(),
+            state_dir.to_string_lossy().to_string(),
+        );
+        Self::from_env(&env)
+    }
+
+    #[must_use]
     pub fn from_env(env: &HashMap<String, String>) -> Self {
+        let data_dir = env
+            .get("HIVEMIND_DATA_DIR")
+            .filter(|value| !value.trim().is_empty())
+            .map(PathBuf::from)
+            .or_else(default_hivemind_data_dir)
+            .unwrap_or_else(|| PathBuf::from(".hivemind"));
         let state_dir = env
             .get(STATE_DIR_ENV)
             .filter(|value| !value.trim().is_empty())
             .map(PathBuf::from)
-            .or_else(|| {
-                env.get("HIVEMIND_DATA_DIR")
-                    .filter(|value| !value.trim().is_empty())
-                    .map(PathBuf::from)
-            })
-            .or_else(default_hivemind_data_dir)
-            .unwrap_or_else(|| PathBuf::from(".hivemind"));
+            .unwrap_or_else(|| data_dir.clone());
 
         let state_db_path = env
             .get(STATE_DB_PATH_ENV)
@@ -33,6 +43,7 @@ impl RuntimeHardeningConfig {
 
         Self {
             state_db_path,
+            blob_storage_dir: data_dir.join("blobs").join("sha256"),
             busy_timeout_ms: parse_u64_env(
                 env,
                 BUSY_TIMEOUT_ENV,
@@ -58,6 +69,13 @@ impl RuntimeHardeningConfig {
                 env,
                 LOG_RETENTION_DAYS_ENV,
                 DEFAULT_LOG_RETENTION_DAYS,
+                1,
+                365,
+            ),
+            blob_retention_days: parse_u64_env(
+                env,
+                BLOB_RETENTION_DAYS_ENV,
+                DEFAULT_BLOB_RETENTION_DAYS,
                 1,
                 365,
             ),

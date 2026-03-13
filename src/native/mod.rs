@@ -9,11 +9,15 @@
 //! - scripted mock model client for deterministic harness tests
 
 pub mod adapter;
+mod groq;
+mod minimax;
 mod openrouter;
 pub mod runtime_hardening;
 pub mod startup_hardening;
 pub mod tool_engine;
 
+pub use groq::GroqModelClient;
+pub use minimax::MiniMaxModelClient;
 pub use openrouter::OpenRouterModelClient;
 
 use crate::adapters::runtime::{NativeToolCallTrace, NativeTransportTelemetry, RuntimeError};
@@ -128,10 +132,6 @@ pub trait AgentLoopObserver {
         _turn_index: u32,
         _tool_call_count: usize,
     ) -> Result<(), NativeRuntimeError> {
-        Ok(())
-    }
-
-    fn on_turn_completed(&mut self, _turn: &AgentLoopTurn) -> Result<(), NativeRuntimeError> {
         Ok(())
     }
 
@@ -255,6 +255,7 @@ pub struct AgentLoop<M: ModelClient> {
 }
 
 mod agent_loop;
+mod context_visibility;
 mod error;
 mod mock;
 mod prompt_assembly;
@@ -262,7 +263,10 @@ mod support;
 mod turn_items;
 
 pub use self::mock::MockModelClient;
-pub(crate) use self::prompt_assembly::{assemble_native_prompt, NativePromptAssembly};
+#[cfg_attr(not(test), allow(unused_imports))]
+pub(crate) use self::prompt_assembly::{
+    assemble_native_prompt, assemble_native_prompt_with_runtime_env, NativePromptAssembly,
+};
 pub(crate) use self::turn_items::{
     assistant_item, compact_history_for_budget_pressure, compact_history_for_hard_budget_limit,
     compacted_summary_item, items_from_tool_trace, normalize_turn_items, user_input_item, TurnItem,

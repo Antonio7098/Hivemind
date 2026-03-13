@@ -1,4 +1,5 @@
 use super::*;
+use ucp_codegraph::CodeGraphNavigator;
 
 #[derive(Debug, Clone)]
 pub(crate) struct IndexedNode {
@@ -8,12 +9,22 @@ pub(crate) struct IndexedNode {
     pub(crate) path: Option<String>,
     pub(crate) partition: Option<String>,
 }
+
+#[derive(Debug, Clone)]
+pub(crate) struct IndexedRepository {
+    pub(crate) navigator: CodeGraphNavigator,
+    pub(crate) block_to_node_id: HashMap<String, String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct GraphQueryIndex {
     pub(crate) nodes: BTreeMap<String, IndexedNode>,
     pub(crate) outgoing: BTreeMap<String, Vec<GraphQueryEdge>>,
     pub(crate) incoming: BTreeMap<String, Vec<GraphQueryEdge>>,
     pub(crate) all_edges: Vec<GraphQueryEdge>,
+    pub(crate) repositories: Vec<IndexedRepository>,
+    pub(crate) node_to_repository_index: HashMap<String, usize>,
+    pub(crate) node_to_block_selector: HashMap<String, String>,
 }
 impl GraphQueryIndex {
     #[allow(clippy::too_many_lines)]
@@ -25,42 +36,43 @@ impl GraphQueryIndex {
         let mut outgoing: BTreeMap<String, Vec<GraphQueryEdge>> = BTreeMap::new();
         let mut incoming: BTreeMap<String, Vec<GraphQueryEdge>> = BTreeMap::new();
         let mut all_edges = Vec::new();
-
-        let mut block_to_node: HashMap<String, String> = HashMap::new();
+        let mut indexed_repositories = Vec::new();
+        let mut node_to_repository_index = HashMap::new();
+        let mut node_to_block_selector = HashMap::new();
 
         for repo in repositories {
-            for (block_id, block) in &repo.document.blocks {
-                let logical_key = block
-                    .metadata
-                    .custom
-                    .get("logical_key")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or_default()
-                    .trim()
-                    .to_string();
+            let document = repo.document.to_document().map_err(|error| {
+                GraphQueryError::new(
+                    "graph_query_snapshot_invalid",
+                    format!(
+                        "Repository '{}' contains an invalid portable graph document: {error}",
+                        repo.repo_name
+                    ),
+                )
+            })?;
+            let navigator = CodeGraphNavigator::new(document.clone());
+            let repository_index = indexed_repositories.len();
+            let mut block_to_node: HashMap<String, String> = HashMap::new();
+
+            for block_id in document.blocks.keys() {
+                let Some(summary) = navigator.describe_node(*block_id) else {
+                    continue;
+                };
+                let logical_key = summary.logical_key.unwrap_or_default().trim().to_string();
                 if logical_key.is_empty() {
                     continue;
                 }
-                let node_class = block
-                    .metadata
-                    .custom
-                    .get("node_class")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or("unknown")
-                    .trim()
-                    .to_string();
-                let normalized_path = block
-                    .metadata
-                    .custom
-                    .get("path")
-                    .and_then(serde_json::Value::as_str)
-                    .map(normalize_graph_path)
+                let node_class = summary.node_class.trim().to_string();
+                let normalized_path = summary
+                    .path
+                    .map(|path| normalize_graph_path(&path))
                     .filter(|item| !item.is_empty());
                 let partition = normalized_path
                     .as_deref()
                     .and_then(|path| match_partition(path, partition_paths));
 
                 let node_id = format!("{}::{logical_key}", repo.repo_name);
+                let block_selector = block_id.to_string();
                 nodes.insert(
                     node_id.clone(),
                     IndexedNode {
@@ -71,13 +83,14 @@ impl GraphQueryIndex {
                         partition,
                     },
                 );
-                block_to_node.insert(block_id.clone(), node_id);
+                block_to_node.insert(block_selector.clone(), node_id.clone());
+                node_to_repository_index.insert(node_id.clone(), repository_index);
+                node_to_block_selector.insert(node_id, block_selector);
             }
-        }
 
-        for repo in repositories {
-            for (block_id, block) in &repo.document.blocks {
-                let Some(source) = block_to_node.get(block_id).cloned() else {
+            for (block_id, block) in &document.blocks {
+                let block_key = block_id.to_string();
+                let Some(source) = block_to_node.get(&block_key).cloned() else {
                     continue;
                 };
                 let mut edges_for_source = Vec::new();
@@ -114,6 +127,11 @@ impl GraphQueryIndex {
                 }
                 outgoing.entry(source).or_default().extend(edges_for_source);
             }
+
+            indexed_repositories.push(IndexedRepository {
+                navigator,
+                block_to_node_id: block_to_node,
+            });
         }
 
         for edges in outgoing.values_mut() {
@@ -147,6 +165,9 @@ impl GraphQueryIndex {
             outgoing,
             incoming,
             all_edges,
+            repositories: indexed_repositories,
+            node_to_repository_index,
+            node_to_block_selector,
         })
     }
 }

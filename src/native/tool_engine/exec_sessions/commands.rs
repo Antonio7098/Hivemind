@@ -1,3 +1,4 @@
+use super::super::graph_query_tool::mark_runtime_graph_dirty;
 use super::*;
 use support::{
     clamp_exec_wait_ms, collect_stream_delta, exec_session_manager, parse_session_cap,
@@ -12,7 +13,15 @@ pub(super) fn handle_exec_command(
     default_timeout_ms: u64,
 ) -> Result<Value, NativeToolEngineError> {
     let started = Instant::now();
-    let input = decode_input::<ExecCommandInput>(input)?;
+    let owner_worktree = session_owner_worktree(ctx.worktree);
+    let worktree_baseline = capture_worktree_baseline(&owner_worktree).ok();
+    let mut input = decode_input::<ExecCommandInput>(input)?;
+    if input.args.is_empty() {
+        if let Some((command, args)) = split_command_string(&input.cmd) {
+            input.cmd = command;
+            input.args = args;
+        }
+    }
     let raw_command = input.cmd.trim();
     if raw_command.is_empty() {
         return Err(NativeToolEngineError::validation(
@@ -85,7 +94,6 @@ pub(super) fn handle_exec_command(
 
     let session_id = EXEC_SESSION_NEXT_ID.fetch_add(1, Ordering::SeqCst);
     let cap = parse_session_cap(ctx.env);
-    let owner_worktree = session_owner_worktree(ctx.worktree);
     let mut warnings = Vec::new();
 
     let lock = exec_session_manager();
@@ -96,8 +104,9 @@ pub(super) fn handle_exec_command(
         session_id,
         support::ExecSession {
             session_id,
-            owner_worktree,
+            owner_worktree: owner_worktree.clone(),
             command_line,
+            worktree_baseline: None,
             child,
             stdin,
             stdout_rx,
@@ -139,6 +148,35 @@ pub(super) fn handle_exec_command(
     let exit_code = session.exit_code()?;
     drop(manager);
 
+    let mut runtime_dirty_paths = Vec::new();
+    let mut current_worktree_baseline = None;
+    let mut fallback_dirty = worktree_baseline.is_none() || exit_code.is_none();
+    if let Some(previous) = worktree_baseline.as_ref() {
+        match capture_worktree_dirty_paths(&owner_worktree, previous) {
+            Ok((dirty_paths, current)) => {
+                runtime_dirty_paths = dirty_paths;
+                current_worktree_baseline = Some(current);
+            }
+            Err(_) => fallback_dirty = true,
+        }
+    } else if let Ok(current) = capture_worktree_baseline(&owner_worktree) {
+        current_worktree_baseline = Some(current);
+    }
+
+    let lock = exec_session_manager();
+    let mut manager = lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(session) = manager.sessions.get_mut(&session_id) {
+        session.worktree_baseline = current_worktree_baseline;
+    }
+    drop(manager);
+
+    if !runtime_dirty_paths.is_empty() {
+        mark_runtime_graph_dirty(ctx.env, &runtime_dirty_paths);
+    } else if fallback_dirty {
+        mark_runtime_graph_dirty(ctx.env, &[]);
+    }
     session_output(session_id, exit_code, stdout, stderr, warnings)
 }
 
@@ -154,7 +192,7 @@ pub(super) fn handle_write_stdin(
     let mut manager = lock
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let (stdout, stderr, exit_code) = {
+    let (stdout, stderr, exit_code, previous_worktree_baseline, session_worktree_root) = {
         let session = manager.sessions.get_mut(&input.session_id).ok_or_else(|| {
             NativeToolEngineError::validation(format!(
                 "unknown exec session id {}",
@@ -213,7 +251,13 @@ pub(super) fn handle_write_stdin(
         if exit_code.is_some() {
             let _ = session.stdin.take();
         }
-        (stdout, stderr, exit_code)
+        (
+            stdout,
+            stderr,
+            exit_code,
+            session.worktree_baseline.clone(),
+            session.owner_worktree.clone(),
+        )
     };
     manager.touch(input.session_id);
 
@@ -228,5 +272,34 @@ pub(super) fn handle_write_stdin(
     }
     drop(manager);
 
+    let mut runtime_dirty_paths = Vec::new();
+    let mut current_worktree_baseline = None;
+    let mut fallback_dirty = previous_worktree_baseline.is_none();
+    if let Some(previous) = previous_worktree_baseline.as_ref() {
+        match capture_worktree_dirty_paths(&session_worktree_root, previous) {
+            Ok((dirty_paths, current)) => {
+                runtime_dirty_paths = dirty_paths;
+                current_worktree_baseline = Some(current);
+            }
+            Err(_) => fallback_dirty = true,
+        }
+    } else if let Ok(current) = capture_worktree_baseline(&session_worktree_root) {
+        current_worktree_baseline = Some(current);
+    }
+
+    let lock = exec_session_manager();
+    let mut manager = lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(session) = manager.sessions.get_mut(&input.session_id) {
+        session.worktree_baseline = current_worktree_baseline;
+    }
+    drop(manager);
+
+    if !runtime_dirty_paths.is_empty() {
+        mark_runtime_graph_dirty(ctx.env, &runtime_dirty_paths);
+    } else if fallback_dirty {
+        mark_runtime_graph_dirty(ctx.env, &[]);
+    }
     session_output(input.session_id, exit_code, stdout, stderr, warnings)
 }
