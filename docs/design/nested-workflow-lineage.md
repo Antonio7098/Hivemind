@@ -53,6 +53,7 @@ Current runtime handling distinguishes success, failure, and cancellation/abort 
 
 Operators should inspect:
 
-1. `hivemind workflow status <run-id>` for parent state plus child run summaries
-2. `hivemind events list --workflow-run <root-run-id>` for full nested lineage
-3. `hivemind workflow run-list` filtered by parent/root ids when validating subtree reconstruction
+1. `hivemind workflow status <run-id>` for the root `WorkflowRun` plus an explicit `child_runs` tree carrying `workflow_name`, `parent_step_name`, and recursive descendants
+2. `/api/workflow-runs/inspect?workflow_run_id=<run-id>` for the same inspect payload used by the CLI rather than a raw run projection
+3. `hivemind events list --workflow-run <root-run-id>` for full nested lineage; when the supplied run id is a root run, the CLI resolves it to `root_workflow_run_id=<run-id>` so child events are included without additional flags
+4. `hivemind workflow run-list` plus explicit `root_workflow_run_id` / `parent_workflow_run_id` fields when validating subtree reconstruction

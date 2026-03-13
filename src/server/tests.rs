@@ -4,6 +4,7 @@ use crate::core::events::{
     NativeEventPayloadCaptureMode, RuntimeOutputStream, RuntimeRole,
 };
 use crate::core::registry::{Registry, RegistryConfig};
+use crate::core::workflow::WorkflowStepKind;
 use chrono::Utc;
 use std::collections::BTreeMap;
 use std::mem;
@@ -888,6 +889,73 @@ fn workflow_endpoints_tick_pause_resume_and_abort() {
     );
     let inspected_run = json_value(&inspect_resp.body);
     assert_eq!(inspected_run["data"]["state"], "aborted");
+}
+
+#[test]
+fn workflow_run_inspect_endpoint_includes_nested_lineage_tree() {
+    let registry = test_registry();
+    let project = registry
+        .create_project("workflow-api-nested", None)
+        .expect("project");
+
+    let child = registry
+        .create_workflow(&project.id.to_string(), "child-workflow", Some("child"))
+        .expect("child workflow");
+    let parent = registry
+        .create_workflow(&project.id.to_string(), "parent-workflow", Some("parent"))
+        .expect("parent workflow");
+    let child_id = child.id.to_string();
+    let parent = registry
+        .workflow_add_step(
+            &parent.id.to_string(),
+            "child-step",
+            WorkflowStepKind::Workflow,
+            None,
+            &[],
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Some(&child_id),
+            None,
+            None,
+        )
+        .expect("workflow child step");
+
+    let parent_run = registry
+        .create_workflow_run(&parent.id.to_string(), None, None, BTreeMap::new())
+        .expect("parent run");
+    let parent_run = registry
+        .start_workflow_run(&parent_run.id.to_string())
+        .expect("start parent");
+    let parent_run = registry
+        .tick_workflow_run(&parent_run.id.to_string(), false, Some(1))
+        .expect("tick parent");
+
+    let inspect_resp = api_request(
+        &registry,
+        ApiMethod::Get,
+        &format!(
+            "/api/workflow-runs/inspect?workflow_run_id={}",
+            parent_run.id
+        ),
+        None,
+    );
+    let inspected_run = json_value(&inspect_resp.body);
+    assert_eq!(inspected_run["data"]["state"], "completed");
+    assert_eq!(inspected_run["data"]["workflow_name"], "parent-workflow");
+    let child_runs = inspected_run["data"]["child_runs"]
+        .as_array()
+        .expect("child runs array");
+    assert_eq!(child_runs.len(), 1, "{inspected_run}");
+    assert_eq!(child_runs[0]["workflow_name"], "child-workflow");
+    assert_eq!(child_runs[0]["parent_step_name"], "child-step");
+    assert_eq!(
+        child_runs[0]["root_workflow_run_id"],
+        parent_run.id.to_string()
+    );
+    assert!(child_runs[0]["children"]
+        .as_array()
+        .is_some_and(|children| children.is_empty()));
 }
 
 #[test]

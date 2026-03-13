@@ -101,12 +101,23 @@ pub(super) fn build_event_filter(
         )?);
     }
     if let Some(workflow_run) = workflow_run {
-        filter.workflow_run_id = Some(parse_event_uuid(
+        let workflow_run_id = parse_event_uuid(
             workflow_run,
             "invalid_workflow_run_id",
             "workflow run",
             origin,
-        )?);
+        )?;
+        if root_workflow_run.is_none()
+            && parent_workflow_run.is_none()
+            && registry
+                .get_workflow_run(&workflow_run_id.to_string())
+                .ok()
+                .is_some_and(|run| run.root_workflow_run_id == workflow_run_id)
+        {
+            filter.root_workflow_run_id = Some(workflow_run_id);
+        } else {
+            filter.workflow_run_id = Some(workflow_run_id);
+        }
     }
     if let Some(root_workflow_run) = root_workflow_run {
         filter.root_workflow_run_id = Some(parse_event_uuid(

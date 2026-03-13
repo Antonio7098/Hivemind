@@ -10,8 +10,8 @@ use crate::core::registry::shared_types::RuntimeStreamDetailLevel;
 use crate::core::registry::{MergeExecuteMode, MergeExecuteOptions, Registry};
 use crate::core::workflow::{
     WorkflowConditionalConfig, WorkflowContextPatchBinding, WorkflowDataValue, WorkflowDefinition,
-    WorkflowRun, WorkflowStepInputBinding, WorkflowStepKind, WorkflowStepOutputBinding,
-    WorkflowStepState, WorkflowWaitConfig,
+    WorkflowRun, WorkflowRunInspectView, WorkflowRunLineageNode, WorkflowStepInputBinding,
+    WorkflowStepKind, WorkflowStepOutputBinding, WorkflowStepState, WorkflowWaitConfig,
 };
 use std::collections::BTreeMap;
 
@@ -193,12 +193,35 @@ fn render_workflow(workflow: WorkflowDefinition, format: OutputFormat) -> ExitCo
     ExitCode::Success
 }
 
-fn render_workflow_run(registry: &Registry, run: WorkflowRun, format: OutputFormat) -> ExitCode {
+fn print_workflow_run_children(children: &[WorkflowRunLineageNode], indent: usize) {
+    for child in children {
+        let prefix = " ".repeat(indent);
+        println!(
+            "{}- run={} workflow={} ({}) parent_step={} state={:?}",
+            prefix,
+            child.run_id,
+            child.workflow_id,
+            child.workflow_name,
+            child.parent_step_name.as_deref().unwrap_or("-"),
+            child.state
+        );
+        print_workflow_run_children(&child.children, indent + 2);
+    }
+}
+
+fn render_workflow_run(
+    registry: &Registry,
+    inspected: WorkflowRunInspectView,
+    format: OutputFormat,
+) -> ExitCode {
     if format == OutputFormat::Table {
+        let run = &inspected.run;
         let workflow = registry.get_workflow(&run.workflow_id.to_string()).ok();
-        let all_runs = registry.list_workflow_runs(None, None).unwrap_or_default();
         println!("Run:      {}", run.id);
-        println!("Workflow: {}", run.workflow_id);
+        println!(
+            "Workflow: {} ({})",
+            run.workflow_id, inspected.workflow_name
+        );
         println!("Project:  {}", run.project_id);
         println!("Root:     {}", run.root_workflow_run_id);
         println!(
@@ -206,6 +229,10 @@ fn render_workflow_run(registry: &Registry, run: WorkflowRun, format: OutputForm
             run.parent_workflow_run_id
                 .map(|id| id.to_string())
                 .unwrap_or_else(|| "-".to_string())
+        );
+        println!(
+            "Parent Step: {}",
+            inspected.parent_step_name.as_deref().unwrap_or("-")
         );
         println!("State:    {:?}", run.state);
         println!("Steps:    {}", run.step_runs.len());
@@ -222,26 +249,11 @@ fn render_workflow_run(registry: &Registry, run: WorkflowRun, format: OutputForm
                 step_run.id
             );
         }
-        let child_runs = all_runs
-            .iter()
-            .filter(|child| child.parent_workflow_run_id == Some(run.id))
-            .collect::<Vec<_>>();
-        if !child_runs.is_empty() {
+        if !inspected.child_runs.is_empty() {
             println!("Children:");
-            for child in child_runs {
-                println!(
-                    "  - run={} workflow={} parent_step={} state={:?}",
-                    child.id,
-                    child.workflow_id,
-                    child
-                        .parent_step_id
-                        .map(|id| id.to_string())
-                        .unwrap_or_else(|| "-".to_string()),
-                    child.state
-                );
-            }
+            print_workflow_run_children(&inspected.child_runs, 2);
         }
-    } else if let Err(err) = output(&run, format) {
+    } else if let Err(err) = output(&inspected, format) {
         eprintln!("Failed to render workflow run: {err}");
     }
     ExitCode::Success
@@ -359,10 +371,12 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
                 Err(err) => output_error(&err, format),
             }
         }
-        WorkflowCommands::Status(args) => match registry.get_workflow_run(&args.workflow_run_id) {
-            Ok(run) => render_workflow_run(&registry, run, format),
-            Err(err) => output_error(&err, format),
-        },
+        WorkflowCommands::Status(args) => {
+            match registry.inspect_workflow_run(&args.workflow_run_id) {
+                Ok(run) => render_workflow_run(&registry, run, format),
+                Err(err) => output_error(&err, format),
+            }
+        }
         WorkflowCommands::Start(args) => match registry.start_workflow_run(&args.workflow_run_id) {
             Ok(run) => output_workflow_run_id(run.id, format),
             Err(err) => output_error(&err, format),
@@ -373,7 +387,10 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
                 args.interactive,
                 args.max_parallel,
             ) {
-                Ok(run) => render_workflow_run(&registry, run, format),
+                Ok(run) => match registry.inspect_workflow_run(&run.id.to_string()) {
+                    Ok(inspected) => render_workflow_run(&registry, inspected, format),
+                    Err(err) => output_error(&err, format),
+                },
                 Err(err) => output_error(&err, format),
             }
         }
@@ -409,7 +426,10 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
                 args.step_id.as_deref(),
                 &args.emitted_by,
             ) {
-                Ok(run) => render_workflow_run(&registry, run, format),
+                Ok(run) => match registry.inspect_workflow_run(&run.id.to_string()) {
+                    Ok(inspected) => render_workflow_run(&registry, inspected, format),
+                    Err(err) => output_error(&err, format),
+                },
                 Err(err) => output_error(&err, format),
             }
         }
@@ -429,7 +449,10 @@ pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode 
             workflow_step_state(args.state),
             args.reason.as_deref(),
         ) {
-            Ok(run) => render_workflow_run(&registry, run, format),
+            Ok(run) => match registry.inspect_workflow_run(&run.id.to_string()) {
+                Ok(inspected) => render_workflow_run(&registry, inspected, format),
+                Err(err) => output_error(&err, format),
+            },
             Err(err) => output_error(&err, format),
         },
         WorkflowCommands::RuntimeStream(args) => match registry

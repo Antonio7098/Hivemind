@@ -14,6 +14,7 @@ Hivemind is **local-first** and **event-sourced**:
 - `events.jsonl` is an append-only compatibility mirror for manual inspection/tools.
 - All derived state is reconstructed from events.
 - Code changes happen in **git worktrees/branches** owned by workflow runs. Legacy flows remain available as a compatibility surface.
+- Phase 5 closeout validated the workflow-first path across flat retries, nested child workflows, append-only bag fan-in, wait/signal control flow, and workflow-owned merge operations.
 
 ---
 
