@@ -1,11 +1,11 @@
 use super::*;
 
 pub(super) fn handle_attempt_list(
-    registry: &Registry,
+    service: &AttemptService,
     args: &AttemptListArgs,
     format: OutputFormat,
 ) -> ExitCode {
-    match registry.list_attempts(args.flow.as_deref(), args.task.as_deref(), args.limit) {
+    match service.list_attempts(args.flow.as_deref(), args.task.as_deref(), args.limit) {
         Ok(attempts) => match format {
             OutputFormat::Table => {
                 if attempts.is_empty() {

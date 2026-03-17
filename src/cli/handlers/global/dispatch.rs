@@ -2,14 +2,14 @@ use super::*;
 
 #[allow(clippy::too_many_lines)]
 pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+    let Some(service) = get_governance_service(format) else {
         return ExitCode::Error;
     };
 
     match cmd {
         GlobalCommands::Skill(cmd) => match cmd {
             GlobalSkillCommands::Create(args) => {
-                match registry.global_skill_create(
+                match service.global_skill_create(
                     &args.skill_id,
                     &args.name,
                     &args.tags,
@@ -22,7 +22,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                     Err(e) => output_error(&e, format),
                 }
             }
-            GlobalSkillCommands::List => match registry.global_skill_list() {
+            GlobalSkillCommands::List => match service.global_skill_list() {
                 Ok(result) => {
                     print_structured(&result, format, "global skill list");
                     ExitCode::Success
@@ -30,7 +30,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             },
             GlobalSkillCommands::Inspect(args) => {
-                match registry.global_skill_inspect(&args.skill_id) {
+                match service.global_skill_inspect(&args.skill_id) {
                     Ok(result) => {
                         print_structured(&result, format, "global skill inspect result");
                         ExitCode::Success
@@ -38,7 +38,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                     Err(e) => output_error(&e, format),
                 }
             }
-            GlobalSkillCommands::Update(args) => match registry.global_skill_update(
+            GlobalSkillCommands::Update(args) => match service.global_skill_update(
                 &args.skill_id,
                 args.name.as_deref(),
                 args.tags.as_deref(),
@@ -50,19 +50,20 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 }
                 Err(e) => output_error(&e, format),
             },
-            GlobalSkillCommands::Delete(args) => match registry.global_skill_delete(&args.skill_id)
-            {
-                Ok(result) => {
-                    print_structured(&result, format, "global skill delete result");
-                    ExitCode::Success
+            GlobalSkillCommands::Delete(args) => {
+                match service.global_skill_delete(&args.skill_id) {
+                    Ok(result) => {
+                        print_structured(&result, format, "global skill delete result");
+                        ExitCode::Success
+                    }
+                    Err(e) => output_error(&e, format),
                 }
-                Err(e) => output_error(&e, format),
-            },
-            GlobalSkillCommands::Registry(cmd) => handle_skill_registry(cmd, &registry, format),
+            }
+            GlobalSkillCommands::Registry(cmd) => handle_skill_registry(cmd, &service, format),
         },
         GlobalCommands::SystemPrompt(cmd) => match cmd {
             GlobalSystemPromptCommands::Create(args) => {
-                match registry.global_system_prompt_create(&args.prompt_id, &args.content) {
+                match service.global_system_prompt_create(&args.prompt_id, &args.content) {
                     Ok(result) => {
                         print_structured(&result, format, "global system prompt create result");
                         ExitCode::Success
@@ -70,7 +71,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                     Err(e) => output_error(&e, format),
                 }
             }
-            GlobalSystemPromptCommands::List => match registry.global_system_prompt_list() {
+            GlobalSystemPromptCommands::List => match service.global_system_prompt_list() {
                 Ok(result) => {
                     print_structured(&result, format, "global system prompt list");
                     ExitCode::Success
@@ -78,7 +79,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             },
             GlobalSystemPromptCommands::Inspect(args) => {
-                match registry.global_system_prompt_inspect(&args.prompt_id) {
+                match service.global_system_prompt_inspect(&args.prompt_id) {
                     Ok(result) => {
                         print_structured(&result, format, "global system prompt inspect result");
                         ExitCode::Success
@@ -87,7 +88,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 }
             }
             GlobalSystemPromptCommands::Update(args) => {
-                match registry.global_system_prompt_update(&args.prompt_id, &args.content) {
+                match service.global_system_prompt_update(&args.prompt_id, &args.content) {
                     Ok(result) => {
                         print_structured(&result, format, "global system prompt update result");
                         ExitCode::Success
@@ -96,7 +97,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 }
             }
             GlobalSystemPromptCommands::Delete(args) => {
-                match registry.global_system_prompt_delete(&args.prompt_id) {
+                match service.global_system_prompt_delete(&args.prompt_id) {
                     Ok(result) => {
                         print_structured(&result, format, "global system prompt delete result");
                         ExitCode::Success
@@ -106,7 +107,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
             }
         },
         GlobalCommands::Template(cmd) => match cmd {
-            GlobalTemplateCommands::Create(args) => match registry.global_template_create(
+            GlobalTemplateCommands::Create(args) => match service.global_template_create(
                 &args.template_id,
                 &args.system_prompt_id,
                 &args.skill_ids,
@@ -119,7 +120,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 }
                 Err(e) => output_error(&e, format),
             },
-            GlobalTemplateCommands::List => match registry.global_template_list() {
+            GlobalTemplateCommands::List => match service.global_template_list() {
                 Ok(result) => {
                     print_structured(&result, format, "global template list");
                     ExitCode::Success
@@ -127,7 +128,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             },
             GlobalTemplateCommands::Inspect(args) => {
-                match registry.global_template_inspect(&args.template_id) {
+                match service.global_template_inspect(&args.template_id) {
                     Ok(result) => {
                         print_structured(&result, format, "global template inspect result");
                         ExitCode::Success
@@ -135,7 +136,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                     Err(e) => output_error(&e, format),
                 }
             }
-            GlobalTemplateCommands::Update(args) => match registry.global_template_update(
+            GlobalTemplateCommands::Update(args) => match service.global_template_update(
                 &args.template_id,
                 args.system_prompt_id.as_deref(),
                 args.skill_ids.as_deref(),
@@ -149,7 +150,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             },
             GlobalTemplateCommands::Delete(args) => {
-                match registry.global_template_delete(&args.template_id) {
+                match service.global_template_delete(&args.template_id) {
                     Ok(result) => {
                         print_structured(&result, format, "global template delete result");
                         ExitCode::Success
@@ -158,7 +159,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 }
             }
             GlobalTemplateCommands::Instantiate(args) => {
-                match registry.global_template_instantiate(&args.project, &args.template_id) {
+                match service.global_template_instantiate(&args.project, &args.template_id) {
                     Ok(result) => {
                         print_structured(&result, format, "global template instantiate result");
                         ExitCode::Success
@@ -169,7 +170,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
         },
         GlobalCommands::Notepad(cmd) => match cmd {
             GlobalNotepadCommands::Create(args) => {
-                match registry.global_notepad_create(&args.content) {
+                match service.global_notepad_create(&args.content) {
                     Ok(result) => {
                         print_structured(&result, format, "global notepad create result");
                         ExitCode::Success
@@ -177,7 +178,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                     Err(e) => output_error(&e, format),
                 }
             }
-            GlobalNotepadCommands::Show => match registry.global_notepad_show() {
+            GlobalNotepadCommands::Show => match service.global_notepad_show() {
                 Ok(result) => {
                     print_structured(&result, format, "global notepad show result");
                     ExitCode::Success
@@ -185,7 +186,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             },
             GlobalNotepadCommands::Update(args) => {
-                match registry.global_notepad_update(&args.content) {
+                match service.global_notepad_update(&args.content) {
                     Ok(result) => {
                         print_structured(&result, format, "global notepad update result");
                         ExitCode::Success
@@ -193,7 +194,7 @@ pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
                     Err(e) => output_error(&e, format),
                 }
             }
-            GlobalNotepadCommands::Delete => match registry.global_notepad_delete() {
+            GlobalNotepadCommands::Delete => match service.global_notepad_delete() {
                 Ok(result) => {
                     print_structured(&result, format, "global notepad delete result");
                     ExitCode::Success

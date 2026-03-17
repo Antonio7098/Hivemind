@@ -1,28 +1,18 @@
 //! Worktree command handlers.
 
+use super::common::get_worktree_service;
 use crate::cli::commands::WorktreeCommands;
 use crate::cli::output::{output_error, OutputFormat};
 use crate::core::error::ExitCode;
-use crate::core::registry::Registry;
-
-fn get_registry(format: OutputFormat) -> Option<Registry> {
-    match Registry::open() {
-        Ok(r) => Some(r),
-        Err(e) => {
-            output_error(&e, format);
-            None
-        }
-    }
-}
 
 #[allow(clippy::too_many_lines)]
 pub fn handle_worktree(cmd: WorktreeCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+    let Some(service) = get_worktree_service(format) else {
         return ExitCode::Error;
     };
 
     match cmd {
-        WorktreeCommands::List(args) => match registry.worktree_list(&args.flow_id) {
+        WorktreeCommands::List(args) => match service.worktree_list(&args.flow_id) {
             Ok(statuses) => match format {
                 OutputFormat::Json => {
                     let response = crate::cli::output::CliResponse::success(&statuses);
@@ -47,7 +37,7 @@ pub fn handle_worktree(cmd: WorktreeCommands, format: OutputFormat) -> ExitCode 
             },
             Err(e) => output_error(&e, format),
         },
-        WorktreeCommands::Inspect(args) => match registry.worktree_inspect(&args.task_id) {
+        WorktreeCommands::Inspect(args) => match service.worktree_inspect(&args.task_id) {
             Ok(status) => match format {
                 OutputFormat::Json => {
                     let response = crate::cli::output::CliResponse::success(&status);
@@ -73,7 +63,7 @@ pub fn handle_worktree(cmd: WorktreeCommands, format: OutputFormat) -> ExitCode 
             Err(e) => output_error(&e, format),
         },
         WorktreeCommands::Cleanup(args) => {
-            match registry.worktree_cleanup(&args.flow_id, args.force, args.dry_run) {
+            match service.worktree_cleanup(&args.flow_id, args.force, args.dry_run) {
                 Ok(result) => {
                     match format {
                         OutputFormat::Json => {
@@ -119,7 +109,7 @@ pub fn handle_worktree(cmd: WorktreeCommands, format: OutputFormat) -> ExitCode 
             }
         }
         WorktreeCommands::RestoreTurn(args) => {
-            match registry.worktree_restore_turn_ref(
+            match service.worktree_restore_turn_ref(
                 &args.attempt_id,
                 args.ordinal,
                 args.confirm,

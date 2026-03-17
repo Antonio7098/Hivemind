@@ -24,8 +24,14 @@ pub(super) fn handle_get(
     path: &str,
     url: &str,
     default_events_limit: usize,
-    registry: &Registry,
+    app: &AppContext,
 ) -> Result<Option<ApiResponse>> {
+    let state_service = || app.state_service();
+    let project_service = || app.project_service();
+    let runtime_service = || app.runtime_service();
+    let event_service = || app.event_service();
+    let attempt_service = || app.attempt_service();
+    let worktree_service = || app.worktree_service();
     let resp = match path {
         "/health" => {
             let mut resp = ApiResponse::text(200, "text/plain", "ok\n");
@@ -42,21 +48,25 @@ pub(super) fn handle_get(
                 .get("events_limit")
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(default_events_limit);
-            super::json_ok(build_ui_state(registry, events_limit)?)?
+            super::json_ok(build_ui_state(
+                &state_service()?,
+                &event_service()?,
+                events_limit,
+            )?)?
         }
-        "/api/projects" => super::json_ok(registry.list_projects()?)?,
-        "/api/tasks" => super::json_ok(list_tasks(registry)?)?,
-        "/api/graphs" => super::json_ok(list_graphs(registry)?)?,
-        "/api/flows" => super::json_ok(list_flows(registry)?)?,
-        "/api/merges" => super::json_ok(list_merge_states(registry)?)?,
-        "/api/runtimes" => super::json_ok(registry.runtime_list())?,
+        "/api/projects" => super::json_ok(project_service()?.list_projects()?)?,
+        "/api/tasks" => super::json_ok(list_tasks(&state_service()?)?)?,
+        "/api/graphs" => super::json_ok(list_graphs(&state_service()?)?)?,
+        "/api/flows" => super::json_ok(list_flows(&state_service()?)?)?,
+        "/api/merges" => super::json_ok(list_merge_states(&state_service()?)?)?,
+        "/api/runtimes" => super::json_ok(runtime_service()?.runtime_list())?,
         "/api/runtimes/health" => {
             let query = parse_query(url);
             let role = parse_runtime_role(
                 query.get("role").map(String::as_str),
                 "server:runtimes:health",
             )?;
-            super::json_ok(registry.runtime_health_with_role(
+            super::json_ok(runtime_service()?.runtime_health_with_role(
                 query.get("project").map(String::as_str),
                 query.get("task").map(String::as_str),
                 query.get("flow").map(String::as_str),
@@ -69,7 +79,7 @@ pub(super) fn handle_get(
                 .get("limit")
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(default_events_limit);
-            super::json_ok(list_ui_events(registry, limit)?)?
+            super::json_ok(list_ui_events(&event_service()?, limit)?)?
         }
         "/api/events/inspect" => {
             let query = parse_query(url);
@@ -80,7 +90,7 @@ pub(super) fn handle_get(
                     "server:events:inspect",
                 )
             })?;
-            super::json_ok(registry.get_event(event_id)?)?
+            super::json_ok(event_service()?.get_event(event_id)?)?
         }
         "/api/runtime-stream" => {
             let query = parse_query(url);
@@ -88,7 +98,7 @@ pub(super) fn handle_get(
                 .get("limit")
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(default_events_limit);
-            super::json_ok(registry.runtime_stream_items_with_detail(
+            super::json_ok(runtime_service()?.runtime_stream_items_with_detail(
                 query.get("flow_id").map(String::as_str),
                 query.get("attempt_id").map(String::as_str),
                 limit,
@@ -105,7 +115,7 @@ pub(super) fn handle_get(
                 )
             })?;
             let output = query.get("output").is_some_and(|v| v == "true");
-            let attempt = registry.get_attempt(attempt_id)?;
+            let attempt = attempt_service()?.get_attempt(attempt_id)?;
             let check_results = attempt
                 .check_results
                 .iter()
@@ -141,9 +151,9 @@ pub(super) fn handle_get(
                 )
             })?;
             let include_diff = query.get("diff").is_some_and(|v| v == "true");
-            let attempt = registry.get_attempt(attempt_id)?;
+            let attempt = attempt_service()?.get_attempt(attempt_id)?;
             let diff = if include_diff {
-                registry.get_attempt_diff(attempt_id)?
+                attempt_service()?.get_attempt_diff(attempt_id)?
             } else {
                 None
             };
@@ -190,7 +200,7 @@ pub(super) fn handle_get(
             })?;
             super::json_ok(serde_json::json!({
                 "attempt_id": attempt_id,
-                "diff": registry.get_attempt_diff(attempt_id)?,
+                "diff": attempt_service()?.get_attempt_diff(attempt_id)?,
             }))?
         }
         "/api/flows/replay" => {
@@ -202,7 +212,7 @@ pub(super) fn handle_get(
                     "server:flows:replay",
                 )
             })?;
-            super::json_ok(registry.replay_flow(flow_id)?)?
+            super::json_ok(event_service()?.replay_flow(flow_id)?)?
         }
         "/api/worktrees" => {
             let query = parse_query(url);
@@ -213,7 +223,7 @@ pub(super) fn handle_get(
                     "server:worktrees:list",
                 )
             })?;
-            super::json_ok(registry.worktree_list(flow_id)?)?
+            super::json_ok(worktree_service()?.worktree_list(flow_id)?)?
         }
         "/api/worktrees/inspect" => {
             let query = parse_query(url);
@@ -224,7 +234,7 @@ pub(super) fn handle_get(
                     "server:worktrees:inspect",
                 )
             })?;
-            super::json_ok(registry.worktree_inspect(task_id)?)?
+            super::json_ok(worktree_service()?.worktree_inspect(task_id)?)?
         }
         _ => return Ok(None),
     };

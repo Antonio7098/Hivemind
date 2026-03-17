@@ -1,15 +1,134 @@
 //! Shared helpers for CLI command handlers.
 
+use crate::app::{
+    AppContext, AttemptService, CheckpointService, EventService, FlowService, GovernanceService,
+    GraphService, MergeService, ProjectService, RuntimeService, TaskService, VerificationService,
+    WorktreeService,
+};
 use crate::cli::commands::{MergeExecuteModeArg, RunModeArg, RuntimeRoleArg};
 use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::events::RuntimeRole;
 use crate::core::flow::RunMode;
-use crate::core::registry::{MergeExecuteMode, Registry};
+use crate::core::registry::MergeExecuteMode;
 use uuid::Uuid;
 
-pub(crate) fn get_registry(format: OutputFormat) -> Option<Registry> {
-    match Registry::open() {
-        Ok(r) => Some(r),
+pub(crate) fn app_context() -> AppContext {
+    AppContext::default()
+}
+
+pub(crate) fn get_flow_service(format: OutputFormat) -> Option<FlowService> {
+    match app_context().flow_service() {
+        Ok(service) => Some(service),
+        Err(e) => {
+            output_error(&e, format);
+            None
+        }
+    }
+}
+
+pub(crate) fn get_graph_service(format: OutputFormat) -> Option<GraphService> {
+    match app_context().graph_service() {
+        Ok(service) => Some(service),
+        Err(e) => {
+            output_error(&e, format);
+            None
+        }
+    }
+}
+
+pub(crate) fn get_runtime_service(format: OutputFormat) -> Option<RuntimeService> {
+    match app_context().runtime_service() {
+        Ok(service) => Some(service),
+        Err(e) => {
+            output_error(&e, format);
+            None
+        }
+    }
+}
+
+pub(crate) fn get_project_service(format: OutputFormat) -> Option<ProjectService> {
+    match app_context().project_service() {
+        Ok(service) => Some(service),
+        Err(e) => {
+            output_error(&e, format);
+            None
+        }
+    }
+}
+
+pub(crate) fn get_governance_service(format: OutputFormat) -> Option<GovernanceService> {
+    match app_context().governance_service() {
+        Ok(service) => Some(service),
+        Err(e) => {
+            output_error(&e, format);
+            None
+        }
+    }
+}
+
+pub(crate) fn get_merge_service(format: OutputFormat) -> Option<MergeService> {
+    match app_context().merge_service() {
+        Ok(service) => Some(service),
+        Err(e) => {
+            output_error(&e, format);
+            None
+        }
+    }
+}
+
+pub(crate) fn get_verification_service(format: OutputFormat) -> Option<VerificationService> {
+    match app_context().verification_service() {
+        Ok(service) => Some(service),
+        Err(e) => {
+            output_error(&e, format);
+            None
+        }
+    }
+}
+
+pub(crate) fn get_checkpoint_service(format: OutputFormat) -> Option<CheckpointService> {
+    match app_context().checkpoint_service() {
+        Ok(service) => Some(service),
+        Err(e) => {
+            output_error(&e, format);
+            None
+        }
+    }
+}
+
+pub(crate) fn get_task_service(format: OutputFormat) -> Option<TaskService> {
+    match app_context().task_service() {
+        Ok(service) => Some(service),
+        Err(e) => {
+            output_error(&e, format);
+            None
+        }
+    }
+}
+
+pub(crate) fn get_attempt_service(format: OutputFormat) -> Option<AttemptService> {
+    match app_context().attempt_service() {
+        Ok(service) => Some(service),
+        Err(e) => {
+            output_error(&e, format);
+            None
+        }
+    }
+}
+
+pub(crate) fn get_event_service(format: OutputFormat) -> Option<EventService> {
+    match app_context().event_service() {
+        Ok(service) => Some(service),
+        Err(e) => {
+            output_error(&e, format);
+            None
+        }
+    }
+}
+
+pub(crate) fn get_worktree_service(format: OutputFormat) -> Option<WorktreeService> {
+    match app_context().worktree_service() {
+        Ok(service) => Some(service),
         Err(e) => {
             output_error(&e, format);
             None

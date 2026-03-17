@@ -2,7 +2,7 @@ use super::*;
 use crate::storage::event_store::EventFilter;
 
 pub(crate) fn handle_attempt_inspect(
-    registry: &Registry,
+    service: &AttemptService,
     args: &AttemptInspectArgs,
     format: OutputFormat,
 ) -> ExitCode {
@@ -18,32 +18,32 @@ pub(crate) fn handle_attempt_inspect(
         );
     };
 
-    match try_print_attempt_from_events(registry, parsed, args, format) {
+    match try_print_attempt_from_events(service, parsed, args, format) {
         Ok(Some(code)) => return code,
         Ok(None) => {}
         Err(e) => return output_error(&e, format),
     }
 
-    match registry.get_attempt(attempt_id) {
+    match service.get_attempt(attempt_id) {
         Ok(attempt) => {
-            print_attempt_inspect_attempt(registry, &attempt, args.diff, args.context, format)
+            print_attempt_inspect_attempt(service, &attempt, args.diff, args.context, format)
         }
         Err(e) if e.code == "attempt_not_found" => {
-            print_attempt_inspect_task_fallback(registry, parsed, args.diff, format, &e)
+            print_attempt_inspect_task_fallback(service, parsed, args.diff, format, &e)
         }
         Err(e) => output_error(&e, format),
     }
 }
 
 fn try_print_attempt_from_events(
-    registry: &Registry,
+    service: &AttemptService,
     attempt_id: Uuid,
     args: &AttemptInspectArgs,
     format: OutputFormat,
 ) -> Result<Option<ExitCode>> {
     let mut filter = EventFilter::all();
     filter.attempt_id = Some(attempt_id);
-    let events = registry.read_events(&filter)?;
+    let events = service.read_events(&filter)?;
     if events.is_empty() {
         return Ok(None);
     }
@@ -66,7 +66,7 @@ fn try_print_attempt_from_events(
         OutputFormat::Table => {
             print_attempt_inspect_table(attempt_id, &corr, &collected, args);
             if args.diff {
-                if let Some(diff) = registry.get_attempt_diff(&attempt_id.to_string())? {
+                if let Some(diff) = service.get_attempt_diff(&attempt_id.to_string())? {
                     println!("{diff}");
                 }
             }
@@ -77,13 +77,13 @@ fn try_print_attempt_from_events(
 }
 
 fn print_attempt_inspect_task_fallback(
-    registry: &Registry,
+    service: &AttemptService,
     task_id: Uuid,
     show_diff: bool,
     format: OutputFormat,
     original_error: &HivemindError,
 ) -> ExitCode {
-    let state = match registry.state() {
+    let state = match service.state() {
         Ok(s) => s,
         Err(e) => return output_error(&e, format),
     };
@@ -106,7 +106,7 @@ fn print_attempt_inspect_task_fallback(
     let diff = if show_diff {
         latest_attempt
             .and_then(|a| a.diff_id.map(|_| a.id))
-            .and_then(|aid| registry.get_attempt_diff(&aid.to_string()).ok())
+            .and_then(|aid| service.get_attempt_diff(&aid.to_string()).ok())
             .flatten()
     } else {
         None

@@ -1,19 +1,19 @@
 //! Merge command handlers.
 
 use crate::cli::commands::MergeCommands;
-use crate::cli::handlers::common::{get_registry, parse_merge_execute_mode};
+use crate::cli::handlers::common::{get_merge_service, parse_merge_execute_mode};
 use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::error::ExitCode;
 use crate::core::registry::MergeExecuteOptions;
 
 pub fn handle_merge(cmd: MergeCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+    let Some(service) = get_merge_service(format) else {
         return ExitCode::Error;
     };
 
     match cmd {
         MergeCommands::Prepare(args) => {
-            match registry.merge_prepare(&args.flow_id, args.target.as_deref()) {
+            match service.merge_prepare(&args.flow_id, args.target.as_deref()) {
                 Ok(ms) => {
                     match format {
                         OutputFormat::Json => {
@@ -45,7 +45,7 @@ pub fn handle_merge(cmd: MergeCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        MergeCommands::Approve(args) => match registry.merge_approve(&args.flow_id) {
+        MergeCommands::Approve(args) => match service.merge_approve(&args.flow_id) {
             Ok(ms) => {
                 match format {
                     OutputFormat::Json => {
@@ -67,7 +67,7 @@ pub fn handle_merge(cmd: MergeCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
-        MergeCommands::Execute(args) => match registry.merge_execute_with_options(
+        MergeCommands::Execute(args) => match service.merge_execute_with_options(
             &args.flow_id,
             MergeExecuteOptions {
                 mode: parse_merge_execute_mode(args.mode),

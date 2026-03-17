@@ -1,42 +1,43 @@
 use super::*;
+use crate::app::{EventService, StateService};
 use crate::core::events::RuntimeOutputStream;
 use serde_json::json;
 use uuid::Uuid;
 
-pub(super) fn list_tasks(registry: &Registry) -> Result<Vec<Task>> {
-    let state = registry.state()?;
+pub(super) fn list_tasks(state_service: &StateService) -> Result<Vec<Task>> {
+    let state = state_service.state()?;
     let mut tasks: Vec<Task> = state.tasks.into_values().collect();
     tasks.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
     tasks.reverse();
     Ok(tasks)
 }
 
-pub(super) fn list_graphs(registry: &Registry) -> Result<Vec<TaskGraph>> {
-    let state = registry.state()?;
+pub(super) fn list_graphs(state_service: &StateService) -> Result<Vec<TaskGraph>> {
+    let state = state_service.state()?;
     let mut graphs: Vec<TaskGraph> = state.graphs.into_values().collect();
     graphs.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
     graphs.reverse();
     Ok(graphs)
 }
 
-pub(super) fn list_flows(registry: &Registry) -> Result<Vec<TaskFlow>> {
-    let state = registry.state()?;
+pub(super) fn list_flows(state_service: &StateService) -> Result<Vec<TaskFlow>> {
+    let state = state_service.state()?;
     let mut flows: Vec<TaskFlow> = state.flows.into_values().collect();
     flows.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
     flows.reverse();
     Ok(flows)
 }
 
-pub(super) fn list_merge_states(registry: &Registry) -> Result<Vec<MergeState>> {
-    let state = registry.state()?;
+pub(super) fn list_merge_states(state_service: &StateService) -> Result<Vec<MergeState>> {
+    let state = state_service.state()?;
     let mut merges: Vec<MergeState> = state.merge_states.into_values().collect();
     merges.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
     merges.reverse();
     Ok(merges)
 }
 
-pub(super) fn list_ui_events(registry: &Registry, limit: usize) -> Result<Vec<UiEvent>> {
-    let events = registry.list_events(None, limit)?;
+pub(super) fn list_ui_events(event_service: &EventService, limit: usize) -> Result<Vec<UiEvent>> {
+    let events = event_service.list_events(None, limit)?;
     let mut ui_events: Vec<UiEvent> = events.iter().map(ui_event).collect::<Result<_>>()?;
     ui_events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
     ui_events.reverse();
@@ -45,7 +46,7 @@ pub(super) fn list_ui_events(registry: &Registry, limit: usize) -> Result<Vec<Ui
 
 #[allow(dead_code)]
 pub(super) fn list_runtime_stream_items(
-    registry: &Registry,
+    event_service: &EventService,
     flow_id: Option<Uuid>,
     attempt_id: Option<Uuid>,
     limit: usize,
@@ -54,7 +55,7 @@ pub(super) fn list_runtime_stream_items(
     filter.flow_id = flow_id;
     filter.attempt_id = attempt_id;
     filter.limit = Some(limit);
-    let mut items = registry
+    let mut items = event_service
         .read_events(&filter)?
         .into_iter()
         .filter_map(runtime_stream_item)

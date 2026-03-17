@@ -66,6 +66,8 @@ These are intentionally opaque to Hivemind.
 
 A **Runtime Adapter** is the only component allowed to interact directly with an execution runtime.
 
+Adding a runtime should be a local change: implement the adapter, register it in the runtime factory/descriptor layer, and preserve the persisted adapter name for compatibility. Broad central dispatch edits in unrelated orchestration code are considered an architectural regression.
+
 Conceptually, an adapter must support the following lifecycle:
 
 ```

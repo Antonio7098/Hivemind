@@ -57,11 +57,12 @@
 //! - Body (JSON or text)
 //! - Optional custom headers
 
+use crate::app::AppContext;
 use crate::cli::output::CliResponse;
 use crate::core::error::{HivemindError, Result};
 use crate::core::events::{CorrelationIds, Event, EventPayload, RuntimeRole};
 use crate::core::flow::{RetryMode, RunMode};
-use crate::core::registry::{MergeExecuteMode, MergeExecuteOptions, Registry};
+use crate::core::registry::{MergeExecuteMode, MergeExecuteOptions};
 use crate::core::state::{MergeState, Project, Task};
 use crate::core::verification::CheckConfig;
 use crate::core::{flow::TaskFlow, graph::TaskGraph};
@@ -71,7 +72,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::io::{self, Read};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::Receiver;
 use uuid::Uuid;
 
 mod api_types;
@@ -81,11 +82,13 @@ mod query_views;
 mod routes;
 #[cfg(test)]
 mod tests;
+mod transport;
 use api_types::*;
 use event_ui::*;
 use http_parse::*;
 use query_views::*;
 use routes::*;
+use transport::*;
 
 #[derive(Debug, Clone)]
 pub struct ServeConfig {
@@ -110,8 +113,18 @@ pub fn handle_api_request(
     default_events_limit: usize,
     body: Option<&[u8]>,
 ) -> Result<ApiResponse> {
-    let registry = Registry::open()?;
-    handle_api_request_inner(method, url, default_events_limit, body, &registry)
+    let app = AppContext::default();
+    handle_api_request_inner(&app, method, url, default_events_limit, body)
+}
+
+fn handle_api_request_with_app(
+    app: &AppContext,
+    method: ApiMethod,
+    url: &str,
+    default_events_limit: usize,
+    body: Option<&[u8]>,
+) -> Result<ApiResponse> {
+    handle_api_request_inner(app, method, url, default_events_limit, body)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -222,6 +235,7 @@ pub fn serve(config: &ServeConfig) -> Result<()> {
     let addr = format!("{}:{}", config.host, config.port);
     let server = tiny_http::Server::http(&addr)
         .map_err(|e| HivemindError::system("server_bind_failed", e.to_string(), "server:serve"))?;
+    let app = AppContext::default();
 
     eprintln!("hivemind serve listening on http://{addr}");
 
@@ -233,8 +247,9 @@ pub fn serve(config: &ServeConfig) -> Result<()> {
         };
 
         if method == ApiMethod::Get && url.starts_with("/api/runtime-stream/stream") {
-            match Registry::open()
-                .and_then(|registry| build_runtime_stream_sse_response(&url, &registry))
+            match app
+                .event_service()
+                .and_then(|service| build_runtime_stream_sse_response(&url, &service))
             {
                 Ok(response) => {
                     let _ = req.respond(response);
@@ -252,8 +267,9 @@ pub fn serve(config: &ServeConfig) -> Result<()> {
         }
 
         if method == ApiMethod::Get && url.starts_with("/api/chat/sessions/stream") {
-            match Registry::open()
-                .and_then(|registry| build_chat_stream_sse_response(&url, &registry))
+            match app
+                .event_service()
+                .and_then(|service| build_chat_stream_sse_response(&url, &service))
             {
                 Ok(response) => {
                     let _ = req.respond(response);
@@ -275,7 +291,8 @@ pub fn serve(config: &ServeConfig) -> Result<()> {
             let _ = req.as_reader().read_to_end(&mut request_body);
         }
 
-        let response = match handle_api_request(
+        let response = match handle_api_request_with_app(
+            &app,
             method,
             &url,
             config.events_limit,
@@ -316,172 +333,4 @@ pub fn serve(config: &ServeConfig) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn build_runtime_stream_sse_response(
-    url: &str,
-    registry: &Registry,
-) -> Result<tiny_http::Response<ChannelReader>> {
-    let query = parse_query(url);
-    let flow_id = query
-        .get("flow_id")
-        .map(|value| {
-            Uuid::parse_str(value).map_err(|e| {
-                HivemindError::user(
-                    "invalid_flow_id",
-                    format!("Invalid flow_id: {e}"),
-                    "server:runtime_stream:sse",
-                )
-            })
-        })
-        .transpose()?;
-    let attempt_id = query
-        .get("attempt_id")
-        .map(|value| {
-            Uuid::parse_str(value).map_err(|e| {
-                HivemindError::user(
-                    "invalid_attempt_id",
-                    format!("Invalid attempt_id: {e}"),
-                    "server:runtime_stream:sse",
-                )
-            })
-        })
-        .transpose()?;
-
-    let mut filter = EventFilter::all();
-    filter.flow_id = flow_id;
-    filter.attempt_id = attempt_id;
-    let rx_events = registry.stream_events(&filter)?;
-    let (tx, rx) = mpsc::channel::<Vec<u8>>();
-    let _ = tx.send(b": connected\n\n".to_vec());
-
-    std::thread::spawn(move || {
-        while let Ok(event) = rx_events.recv() {
-            if let Some(item) = runtime_stream_item(event) {
-                let payload = RuntimeStreamEnvelope {
-                    cursor: item.sequence,
-                    item,
-                };
-                match serde_json::to_string(&payload) {
-                    Ok(json) => {
-                        if tx
-                            .send(format!("event: runtime\ndata: {json}\n\n").into_bytes())
-                            .is_err()
-                        {
-                            break;
-                        }
-                    }
-                    Err(_) => {
-                        if tx.send(b"event: error\ndata: {}\n\n".to_vec()).is_err() {
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    let mut headers = cors_headers();
-    headers.push(
-        tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/event-stream"[..])
-            .expect("sse content-type header"),
-    );
-    headers.push(
-        tiny_http::Header::from_bytes(&b"Cache-Control"[..], &b"no-cache"[..])
-            .expect("sse cache-control header"),
-    );
-    headers.push(
-        tiny_http::Header::from_bytes(&b"Connection"[..], &b"keep-alive"[..])
-            .expect("sse connection header"),
-    );
-
-    Ok(tiny_http::Response::new(
-        tiny_http::StatusCode(200),
-        headers,
-        ChannelReader::new(rx),
-        None,
-        None,
-    ))
-}
-
-fn build_chat_stream_sse_response(
-    url: &str,
-    registry: &Registry,
-) -> Result<tiny_http::Response<ChannelReader>> {
-    let query = parse_query(url);
-    let session_id = query
-        .get("session_id")
-        .map(|value| {
-            Uuid::parse_str(value).map_err(|e| {
-                HivemindError::user(
-                    "invalid_chat_session_id",
-                    format!("Invalid session_id: {e}"),
-                    "server:chat_stream:sse",
-                )
-            })
-        })
-        .transpose()?;
-
-    let rx_events = registry.stream_events(&EventFilter::all())?;
-    let (tx, rx) = mpsc::channel::<Vec<u8>>();
-    let _ = tx.send(b": connected\n\n".to_vec());
-
-    std::thread::spawn(move || {
-        while let Ok(event) = rx_events.recv() {
-            if let Some(payload) = routes::chat::stream_envelope(&event, session_id) {
-                match serde_json::to_string(&payload) {
-                    Ok(json) => {
-                        if tx
-                            .send(format!("event: chat\ndata: {json}\n\n").into_bytes())
-                            .is_err()
-                        {
-                            break;
-                        }
-                    }
-                    Err(_) => {
-                        if tx.send(b"event: error\ndata: {}\n\n".to_vec()).is_err() {
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    let mut headers = cors_headers();
-    headers.push(
-        tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/event-stream"[..])
-            .expect("sse content-type header"),
-    );
-    headers.push(
-        tiny_http::Header::from_bytes(&b"Cache-Control"[..], &b"no-cache"[..])
-            .expect("sse cache-control header"),
-    );
-    headers.push(
-        tiny_http::Header::from_bytes(&b"Connection"[..], &b"keep-alive"[..])
-            .expect("sse connection header"),
-    );
-
-    Ok(tiny_http::Response::new(
-        tiny_http::StatusCode(200),
-        headers,
-        ChannelReader::new(rx),
-        None,
-        None,
-    ))
-}
-
-fn api_response_to_tiny(response: ApiResponse) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
-    let mut tiny = tiny_http::Response::from_data(response.body)
-        .with_status_code(response.status_code)
-        .with_header(
-            tiny_http::Header::from_bytes(&b"Content-Type"[..], response.content_type.as_bytes())
-                .expect("content-type header"),
-        );
-
-    for h in response.extra_headers {
-        tiny = tiny.with_header(h);
-    }
-
-    tiny
 }

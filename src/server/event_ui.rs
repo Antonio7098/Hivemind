@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::{EventService, StateService};
 mod types;
 use types::*;
 mod categories;
@@ -17,8 +18,12 @@ pub(super) fn ui_event(event: &Event) -> Result<UiEvent> {
         payload: payload_map(&event.payload)?,
     })
 }
-pub(super) fn build_ui_state(registry: &Registry, events_limit: usize) -> Result<UiState> {
-    let state = registry.state()?;
+pub(super) fn build_ui_state(
+    state_service: &StateService,
+    event_service: &EventService,
+    events_limit: usize,
+) -> Result<UiState> {
+    let state = state_service.state()?;
 
     let mut projects: Vec<Project> = state.projects.into_values().collect();
     projects.sort_by(|a, b| a.name.cmp(&b.name));
@@ -39,7 +44,7 @@ pub(super) fn build_ui_state(registry: &Registry, events_limit: usize) -> Result
     merge_states.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
     merge_states.reverse();
 
-    let events = registry.list_events(None, events_limit)?;
+    let events = event_service.list_events(None, events_limit)?;
     let mut ui_events: Vec<UiEvent> = events.iter().map(ui_event).collect::<Result<_>>()?;
     ui_events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
     ui_events.reverse();

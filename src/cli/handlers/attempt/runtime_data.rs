@@ -131,7 +131,7 @@ pub(crate) fn collect_attempt_runtime_data(
 }
 
 pub(crate) fn attempt_context_from_events(
-    registry: &Registry,
+    service: &AttemptService,
     attempt_id: Uuid,
 ) -> Option<serde_json::Value> {
     use crate::core::events::EventPayload;
@@ -139,7 +139,7 @@ pub(crate) fn attempt_context_from_events(
 
     let mut filter = EventFilter::all();
     filter.attempt_id = Some(attempt_id);
-    let events = registry.read_events(&filter).ok()?;
+    let events = service.read_events(&filter).ok()?;
     let mut retry_context: Option<String> = None;
     let mut manifest: Option<serde_json::Value> = None;
     let mut context_window_hash: Option<String> = None;

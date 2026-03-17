@@ -1,21 +1,11 @@
 //! Graph command handlers.
 
+use super::common::get_graph_service;
 use crate::cli::commands::{GraphCommands, GraphQueryCommands, GraphSnapshotCommands};
 use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::error::ExitCode;
 use crate::core::graph_query::{GraphQueryRequest, GraphQueryResult};
-use crate::core::registry::Registry;
 use uuid::Uuid;
-
-fn get_registry(format: OutputFormat) -> Option<Registry> {
-    match Registry::open() {
-        Ok(r) => Some(r),
-        Err(e) => {
-            output_error(&e, format);
-            None
-        }
-    }
-}
 
 fn print_graph_id(graph_id: Uuid, format: OutputFormat) {
     match format {
@@ -113,7 +103,7 @@ fn print_graph_query_result(result: &GraphQueryResult, format: OutputFormat) {
 
 #[allow(clippy::too_many_lines)]
 pub fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+    let Some(service) = get_graph_service(format) else {
         return ExitCode::Error;
     };
 
@@ -134,7 +124,7 @@ pub fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
                 task_ids.push(id);
             }
 
-            match registry.create_graph(&args.project, &args.name, &task_ids) {
+            match service.create_graph(&args.project, &args.name, &task_ids) {
                 Ok(graph) => {
                     print_graph_id(graph.id, format);
                     ExitCode::Success
@@ -145,7 +135,7 @@ pub fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
         GraphCommands::Query(cmd) => handle_graph_query(cmd, format),
         GraphCommands::Snapshot(cmd) => handle_graph_snapshot(cmd, format),
         GraphCommands::AddDependency(args) => {
-            match registry.add_graph_dependency(&args.graph_id, &args.from_task, &args.to_task) {
+            match service.add_graph_dependency(&args.graph_id, &args.from_task, &args.to_task) {
                 Ok(graph) => {
                     print_graph_id(graph.id, format);
                     ExitCode::Success
@@ -161,7 +151,7 @@ pub fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
             check.required = args.required;
             check.timeout_ms = args.timeout_ms;
 
-            match registry.add_graph_task_check(&args.graph_id, &args.task_id, check) {
+            match service.add_graph_task_check(&args.graph_id, &args.task_id, check) {
                 Ok(graph) => {
                     print_graph_id(graph.id, format);
                     ExitCode::Success
@@ -169,7 +159,7 @@ pub fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        GraphCommands::Validate(args) => match registry.validate_graph(&args.graph_id) {
+        GraphCommands::Validate(args) => match service.validate_graph(&args.graph_id) {
             Ok(result) => match format {
                 OutputFormat::Json => {
                     if let Ok(json) = serde_json::to_string_pretty(&result) {
@@ -197,14 +187,14 @@ pub fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
             },
             Err(e) => output_error(&e, format),
         },
-        GraphCommands::List(args) => match registry.list_graphs(args.project.as_deref()) {
+        GraphCommands::List(args) => match service.list_graphs(args.project.as_deref()) {
             Ok(graphs) => {
                 print_graphs(&graphs, format);
                 ExitCode::Success
             }
             Err(e) => output_error(&e, format),
         },
-        GraphCommands::Delete(args) => match registry.delete_graph(&args.graph_id) {
+        GraphCommands::Delete(args) => match service.delete_graph(&args.graph_id) {
             Ok(graph_id) => {
                 print_graph_id(graph_id, format);
                 ExitCode::Success
@@ -215,12 +205,12 @@ pub fn handle_graph(cmd: GraphCommands, format: OutputFormat) -> ExitCode {
 }
 
 pub fn handle_graph_snapshot(cmd: GraphSnapshotCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+    let Some(service) = get_graph_service(format) else {
         return ExitCode::Error;
     };
     match cmd {
         GraphSnapshotCommands::Refresh(args) => {
-            match registry.graph_snapshot_refresh(&args.project, "manual_refresh") {
+            match service.graph_snapshot_refresh(&args.project, "manual_refresh") {
                 Ok(result) => {
                     if format == OutputFormat::Table {
                         println!("Project:              {}", result.project_id);
@@ -243,7 +233,7 @@ pub fn handle_graph_snapshot(cmd: GraphSnapshotCommands, format: OutputFormat) -
 }
 
 pub fn handle_graph_query(cmd: GraphQueryCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+    let Some(service) = get_graph_service(format) else {
         return ExitCode::Error;
     };
     let (project, request) = match cmd {
@@ -283,7 +273,7 @@ pub fn handle_graph_query(cmd: GraphQueryCommands, format: OutputFormat) -> Exit
         ),
     };
 
-    match registry.graph_query_execute(&project, &request, "cli_graph_query") {
+    match service.graph_query_execute(&project, &request, "cli_graph_query") {
         Ok(result) => {
             print_graph_query_result(&result, format);
             ExitCode::Success

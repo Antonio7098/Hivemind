@@ -5,7 +5,7 @@ use crate::cli::commands::{
     ProjectGovernanceNotepadCommands, ProjectGovernanceRepairCommands,
     ProjectGovernanceSnapshotCommands,
 };
-use crate::cli::handlers::common::{get_registry, print_structured};
+use crate::cli::handlers::common::{get_governance_service, print_structured};
 use crate::cli::output::{output_error, OutputFormat};
 use crate::core::error::{ExitCode, HivemindError};
 use std::fs;
@@ -33,7 +33,7 @@ fn read_constitution_payload(
 }
 
 pub fn handle_constitution(cmd: ConstitutionCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+    let Some(service) = get_governance_service(format) else {
         return ExitCode::Error;
     };
 
@@ -47,7 +47,7 @@ pub fn handle_constitution(cmd: ConstitutionCommands, format: OutputFormat) -> E
                 Ok(value) => value,
                 Err(err) => return output_error(&err, format),
             };
-            match registry.constitution_init(
+            match service.constitution_init(
                 &args.project,
                 payload.as_deref(),
                 args.confirm,
@@ -61,7 +61,7 @@ pub fn handle_constitution(cmd: ConstitutionCommands, format: OutputFormat) -> E
                 Err(e) => output_error(&e, format),
             }
         }
-        ConstitutionCommands::Show(args) => match registry.constitution_show(&args.project) {
+        ConstitutionCommands::Show(args) => match service.constitution_show(&args.project) {
             Ok(result) => {
                 print_structured(&result, format, "constitution show result");
                 ExitCode::Success
@@ -69,7 +69,7 @@ pub fn handle_constitution(cmd: ConstitutionCommands, format: OutputFormat) -> E
             Err(e) => output_error(&e, format),
         },
         ConstitutionCommands::Validate(args) => {
-            match registry.constitution_validate(&args.project, None) {
+            match service.constitution_validate(&args.project, None) {
                 Ok(result) => {
                     print_structured(&result, format, "constitution validate result");
                     ExitCode::Success
@@ -77,7 +77,7 @@ pub fn handle_constitution(cmd: ConstitutionCommands, format: OutputFormat) -> E
                 Err(e) => output_error(&e, format),
             }
         }
-        ConstitutionCommands::Check(args) => match registry.constitution_check(&args.project) {
+        ConstitutionCommands::Check(args) => match service.constitution_check(&args.project) {
             Ok(result) => {
                 print_structured(&result, format, "constitution check result");
                 ExitCode::Success
@@ -107,7 +107,7 @@ pub fn handle_constitution(cmd: ConstitutionCommands, format: OutputFormat) -> E
                 Err(err) => return output_error(&err, format),
             };
 
-            match registry.constitution_update(
+            match service.constitution_update(
                 &args.project,
                 &payload,
                 args.confirm,

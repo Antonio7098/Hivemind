@@ -1,28 +1,11 @@
 //! Runtime command handlers.
 
-use crate::cli::commands::{RuntimeCommands, RuntimeRoleArg, RuntimeStreamArgs};
+use super::common::{get_runtime_service, parse_runtime_role};
+use crate::app::RuntimeService;
+use crate::cli::commands::{RuntimeCommands, RuntimeStreamArgs};
 use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::error::ExitCode;
-use crate::core::events::RuntimeRole;
 use crate::core::registry::shared_types::RuntimeStreamDetailLevel;
-use crate::core::registry::Registry;
-
-fn parse_runtime_role(role: RuntimeRoleArg) -> RuntimeRole {
-    match role {
-        RuntimeRoleArg::Worker => RuntimeRole::Worker,
-        RuntimeRoleArg::Validator => RuntimeRole::Validator,
-    }
-}
-
-fn get_registry(format: OutputFormat) -> Option<Registry> {
-    match Registry::open() {
-        Ok(r) => Some(r),
-        Err(e) => {
-            output_error(&e, format);
-            None
-        }
-    }
-}
 
 fn parse_runtime_stream_detail(
     detail: crate::cli::commands::RuntimeStreamDetailArg,
@@ -39,13 +22,13 @@ fn parse_runtime_stream_detail(
 }
 
 pub fn handle_runtime(cmd: RuntimeCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+    let Some(service) = get_runtime_service(format) else {
         return ExitCode::Error;
     };
 
     match cmd {
         RuntimeCommands::List => {
-            let rows = registry.runtime_list();
+            let rows = service.runtime_list();
             match format {
                 OutputFormat::Table => {
                     if rows.is_empty() {
@@ -75,7 +58,7 @@ pub fn handle_runtime(cmd: RuntimeCommands, format: OutputFormat) -> ExitCode {
             }
         }
         RuntimeCommands::Health(args) => {
-            match registry.runtime_health_with_role(
+            match service.runtime_health_with_role(
                 args.project.as_deref(),
                 args.task.as_deref(),
                 args.flow.as_deref(),
@@ -115,7 +98,7 @@ pub fn handle_runtime(cmd: RuntimeCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        RuntimeCommands::DefaultsSet(args) => match registry.runtime_defaults_set(
+        RuntimeCommands::DefaultsSet(args) => match service.runtime_defaults_set(
             parse_runtime_role(args.role),
             &args.adapter,
             &args.binary_path,
@@ -133,16 +116,16 @@ pub fn handle_runtime(cmd: RuntimeCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
-        RuntimeCommands::Stream(args) => handle_runtime_stream(&registry, &args, format),
+        RuntimeCommands::Stream(args) => handle_runtime_stream(&service, &args, format),
     }
 }
 
 fn handle_runtime_stream(
-    registry: &Registry,
+    service: &RuntimeService,
     args: &RuntimeStreamArgs,
     format: OutputFormat,
 ) -> ExitCode {
-    match registry.runtime_stream_items_with_detail(
+    match service.runtime_stream_items_with_detail(
         args.flow.as_deref(),
         args.attempt.as_deref(),
         args.limit,

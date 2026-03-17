@@ -2,14 +2,14 @@ use super::*;
 use crate::core::events::CorrelationIds;
 
 pub(crate) fn print_attempt_inspect_attempt(
-    registry: &Registry,
+    service: &AttemptService,
     attempt: &AttemptState,
     show_diff: bool,
     show_context: bool,
     format: OutputFormat,
 ) -> ExitCode {
     let diff = if show_diff {
-        match registry.get_attempt_diff(&attempt.id.to_string()) {
+        match service.get_attempt_diff(&attempt.id.to_string()) {
             Ok(d) => d,
             Err(e) => return output_error(&e, format),
         }
@@ -17,7 +17,7 @@ pub(crate) fn print_attempt_inspect_attempt(
         None
     };
     let context_value = if show_context {
-        attempt_context_from_events(registry, attempt.id)
+        attempt_context_from_events(service, attempt.id)
     } else {
         None
     };

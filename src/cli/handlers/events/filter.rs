@@ -52,7 +52,7 @@ fn parse_non_empty_filter(
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_event_filter(
-    registry: &Registry,
+    service: &EventService,
     origin: &str,
     project: Option<&str>,
     graph: Option<&str>,
@@ -73,7 +73,7 @@ pub(super) fn build_event_filter(
     filter.limit = Some(limit);
 
     if let Some(project) = project {
-        filter.project_id = Some(registry.get_project(project)?.id);
+        filter.project_id = Some(service.get_project(project)?.id);
     }
     if let Some(graph) = graph {
         filter.graph_id = Some(parse_event_uuid(

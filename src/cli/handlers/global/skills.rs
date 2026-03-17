@@ -3,7 +3,7 @@ use super::*;
 #[allow(clippy::too_many_lines)]
 pub(super) fn handle_skill_registry(
     cmd: GlobalSkillRegistryCommands,
-    registry: &Registry,
+    service: &GovernanceService,
     format: OutputFormat,
 ) -> ExitCode {
     match cmd {
@@ -71,7 +71,7 @@ pub(super) fn handle_skill_registry(
                     Err(e) => return output_error(&e, format),
                 };
 
-            match registry.global_skill_create(
+            match service.global_skill_create(
                 skill_id,
                 &detail.skill.name,
                 &detail.skill.tags,
@@ -95,7 +95,7 @@ pub(super) fn handle_skill_registry(
             }
         }
         GlobalSkillRegistryCommands::PullGithub(args) => {
-            let global_root = registry.governance_global_root();
+            let global_root = service.governance_global_root();
             let skills_dir = global_root.join("skills");
 
             match skill_registry::pull_from_github(&args.repo, args.skill.as_deref(), &skills_dir) {

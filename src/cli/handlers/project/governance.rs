@@ -2,7 +2,7 @@ use super::*;
 
 #[allow(clippy::too_many_lines)]
 pub(super) fn handle_project_governance(
-    registry: &Registry,
+    service: &GovernanceService,
     cmd: ProjectGovernanceCommands,
     format: OutputFormat,
 ) -> ExitCode {
@@ -18,7 +18,7 @@ pub(super) fn handle_project_governance(
                 Ok(project) => project,
                 Err(e) => return output_error(&e, format),
             };
-            match registry.project_governance_init(&project) {
+            match service.project_governance_init(&project) {
                 Ok(result) => {
                     render::print_project_governance_init(&result, format);
                     ExitCode::Success
@@ -27,7 +27,7 @@ pub(super) fn handle_project_governance(
             }
         }
         ProjectGovernanceCommands::Migrate(args) => {
-            match registry.project_governance_migrate(&args.project) {
+            match service.project_governance_migrate(&args.project) {
                 Ok(result) => {
                     render::print_project_governance_migrate(&result, format);
                     ExitCode::Success
@@ -36,7 +36,7 @@ pub(super) fn handle_project_governance(
             }
         }
         ProjectGovernanceCommands::Inspect(args) => {
-            match registry.project_governance_inspect(&args.project) {
+            match service.project_governance_inspect(&args.project) {
                 Ok(result) => {
                     render::print_project_governance_inspect(&result, format);
                     ExitCode::Success
@@ -45,7 +45,7 @@ pub(super) fn handle_project_governance(
             }
         }
         ProjectGovernanceCommands::Diagnose(args) => {
-            match registry.project_governance_diagnose(&args.project) {
+            match service.project_governance_diagnose(&args.project) {
                 Ok(result) => {
                     print_structured(&result, format, "project governance diagnostics");
                     ExitCode::Success
@@ -54,7 +54,7 @@ pub(super) fn handle_project_governance(
             }
         }
         ProjectGovernanceCommands::Replay(args) => {
-            match registry.project_governance_replay(&args.project, args.verify) {
+            match service.project_governance_replay(&args.project, args.verify) {
                 Ok(result) => {
                     print_structured(&result, format, "project governance replay result");
                     ExitCode::Success
@@ -64,7 +64,7 @@ pub(super) fn handle_project_governance(
         }
         ProjectGovernanceCommands::Snapshot(cmd) => match cmd {
             ProjectGovernanceSnapshotCommands::Create(args) => {
-                match registry
+                match service
                     .project_governance_snapshot_create(&args.project, args.interval_minutes)
                 {
                     Ok(result) => {
@@ -75,7 +75,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceSnapshotCommands::List(args) => {
-                match registry.project_governance_snapshot_list(&args.project, args.limit) {
+                match service.project_governance_snapshot_list(&args.project, args.limit) {
                     Ok(result) => {
                         print_structured(&result, format, "governance snapshot list result");
                         ExitCode::Success
@@ -84,7 +84,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceSnapshotCommands::Restore(args) => {
-                match registry.project_governance_snapshot_restore(
+                match service.project_governance_snapshot_restore(
                     &args.project,
                     &args.snapshot_id,
                     args.confirm,
@@ -99,7 +99,7 @@ pub(super) fn handle_project_governance(
         },
         ProjectGovernanceCommands::Repair(cmd) => match cmd {
             ProjectGovernanceRepairCommands::Detect(args) => {
-                match registry.project_governance_repair_detect(&args.project) {
+                match service.project_governance_repair_detect(&args.project) {
                     Ok(result) => {
                         print_structured(&result, format, "governance repair detect result");
                         ExitCode::Success
@@ -108,7 +108,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceRepairCommands::Preview(args) => {
-                match registry
+                match service
                     .project_governance_repair_preview(&args.project, args.snapshot_id.as_deref())
                 {
                     Ok(result) => {
@@ -119,7 +119,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceRepairCommands::Apply(args) => {
-                match registry.project_governance_repair_apply(
+                match service.project_governance_repair_apply(
                     &args.project,
                     args.snapshot_id.as_deref(),
                     args.confirm,
@@ -134,7 +134,7 @@ pub(super) fn handle_project_governance(
         },
         ProjectGovernanceCommands::Document(cmd) => match cmd {
             ProjectGovernanceDocumentCommands::Create(args) => {
-                match registry.project_governance_document_create(
+                match service.project_governance_document_create(
                     &args.project,
                     &args.document_id,
                     &args.title,
@@ -150,7 +150,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceDocumentCommands::List(args) => {
-                match registry.project_governance_document_list(&args.project) {
+                match service.project_governance_document_list(&args.project) {
                     Ok(result) => {
                         print_structured(&result, format, "governance document list");
                         ExitCode::Success
@@ -159,7 +159,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceDocumentCommands::Inspect(args) => {
-                match registry.project_governance_document_inspect(&args.project, &args.document_id)
+                match service.project_governance_document_inspect(&args.project, &args.document_id)
                 {
                     Ok(result) => {
                         print_structured(&result, format, "governance document inspect result");
@@ -169,7 +169,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceDocumentCommands::Update(args) => {
-                match registry.project_governance_document_update(
+                match service.project_governance_document_update(
                     &args.project,
                     &args.document_id,
                     args.title.as_deref(),
@@ -185,8 +185,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceDocumentCommands::Delete(args) => {
-                match registry.project_governance_document_delete(&args.project, &args.document_id)
-                {
+                match service.project_governance_document_delete(&args.project, &args.document_id) {
                     Ok(result) => {
                         print_structured(&result, format, "governance document delete result");
                         ExitCode::Success
@@ -197,7 +196,7 @@ pub(super) fn handle_project_governance(
         },
         ProjectGovernanceCommands::Attachment(cmd) => match cmd {
             ProjectGovernanceAttachmentCommands::Include(args) => {
-                match registry.project_governance_attachment_set_document(
+                match service.project_governance_attachment_set_document(
                     &args.project,
                     &args.task_id,
                     &args.document_id,
@@ -211,7 +210,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceAttachmentCommands::Exclude(args) => {
-                match registry.project_governance_attachment_set_document(
+                match service.project_governance_attachment_set_document(
                     &args.project,
                     &args.task_id,
                     &args.document_id,
@@ -227,7 +226,7 @@ pub(super) fn handle_project_governance(
         },
         ProjectGovernanceCommands::Notepad(cmd) => match cmd {
             ProjectGovernanceNotepadCommands::Create(args) => {
-                match registry.project_governance_notepad_create(&args.project, &args.content) {
+                match service.project_governance_notepad_create(&args.project, &args.content) {
                     Ok(result) => {
                         print_structured(&result, format, "project notepad create result");
                         ExitCode::Success
@@ -236,7 +235,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceNotepadCommands::Show(args) => {
-                match registry.project_governance_notepad_show(&args.project) {
+                match service.project_governance_notepad_show(&args.project) {
                     Ok(result) => {
                         print_structured(&result, format, "project notepad show result");
                         ExitCode::Success
@@ -245,7 +244,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceNotepadCommands::Update(args) => {
-                match registry.project_governance_notepad_update(&args.project, &args.content) {
+                match service.project_governance_notepad_update(&args.project, &args.content) {
                     Ok(result) => {
                         print_structured(&result, format, "project notepad update result");
                         ExitCode::Success
@@ -254,7 +253,7 @@ pub(super) fn handle_project_governance(
                 }
             }
             ProjectGovernanceNotepadCommands::Delete(args) => {
-                match registry.project_governance_notepad_delete(&args.project) {
+                match service.project_governance_notepad_delete(&args.project) {
                     Ok(result) => {
                         print_structured(&result, format, "project notepad delete result");
                         ExitCode::Success

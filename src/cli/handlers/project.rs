@@ -1,16 +1,18 @@
 //! Project command handlers.
 
+use crate::app::{GovernanceService, ProjectService};
 use crate::cli::commands::{
     ProjectCommands, ProjectGovernanceAttachmentCommands, ProjectGovernanceCommands,
     ProjectGovernanceDocumentCommands, ProjectGovernanceNotepadCommands,
     ProjectGovernanceRepairCommands, ProjectGovernanceSnapshotCommands,
 };
-use crate::cli::handlers::common::{get_registry, parse_runtime_role, print_structured};
+use crate::cli::handlers::common::{
+    get_governance_service, get_project_service, parse_runtime_role, print_structured,
+};
 use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::error::{ExitCode, HivemindError};
 use crate::core::registry::{
     ProjectGovernanceInitResult, ProjectGovernanceInspectResult, ProjectGovernanceMigrateResult,
-    Registry,
 };
 use crate::core::scope::RepoAccessMode;
 use crate::core::state::Project;
@@ -21,13 +23,13 @@ mod render;
 mod support;
 
 pub fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+    let Some(project_service) = get_project_service(format) else {
         return ExitCode::Error;
     };
 
     match cmd {
         ProjectCommands::Create(args) => {
-            match registry.create_project(&args.name, args.description.as_deref()) {
+            match project_service.create_project(&args.name, args.description.as_deref()) {
                 Ok(project) => {
                     render::print_project(&project, format);
                     ExitCode::Success
@@ -35,21 +37,21 @@ pub fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        ProjectCommands::List => match registry.list_projects() {
+        ProjectCommands::List => match project_service.list_projects() {
             Ok(projects) => {
                 render::print_projects(&projects, format);
                 ExitCode::Success
             }
             Err(e) => output_error(&e, format),
         },
-        ProjectCommands::Inspect(args) => match registry.get_project(&args.project) {
+        ProjectCommands::Inspect(args) => match project_service.get_project(&args.project) {
             Ok(project) => {
                 render::print_project(&project, format);
                 ExitCode::Success
             }
             Err(e) => output_error(&e, format),
         },
-        ProjectCommands::Update(args) => match registry.update_project(
+        ProjectCommands::Update(args) => match project_service.update_project(
             &args.project,
             args.name.as_deref(),
             args.description.as_deref(),
@@ -60,7 +62,7 @@ pub fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
-        ProjectCommands::RuntimeSet(args) => match registry.project_runtime_set_role(
+        ProjectCommands::RuntimeSet(args) => match project_service.project_runtime_set_role(
             &args.project,
             parse_runtime_role(args.role),
             &args.adapter,
@@ -82,8 +84,12 @@ pub fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                 Ok(mode) => mode,
                 Err(code) => return code,
             };
-            match registry.attach_repo(&args.project, &args.path, args.name.as_deref(), access_mode)
-            {
+            match project_service.attach_repo(
+                &args.project,
+                &args.path,
+                args.name.as_deref(),
+                access_mode,
+            ) {
                 Ok(project) => {
                     render::print_project(&project, format);
                     ExitCode::Success
@@ -92,7 +98,7 @@ pub fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
             }
         }
         ProjectCommands::DetachRepo(args) => {
-            match registry.detach_repo(&args.project, &args.repo_name) {
+            match project_service.detach_repo(&args.project, &args.repo_name) {
                 Ok(project) => {
                     render::print_project(&project, format);
                     ExitCode::Success
@@ -100,15 +106,20 @@ pub fn handle_project(cmd: ProjectCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        ProjectCommands::Delete(args) => match registry.delete_project(&args.project) {
+        ProjectCommands::Delete(args) => match project_service.delete_project(&args.project) {
             Ok(project_id) => {
                 render::print_project_id(project_id, format);
                 ExitCode::Success
             }
             Err(e) => output_error(&e, format),
         },
-        ProjectCommands::Governance(cmd) => {
-            governance::handle_project_governance(&registry, cmd, format)
-        }
+        ProjectCommands::Governance(cmd) => handle_project_governance(cmd, format),
     }
+}
+
+fn handle_project_governance(cmd: ProjectGovernanceCommands, format: OutputFormat) -> ExitCode {
+    let Some(service) = get_governance_service(format) else {
+        return ExitCode::Error;
+    };
+    governance::handle_project_governance(&service, cmd, format)
 }

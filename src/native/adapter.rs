@@ -26,6 +26,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 mod config;
+mod observer;
 mod runtime;
 mod trace;
 

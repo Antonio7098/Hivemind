@@ -92,11 +92,11 @@ const POST_ONLY_PATHS: &[&str] = &[
 ];
 
 pub(super) fn handle_api_request_inner(
+    app: &AppContext,
     method: ApiMethod,
     url: &str,
     default_events_limit: usize,
     body: Option<&[u8]>,
-    registry: &Registry,
 ) -> Result<ApiResponse> {
     if method == ApiMethod::Options {
         let mut resp = ApiResponse::text(204, "text/plain", "");
@@ -108,13 +108,13 @@ pub(super) fn handle_api_request_inner(
 
     match method {
         ApiMethod::Get => {
-            if let Some(resp) = chat::handle_get(path, url, registry)? {
+            if let Some(resp) = chat::handle_get(path, url, app)? {
                 return Ok(resp);
             }
-            if let Some(resp) = queries::handle_get(path, url, default_events_limit, registry)? {
+            if let Some(resp) = queries::handle_get(path, url, default_events_limit, app)? {
                 return Ok(resp);
             }
-            if let Some(resp) = governance::handle_get(path, url, registry)? {
+            if let Some(resp) = governance::handle_get(path, url, app)? {
                 return Ok(resp);
             }
             if GET_ONLY_PATHS.contains(&path) {
@@ -126,25 +126,25 @@ pub(super) fn handle_api_request_inner(
             not_found(path)
         }
         ApiMethod::Post => {
-            if let Some(resp) = chat::handle_post(path, body, registry)? {
+            if let Some(resp) = chat::handle_post(path, body, app)? {
                 return Ok(resp);
             }
-            if let Some(resp) = projects::handle_post(path, body, registry)? {
+            if let Some(resp) = projects::handle_post(path, body, app)? {
                 return Ok(resp);
             }
-            if let Some(resp) = tasks::handle_post(path, body, registry)? {
+            if let Some(resp) = tasks::handle_post(path, body, app)? {
                 return Ok(resp);
             }
-            if let Some(resp) = graphs::handle_post(path, body, registry)? {
+            if let Some(resp) = graphs::handle_post(path, body, app)? {
                 return Ok(resp);
             }
-            if let Some(resp) = flows::handle_post(path, body, registry)? {
+            if let Some(resp) = flows::handle_post(path, body, app)? {
                 return Ok(resp);
             }
-            if let Some(resp) = operations::handle_post(path, body, registry)? {
+            if let Some(resp) = operations::handle_post(path, body, app)? {
                 return Ok(resp);
             }
-            if let Some(resp) = governance::handle_post(path, body, registry)? {
+            if let Some(resp) = governance::handle_post(path, body, app)? {
                 return Ok(resp);
             }
             if GET_ONLY_PATHS.contains(&path) {

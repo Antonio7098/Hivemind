@@ -1,9 +1,9 @@
+use crate::app::EventService;
 use crate::cli::commands::EventNativeSummaryArgs;
 use crate::cli::handlers::common::print_structured;
 use crate::cli::output::{output_error, OutputFormat};
 use crate::core::error::ExitCode;
 use crate::core::events::{Event, EventPayload};
-use crate::core::registry::Registry;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -140,12 +140,12 @@ pub(super) struct NativeTurnSummaryRow {
 }
 
 pub(super) fn handle_events_native_summary(
-    registry: &Registry,
+    service: &EventService,
     args: &EventNativeSummaryArgs,
     format: OutputFormat,
 ) -> ExitCode {
     let filter = match build_event_filter(
-        registry,
+        service,
         "cli:events:native-summary",
         args.project.as_deref(),
         args.graph.as_deref(),
@@ -164,7 +164,7 @@ pub(super) fn handle_events_native_summary(
         Err(error) => return output_error(&error, format),
     };
 
-    let events = match registry.read_events(&filter) {
+    let events = match service.read_events(&filter) {
         Ok(events) => events,
         Err(error) => return output_error(&error, format),
     };
