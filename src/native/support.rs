@@ -1,4 +1,5 @@
 use super::*;
+use crate::adapters::runtime::NativeTransportTelemetry;
 use crate::native::tool_engine::ToolPermission;
 
 pub(crate) const fn default_prompt_headroom() -> usize {

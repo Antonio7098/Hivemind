@@ -20,6 +20,7 @@ pub(crate) struct AttemptInspectCollected {
     pub(crate) delivered_context_hash: Option<String>,
 }
 
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub(crate) fn collect_attempt_runtime_data(
     events: &[crate::core::events::Event],

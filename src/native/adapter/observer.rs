@@ -1,6 +1,6 @@
 use super::*;
 use crate::adapters::runtime::NativeHistoryCompactionTrace;
-use crate::native::{AgentLoopObserver, NativeRuntimeError};
+use crate::native::{AgentLoopObserver, HistoryCompactionEvent, NativeRuntimeError};
 use std::time::Instant;
 
 pub(super) type ProgressEmitter<'a> = Box<dyn FnMut(String) -> Result<(), RuntimeError> + 'a>;
@@ -151,33 +151,33 @@ impl AgentLoopObserver for NativeProgressObserver<'_> {
 
     fn on_history_compacted(
         &mut self,
-        turn_index: u32,
-        reason: &str,
-        rendered_prompt_bytes_before: usize,
-        selected_history_count_before: usize,
-        selected_history_chars_before: usize,
-        visible_items_before: usize,
-        visible_items_after: usize,
-        prompt_tokens_before: usize,
-        projected_budget_used: usize,
-        token_budget: usize,
-        elapsed_since_invocation_ms: u64,
+        event: &HistoryCompactionEvent,
     ) -> Result<(), NativeRuntimeError> {
         self.history_compactions.push(NativeHistoryCompactionTrace {
-            turn_index,
-            reason: reason.to_string(),
-            rendered_prompt_bytes_before,
-            selected_history_count_before,
-            selected_history_chars_before,
-            visible_items_before,
-            visible_items_after,
-            prompt_tokens_before,
-            projected_budget_used,
-            token_budget,
-            elapsed_since_invocation_ms,
+            turn_index: event.turn_index,
+            reason: event.reason.clone(),
+            rendered_prompt_bytes_before: event.rendered_prompt_bytes_before,
+            selected_history_count_before: event.selected_history_count_before,
+            selected_history_chars_before: event.selected_history_chars_before,
+            visible_items_before: event.visible_items_before,
+            visible_items_after: event.visible_items_after,
+            prompt_tokens_before: event.prompt_tokens_before,
+            projected_budget_used: event.projected_budget_used,
+            token_budget: event.token_budget,
+            elapsed_since_invocation_ms: event.elapsed_since_invocation_ms,
         });
         self.emit_line(format!(
-            "[native-progress] stage=history_compacted turn={turn_index} reason={reason} rendered_prompt_bytes_before={rendered_prompt_bytes_before} selected_history_count_before={selected_history_count_before} selected_history_chars_before={selected_history_chars_before} visible_items_before={visible_items_before} visible_items_after={visible_items_after} prompt_tokens_before={prompt_tokens_before} projected_budget_used={projected_budget_used} token_budget={token_budget}",
+            "[native-progress] stage=history_compacted turn={} reason={} rendered_prompt_bytes_before={} selected_history_count_before={} selected_history_chars_before={} visible_items_before={} visible_items_after={} prompt_tokens_before={} projected_budget_used={} token_budget={}",
+            event.turn_index,
+            event.reason,
+            event.rendered_prompt_bytes_before,
+            event.selected_history_count_before,
+            event.selected_history_chars_before,
+            event.visible_items_before,
+            event.visible_items_after,
+            event.prompt_tokens_before,
+            event.projected_budget_used,
+            event.token_budget,
         ))
     }
 }

@@ -1,7 +1,13 @@
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #![allow(clippy::too_many_lines)]
 
 use super::*;
 use crate::adapters::runtime::StructuredRuntimeObservation;
+
+mod adapter_lifecycle;
+mod filesystem;
+mod interactive;
+mod observations;
 
 pub(super) struct TickRuntimeExecution {
     pub(super) runtime_for_adapter: ProjectRuntimeConfig,
@@ -75,6 +81,16 @@ impl Registry {
             "HIVEMIND_DATA_DIR".to_string(),
             self.config.data_dir.to_string_lossy().to_string(),
         );
+        if let Some(worktree_base_dir) = worktree_status
+            .path
+            .parent()
+            .and_then(|parent| parent.parent())
+        {
+            runtime_for_adapter.env.insert(
+                "HIVEMIND_WORKTREE_DIR".to_string(),
+                worktree_base_dir.to_string_lossy().to_string(),
+            );
+        }
         runtime_for_adapter.env.insert(
             "HIVEMIND_PRIMARY_WORKTREE".to_string(),
             worktree_status.path.to_string_lossy().to_string(),
@@ -253,7 +269,7 @@ impl Registry {
     ) -> Result<Option<TickRuntimeExecution>> {
         let mut adapter = Self::build_runtime_adapter(runtime_for_adapter.clone())?;
         if let Err(e) = adapter.initialize() {
-            self.handle_runtime_failure(
+            return self.handle_tick_runtime_adapter_error(
                 state,
                 flow,
                 task_id,
@@ -261,17 +277,12 @@ impl Registry {
                 &runtime_for_adapter,
                 next_attempt_number,
                 max_attempts,
-                &e.code,
-                &e.message,
-                e.recoverable,
-                "",
-                "",
+                &e,
                 origin,
-            )?;
-            return Ok(None);
+            );
         }
         if let Err(e) = adapter.prepare(task_id, &worktree_status.path) {
-            self.handle_runtime_failure(
+            return self.handle_tick_runtime_adapter_error(
                 state,
                 flow,
                 task_id,
@@ -279,14 +290,9 @@ impl Registry {
                 &runtime_for_adapter,
                 next_attempt_number,
                 max_attempts,
-                &e.code,
-                &e.message,
-                e.recoverable,
-                "",
-                "",
+                &e,
                 origin,
-            )?;
-            return Ok(None);
+            );
         }
 
         let mut runtime_projector = RuntimeEventProjector::new();
@@ -294,52 +300,20 @@ impl Registry {
         let (report, terminated_reason) = if interactive {
             let mut stdout = std::io::stdout();
             let res = adapter.execute_interactive(&input, |evt| {
-                match evt {
-                    InteractiveAdapterEvent::Output { content } => {
-                        let chunk = content;
-                        let _ = stdout.write_all(chunk.as_bytes());
-                        let _ = stdout.flush();
-                        let event = Event::new(
-                            EventPayload::RuntimeOutputChunk {
-                                attempt_id,
-                                stream: RuntimeOutputStream::Stdout,
-                                content: chunk.clone(),
-                            },
-                            attempt_corr.clone(),
-                        );
-                        self.store.append(event).map_err(|e| e.to_string())?;
-                        let _ = self.append_projected_runtime_observations(
-                            attempt_id,
-                            attempt_corr,
-                            runtime_projector.observe_chunk(RuntimeOutputStream::Stdout, &chunk),
-                            origin,
-                        );
-                    }
-                    InteractiveAdapterEvent::Input { content } => {
-                        let event = Event::new(
-                            EventPayload::RuntimeInputProvided {
-                                attempt_id,
-                                content,
-                            },
-                            attempt_corr.clone(),
-                        );
-                        self.store.append(event).map_err(|e| e.to_string())?;
-                    }
-                    InteractiveAdapterEvent::Interrupted => {
-                        let event = Event::new(
-                            EventPayload::RuntimeInterrupted { attempt_id },
-                            attempt_corr.clone(),
-                        );
-                        self.store.append(event).map_err(|e| e.to_string())?;
-                    }
-                }
-                Ok(())
+                self.handle_interactive_adapter_event(
+                    attempt_id,
+                    attempt_corr,
+                    &mut runtime_projector,
+                    &mut stdout,
+                    evt,
+                    origin,
+                )
             });
 
             match res {
                 Ok(r) => (r.report, r.terminated_reason),
                 Err(e) => {
-                    self.handle_runtime_failure(
+                    return self.handle_tick_runtime_adapter_error(
                         state,
                         flow,
                         task_id,
@@ -347,21 +321,16 @@ impl Registry {
                         &runtime_for_adapter,
                         next_attempt_number,
                         max_attempts,
-                        &e.code,
-                        &e.message,
-                        e.recoverable,
-                        "",
-                        "",
+                        &e,
                         origin,
-                    )?;
-                    return Ok(None);
+                    );
                 }
             }
         } else {
             let report = match adapter.execute(input) {
                 Ok(r) => r,
                 Err(e) => {
-                    self.handle_runtime_failure(
+                    return self.handle_tick_runtime_adapter_error(
                         state,
                         flow,
                         task_id,
@@ -369,14 +338,9 @@ impl Registry {
                         &runtime_for_adapter,
                         next_attempt_number,
                         max_attempts,
-                        &e.code,
-                        &e.message,
-                        e.recoverable,
-                        "",
-                        "",
+                        &e,
                         origin,
-                    )?;
-                    return Ok(None);
+                    );
                 }
             };
             (report, None)
@@ -394,45 +358,7 @@ impl Registry {
             )?;
         }
 
-        if let Ok(state) = self.state() {
-            if let Some(attempt) = state.attempts.get(&attempt_id) {
-                if let Some(baseline_id) = attempt.baseline_id {
-                    if let Ok(baseline) = self.read_baseline_artifact(baseline_id) {
-                        if let Ok(diff) = Diff::compute(&baseline, &worktree_status.path) {
-                            let created = diff
-                                .changes
-                                .iter()
-                                .filter(|c| c.change_type == ChangeType::Created)
-                                .map(|c| c.path.clone())
-                                .collect();
-                            let modified = diff
-                                .changes
-                                .iter()
-                                .filter(|c| c.change_type == ChangeType::Modified)
-                                .map(|c| c.path.clone())
-                                .collect();
-                            let deleted = diff
-                                .changes
-                                .iter()
-                                .filter(|c| c.change_type == ChangeType::Deleted)
-                                .map(|c| c.path.clone())
-                                .collect();
-
-                            let fs_event = Event::new(
-                                EventPayload::RuntimeFilesystemObserved {
-                                    attempt_id,
-                                    files_created: created,
-                                    files_modified: modified,
-                                    files_deleted: deleted,
-                                },
-                                attempt_corr.clone(),
-                            );
-                            let _ = self.store.append(fs_event);
-                        }
-                    }
-                }
-            }
-        }
+        self.append_runtime_filesystem_observation(attempt_id, attempt_corr, worktree_status);
 
         let has_structured_command_events =
             report
@@ -446,58 +372,24 @@ impl Registry {
                 });
 
         if !interactive {
-            for chunk in report.stdout.lines() {
-                let content = chunk.to_string();
-                let event = Event::new(
-                    EventPayload::RuntimeOutputChunk {
-                        attempt_id,
-                        stream: RuntimeOutputStream::Stdout,
-                        content: content.clone(),
-                    },
-                    attempt_corr.clone(),
-                );
-                self.store.append(event).map_err(|e| {
-                    HivemindError::system("event_append_failed", e.to_string(), origin)
-                })?;
-
-                let observations = runtime_projector
-                    .observe_chunk(RuntimeOutputStream::Stdout, &format!("{content}\n"));
-                let _ = self.append_projected_runtime_observations(
-                    attempt_id,
-                    attempt_corr,
-                    filter_projected_runtime_observations(
-                        observations,
-                        has_structured_command_events,
-                    ),
-                    origin,
-                );
-            }
-            for chunk in report.stderr.lines() {
-                let content = chunk.to_string();
-                let event = Event::new(
-                    EventPayload::RuntimeOutputChunk {
-                        attempt_id,
-                        stream: RuntimeOutputStream::Stderr,
-                        content: content.clone(),
-                    },
-                    attempt_corr.clone(),
-                );
-                self.store.append(event).map_err(|e| {
-                    HivemindError::system("event_append_failed", e.to_string(), origin)
-                })?;
-
-                let observations = runtime_projector
-                    .observe_chunk(RuntimeOutputStream::Stderr, &format!("{content}\n"));
-                let _ = self.append_projected_runtime_observations(
-                    attempt_id,
-                    attempt_corr,
-                    filter_projected_runtime_observations(
-                        observations,
-                        has_structured_command_events,
-                    ),
-                    origin,
-                );
-            }
+            self.append_runtime_output_stream(
+                attempt_id,
+                attempt_corr,
+                &mut runtime_projector,
+                RuntimeOutputStream::Stdout,
+                &report.stdout,
+                has_structured_command_events,
+                origin,
+            )?;
+            self.append_runtime_output_stream(
+                attempt_id,
+                attempt_corr,
+                &mut runtime_projector,
+                RuntimeOutputStream::Stderr,
+                &report.stderr,
+                has_structured_command_events,
+                origin,
+            )?;
 
             let _ = self.append_structured_runtime_observations(
                 attempt_id,

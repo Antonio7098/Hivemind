@@ -10,25 +10,25 @@ This is not a roadmap. It is one ordered execution process with guardrails, exit
 ## Tracker Summary
 Overall status:
 - [ ] Not started
-- [ ] In progress
+- [x] In progress
 - [ ] Complete
 
 Working fields:
-- Current focus:
-- Owner:
-- Start date:
-- Last updated:
-- Active blockers:
+- Current focus: follow-up hotspot reduction in core execution paths, especially `tick/once/runtime.rs`, plus docs/process alignment after the native hotspot-reduction pass
+- Owner: Augment Agent
+- Start date: 2026-03-11
+- Last updated: 2026-03-18
+- Active blockers: None
 
 Execution checklist:
-- [ ] 1. Establish guardrails first
-- [ ] 2. Create a real composition root
-- [ ] 3. Break up `Registry` by capability
+- [x] 1. Establish guardrails first
+- [x] 2. Create a real composition root
+- [x] 3. Break up `Registry` by capability
 - [ ] 4. Split event replay by aggregate
-- [ ] 5. Decompose server routing
-- [ ] 6. Open runtime extension properly
-- [ ] 7. Reduce native tool engine concentration
-- [ ] 8. Split the integration test monolith
+- [x] 5. Decompose server routing
+- [x] 6. Open runtime extension properly
+- [x] 7. Reduce native tool engine concentration
+- [x] 8. Split the integration test monolith
 
 ## Update Rules
 - mark the checklist item only when its exit check is met
@@ -156,14 +156,14 @@ For each item:
 
 ## Success Criteria
 This process is complete when:
-- [ ] Hivemind enforces its own architecture boundaries in CI
-- [ ] CLI/server composition is centralized
-- [ ] `Registry` is substantially thinner
+- [x] Hivemind enforces its own architecture boundaries in CI
+- [x] CLI/server composition is centralized
+- [x] `Registry` is substantially thinner
 - [ ] `AppState` mutation logic is split by aggregate
-- [ ] server routing is modularized
-- [ ] runtime extension no longer depends on a broad central switch
-- [ ] `native/tool_engine.rs` is materially decomposed
-- [ ] `tests/integration.rs` is no longer a monolith
+- [x] server routing is modularized
+- [x] runtime extension no longer depends on a broad central switch
+- [x] `native/tool_engine.rs` is materially decomposed
+- [x] `tests/integration.rs` is no longer a monolith
 
 ## What Not To Do
 - no large-batch rename-only churn
@@ -172,8 +172,13 @@ This process is complete when:
 - no feature expansion unless required for compatibility preservation
 
 ## Progress Log
-- YYYY-MM-DD — Started item N. Notes:
-- YYYY-MM-DD — Completed item N. Evidence:
+- 2026-03-11 — Started bounded architecture refactor cycle. Notes: began with repo guardrails, composition root extraction, and service boundary cleanup.
+- 2026-03-11 — Completed items 1-3 and 5-6. Evidence: `.github/workflows/ci.yml`; `scripts/check_architecture.py`; `src/app.rs`; `src/server.rs`; `src/server/routes.rs`; service-oriented `src/core/registry/*` slices; runtime registration/factory extraction in `src/core/registry/runtime/management/support/factory.rs`.
+- 2026-03-18 — Completed item 8 and tightened test architecture validation. Evidence: `tests/runtime_scope.rs`; `tests/query_views.rs`; `tests/flow_lifecycle.rs`; `tests/integration_remainder.rs`; `src/native/tests/{agent_loop,budget_compaction,checkpoint_completion,support}.rs`; targeted architecture smoke tests in `.github/workflows/ci.yml`; `cargo test --test runtime_scope`; `cargo test --test query_views`; `cargo test --test flow_lifecycle`; `cargo test --test integration_remainder`; `cargo test native::tests`.
+- 2026-03-18 — Reduced native hotspot concentration further while item 7 remains in progress. Evidence: `src/native/turn_items/budget_compaction.rs`; `src/native/prompt_assembly/sections.rs`; `src/native/tool_engine/run_command_tool/policy.rs`; `cargo test native::tests`.
+- 2026-03-18 — Completed item 7 by separating tool-engine policy from execution paths. Evidence: `src/native/tool_engine/run_command_tool/policy.rs`; `src/native/tool_engine/policy_eval/{network,approval}.rs`; `src/native/tool_engine/policy_eval.rs`; `cargo test native::tests`.
+- 2026-03-18 — Tightened native observability contracts after the tool-engine split. Evidence: `src/native/contracts.rs`; `src/native/mod.rs`; `src/native/agent_loop.rs`; `src/native/adapter/observer.rs`; `cargo test native::tests`.
+- 2026-03-18 — Began reducing the core tick runtime execution hotspot. Evidence: `src/core/registry/flow/execution/tick/once/runtime/{observations,adapter_lifecycle}.rs`; `src/core/registry/flow/execution/tick/once/runtime.rs`; `cargo test flow_lifecycle`.
 - YYYY-MM-DD — Blocker found. Impact / decision:
 
 ## Final Note

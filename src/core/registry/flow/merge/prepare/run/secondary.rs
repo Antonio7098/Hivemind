@@ -1,3 +1,4 @@
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #![allow(clippy::too_many_lines)]
 
 use super::*;

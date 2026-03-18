@@ -37,6 +37,7 @@ fn native_blob_ref(label: &str) -> NativeBlobRef {
     }
 }
 
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn seed_runtime_projection_attempt(registry: &Registry) -> (Uuid, Uuid, Uuid) {
     let project_id = Uuid::new_v4();

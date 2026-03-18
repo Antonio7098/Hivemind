@@ -13,10 +13,10 @@ Use this as a working tracker for improving SOLID qualities, modularity, extensi
 - [ ] Complete
 
 Working fields:
-- Current focus: Sections 1 and 12 plus the remaining deeper core/native follow-up hotspots
+- Current focus: Sections 1, 5, and 13 follow-up hotspots after completing the current native hotspot-reduction pass
 - Owner: Augment Agent
 - Start date: 2026-03-11
-- Last updated: 2026-03-11
+- Last updated: 2026-03-18
 - Active blockers: None
 
 ## How To Use This Checklist
@@ -32,7 +32,7 @@ Working fields:
 - [ ] core reducers/projections are decomposed enough to shrink hotspot risk
 - [x] CLI and server are transport shells over narrower services
 - [x] architecture guardrails exist in CI
-- [ ] test structure reflects subsystem boundaries
+- [x] test structure reflects subsystem boundaries
 - [ ] docs, tooling, and process support the architecture rather than lag behind it
 
 ## 1. Repo-Level Guardrails, Packaging, and Build
@@ -92,7 +92,7 @@ Exit condition:
 Goal: shrink the specialized orchestration hotspots that remain inside core execution paths.
 
 - [x] break down `src/core/registry/runtime/management/projection.rs`
-- [ ] review `src/core/registry/flow/execution/tick/once/runtime.rs` for extractable phases
+- [x] review `src/core/registry/flow/execution/tick/once/runtime.rs` for extractable phases *(2026-03-18: extracted `runtime/observations.rs` for non-interactive output projection and `runtime/adapter_lifecycle.rs` for repeated adapter failure handling; validated with `cargo test flow_lifecycle`)*
 - [ ] review `src/core/registry/flow/verification/process/task.rs` for smaller processing units
 - [x] separate projection assembly from orchestration decisions where practical
 - [x] preserve replayability and observability while thinning execution-path files
@@ -128,12 +128,13 @@ Exit condition:
 Goal: keep the native subsystem powerful without letting it become the next monolith.
 
 - [x] split `agent_loop` into clearer phases if turn preparation / transition / result handling remain entangled
-- [ ] reduce concentration in `turn_items` and `prompt_assembly`
+- [x] reduce concentration in `turn_items` and `prompt_assembly` *(2026-03-18: extracted `src/native/turn_items/budget_compaction.rs` and `src/native/prompt_assembly/sections.rs` so orchestration files no longer own both helper logic and assembly/compaction details)*
 - [x] separate tool contract/schema handling from tool execution mechanics
-- [ ] separate approval/sandbox/network policy from command execution code
+- [x] separate approval/sandbox/network policy from command execution code *(2026-03-18: extracted `src/native/tool_engine/run_command_tool/policy.rs`, `src/native/tool_engine/policy_eval/network.rs`, and `src/native/tool_engine/policy_eval/approval.rs` so command execution no longer owns the policy decision paths directly)*
+
 - [x] reduce concentration in `native/adapter/runtime.rs`
-- [ ] keep `ModelClient`, `AgentLoopObserver`, and observability contracts explicit
-- [ ] ensure native tests remain deterministic and grouped by subsystem responsibility
+- [x] keep `ModelClient`, `AgentLoopObserver`, and observability contracts explicit *(2026-03-18: extracted `src/native/contracts.rs` and replaced history-compaction callback argument lists with `HistoryCompactionEvent`)*
+- [x] ensure native tests remain deterministic and grouped by subsystem responsibility *(2026-03-18: grouped native tests into `agent_loop`, `budget_compaction`, and `checkpoint_completion` modules with shared deterministic support helpers)*
 
 Exit condition:
 - native runtime responsibilities are distributed across smaller focused units rather than a few heavy files
@@ -179,12 +180,12 @@ Exit condition:
 ## 12. `tests` and Validation Architecture
 Goal: keep coverage high while making failures easier to localize and maintain.
 
-- [ ] split `tests/integration.rs` by capability area
-- [ ] split oversized `native` test modules where responsibility boundaries are clear
+- [x] split `tests/integration.rs` by capability area *(2026-03-18: extracted `tests/runtime_scope.rs`, `tests/query_views.rs`, `tests/flow_lifecycle.rs`, and `tests/integration_remainder.rs`)*
+- [x] split oversized `native` test modules where responsibility boundaries are clear *(2026-03-18: split `src/native/tests.rs` into `src/native/tests/agent_loop.rs`, `budget_compaction.rs`, `checkpoint_completion.rs`, and `support.rs`; validated with `cargo test native::tests`)*
 - [x] split oversized `server` test modules where route groups already exist
 - [x] preserve helper reuse without rebuilding a new giant shared harness blob
-- [ ] ensure CI still runs the smallest reliable test matrix for fast feedback
-- [ ] decide which `hivemind-test/` scripts should remain manual versus become automated smoke coverage
+- [x] ensure CI still runs the smallest reliable test matrix for fast feedback *(2026-03-18: added targeted architecture smoke tests for split suites in `.github/workflows/ci.yml` before full `cargo nextest run --all-features`)*
+- [x] decide which `hivemind-test/` scripts should remain manual versus become automated smoke coverage *(2026-03-18: keep real-provider/beta scripts such as `test_native_openrouter_beta_api.sh`, `test_runtime_projection_real_codex.sh`, `test_runtime_projection_real_opencode.sh`, and restore-turn real-provider scripts manual; rely on automated cargo/CI smoke coverage for local deterministic runtime, worktree, flow, query-view, and integration-split scenarios)*
 
 Exit condition:
 - test failures point to subsystem areas quickly rather than one monolithic scenario file
@@ -210,7 +211,7 @@ Exit condition:
 - [ ] 6. native hotspot reduction
 - [x] 7. CLI/service boundary cleanup
 - [x] 8. server/service boundary cleanup
-- [ ] 9. test suite restructuring
+- [x] 9. test suite restructuring
 - [ ] 10. docs/process/tooling alignment
 
 ## Progress Log
@@ -224,8 +225,14 @@ Exit condition:
 - 2026-03-11 — Reduced core/native hotspots with submodule extraction. Evidence: `src/core/registry/runtime/management/projection/approval.rs`; `src/native/agent_loop/{directive_repair,checkpoint_support,budget_support}.rs`; `src/native/tool_engine/engine/{contracts,dispatch}.rs`; targeted `cargo test` for checkpoint and network policy paths.
 - 2026-03-11 — Split server route and test hotspots. Evidence: `src/server/routes/chat/{scope,execution,view}.rs`; `src/server/tests/{chat,runtime_stream}.rs`; `cargo test api_chat_sessions_create_send_and_inspect_round_trip`; `cargo test api_runtime_stream_supports_detail_levels`.
 - 2026-03-11 — Added build-script compatibility fragment to unblock validation on this branch. Evidence: `src/core/events/payload/fragments/workflow_execution.rs`; targeted `cargo test server::tests::api_version_ok`.
-- YYYY-MM-DD — Completed section N. Evidence:
-- YYYY-MM-DD — Blocker found. Impact / decision:
+- 2026-03-18 — Completed integration and native test suite restructuring. Evidence: `tests/runtime_scope.rs`; `tests/query_views.rs`; `tests/flow_lifecycle.rs`; `tests/integration_remainder.rs`; `src/native/tests/{agent_loop,budget_compaction,checkpoint_completion,support}.rs`; `.github/workflows/ci.yml`; `cargo test --test runtime_scope`; `cargo test --test query_views`; `cargo test --test flow_lifecycle`; `cargo test --test integration_remainder`; `cargo test native::tests`.
+- 2026-03-18 — Classified manual versus automated smoke coverage in `hivemind-test/`. Evidence: manual-only real-provider/beta scripts retained in `hivemind-test/`; CI smoke coverage added in `.github/workflows/ci.yml` for capability-split cargo tests.
+- 2026-03-18 — Reduced native prompt/history hotspot concentration further. Evidence: `src/native/turn_items/budget_compaction.rs`; `src/native/prompt_assembly/sections.rs`; `cargo test native::tests`.
+- 2026-03-18 — Reduced native command-runner policy coupling further. Evidence: `src/native/tool_engine/run_command_tool/policy.rs`; `src/native/tool_engine/run_command_tool.rs`; `cargo test native::tests`.
+- 2026-03-18 — Reduced native policy-evaluation coupling further. Evidence: `src/native/tool_engine/policy_eval/network.rs`; `src/native/tool_engine/policy_eval.rs`; `cargo test native::tests`.
+- 2026-03-18 — Reduced native approval/dangerous-command coupling further. Evidence: `src/native/tool_engine/policy_eval/approval.rs`; `src/native/tool_engine/policy_eval.rs`; `cargo test native::tests`.
+- 2026-03-18 — Made native observability contracts explicit. Evidence: `src/native/contracts.rs`; `src/native/mod.rs`; `src/native/agent_loop.rs`; `src/native/adapter/observer.rs`; `cargo test native::tests`.
+- 2026-03-18 — Began reducing the core tick runtime execution hotspot. Evidence: `src/core/registry/flow/execution/tick/once/runtime/{observations,adapter_lifecycle}.rs`; `src/core/registry/flow/execution/tick/once/runtime.rs`; `cargo test flow_lifecycle`.
 
 ## Final Note
 The target is not “more abstraction.”

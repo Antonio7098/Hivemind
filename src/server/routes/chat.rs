@@ -222,6 +222,7 @@ fn create_chat_session(
     )?))
 }
 
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn send_chat_session_message(
     service: &ChatService,

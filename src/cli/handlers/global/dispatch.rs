@@ -1,5 +1,6 @@
 use super::*;
 
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub fn handle_global(cmd: GlobalCommands, format: OutputFormat) -> ExitCode {
     let Some(service) = get_governance_service(format) else {

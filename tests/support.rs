@@ -94,8 +94,13 @@ pub(crate) fn hivemind_bin() -> PathBuf {
 }
 
 pub(crate) fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, String, String) {
+    let data_dir = home.join(".hivemind");
+    let worktree_dir = home.join("hivemind").join("worktrees");
     let output = Command::new(hivemind_bin())
         .env("HOME", home)
+        .env("USERPROFILE", home)
+        .env("HIVEMIND_DATA_DIR", &data_dir)
+        .env("HIVEMIND_WORKTREE_DIR", &worktree_dir)
         .args(args)
         .output()
         .expect("run hivemind");
@@ -105,6 +110,143 @@ pub(crate) fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, Strin
         String::from_utf8_lossy(&output.stdout).to_string(),
         String::from_utf8_lossy(&output.stderr).to_string(),
     )
+}
+
+pub(crate) fn set_project_runtime_script(
+    home: &std::path::Path,
+    project: &str,
+    unix_script: &str,
+    windows_script: &str,
+    timeout_ms: u64,
+) -> (i32, String, String) {
+    set_project_runtime_script_with_model(
+        home,
+        project,
+        None,
+        unix_script,
+        windows_script,
+        timeout_ms,
+    )
+}
+
+pub(crate) fn set_project_native_scripted_runtime(
+    home: &std::path::Path,
+    project: &str,
+    directives: &[&str],
+    timeout_ms: u64,
+) -> (i32, String, String) {
+    let directives_json = serde_json::to_string(directives).expect("encode scripted directives");
+    let timeout_ms = if cfg!(windows) {
+        timeout_ms.max(5_000)
+    } else {
+        timeout_ms
+    };
+    let directives_env = format!("HIVEMIND_NATIVE_SCRIPTED_DIRECTIVES_JSON={directives_json}");
+    let timeout_arg = timeout_ms.to_string();
+    let args = vec![
+        "project".to_string(),
+        "runtime-set".to_string(),
+        project.to_string(),
+        "--adapter".to_string(),
+        "native".to_string(),
+        "--binary-path".to_string(),
+        "builtin-native".to_string(),
+        "--model".to_string(),
+        "mock-model".to_string(),
+        "--env".to_string(),
+        "HIVEMIND_NATIVE_PROVIDER=mock".to_string(),
+        "--env".to_string(),
+        directives_env,
+        "--timeout-ms".to_string(),
+        timeout_arg,
+    ];
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    run_hivemind(home, &arg_refs)
+}
+
+pub(crate) fn set_project_runtime_script_with_model(
+    home: &std::path::Path,
+    project: &str,
+    model: Option<&str>,
+    unix_script: &str,
+    windows_script: &str,
+    timeout_ms: u64,
+) -> (i32, String, String) {
+    let timeout_ms = if cfg!(windows) {
+        timeout_ms.max(5_000)
+    } else {
+        timeout_ms
+    };
+    let windows_script = if cfg!(windows)
+        && windows_script.contains("checkpoint complete --id")
+        && !windows_script.contains("--attempt-id")
+    {
+        windows_script.replace(
+            "checkpoint complete --id",
+            "checkpoint complete --attempt-id %HIVEMIND_ATTEMPT_ID% --id",
+        )
+    } else {
+        windows_script.to_string()
+    };
+    let windows_script = if cfg!(windows) && !windows_script.contains("exit /b") {
+        format!("{windows_script} & exit /b 0")
+    } else {
+        windows_script
+    };
+
+    let mut args = vec![
+        "project".to_string(),
+        "runtime-set".to_string(),
+        project.to_string(),
+        "--binary-path".to_string(),
+    ];
+
+    if cfg!(windows) {
+        args.push("cmd.exe".to_string());
+    } else {
+        args.push("/usr/bin/env".to_string());
+    }
+
+    if let Some(model) = model {
+        args.push("--model".to_string());
+        args.push(model.to_string());
+    }
+
+    if cfg!(windows) {
+        args.push("--arg".to_string());
+        args.push("/C".to_string());
+        args.push("--arg".to_string());
+        args.push(windows_script);
+    } else {
+        args.push("--arg".to_string());
+        args.push("sh".to_string());
+        args.push("--arg".to_string());
+        args.push("-c".to_string());
+        args.push("--arg".to_string());
+        args.push(unix_script.to_string());
+    }
+
+    args.push("--timeout-ms".to_string());
+    args.push(timeout_ms.to_string());
+
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    run_hivemind(home, &arg_refs)
+}
+
+pub(crate) fn expected_runtime_flag_prefix() -> &'static [&'static str] {
+    if cfg!(windows) {
+        &["/C"]
+    } else {
+        &["sh", "-c"]
+    }
+}
+
+pub(crate) fn failing_check_command() -> &'static str {
+    if cfg!(windows) {
+        "exit /b 1"
+    } else {
+        "exit 1"
+    }
 }
 
 pub(crate) fn worktree_root(home: &std::path::Path) -> PathBuf {
@@ -117,7 +259,13 @@ pub(crate) fn run_hivemind_with_env(
     extra_env: &[(&str, &str)],
 ) -> (i32, String, String) {
     let mut cmd = Command::new(hivemind_bin());
-    cmd.env("HOME", home).args(args);
+    let data_dir = home.join(".hivemind");
+    let worktree_dir = home.join("hivemind").join("worktrees");
+    cmd.env("HOME", home)
+        .env("USERPROFILE", home)
+        .env("HIVEMIND_DATA_DIR", &data_dir)
+        .env("HIVEMIND_WORKTREE_DIR", &worktree_dir)
+        .args(args);
     for (k, v) in extra_env {
         cmd.env(k, v);
     }

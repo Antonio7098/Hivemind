@@ -305,6 +305,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
         Ok(())
     }
 
+    // ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
     #[allow(clippy::too_many_lines)]
     fn execute(&mut self, input: ExecutionInput) -> Result<ExecutionReport, RuntimeError> {
         let worktree = self

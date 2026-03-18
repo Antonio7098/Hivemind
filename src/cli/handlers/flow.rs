@@ -37,6 +37,7 @@ fn print_flows(flows: &[crate::core::flow::TaskFlow], format: OutputFormat) {
     }
 }
 
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
     let Some(service) = get_flow_service(format) else {

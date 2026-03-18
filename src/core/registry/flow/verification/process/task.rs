@@ -1,6 +1,7 @@
 use super::*;
 
 impl Registry {
+    // ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
     #[allow(clippy::too_many_lines)]
     pub(crate) fn process_verifying_task(&self, flow_id: &str, task_id: Uuid) -> Result<TaskFlow> {
         let flow = self.get_flow(flow_id)?;

@@ -1,5 +1,6 @@
 use super::*;
 
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub(super) fn handle_skill_registry(
     cmd: GlobalSkillRegistryCommands,

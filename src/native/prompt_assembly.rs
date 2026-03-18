@@ -4,6 +4,13 @@ use crate::native::tool_engine::ToolContract;
 use crate::native::turn_items::TurnItemKind;
 use sha2::{Digest, Sha256};
 
+mod sections;
+
+use sections::{
+    join_lines, render_metadata_section, render_tool_contract, section, select_items_with_budget,
+    stable_hash,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NativePromptAssembly {
     pub base_runtime_instructions: String,
@@ -89,6 +96,7 @@ struct NativePromptSelection {
     truncated_item_count: usize,
 }
 
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub(crate) fn assemble_native_prompt(
     config: &NativeRuntimeConfig,
@@ -273,12 +281,6 @@ pub(crate) fn assemble_native_prompt(
     }
 }
 
-fn stable_hash(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
-
 fn base_runtime_instructions() -> String {
     "You are the Hivemind native runtime controller. Work only from explicit prompt sections, use the declared tools, and keep progress attributable through THINK / ACT / DONE directives. If you would otherwise reply with plain-English planning text like 'I'll inspect the repo first', emit that as THINK instead. When emitting ACT tool:<name>:<payload>, the payload must be a JSON object that matches that tool's input_schema exactly; do not invent fields, do not pass bare strings unless the schema explicitly allows them, and reformulate the action to fit the schema when needed."
         .to_string()
@@ -319,120 +321,6 @@ fn objective_state(mode: AgentMode, input: &ExecutionInput) -> String {
                 input.task_description, input.success_criteria
             )
         }
-    }
-}
-
-fn render_metadata_section(metadata: &NativePromptMetadata) -> String {
-    section(
-        "Context Manifest",
-        &join_lines(
-            &[
-                optional_line("manifest_hash", metadata.manifest_hash.as_deref()),
-                optional_line("inputs_hash", metadata.inputs_hash.as_deref()),
-                optional_line(
-                    "delivered_context_hash",
-                    metadata.delivered_context_hash.as_deref(),
-                ),
-                optional_line(
-                    "rendered_context_hash",
-                    metadata.rendered_context_hash.as_deref(),
-                ),
-                optional_line(
-                    "context_window_state_hash",
-                    metadata.context_window_state_hash.as_deref(),
-                ),
-                optional_line("delivery_target", metadata.delivery_target.as_deref()),
-                Some(format!(
-                    "runtime_context_bytes={}",
-                    metadata.runtime_context_bytes
-                )),
-            ]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>(),
-            "(no context manifest metadata)",
-        ),
-    )
-}
-
-fn render_tool_contract(contract: &ToolContract) -> String {
-    let permissions = contract
-        .required_permissions
-        .iter()
-        .map(|permission| format!("{permission:?}").to_ascii_lowercase())
-        .collect::<Vec<_>>()
-        .join(",");
-    let input_schema = serde_json::to_string(&contract.input_schema)
-        .unwrap_or_else(|_| "{\"error\":\"input_schema_unavailable\"}".to_string());
-    format!(
-        "- {}@{} scope={} permissions={} cancellable={} timeout_ms={} input_schema={}",
-        contract.name,
-        contract.version,
-        contract.required_scope,
-        permissions,
-        contract.cancellable,
-        contract.timeout_ms,
-        input_schema,
-    )
-}
-
-fn select_items_with_budget(items: &[TurnItem], budget: usize) -> NativePromptSelection {
-    if budget == 0 {
-        return NativePromptSelection {
-            items: Vec::new(),
-            skipped_item_count: items.iter().filter(|item| item.model_visible).count(),
-            truncated_item_count: 0,
-        };
-    }
-
-    let mut selected = Vec::new();
-    let mut used = 0usize;
-    let mut skipped_item_count = 0usize;
-    let mut truncated_item_count = 0usize;
-    for item in items.iter().rev().filter(|item| item.model_visible) {
-        let rendered = item.render_for_prompt();
-        let chars = rendered.chars().count();
-        if used + chars <= budget {
-            selected.push(item.clone());
-            used += chars;
-            continue;
-        }
-        if selected.is_empty() {
-            let mut truncated = item.clone();
-            truncated.apply_prompt_truncation(budget);
-            if !truncated.render_for_prompt().trim().is_empty() {
-                selected.push(truncated);
-                truncated_item_count = 1;
-            }
-        }
-        skipped_item_count += 1;
-        break;
-    }
-    selected.reverse();
-    NativePromptSelection {
-        items: selected,
-        skipped_item_count,
-        truncated_item_count,
-    }
-}
-
-#[allow(clippy::manual_map, clippy::option_if_let_else)]
-fn optional_line(key: &str, value: Option<&str>) -> Option<String> {
-    match value {
-        Some(value) => Some(format!("{key}={value}")),
-        None => None,
-    }
-}
-
-fn section(title: &str, body: &str) -> String {
-    format!("{title}:\n{body}")
-}
-
-fn join_lines(lines: &[String], fallback: &str) -> String {
-    if lines.is_empty() {
-        fallback.to_string()
-    } else {
-        lines.join("\n")
     }
 }
 

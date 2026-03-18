@@ -26,7 +26,8 @@ HOTSPOT_BUDGETS = {
     "src/server.rs": 520,
     "tests/governance.rs": 1900,
     "tests/events_cli.rs": 320,
-    "tests/integration.rs": 2600,
+    "tests/integration.rs": 2000,
+    "tests/verification.rs": 900,
 }
 TOO_MANY_LINES_BUDGETS = {
     "src/adapters/opencode/interactive.rs": 1,
@@ -92,9 +93,11 @@ TOO_MANY_LINES_BUDGETS = {
     "src/server/tests.rs": 1,
     "src/server.rs": 1,
     "tests/governance.rs": 8,
-    "tests/integration.rs": 5,
+    "tests/integration.rs": 1,
+    "tests/verification.rs": 4,
 }
 MAX_TOO_MANY_LINES = sum(TOO_MANY_LINES_BUDGETS.values())
+DEBT_TAG = "ARCH_DEBT"
 
 
 def iter_rs_files(root: Path):
@@ -112,6 +115,26 @@ def count_lines(path: Path) -> int:
         return sum(1 for _ in handle)
 
 
+def normalize_relative_path(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
+
+
+def has_debt_annotation(lines: list[str], index: int) -> bool:
+    for back in range(1, 4):
+        prev_index = index - back
+        if prev_index < 0:
+            break
+        prev_line = lines[prev_index].strip()
+        if not prev_line:
+            continue
+        if prev_line.startswith("//"):
+            if DEBT_TAG in prev_line.upper():
+                return True
+            continue
+        break
+    return False
+
+
 def main() -> int:
     errors: list[str] = []
     too_many_lines_count = 0
@@ -120,7 +143,8 @@ def main() -> int:
 
     for relative_root, forbidden_terms in FORBIDDEN_LAYER_IMPORTS.items():
         for path in iter_rs_files(ROOT / relative_root):
-            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            for number, line in enumerate(lines, start=1):
                 if is_comment(line):
                     continue
                 for term in forbidden_terms:
@@ -128,7 +152,8 @@ def main() -> int:
                         errors.append(f"{path.relative_to(ROOT)}:{number}: forbidden dependency on {term}")
 
     for path in iter_rs_files(ROOT / "src"):
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for number, line in enumerate(lines, start=1):
             if is_comment(line):
                 continue
             if "Registry::open(" in line:
@@ -136,15 +161,30 @@ def main() -> int:
                     f"{path.relative_to(ROOT)}:{number}: direct Registry::open() is forbidden; use AppContext"
                 )
             if allow_pattern.search(line):
+                if not has_debt_annotation(lines, number - 1):
+                    errors.append(
+                        (
+                            f"{normalize_relative_path(path)}:{number}: add preceding '// {DEBT_TAG}: reason' comment "
+                            "to treat this allowance as explicit architecture debt"
+                        )
+                    )
                 too_many_lines_count += 1
-                relative_path = str(path.relative_to(ROOT))
+                relative_path = normalize_relative_path(path)
                 too_many_lines_by_file[relative_path] = too_many_lines_by_file.get(relative_path, 0) + 1
 
     for path in iter_rs_files(ROOT / "tests"):
-        for line in path.read_text(encoding="utf-8").splitlines():
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for number, line in enumerate(lines, start=1):
             if allow_pattern.search(line):
+                if not has_debt_annotation(lines, number - 1):
+                    errors.append(
+                        (
+                            f"{normalize_relative_path(path)}:{number}: add preceding '// {DEBT_TAG}: reason' comment "
+                            "to treat this allowance as explicit architecture debt"
+                        )
+                    )
                 too_many_lines_count += 1
-                relative_path = str(path.relative_to(ROOT))
+                relative_path = normalize_relative_path(path)
                 too_many_lines_by_file[relative_path] = too_many_lines_by_file.get(relative_path, 0) + 1
 
     for relative_path, actual in sorted(too_many_lines_by_file.items()):

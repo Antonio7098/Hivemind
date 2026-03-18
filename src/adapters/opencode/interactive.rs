@@ -2,7 +2,9 @@ use super::*;
 use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::terminal;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+#[cfg(not(windows))]
 use signal_hook::consts::SIGINT;
+#[cfg(not(windows))]
 use signal_hook::iterator::Signals;
 use std::io::Write;
 use std::sync::mpsc;
@@ -10,6 +12,7 @@ mod raw_mode;
 use raw_mode::*;
 
 impl OpenCodeAdapter {
+    // ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
     #[allow(clippy::too_many_lines)]
     pub fn execute_interactive<F>(
         &mut self,
@@ -160,6 +163,7 @@ impl OpenCodeAdapter {
             }
         });
 
+        #[cfg(not(windows))]
         let mut signals = Signals::new([SIGINT]).map_err(|e| {
             RuntimeError::new(
                 "signal_register_failed",
@@ -192,6 +196,7 @@ impl OpenCodeAdapter {
                 let _ = writer.flush();
             }
 
+            #[cfg(not(windows))]
             for _sig in signals.pending() {
                 if terminated_reason.is_none() {
                     let _ = tx.send(Msg::Interrupt);

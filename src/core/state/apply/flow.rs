@@ -1,6 +1,7 @@
 use super::*;
 
 impl AppState {
+    // ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
     #[allow(clippy::too_many_lines)]
     pub(super) fn apply_flow_event(&mut self, event: &Event, timestamp: DateTime<Utc>) -> bool {
         match &event.payload {

@@ -1,6 +1,7 @@
 use super::*;
 
 impl Registry {
+    // ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
     #[allow(clippy::too_many_lines)]
     pub fn tick_flow(
         &self,

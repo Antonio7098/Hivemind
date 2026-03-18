@@ -230,6 +230,7 @@ impl Read for ChannelReader {
     }
 }
 
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub fn serve(config: &ServeConfig) -> Result<()> {
     let addr = format!("{}:{}", config.host, config.port);

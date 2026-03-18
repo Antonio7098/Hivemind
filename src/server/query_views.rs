@@ -64,6 +64,7 @@ pub(super) fn list_runtime_stream_items(
     Ok(items)
 }
 
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub(super) fn runtime_stream_item(event: Event) -> Option<RuntimeStreamItemView> {
     let sequence = event.metadata.sequence.unwrap_or(0);

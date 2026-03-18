@@ -129,6 +129,7 @@ fn cli_project_governance_init_accepts_project_flag() {
 }
 
 #[test]
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn cli_sprint35_governance_artifacts_and_template_instantiation() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -272,23 +273,12 @@ fn cli_sprint35_governance_artifacts_and_template_instantiation() {
     );
     assert_eq!(code, 0, "{err}");
 
-    let (code, _out, err) = run_hivemind(
+    let (code, _out, err) = set_project_runtime_script(
         tmp.path(),
-        &[
-            "project",
-            "runtime-set",
-            "proj",
-            "--binary-path",
-            "/usr/bin/env",
-            "--arg",
-            "sh",
-            "--arg",
-            "-c",
-            "--arg",
-            "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
-            "--timeout-ms",
-            "1000",
-        ],
+        "proj",
+        "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+        "echo runtime_ok & \"%HIVEMIND_BIN%\" checkpoint complete --id checkpoint-1",
+        1000,
     );
     assert_eq!(code, 0, "{err}");
 
@@ -560,6 +550,7 @@ fn cli_sprint35_governance_artifacts_and_template_instantiation() {
 }
 
 #[test]
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn cli_sprint36_constitution_lifecycle_and_auditability() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -824,6 +815,7 @@ rules:
 }
 
 #[test]
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn cli_constitution_check_reports_blocking_violations() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1028,6 +1020,7 @@ rules:
 }
 
 #[test]
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn cli_project_governance_diagnose_reports_invalid_refs_and_stale_snapshot() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1207,6 +1200,7 @@ fn cli_project_governance_diagnose_reports_invalid_refs_and_stale_snapshot() {
 }
 
 #[test]
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn cli_governance_artifact_ops_stable_under_concurrent_flow_activity() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1283,23 +1277,12 @@ fn cli_governance_artifact_ops_stable_under_concurrent_flow_activity() {
     );
     assert_eq!(code, 0, "{err}");
 
-    let (code, _out, err) = run_hivemind(
+    let (code, _out, err) = set_project_runtime_script(
         tmp.path(),
-        &[
-            "project",
-            "runtime-set",
-            "proj",
-            "--binary-path",
-            "/usr/bin/env",
-            "--arg",
-            "sh",
-            "--arg",
-            "-c",
-            "--arg",
-            "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
-            "--timeout-ms",
-            "2000",
-        ],
+        "proj",
+        "echo runtime_ok; \"$HIVEMIND_BIN\" checkpoint complete --id checkpoint-1",
+        "echo runtime_ok & \"%HIVEMIND_BIN%\" checkpoint complete --id checkpoint-1",
+        2000,
     );
     assert_eq!(code, 0, "{err}");
 
@@ -1412,6 +1395,7 @@ fn cli_governance_artifact_ops_stable_under_concurrent_flow_activity() {
 }
 
 #[test]
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn cli_governance_snapshot_restore_and_repair_flow() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1577,6 +1561,7 @@ fn cli_governance_snapshot_restore_and_repair_flow() {
 }
 
 #[test]
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn cli_governance_replay_and_snapshot_restore_verification() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1719,6 +1704,7 @@ fn cli_governance_replay_and_snapshot_restore_verification() {
 }
 
 #[test]
+// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn cli_governance_replay_verify_and_diagnose_detect_missing_artifact_files() {
     let tmp = tempfile::tempdir().expect("tempdir");

@@ -1,4 +1,4 @@
-use super::*;
+use super::support::*;
 
 #[test]
 #[cfg(unix)]

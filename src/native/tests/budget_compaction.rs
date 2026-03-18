@@ -1,4 +1,4 @@
-use super::*;
+use super::support::*;
 
 #[test]
 fn budget_compaction_preserves_recent_turn_and_latest_tool_result_context() {

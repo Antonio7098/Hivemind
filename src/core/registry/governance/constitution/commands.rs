@@ -15,6 +15,7 @@ impl Registry {
         )
     }
 
+    // ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
     #[allow(clippy::too_many_lines)]
     pub fn constitution_init(
         &self,
@@ -205,6 +206,7 @@ impl Registry {
         })
     }
 
+    // ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
     #[allow(clippy::too_many_lines)]
     pub fn constitution_update(
         &self,

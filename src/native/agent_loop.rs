@@ -1,4 +1,5 @@
 use super::*;
+use crate::adapters::runtime::NativeTransportTelemetry;
 
 mod budget_support;
 mod checkpoint_support;
@@ -200,32 +201,34 @@ impl<M: ModelClient> AgentLoop<M> {
                             .filter(|item| item.model_visible)
                             .count();
                         if let Some(observer) = observer.as_deref_mut() {
-                            observer.on_history_compacted(
-                                self.next_turn_index,
-                                "soft_budget_pressure",
-                                request
+                            observer.on_history_compacted(&HistoryCompactionEvent {
+                                turn_index: self.next_turn_index,
+                                reason: "soft_budget_pressure".to_string(),
+                                rendered_prompt_bytes_before: request
                                     .prompt_assembly
                                     .as_ref()
                                     .map(|assembly| assembly.rendered_prompt_bytes)
                                     .unwrap_or_default(),
-                                request
+                                selected_history_count_before: request
                                     .prompt_assembly
                                     .as_ref()
                                     .map(|assembly| assembly.selected_history_count)
                                     .unwrap_or_default(),
-                                request
+                                selected_history_chars_before: request
                                     .prompt_assembly
                                     .as_ref()
                                     .map(|assembly| assembly.selected_history_chars)
                                     .unwrap_or_default(),
                                 visible_items_before,
                                 visible_items_after,
-                                request_tokens,
-                                self.used_tokens.saturating_add(request_tokens),
-                                self.config.token_budget,
-                                u64::try_from(self.started_at.elapsed().as_millis())
-                                    .unwrap_or(u64::MAX),
-                            )?;
+                                prompt_tokens_before: request_tokens,
+                                projected_budget_used: self.used_tokens.saturating_add(request_tokens),
+                                token_budget: self.config.token_budget,
+                                elapsed_since_invocation_ms: u64::try_from(
+                                    self.started_at.elapsed().as_millis(),
+                                )
+                                .unwrap_or(u64::MAX),
+                            })?;
                         }
                         history = compacted_history;
                         self.history_items = history.clone();
@@ -248,32 +251,34 @@ impl<M: ModelClient> AgentLoop<M> {
                                 .filter(|item| item.model_visible)
                                 .count();
                             if let Some(observer) = observer.as_deref_mut() {
-                                observer.on_history_compacted(
-                                    self.next_turn_index,
-                                    "hard_budget_limit",
-                                    request
+                                observer.on_history_compacted(&HistoryCompactionEvent {
+                                    turn_index: self.next_turn_index,
+                                    reason: "hard_budget_limit".to_string(),
+                                    rendered_prompt_bytes_before: request
                                         .prompt_assembly
                                         .as_ref()
                                         .map(|assembly| assembly.rendered_prompt_bytes)
                                         .unwrap_or_default(),
-                                    request
+                                    selected_history_count_before: request
                                         .prompt_assembly
                                         .as_ref()
                                         .map(|assembly| assembly.selected_history_count)
                                         .unwrap_or_default(),
-                                    request
+                                    selected_history_chars_before: request
                                         .prompt_assembly
                                         .as_ref()
                                         .map(|assembly| assembly.selected_history_chars)
                                         .unwrap_or_default(),
                                     visible_items_before,
                                     visible_items_after,
-                                    request_tokens,
-                                    self.used_tokens.saturating_add(request_tokens),
-                                    self.config.token_budget,
-                                    u64::try_from(self.started_at.elapsed().as_millis())
-                                        .unwrap_or(u64::MAX),
-                                )?;
+                                    prompt_tokens_before: request_tokens,
+                                    projected_budget_used: self.used_tokens.saturating_add(request_tokens),
+                                    token_budget: self.config.token_budget,
+                                    elapsed_since_invocation_ms: u64::try_from(
+                                        self.started_at.elapsed().as_millis(),
+                                    )
+                                    .unwrap_or(u64::MAX),
+                                })?;
                             }
                             history = compacted_history;
                             self.history_items = history.clone();
