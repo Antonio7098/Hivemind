@@ -1,49 +1,15 @@
-//! Flow command handlers.
-
-use super::common::{get_flow_service, parse_run_mode, parse_runtime_role, print_flow_id};
+use super::super::common::{parse_run_mode, parse_runtime_role, print_flow_id};
+use super::view::print_flows;
+use crate::app::FlowService;
 use crate::cli::commands::FlowCommands;
 use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::error::ExitCode;
-use uuid::Uuid;
 
-fn print_flows(flows: &[crate::core::flow::TaskFlow], format: OutputFormat) {
-    match format {
-        OutputFormat::Table => {
-            if flows.is_empty() {
-                println!("No flows found.");
-                return;
-            }
-            println!(
-                "{:<36}  {:<36}  {:<10}  {:<6}  GRAPH",
-                "ID", "PROJECT", "STATE", "MODE"
-            );
-            println!("{}", "-".repeat(110));
-            for f in flows {
-                println!(
-                    "{:<36}  {:<36}  {:<10}  {:<6}  {}",
-                    f.id,
-                    f.project_id,
-                    format!("{:?}", f.state).to_lowercase(),
-                    format!("{:?}", f.run_mode).to_lowercase(),
-                    f.graph_id
-                );
-            }
-        }
-        _ => {
-            if let Err(err) = output(flows, format) {
-                eprintln!("Failed to render flows: {err}");
-            }
-        }
-    }
-}
-
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
-#[allow(clippy::too_many_lines)]
-pub fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
-    let Some(service) = get_flow_service(format) else {
-        return ExitCode::Error;
-    };
-
+pub(super) fn handle_flow_core(
+    service: &FlowService,
+    cmd: FlowCommands,
+    format: OutputFormat,
+) -> ExitCode {
     match cmd {
         FlowCommands::Create(args) => {
             match service.create_flow(&args.graph_id, args.name.as_deref()) {
@@ -54,13 +20,6 @@ pub fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        FlowCommands::List(args) => match service.list_flows(args.project.as_deref()) {
-            Ok(flows) => {
-                print_flows(&flows, format);
-                ExitCode::Success
-            }
-            Err(e) => output_error(&e, format),
-        },
         FlowCommands::Start(args) => match service.start_flow(&args.flow_id) {
             Ok(flow) => {
                 print_flow_id(flow.id, format);
@@ -112,46 +71,6 @@ pub fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        FlowCommands::Status(args) => match service.get_flow(&args.flow_id) {
-            Ok(flow) => match format {
-                OutputFormat::Json | OutputFormat::Yaml => {
-                    if let Err(err) = output(&flow, format) {
-                        eprintln!("Failed to render flow status: {err}");
-                    }
-                    ExitCode::Success
-                }
-                OutputFormat::Table => {
-                    println!("ID:      {}", flow.id);
-                    println!("Graph:   {}", flow.graph_id);
-                    println!("Project: {}", flow.project_id);
-                    println!("State:   {:?}", flow.state);
-                    println!("RunMode: {:?}", flow.run_mode);
-                    if !flow.depends_on_flows.is_empty() {
-                        let mut deps: Vec<_> = flow.depends_on_flows.iter().copied().collect();
-                        deps.sort();
-                        println!(
-                            "FlowDeps: {}",
-                            deps.iter()
-                                .map(ToString::to_string)
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        );
-                    }
-                    let mut counts = std::collections::HashMap::new();
-                    for exec in flow.task_executions.values() {
-                        *counts.entry(exec.state).or_insert(0usize) += 1;
-                    }
-                    println!("Tasks:");
-                    let mut keys: Vec<_> = counts.keys().copied().collect();
-                    keys.sort_by_key(|k| format!("{k:?}"));
-                    for k in keys {
-                        println!("  - {:?}: {}", k, counts[&k]);
-                    }
-                    ExitCode::Success
-                }
-            },
-            Err(e) => output_error(&e, format),
-        },
         FlowCommands::SetRunMode(args) => {
             let mode = parse_run_mode(args.mode);
             match service.flow_set_run_mode(&args.flow_id, mode) {
@@ -203,5 +122,6 @@ pub fn handle_flow(cmd: FlowCommands, format: OutputFormat) -> ExitCode {
             }
             Err(e) => output_error(&e, format),
         },
+        _ => unreachable!("handled in caller"),
     }
 }
