@@ -169,7 +169,7 @@ Goal: make server code a delivery shell over services and read models.
 - [x] extract registry/store/runtime construction from server entrypoints and SSE paths
 - [x] reduce concentration in `src/server/routes/chat.rs`
 - [x] reduce concentration in `src/server.rs`
-- [ ] separate HTTP parsing/encoding concerns from orchestration concerns
+- [x] separate HTTP parsing/encoding concerns from orchestration concerns
 - [x] separate query-view assembly from transport concerns
 - [x] keep route groups capability-oriented and locally extensible
 - [x] extend server tests around service seams as route internals are refactored
