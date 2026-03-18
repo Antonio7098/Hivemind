@@ -88,11 +88,11 @@ Goal: reduce `Registry` from a broad god-facade into narrower service-oriented s
 Exit condition:
 - most new or modified code depends on smaller service surfaces, not the full registry
 
-## 5. `src/core/flow`, `scheduler`, `verification`, and Runtime Projection Paths
+## 5. `src/core/flow`, `scheduler`, `verification`, and Runtime Execution Paths
 Goal: shrink the specialized orchestration hotspots that remain inside core execution paths.
 
 - [x] break down `src/core/registry/runtime/management/projection.rs`
-- [x] review `src/core/registry/flow/execution/tick/once/runtime.rs` for extractable phases *(2026-03-18: extracted `runtime/observations.rs` for non-interactive output projection and `runtime/adapter_lifecycle.rs` for repeated adapter failure handling; validated with `cargo test flow_lifecycle`)*
+- [x] review `src/core/registry/flow/execution/tick/once/runtime.rs` for extractable phases *(2026-03-18: extracted `runtime/observations.rs`, `runtime/adapter_lifecycle.rs`, `runtime/filesystem.rs`, `runtime/interactive.rs`, and `runtime/environment.rs` to isolate projection, lifecycle, and setup logic from orchestration)*
 - [ ] review `src/core/registry/flow/verification/process/task.rs` for smaller processing units
 - [x] separate projection assembly from orchestration decisions where practical
 - [x] preserve replayability and observability while thinning execution-path files
@@ -232,7 +232,7 @@ Exit condition:
 - 2026-03-18 — Reduced native policy-evaluation coupling further. Evidence: `src/native/tool_engine/policy_eval/network.rs`; `src/native/tool_engine/policy_eval.rs`; `cargo test native::tests`.
 - 2026-03-18 — Reduced native approval/dangerous-command coupling further. Evidence: `src/native/tool_engine/policy_eval/approval.rs`; `src/native/tool_engine/policy_eval.rs`; `cargo test native::tests`.
 - 2026-03-18 — Made native observability contracts explicit. Evidence: `src/native/contracts.rs`; `src/native/mod.rs`; `src/native/agent_loop.rs`; `src/native/adapter/observer.rs`; `cargo test native::tests`.
-- 2026-03-18 — Began reducing the core tick runtime execution hotspot. Evidence: `src/core/registry/flow/execution/tick/once/runtime/{observations,adapter_lifecycle}.rs`; `src/core/registry/flow/execution/tick/once/runtime.rs`; `cargo test flow_lifecycle`.
+- 2026-03-18 — Substantially reduced the core tick runtime execution hotspot. Evidence: `src/core/registry/flow/execution/tick/once/runtime/{observations,adapter_lifecycle,filesystem,interactive,environment}.rs`; `src/core/registry/flow/execution/tick/once/runtime.rs`; `cargo test flow_lifecycle`.
 
 ## Final Note
 The target is not “more abstraction.”

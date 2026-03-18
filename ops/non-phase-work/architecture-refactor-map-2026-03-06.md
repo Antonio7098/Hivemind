@@ -14,7 +14,7 @@ Overall status:
 - [ ] Complete
 
 Working fields:
-- Current focus: follow-up hotspot reduction in core execution paths, especially `tick/once/runtime.rs`, plus docs/process alignment after the native hotspot-reduction pass
+- Current focus: verify `tick/once/runtime.rs` is fully decomposed, move to `verification/process/task.rs`, and finish core execution hotspot reduction
 - Owner: Augment Agent
 - Start date: 2026-03-11
 - Last updated: 2026-03-18
@@ -178,7 +178,7 @@ This process is complete when:
 - 2026-03-18 — Reduced native hotspot concentration further while item 7 remains in progress. Evidence: `src/native/turn_items/budget_compaction.rs`; `src/native/prompt_assembly/sections.rs`; `src/native/tool_engine/run_command_tool/policy.rs`; `cargo test native::tests`.
 - 2026-03-18 — Completed item 7 by separating tool-engine policy from execution paths. Evidence: `src/native/tool_engine/run_command_tool/policy.rs`; `src/native/tool_engine/policy_eval/{network,approval}.rs`; `src/native/tool_engine/policy_eval.rs`; `cargo test native::tests`.
 - 2026-03-18 — Tightened native observability contracts after the tool-engine split. Evidence: `src/native/contracts.rs`; `src/native/mod.rs`; `src/native/agent_loop.rs`; `src/native/adapter/observer.rs`; `cargo test native::tests`.
-- 2026-03-18 — Began reducing the core tick runtime execution hotspot. Evidence: `src/core/registry/flow/execution/tick/once/runtime/{observations,adapter_lifecycle}.rs`; `src/core/registry/flow/execution/tick/once/runtime.rs`; `cargo test flow_lifecycle`.
+- 2026-03-18 — Substantially reduced the core tick runtime execution hotspot. Evidence: `src/core/registry/flow/execution/tick/once/runtime/{observations,adapter_lifecycle,filesystem,interactive,environment}.rs`; `src/core/registry/flow/execution/tick/once/runtime.rs`; `cargo test flow_lifecycle`.
 - YYYY-MM-DD — Blocker found. Impact / decision:
 
 ## Final Note
