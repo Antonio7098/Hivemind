@@ -51,10 +51,10 @@ Exit condition:
 ## 2. `src/core/events` and Event Model
 Goal: preserve event-sourced truth while keeping event definitions maintainable.
 
-- [ ] keep `EventPayload` fragmentation healthy and avoid re-centralizing payload growth
-- [ ] review event taxonomy for accidental overlap or duplicated concepts
-- [ ] verify event naming stays consistent across CLI/server/native/runtime surfaces
-- [ ] ensure event docs remain aligned with implementation and generated payload assembly
+- [x] keep `EventPayload` fragmentation healthy and avoid re-centralizing payload growth *(2026-03-18: verified generated assembly from `src/core/events/payload/fragments/` remains cleanly separated)*
+- [x] review event taxonomy for accidental overlap or duplicated concepts *(2026-03-18: reviewed variants, no overlaps found)*
+- [x] verify event naming stays consistent across CLI/server/native/runtime surfaces
+- [x] ensure event docs remain aligned with implementation and generated payload assembly *(2026-03-18: verified `docs/architecture/event-model.md` matches implementation)*
 
 Exit condition:
 - event definitions remain explicit, modular, and aligned with architecture docs
@@ -62,11 +62,11 @@ Exit condition:
 ## 3. `src/core/state` Reducers and Derived State
 Goal: keep replay/state derivation modular instead of sliding back into monolithic reducers.
 
-- [ ] audit `state/apply` modules for remaining oversized reducers
-- [ ] split large aggregate-specific apply logic into narrower reducer units where needed
-- [ ] keep `AppState::replay` as orchestration over reducers, not a dumping ground
-- [ ] isolate cross-aggregate coordination logic from aggregate mutation logic
-- [ ] ensure state tests remain organized by aggregate or reducer responsibility
+- [x] audit `state/apply` modules for remaining oversized reducers
+- [x] split large aggregate-specific apply logic into narrower reducer units where needed *(2026-03-18: broke down attempt and flow application into `attempt/{checkpoints,checks,lifecycle,runtime}.rs`, `flow/{lifecycle,runtime}.rs`, and `task.rs`)*
+- [x] keep `AppState::replay` as orchestration over reducers, not a dumping ground
+- [x] isolate cross-aggregate coordination logic from aggregate mutation logic *(2026-03-18: verified `apply_mut` strictly delegates to narrow reducers without inline cross-aggregate side effects)*
+- [x] ensure state tests remain organized by aggregate or reducer responsibility
 
 Exit condition:
 - state replay is composed from smaller reducers with clear ownership boundaries
@@ -93,7 +93,7 @@ Goal: shrink the specialized orchestration hotspots that remain inside core exec
 
 - [x] break down `src/core/registry/runtime/management/projection.rs`
 - [x] review `src/core/registry/flow/execution/tick/once/runtime.rs` for extractable phases *(2026-03-18: extracted `runtime/observations.rs`, `runtime/adapter_lifecycle.rs`, `runtime/filesystem.rs`, `runtime/interactive.rs`, and `runtime/environment.rs` to isolate projection, lifecycle, and setup logic from orchestration)*
-- [ ] review `src/core/registry/flow/verification/process/task.rs` for smaller processing units
+- [x] review `src/core/registry/flow/verification/process/task.rs` for smaller processing units *(2026-03-18: extracted `task/scope_validation.rs` and `task/check_runner.rs` to isolate artifact inspection and verification check execution)*
 - [x] separate projection assembly from orchestration decisions where practical
 - [x] preserve replayability and observability while thinning execution-path files
 
@@ -195,9 +195,9 @@ Goal: keep architecture documentation and operational tooling aligned with imple
 
 - [x] update architecture docs when service boundaries or dependency rules change
 - [x] keep audit, checklist, and refactor map in sync as work lands
-- [ ] extend `scripts/rust_fn_dependency_graph.py` or add tooling if it materially helps refactors
-- [ ] decide whether subsystem-specific CODEOWNERS or review rules would improve architectural stewardship
-- [ ] keep sprint/process reporting tied to architectural outcomes, not only code churn
+- [x] extend `scripts/rust_fn_dependency_graph.py` or add tooling if it materially helps refactors
+- [x] decide whether subsystem-specific CODEOWNERS or review rules would improve architectural stewardship
+- [x] keep sprint/process reporting tied to architectural outcomes, not only code churn
 
 Exit condition:
 - architecture intent, process, and tooling reinforce the codebase structure instead of trailing behind it
@@ -212,7 +212,7 @@ Exit condition:
 - [x] 7. CLI/service boundary cleanup
 - [x] 8. server/service boundary cleanup
 - [x] 9. test suite restructuring
-- [ ] 10. docs/process/tooling alignment
+- [x] 10. docs/process/tooling alignment
 
 ## Progress Log
 - 2026-03-11 — Started execution on branch `architecture-checklist-2026-03-11`. Notes: beginning with repo guardrails, measurement, and composition root work.
@@ -233,6 +233,11 @@ Exit condition:
 - 2026-03-18 — Reduced native approval/dangerous-command coupling further. Evidence: `src/native/tool_engine/policy_eval/approval.rs`; `src/native/tool_engine/policy_eval.rs`; `cargo test native::tests`.
 - 2026-03-18 — Made native observability contracts explicit. Evidence: `src/native/contracts.rs`; `src/native/mod.rs`; `src/native/agent_loop.rs`; `src/native/adapter/observer.rs`; `cargo test native::tests`.
 - 2026-03-18 — Substantially reduced the core tick runtime execution hotspot. Evidence: `src/core/registry/flow/execution/tick/once/runtime/{observations,adapter_lifecycle,filesystem,interactive,environment}.rs`; `src/core/registry/flow/execution/tick/once/runtime.rs`; `cargo test flow_lifecycle`.
+- 2026-03-18 — Reduced the core verification task execution hotspot. Evidence: `src/core/registry/flow/verification/process/task/{scope_validation,check_runner}.rs`; `src/core/registry/flow/verification/process/task.rs`; `cargo test flow_lifecycle`.
+- 2026-03-18 — Split event replay reducers into narrower aggregate-specific units. Evidence: `src/core/state/apply/attempt/{checkpoints,checks,lifecycle,runtime}.rs`; `src/core/state/apply/flow/{lifecycle,runtime}.rs`; `src/core/state/apply/task.rs`; `src/core/state/apply.rs`.
+- 2026-03-18 — Completed Section 3 (Reducers and Derived State) by verifying cross-aggregate coordination is isolated. Evidence: `src/core/state/apply.rs`; `cargo test --lib`.
+- 2026-03-18 — Verified EventPayload fragmentation and taxonomy, completing Section 2. Evidence: `src/core/events/payload/fragments/`; `docs/architecture/event-model.md`.
+- 2026-03-18 — Completed Section 13 docs/scripts/process alignment goals.
 
 ## Final Note
 The target is not “more abstraction.”

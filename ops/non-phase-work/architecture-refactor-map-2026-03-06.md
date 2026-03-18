@@ -14,7 +14,7 @@ Overall status:
 - [ ] Complete
 
 Working fields:
-- Current focus: verify `tick/once/runtime.rs` is fully decomposed, move to `verification/process/task.rs`, and finish core execution hotspot reduction
+- Current focus: verify `verification/process/task.rs` is fully decomposed and finish core execution hotspot reduction pass
 - Owner: Augment Agent
 - Start date: 2026-03-11
 - Last updated: 2026-03-18
@@ -24,7 +24,7 @@ Execution checklist:
 - [x] 1. Establish guardrails first
 - [x] 2. Create a real composition root
 - [x] 3. Break up `Registry` by capability
-- [ ] 4. Split event replay by aggregate
+- [x] 4. Split event replay by aggregate
 - [x] 5. Decompose server routing
 - [x] 6. Open runtime extension properly
 - [x] 7. Reduce native tool engine concentration
@@ -179,7 +179,11 @@ This process is complete when:
 - 2026-03-18 — Completed item 7 by separating tool-engine policy from execution paths. Evidence: `src/native/tool_engine/run_command_tool/policy.rs`; `src/native/tool_engine/policy_eval/{network,approval}.rs`; `src/native/tool_engine/policy_eval.rs`; `cargo test native::tests`.
 - 2026-03-18 — Tightened native observability contracts after the tool-engine split. Evidence: `src/native/contracts.rs`; `src/native/mod.rs`; `src/native/agent_loop.rs`; `src/native/adapter/observer.rs`; `cargo test native::tests`.
 - 2026-03-18 — Substantially reduced the core tick runtime execution hotspot. Evidence: `src/core/registry/flow/execution/tick/once/runtime/{observations,adapter_lifecycle,filesystem,interactive,environment}.rs`; `src/core/registry/flow/execution/tick/once/runtime.rs`; `cargo test flow_lifecycle`.
-- YYYY-MM-DD — Blocker found. Impact / decision:
+- 2026-03-18 — Reduced the core verification task execution hotspot. Evidence: `src/core/registry/flow/verification/process/task/{scope_validation,check_runner}.rs`; `src/core/registry/flow/verification/process/task.rs`; `cargo test flow_lifecycle`.
+- 2026-03-18 — Split event replay reducers into narrower aggregate-specific units. Evidence: `src/core/state/apply/attempt/{checkpoints,checks,lifecycle,runtime}.rs`; `src/core/state/apply/flow/{lifecycle,runtime}.rs`; `src/core/state/apply/task.rs`; `src/core/state/apply.rs`.
+- 2026-03-18 — Completed Section 3 (Reducers and Derived State) by verifying cross-aggregate coordination is isolated. Evidence: `src/core/state/apply.rs`; `cargo test --lib`.
+- 2026-03-18 — Verified EventPayload fragmentation and taxonomy, completing Section 2. Evidence: `src/core/events/payload/fragments/`; `docs/architecture/event-model.md`.
+- 2026-03-18 — Completed Section 13 docs/scripts/process alignment goals.
 
 ## Final Note
 The aim is not to make Hivemind look more abstract. The aim is to make it easier to change, easier to reason about, and harder to accidentally damage.

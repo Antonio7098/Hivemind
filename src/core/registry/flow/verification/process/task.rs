@@ -1,5 +1,7 @@
 use super::*;
 
+mod check_runner;
+mod outcomes;
 mod scope_validation;
 
 impl Registry {
@@ -46,82 +48,16 @@ impl Registry {
             CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, task_id);
 
         if !verification.passed {
-            if let Some(scope) = &task.scope {
-                self.append_event(
-                    Event::new(
-                        EventPayload::ScopeViolationDetected {
-                            flow_id: flow.id,
-                            task_id,
-                            attempt_id: attempt.id,
-                            verification_id: verification.id,
-                            verified_at: verification.verified_at,
-                            scope: scope.clone(),
-                            violations: verification.violations.clone(),
-                        },
-                        CorrelationIds::for_graph_flow_task_attempt(
-                            flow.project_id,
-                            flow.graph_id,
-                            flow.id,
-                            task_id,
-                            attempt.id,
-                        ),
-                    ),
-                    origin,
-                )?;
-            }
-
-            self.append_event(
-                Event::new(
-                    EventPayload::TaskExecutionStateChanged {
-                        flow_id: flow.id,
-                        task_id,
-                        attempt_id: Some(attempt.id),
-                        from: TaskExecState::Verifying,
-                        to: TaskExecState::Failed,
-                    },
-                    corr_task,
-                ),
+            self.handle_scope_violation(
+                &flow,
+                task_id,
+                attempt.id,
+                &verification,
+                task,
+                &worktree_status,
                 origin,
             )?;
-
-            self.append_event(
-                Event::new(
-                    EventPayload::TaskExecutionFailed {
-                        flow_id: flow.id,
-                        task_id,
-                        attempt_id: Some(attempt.id),
-                        reason: Some("scope_violation".to_string()),
-                    },
-                    CorrelationIds::for_graph_flow_task_attempt(
-                        flow.project_id,
-                        flow.graph_id,
-                        flow.id,
-                        task_id,
-                        attempt.id,
-                    ),
-                ),
-                origin,
-            )?;
-
-            let violations = verification
-                .violations
-                .iter()
-                .map(|v| {
-                    let path = v.path.as_deref().unwrap_or("-");
-                    format!("{:?}: {path}: {}", v.violation_type, v.description)
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            return Err(HivemindError::scope(
-                "scope_violation",
-                format!("Scope violation detected:\n{violations}"),
-                origin,
-            )
-            .with_hint(format!(
-                "Worktree preserved at {}",
-                worktree_status.path.display()
-            )));
+            unreachable!("handle_scope_violation always returns Err");
         }
 
         let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
@@ -149,73 +85,17 @@ impl Registry {
             )?;
         }
 
-        let target_dir = self
-            .config
-            .data_dir
-            .join("cargo-target")
-            .join(flow.id.to_string())
-            .join(task_id.to_string())
-            .join(attempt.id.to_string())
-            .join("checks");
-        let _ = fs::create_dir_all(&target_dir);
+        let (checks_passed, results) = self.run_verification_checks(
+            &flow,
+            task_id,
+            task,
+            &attempt,
+            &worktree_status,
+            &corr_attempt,
+            origin,
+        )?;
 
-        let mut results = Vec::new();
-        for check in &task.criteria.checks {
-            self.append_event(
-                Event::new(
-                    EventPayload::CheckStarted {
-                        flow_id: flow.id,
-                        task_id,
-                        attempt_id: attempt.id,
-                        check_name: check.name.clone(),
-                        required: check.required,
-                    },
-                    corr_attempt.clone(),
-                ),
-                origin,
-            )?;
-
-            let started = Instant::now();
-            let (exit_code, combined) = match Self::run_check_command(
-                &worktree_status.path,
-                &target_dir,
-                &check.command,
-                check.timeout_ms,
-            ) {
-                Ok((exit_code, output, _timed_out)) => (exit_code, output),
-                Err(e) => (127, e.to_string()),
-            };
-            let duration_ms =
-                u64::try_from(started.elapsed().as_millis().min(u128::from(u64::MAX)))
-                    .unwrap_or(u64::MAX);
-            let passed = exit_code == 0;
-
-            self.append_event(
-                Event::new(
-                    EventPayload::CheckCompleted {
-                        flow_id: flow.id,
-                        task_id,
-                        attempt_id: attempt.id,
-                        check_name: check.name.clone(),
-                        passed,
-                        exit_code,
-                        output: combined.clone(),
-                        duration_ms,
-                        required: check.required,
-                    },
-                    corr_attempt.clone(),
-                ),
-                origin,
-            )?;
-
-            results.push((check.name.clone(), check.required, passed));
-        }
-
-        let required_failed = results
-            .iter()
-            .any(|(_, required, passed)| *required && !*passed);
-
-        if !required_failed {
+        if checks_passed {
             self.append_event(
                 Event::new(
                     EventPayload::TaskExecutionStateChanged {
@@ -284,64 +164,16 @@ impl Registry {
             return self.get_flow(flow_id);
         }
 
-        let max_retries = task.retry_policy.max_retries;
-        let max_attempts = max_retries.saturating_add(1);
-        let can_retry = exec.attempt_count < max_attempts;
-        let to = if can_retry {
-            TaskExecState::Retry
-        } else {
-            TaskExecState::Failed
-        };
-
-        self.append_event(
-            Event::new(
-                EventPayload::TaskExecutionStateChanged {
-                    flow_id: flow.id,
-                    task_id,
-                    attempt_id: Some(attempt.id),
-                    from: TaskExecState::Verifying,
-                    to,
-                },
-                corr_task,
-            ),
+        self.handle_verification_failure(
+            &flow,
+            task_id,
+            attempt.id,
+            task,
+            exec,
+            &results,
+            &worktree_status,
             origin,
         )?;
-
-        if matches!(to, TaskExecState::Retry | TaskExecState::Failed) {
-            self.append_event(
-                Event::new(
-                    EventPayload::TaskExecutionFailed {
-                        flow_id: flow.id,
-                        task_id,
-                        attempt_id: Some(attempt.id),
-                        reason: Some("required_checks_failed".to_string()),
-                    },
-                    corr_attempt.clone(),
-                ),
-                origin,
-            )?;
-        }
-
-        let failures = results
-            .into_iter()
-            .filter(|(_, required, passed)| *required && !*passed)
-            .map(|(name, _, _)| name)
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let err = HivemindError::verification(
-            "required_checks_failed",
-            format!("Required checks failed: {failures}"),
-            origin,
-        )
-        .with_hint(format!(
-            "View check outputs via `hivemind verify results {}`. Worktree preserved at {}",
-            attempt.id,
-            worktree_status.path.display()
-        ));
-
-        self.record_error_event(&err, corr_attempt);
-
-        Err(err)
+        unreachable!("handle_verification_failure always returns Err");
     }
 }

@@ -1,4 +1,6 @@
+use super::scope::ResolvedChatScope;
 use super::*;
+use std::time::Duration;
 
 pub(super) struct ChatExecutionRequest<'a> {
     pub(super) mode: ChatMode,
@@ -58,12 +60,12 @@ where
     Ok(ChatInvokeResponse {
         request_id,
         mode: req.mode.as_str().to_string(),
-        project_id: scope.project_id.map(|value| value.to_string()),
-        task_id: scope.task_id.map(|value| value.to_string()),
-        flow_id: scope.flow_id.map(|value| value.to_string()),
+        project_id: scope.project_id.map(|value: uuid::Uuid| value.to_string()),
+        task_id: scope.task_id.map(|value: uuid::Uuid| value.to_string()),
+        flow_id: scope.flow_id.map(|value: uuid::Uuid| value.to_string()),
         runtime_selection_source: scope
             .selection_source
-            .map(|value| value.as_str().to_string()),
+            .map(|value: crate::core::events::RuntimeSelectionSource| value.as_str().to_string()),
         provider,
         model,
         assistant_message,
