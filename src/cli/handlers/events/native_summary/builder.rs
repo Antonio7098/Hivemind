@@ -2,7 +2,6 @@ use super::types::*;
 use crate::core::events::{Event, EventPayload};
 use std::collections::{BTreeMap, BTreeSet};
 
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub(super) fn build_native_summary(events: &[Event]) -> NativeSummaryReport {
     let mut invocations = BTreeMap::<String, NativeInvocationSummary>::new();

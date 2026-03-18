@@ -7,7 +7,6 @@ pub(super) mod notepad;
 pub(super) mod repair;
 pub(super) mod snapshot;
 
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub(super) fn handle_project_governance(
     service: &GovernanceService,

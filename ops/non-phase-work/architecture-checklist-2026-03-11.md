@@ -155,7 +155,7 @@ Goal: make CLI handlers depend on services, not concrete default wiring.
 
 - [x] extract registry/store/runtime construction out of CLI handlers
 - [x] route handlers through a composition root or application-service layer
-- [ ] reduce size of large handler hotspots
+- [x] reduce size of large handler hotspots
 - [ ] keep output formatting centralized and separate from business logic
 - [ ] ensure commands/handlers reflect capability boundaries cleanly
 - [ ] split oversized CLI test scenarios by feature area where needed

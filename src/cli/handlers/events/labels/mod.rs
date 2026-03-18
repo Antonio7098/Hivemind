@@ -1,4 +1,3 @@
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub(super) fn event_type_label(payload: &crate::core::events::EventPayload) -> &'static str {
     use crate::core::events::EventPayload;

@@ -5,8 +5,6 @@ use crate::core::error::ExitCode;
 
 pub(super) mod core;
 
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
-#[allow(clippy::too_many_lines)]
 pub fn handle_worktree(cmd: WorktreeCommands, format: OutputFormat) -> ExitCode {
     let Some(service) = get_worktree_service(format) else {
         return ExitCode::Error;
