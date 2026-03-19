@@ -83,7 +83,7 @@ Goal: reduce `Registry` from a broad god-facade into narrower service-oriented s
 - [x] extract `GovernanceService`
 - [x] extract `WorktreeService`
 - [x] move new callers to smaller services rather than the full `Registry`
-- [ ] decide whether `Registry` remains only as a thin composition facade
+- [x] decide whether `Registry` remains only as a thin composition facade *(2026-03-19: Yes, `Registry` now acts purely as a composition root/factory for the narrower domain services, discouraging direct monolithic usage)*
 
 Exit condition:
 - most new or modified code depends on smaller service surfaces, not the full registry
