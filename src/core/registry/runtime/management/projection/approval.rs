@@ -1,3 +1,4 @@
+use super::stream::{value_map, with_duration};
 use super::*;
 use chrono::DateTime;
 
