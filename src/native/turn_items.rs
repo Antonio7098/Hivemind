@@ -290,7 +290,6 @@ pub(crate) fn assistant_item(
     }
 }
 
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub(crate) fn items_from_tool_trace(
     invocation_id: &str,

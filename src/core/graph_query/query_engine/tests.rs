@@ -1,7 +1,6 @@
 use super::*;
 use std::collections::BTreeMap;
 
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn sample_index() -> GraphQueryIndex {
     let mut nodes = BTreeMap::new();

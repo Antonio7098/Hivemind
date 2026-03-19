@@ -32,7 +32,6 @@ pub(crate) fn compact_history_for_hard_budget_limit(
     )
 }
 
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 fn compact_history_for_budget_mode(
     invocation_id: &str,

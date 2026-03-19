@@ -6,7 +6,6 @@ use approval::evaluate_approval_and_exec_policy;
 use dangerous::*;
 use network::evaluate_network_targets;
 
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub(super) fn evaluate_tool_policies_impl(
     action: &NativeToolAction,

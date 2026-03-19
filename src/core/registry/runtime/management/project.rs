@@ -195,8 +195,7 @@ impl Registry {
         self.runtime_health_with_role(project, task_id, None, RuntimeRole::Worker)
     }
 
-    // ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
-    #[allow(clippy::too_many_lines)]
+        #[allow(clippy::too_many_lines)]
     pub fn runtime_health_with_role(
         &self,
         project: Option<&str>,

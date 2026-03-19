@@ -1,8 +1,7 @@
 use super::*;
 
 impl Registry {
-    // ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
-    #[allow(clippy::too_many_lines)]
+        #[allow(clippy::too_many_lines)]
     pub(crate) fn merge_execute_via_pr(
         &self,
         flow_id: &str,

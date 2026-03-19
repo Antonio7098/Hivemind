@@ -1,8 +1,7 @@
 use super::*;
 
 impl Registry {
-    // ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
-    #[allow(clippy::too_many_lines)]
+        #[allow(clippy::too_many_lines)]
     pub(crate) fn build_governance_repair_plan(
         &self,
         project: &Project,

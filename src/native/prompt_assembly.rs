@@ -96,7 +96,6 @@ struct NativePromptSelection {
     truncated_item_count: usize,
 }
 
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub(crate) fn assemble_native_prompt(
     config: &NativeRuntimeConfig,

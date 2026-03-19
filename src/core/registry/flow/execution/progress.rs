@@ -97,7 +97,6 @@ impl Registry {
 }
 
 #[cfg(test)]
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 mod tests {
     use super::*;

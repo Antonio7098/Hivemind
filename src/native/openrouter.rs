@@ -1,4 +1,3 @@
-use super::*;
 use crate::adapters::runtime::NativeTransportTelemetry;
 
 mod client;

@@ -5,7 +5,6 @@ use support::{
     spawn_pipe_reader, EXEC_SESSION_NEXT_ID,
 };
 
-// ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
 #[allow(clippy::too_many_lines)]
 pub(super) fn handle_exec_command(
     ctx: &ToolExecutionContext<'_>,

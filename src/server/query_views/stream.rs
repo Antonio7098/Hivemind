@@ -1,8 +1,7 @@
 use super::*;
-use crate::app::EventService;
 use crate::core::events::RuntimeOutputStream;
 use serde_json::json;
-use uuid::Uuid;
+use serde_json::Value;
 
 pub(crate) fn runtime_stream_item(event: Event) -> Option<RuntimeStreamItemView> {
     let sequence = event.metadata.sequence.unwrap_or(0);

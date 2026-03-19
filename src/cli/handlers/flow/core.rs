@@ -20,6 +20,13 @@ pub(super) fn handle_flow_core(
                 Err(e) => output_error(&e, format),
             }
         }
+        FlowCommands::List(args) => match service.list_flows(args.project.as_deref()) {
+            Ok(flows) => {
+                print_flows(&flows, format);
+                ExitCode::Success
+            }
+            Err(e) => output_error(&e, format),
+        },
         FlowCommands::Start(args) => match service.start_flow(&args.flow_id) {
             Ok(flow) => {
                 print_flow_id(flow.id, format);
@@ -71,6 +78,46 @@ pub(super) fn handle_flow_core(
                 Err(e) => output_error(&e, format),
             }
         }
+        FlowCommands::Status(args) => match service.get_flow(&args.flow_id) {
+            Ok(flow) => match format {
+                OutputFormat::Json | OutputFormat::Yaml => {
+                    if let Err(err) = output(&flow, format) {
+                        eprintln!("Failed to render flow status: {err}");
+                    }
+                    ExitCode::Success
+                }
+                OutputFormat::Table => {
+                    println!("ID:      {}", flow.id);
+                    println!("Graph:   {}", flow.graph_id);
+                    println!("Project: {}", flow.project_id);
+                    println!("State:   {:?}", flow.state);
+                    println!("RunMode: {:?}", flow.run_mode);
+                    if !flow.depends_on_flows.is_empty() {
+                        let mut deps: Vec<_> = flow.depends_on_flows.iter().copied().collect();
+                        deps.sort();
+                        println!(
+                            "FlowDeps: {}",
+                            deps.iter()
+                                .map(ToString::to_string)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                    }
+                    let mut counts = std::collections::HashMap::new();
+                    for exec in flow.task_executions.values() {
+                        *counts.entry(exec.state).or_insert(0usize) += 1;
+                    }
+                    println!("Tasks:");
+                    let mut keys: Vec<_> = counts.keys().copied().collect();
+                    keys.sort_by_key(|k| format!("{k:?}"));
+                    for k in keys {
+                        println!("  - {:?}: {}", k, counts[&k]);
+                    }
+                    ExitCode::Success
+                }
+            },
+            Err(e) => output_error(&e, format),
+        },
         FlowCommands::SetRunMode(args) => {
             let mode = parse_run_mode(args.mode);
             match service.flow_set_run_mode(&args.flow_id, mode) {
@@ -122,6 +169,5 @@ pub(super) fn handle_flow_core(
             }
             Err(e) => output_error(&e, format),
         },
-        _ => unreachable!("handled in caller"),
     }
 }

@@ -16,8 +16,7 @@ pub struct GraphQueryIndex {
     pub(crate) all_edges: Vec<GraphQueryEdge>,
 }
 impl GraphQueryIndex {
-    // ARCH_DEBT: oversized unit retained temporarily while checklist-driven extraction continues.
-    #[allow(clippy::too_many_lines)]
+        #[allow(clippy::too_many_lines)]
     pub fn from_snapshot_repositories(
         repositories: &[GraphQueryRepository],
         partition_paths: &BTreeMap<String, String>,

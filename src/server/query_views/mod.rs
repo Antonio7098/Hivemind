@@ -1,9 +1,7 @@
 use super::*;
 use crate::app::{EventService, StateService};
-use crate::core::events::RuntimeOutputStream;
 pub(super) mod stream;
 pub(crate) use stream::runtime_stream_item;
-use uuid::Uuid;
 
 pub(super) fn list_tasks(state_service: &StateService) -> Result<Vec<Task>> {
     let state = state_service.state()?;
@@ -70,6 +68,7 @@ pub(super) fn list_runtime_stream_items(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::events::RuntimeOutputStream;
 
     #[test]
     fn runtime_stream_item_maps_turn_event() {

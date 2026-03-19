@@ -1,10 +1,28 @@
 use super::*;
+use std::str::FromStr;
 
 pub(super) mod attempts;
 pub(super) mod events;
 pub(super) mod other;
 pub(super) mod runtime;
 pub(super) mod state;
+
+fn parse_runtime_stream_detail(
+    query: &std::collections::HashMap<String, String>,
+) -> Result<crate::core::registry::shared_types::RuntimeStreamDetailLevel> {
+    let Some(raw) = query.get("detail") else {
+        return Ok(crate::core::registry::shared_types::RuntimeStreamDetailLevel::Telemetry);
+    };
+    crate::core::registry::shared_types::RuntimeStreamDetailLevel::from_str(raw).map_err(|_| {
+        HivemindError::user(
+            "invalid_runtime_stream_detail",
+            format!(
+                "Unsupported runtime stream detail '{raw}'. Expected summary, observability, or telemetry"
+            ),
+            "server/runtime-stream",
+        )
+    })
+}
 
 pub(super) fn handle_get(
     path: &str,

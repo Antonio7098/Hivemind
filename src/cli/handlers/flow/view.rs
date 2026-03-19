@@ -1,6 +1,6 @@
 use crate::cli::output::{output, OutputFormat};
 
-pub(super) fn print_flows(flows: &[crate::core::flow::TaskFlow], format: OutputFormat) {
+pub(crate) fn print_flows(flows: &[crate::core::flow::TaskFlow], format: OutputFormat) {
     match format {
         OutputFormat::Table => {
             if flows.is_empty() {
