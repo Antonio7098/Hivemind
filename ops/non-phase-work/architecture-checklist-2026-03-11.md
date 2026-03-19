@@ -113,11 +113,11 @@ Exit condition:
 
 
 - [x] replace centralized string/enum adapter construction with a registration/factory model
-- [ ] define runtime descriptor metadata and capabilities in one extensible place
-- [ ] preserve compatibility for persisted/runtime config names
-- [ ] keep `RuntimeAdapter` trait stable unless a real design gap is proven
-- [ ] ensure OpenCode-derived adapters share implementation without leaking policy upward
-- [ ] add tests for runtime registration, discovery, and compatibility behavior
+- [x] define runtime descriptor metadata and capabilities in one extensible place
+- [x] preserve compatibility for persisted/runtime config names
+- [x] keep `RuntimeAdapter` trait stable unless a real design gap is proven
+- [x] ensure OpenCode-derived adapters share implementation without leaking policy upward
+- [x] add tests for runtime registration, discovery, and compatibility behavior
 
 Exit condition:
 - adding a runtime mostly means implementing and registering it, not editing broad dispatch code

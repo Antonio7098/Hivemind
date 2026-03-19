@@ -121,9 +121,7 @@ impl Registry {
     pub(crate) fn runtime_descriptor_for_adapter(
         adapter: &str,
     ) -> Option<crate::adapters::RuntimeDescriptor> {
-        runtime_descriptors()
-            .into_iter()
-            .find(|descriptor| descriptor.adapter_name == adapter)
+        crate::adapters::runtime_descriptor_for(adapter).copied()
     }
 
     pub(crate) fn runtime_capabilities_for_adapter(adapter: &str) -> Vec<String> {
