@@ -140,10 +140,10 @@ Exit condition:
 ## 9. `src/storage` Event Store and Persistence
 Goal: preserve the cleanest subsystem and prevent persistence concerns from leaking upward.
 
-- [ ] keep `EventStore` narrow and stable
-- [ ] ensure new query requirements do not force callers to depend on backend details
-- [ ] keep SQLite/JSONL/memory implementations behaviorally substitutable
-- [ ] maintain targeted storage tests per backend and shared contract behavior
+- [x] keep `EventStore` narrow and stable
+- [x] ensure new query requirements do not force callers to depend on backend details
+- [x] keep SQLite/JSONL/memory implementations behaviorally substitutable
+- [x] maintain targeted storage tests per backend and shared contract behavior
 
 Exit condition:
 - storage remains a model subsystem with a small public surface and strong substitutability
@@ -238,6 +238,8 @@ Exit condition:
 - 2026-03-18 — Completed Section 13 docs/scripts/process alignment goals.
 - 2026-03-18 — Completed Section 10 (CLI hotspots) and 11 (Server hotspots) by extracting commands and routes into smaller modules. Evidence: `src/cli/handlers/{flow,graph,worktree,attempt,events,project/governance,global/dispatch}/*`; `src/server/{routes,query_views}/*`; `cargo test --lib`.
 - 2026-03-19 — Added architecture guardrails for support subsystems in `scripts/check_architecture.py` to prevent them from depending on core flow/registry/state orchestration logic, completing Section 6.
+- 2026-03-19 — Completed Section 7 (Runtime Extension Model) by centralizing runtime descriptors in `adapters/mod.rs` and enforcing compatibility with selection logic.
+- 2026-03-19 — Completed Section 9 (Event Store and Persistence) by ensuring the `EventStore` trait remains narrow and backend implementations are substitutable, with validated coverage.
 
 ## Final Note
 The target is not “more abstraction.”
