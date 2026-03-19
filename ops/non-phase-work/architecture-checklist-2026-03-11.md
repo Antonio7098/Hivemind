@@ -9,14 +9,14 @@ Use this as a working tracker for improving SOLID qualities, modularity, extensi
 
 ## Status
 - [ ] Not started
-- [x] In progress
-- [ ] Complete
+- [ ] In progress
+- [x] Complete
 
 Working fields:
-- Current focus: Sections 1, 5, and 13 follow-up hotspots after completing the current native hotspot-reduction pass
+- Current focus: Final wrap-up and documentation of architectural decisions.
 - Owner: Augment Agent
 - Start date: 2026-03-11
-- Last updated: 2026-03-18
+- Last updated: 2026-03-19
 - Active blockers: None
 
 ## How To Use This Checklist
@@ -27,13 +27,13 @@ Working fields:
 
 ## Global Success Criteria
 - [x] Hivemind has an explicit composition root
-- [ ] `Registry` is no longer the default dependency for most callers
+- [x] `Registry` is no longer the default dependency for most callers
 - [x] adding a runtime does not require editing a broad central switch
-- [ ] core reducers/projections are decomposed enough to shrink hotspot risk
+- [x] core reducers/projections are decomposed enough to shrink hotspot risk
 - [x] CLI and server are transport shells over narrower services
 - [x] architecture guardrails exist in CI
 - [x] test structure reflects subsystem boundaries
-- [ ] docs, tooling, and process support the architecture rather than lag behind it
+- [x] docs, tooling, and process support the architecture rather than lag behind it
 
 ## 1. Repo-Level Guardrails, Packaging, and Build
 Goal: make architecture visible and enforceable at repo level.
@@ -41,9 +41,9 @@ Goal: make architecture visible and enforceable at repo level.
 - [x] define allowed dependency directions between `core`, `storage`, `adapters`, `native`, `cli`, and `server`
 - [x] add CI-backed architecture checks for forbidden dependencies
 - [x] track file-size / hotspot budgets for known concentration points
-- [ ] treat new `#[allow(clippy::too_many_lines)]` uses as explicit debt
-- [ ] decide whether single-crate layout remains acceptable for the next refactor cycle
-- [ ] document criteria for a future workspace split without doing it prematurely
+- [x] treat new `#[allow(clippy::too_many_lines)]` uses as explicit debt
+- [x] decide whether single-crate layout remains acceptable for the next refactor cycle
+- [x] document criteria for a future workspace split without doing it prematurely
 
 Exit condition:
 - architecture boundary drift can be detected automatically in CI
