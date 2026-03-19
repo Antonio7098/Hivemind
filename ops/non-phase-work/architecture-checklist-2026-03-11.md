@@ -207,7 +207,7 @@ Exit condition:
 - [x] 2. composition root
 - [x] 3. `Registry` service extraction
 - [x] 4. runtime registration/factory model
-- [ ] 5. core execution/projection hotspot reduction
+- [x] 5. core execution/projection hotspot reduction
 - [ ] 6. native hotspot reduction
 - [x] 7. CLI/service boundary cleanup
 - [x] 8. server/service boundary cleanup
@@ -238,6 +238,8 @@ Exit condition:
 - 2026-03-18 — Completed Section 3 (Reducers and Derived State) by verifying cross-aggregate coordination is isolated. Evidence: `src/core/state/apply.rs`; `cargo test --lib`.
 - 2026-03-18 — Verified EventPayload fragmentation and taxonomy, completing Section 2. Evidence: `src/core/events/payload/fragments/`; `docs/architecture/event-model.md`.
 - 2026-03-18 — Completed Section 13 docs/scripts/process alignment goals.
+- 2026-03-18 — Completed Section 10 (CLI hotspots) and 11 (Server hotspots) by extracting commands and routes into smaller modules. Evidence: `src/cli/handlers/{flow,graph,worktree,attempt,events,project/governance,global/dispatch}/*`; `src/server/{routes,query_views}/*`; `cargo test --lib`.
+- 2026-03-19 — Completed Section 5 (Core execution/projection hotspot reduction) by breaking down the runtime projection stream into smaller components. Evidence: `src/core/registry/runtime/management/projection/{mod,stream,approval}.rs`; `cargo test --lib`.
 
 ## Final Note
 The target is not “more abstraction.”
