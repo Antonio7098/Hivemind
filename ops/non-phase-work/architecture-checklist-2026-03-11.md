@@ -206,7 +206,7 @@ Exit condition:
 - [x] 3. `Registry` service extraction
 - [x] 4. runtime registration/factory model
 - [x] 5. core execution/projection hotspot reduction
-- [ ] 6. native hotspot reduction
+- [x] 6. native hotspot reduction
 - [x] 7. CLI/service boundary cleanup
 - [x] 8. server/service boundary cleanup
 - [x] 9. test suite restructuring
