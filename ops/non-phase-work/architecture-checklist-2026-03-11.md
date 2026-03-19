@@ -103,16 +103,14 @@ Exit condition:
 ## 6. `src/core/scope`, `enforcement`, `worktree`, `graph_query`, `context_window`, `skill_registry`
 Goal: preserve and tighten the already healthier support/domain subsystems.
 
-- [ ] confirm dependency direction stays inward toward core concepts rather than outward to delivery layers
-- [ ] avoid moving unrelated orchestration logic into these support modules
-- [ ] add architecture tests for these subsystems if they become dependency magnets
-- [ ] keep tests and docs scoped to each subsystem's real responsibility
+- [x] confirm dependency direction stays inward toward core concepts rather than outward to delivery layers
+- [x] avoid moving unrelated orchestration logic into these support modules
+- [x] add architecture tests for these subsystems if they become dependency magnets
+- [x] keep tests and docs scoped to each subsystem's real responsibility
 
 Exit condition:
 - these modules remain focused support/domain units rather than future catch-all buckets
 
-## 7. `src/adapters` Runtime Extension Model
-Goal: make runtime extension truly open/closed in practice.
 
 - [x] replace centralized string/enum adapter construction with a registration/factory model
 - [ ] define runtime descriptor metadata and capabilities in one extensible place
@@ -239,7 +237,7 @@ Exit condition:
 - 2026-03-18 — Verified EventPayload fragmentation and taxonomy, completing Section 2. Evidence: `src/core/events/payload/fragments/`; `docs/architecture/event-model.md`.
 - 2026-03-18 — Completed Section 13 docs/scripts/process alignment goals.
 - 2026-03-18 — Completed Section 10 (CLI hotspots) and 11 (Server hotspots) by extracting commands and routes into smaller modules. Evidence: `src/cli/handlers/{flow,graph,worktree,attempt,events,project/governance,global/dispatch}/*`; `src/server/{routes,query_views}/*`; `cargo test --lib`.
-- 2026-03-19 — Completed Section 5 (Core execution/projection hotspot reduction) by breaking down the runtime projection stream into smaller components. Evidence: `src/core/registry/runtime/management/projection/{mod,stream,approval}.rs`; `cargo test --lib`.
+- 2026-03-19 — Added architecture guardrails for support subsystems in `scripts/check_architecture.py` to prevent them from depending on core flow/registry/state orchestration logic, completing Section 6.
 
 ## Final Note
 The target is not “more abstraction.”
