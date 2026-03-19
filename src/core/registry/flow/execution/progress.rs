@@ -97,6 +97,7 @@ impl Registry {
 }
 
 #[cfg(test)]
+// ARCH_DEBT: legacy oversized function
 #[allow(clippy::too_many_lines)]
 mod tests {
     use super::*;

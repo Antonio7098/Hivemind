@@ -147,6 +147,7 @@ impl NativeRuntimeAdapter {
         capabilities.into_iter().collect()
     }
 
+// ARCH_DEBT: legacy oversized function
         #[allow(clippy::too_many_lines)]
     fn execute_with_progress(
         &self,
@@ -414,6 +415,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
         Ok(())
     }
 
+// ARCH_DEBT: legacy oversized function
         #[allow(clippy::too_many_lines)]
     fn execute(&mut self, input: ExecutionInput) -> Result<ExecutionReport, RuntimeError> {
         self.execute_with_progress(&input, None)

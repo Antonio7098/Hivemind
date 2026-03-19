@@ -1,6 +1,7 @@
 use super::*;
 
 impl Registry {
+// ARCH_DEBT: legacy oversized function
         #[allow(clippy::too_many_lines)]
     pub(crate) fn validate_constitution(
         artifact: &ConstitutionArtifact,

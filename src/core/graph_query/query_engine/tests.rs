@@ -1,6 +1,7 @@
 use super::*;
 use std::collections::BTreeMap;
 
+// ARCH_DEBT: legacy oversized function
 #[allow(clippy::too_many_lines)]
 fn sample_index() -> GraphQueryIndex {
     let mut nodes = BTreeMap::new();

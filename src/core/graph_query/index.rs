@@ -16,6 +16,7 @@ pub struct GraphQueryIndex {
     pub(crate) all_edges: Vec<GraphQueryEdge>,
 }
 impl GraphQueryIndex {
+// ARCH_DEBT: legacy oversized function
         #[allow(clippy::too_many_lines)]
     pub fn from_snapshot_repositories(
         repositories: &[GraphQueryRepository],

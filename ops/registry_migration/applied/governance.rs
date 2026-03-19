@@ -434,6 +434,7 @@ impl Registry {
             }
         }
 
+// ARCH_DEBT: legacy oversized function
         #[allow(clippy::too_many_lines)]
         fn validate_constitution(artifact: &ConstitutionArtifact) -> Vec<ConstitutionValidationIssue> {
             let mut issues = Vec::new();

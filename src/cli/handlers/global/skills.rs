@@ -1,5 +1,6 @@
 use super::*;
 
+// ARCH_DEBT: legacy oversized function
 #[allow(clippy::too_many_lines)]
 pub(super) fn handle_skill_registry(
     cmd: GlobalSkillRegistryCommands,

@@ -15,6 +15,7 @@ impl Registry {
         )
     }
 
+// ARCH_DEBT: legacy oversized function
         #[allow(clippy::too_many_lines)]
     pub fn constitution_init(
         &self,
@@ -205,6 +206,7 @@ impl Registry {
         })
     }
 
+// ARCH_DEBT: legacy oversized function
         #[allow(clippy::too_many_lines)]
     pub fn constitution_update(
         &self,

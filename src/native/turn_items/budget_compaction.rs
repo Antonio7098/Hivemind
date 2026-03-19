@@ -32,6 +32,7 @@ pub(crate) fn compact_history_for_hard_budget_limit(
     )
 }
 
+// ARCH_DEBT: legacy oversized function
 #[allow(clippy::too_many_lines)]
 fn compact_history_for_budget_mode(
     invocation_id: &str,

@@ -290,6 +290,7 @@ pub(crate) fn assistant_item(
     }
 }
 
+// ARCH_DEBT: legacy oversized function
 #[allow(clippy::too_many_lines)]
 pub(crate) fn items_from_tool_trace(
     invocation_id: &str,

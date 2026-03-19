@@ -217,6 +217,7 @@
     /// # Errors
     /// Returns an error when project/repository resolution fails, UCP extraction
     /// cannot produce a profile-compliant graph, or snapshot persistence fails.
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn graph_snapshot_refresh(
         &self,
@@ -731,6 +732,7 @@
     }
 
 // ensure_graph_snapshot_current_for_constitution (11665-11789)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     fn ensure_graph_snapshot_current_for_constitution(
         &self,
@@ -983,6 +985,7 @@
     }
 
 // evaluate_constitution_rules (11913-12098)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     fn evaluate_constitution_rules(
         artifact: &ConstitutionArtifact,
@@ -1464,6 +1467,7 @@
     }
 
 // add_graph_dependency (14394-14516)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn add_graph_dependency(
         &self,

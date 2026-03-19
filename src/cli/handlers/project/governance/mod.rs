@@ -7,6 +7,7 @@ pub(super) mod notepad;
 pub(super) mod repair;
 pub(super) mod snapshot;
 
+// ARCH_DEBT: legacy oversized function
 #[allow(clippy::too_many_lines)]
 pub(super) fn handle_project_governance(
     service: &GovernanceService,

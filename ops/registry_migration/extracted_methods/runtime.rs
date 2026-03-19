@@ -1342,6 +1342,7 @@
     }
 
 // runtime_health_with_role (7518-7647)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn runtime_health_with_role(
         &self,

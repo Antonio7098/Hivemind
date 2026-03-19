@@ -1,6 +1,7 @@
 use super::*;
 
 impl ContextWindow {
+// ARCH_DEBT: legacy oversized function
         #[allow(clippy::too_many_lines)]
     pub fn prune(
         &mut self,

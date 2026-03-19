@@ -195,6 +195,7 @@ impl Registry {
         self.runtime_health_with_role(project, task_id, None, RuntimeRole::Worker)
     }
 
+// ARCH_DEBT: legacy oversized function
         #[allow(clippy::too_many_lines)]
     pub fn runtime_health_with_role(
         &self,

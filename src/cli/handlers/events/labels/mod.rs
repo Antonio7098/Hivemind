@@ -1,3 +1,4 @@
+// ARCH_DEBT: legacy oversized function
 #[allow(clippy::too_many_lines)]
 pub(super) fn event_type_label(payload: &crate::core::events::EventPayload) -> &'static str {
     use crate::core::events::EventPayload;

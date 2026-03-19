@@ -96,6 +96,7 @@ struct NativePromptSelection {
     truncated_item_count: usize,
 }
 
+// ARCH_DEBT: legacy oversized function
 #[allow(clippy::too_many_lines)]
 pub(crate) fn assemble_native_prompt(
     config: &NativeRuntimeConfig,

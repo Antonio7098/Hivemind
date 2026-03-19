@@ -2,6 +2,7 @@ use super::*;
 use crate::native::AgentMode;
 
 impl NativeToolEngine {
+// ARCH_DEBT: legacy oversized function
         #[allow(clippy::too_many_lines)]
     fn evaluate_tool_policies(
         action: &NativeToolAction,
