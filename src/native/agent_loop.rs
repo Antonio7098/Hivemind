@@ -222,7 +222,9 @@ impl<M: ModelClient> AgentLoop<M> {
                                 visible_items_before,
                                 visible_items_after,
                                 prompt_tokens_before: request_tokens,
-                                projected_budget_used: self.used_tokens.saturating_add(request_tokens),
+                                projected_budget_used: self
+                                    .used_tokens
+                                    .saturating_add(request_tokens),
                                 token_budget: self.config.token_budget,
                                 elapsed_since_invocation_ms: u64::try_from(
                                     self.started_at.elapsed().as_millis(),
@@ -272,7 +274,9 @@ impl<M: ModelClient> AgentLoop<M> {
                                     visible_items_before,
                                     visible_items_after,
                                     prompt_tokens_before: request_tokens,
-                                    projected_budget_used: self.used_tokens.saturating_add(request_tokens),
+                                    projected_budget_used: self
+                                        .used_tokens
+                                        .saturating_add(request_tokens),
                                     token_budget: self.config.token_budget,
                                     elapsed_since_invocation_ms: u64::try_from(
                                         self.started_at.elapsed().as_millis(),

@@ -1,5 +1,7 @@
 use super::*;
 
+// ARCH_DEBT: legacy oversized function awaiting policy engine refactor
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub(super) fn evaluate_approval_and_exec_policy(
     ctx: &ToolExecutionContext<'_>,
     requires_write: bool,

@@ -5,6 +5,8 @@ use crate::cli::commands::FlowCommands;
 use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::error::ExitCode;
 
+// ARCH_DEBT: legacy oversized function awaiting CLI handler refactor
+#[allow(clippy::too_many_lines)]
 pub(super) fn handle_flow_core(
     service: &FlowService,
     cmd: FlowCommands,

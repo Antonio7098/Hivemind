@@ -1,6 +1,8 @@
 use super::*;
 
 impl AppState {
+    // ARCH_DEBT: legacy oversized function awaiting state apply refactor
+    #[allow(clippy::too_many_lines)]
     pub(super) fn apply_flow_lifecycle_event(
         &mut self,
         payload: &EventPayload,

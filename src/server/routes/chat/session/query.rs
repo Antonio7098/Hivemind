@@ -5,7 +5,10 @@ use crate::core::error::{HivemindError, Result};
 use crate::server::api_types::{ChatSessionInspectView, ChatSessionSummaryView};
 use crate::server::routes::parse_query;
 
-pub(crate) fn list_chat_sessions(url: &str, service: &ChatService) -> Result<Vec<ChatSessionSummaryView>> {
+pub(crate) fn list_chat_sessions(
+    url: &str,
+    service: &ChatService,
+) -> Result<Vec<ChatSessionSummaryView>> {
     let query = parse_query(url);
     let scope = resolve_chat_scope(
         service,
@@ -38,7 +41,10 @@ pub(crate) fn list_chat_sessions(url: &str, service: &ChatService) -> Result<Vec
     Ok(sessions.iter().map(map_session_summary).collect())
 }
 
-pub(crate) fn inspect_chat_session(url: &str, service: &ChatService) -> Result<ChatSessionInspectView> {
+pub(crate) fn inspect_chat_session(
+    url: &str,
+    service: &ChatService,
+) -> Result<ChatSessionInspectView> {
     let query = parse_query(url);
     let session_id = query.get("session_id").ok_or_else(|| {
         HivemindError::user(

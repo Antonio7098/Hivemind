@@ -1,4 +1,6 @@
-use crate::server::tests::support::{api_request, json_value, seed_runtime_projection_attempt, test_app};
+use crate::server::tests::support::{
+    api_request, json_value, seed_runtime_projection_attempt, test_app,
+};
 use crate::server::ApiMethod;
 
 #[test]

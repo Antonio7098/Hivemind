@@ -1,6 +1,6 @@
 use super::*;
 
-type RuntimeAdapterBuilder = fn(ProjectRuntimeConfig) -> Result<SelectedRuntimeAdapter>;
+type RuntimeAdapterBuilder = fn(ProjectRuntimeConfig) -> SelectedRuntimeAdapter;
 
 const RUNTIME_ADAPTER_BUILDERS: &[(&str, RuntimeAdapterBuilder)] = &[
     ("opencode", build_opencode_adapter),
@@ -93,7 +93,7 @@ fn parse_native_runtime_args(cfg: &mut NativeAdapterConfig, args: &[String]) -> 
     scripted
 }
 
-fn build_opencode_adapter(mut runtime: ProjectRuntimeConfig) -> Result<SelectedRuntimeAdapter> {
+fn build_opencode_adapter(mut runtime: ProjectRuntimeConfig) -> SelectedRuntimeAdapter {
     let timeout = Duration::from_millis(runtime.timeout_ms);
     let resume_session_id = runtime.env.remove("HIVEMIND_RUNTIME_RESUME_SESSION_ID");
     let mut cfg = OpenCodeConfig::new(PathBuf::from(runtime.binary_path));
@@ -102,12 +102,12 @@ fn build_opencode_adapter(mut runtime: ProjectRuntimeConfig) -> Result<SelectedR
     cfg.base.env = runtime.env;
     cfg.base.resume_session_id.clone_from(&resume_session_id);
     cfg.base.timeout = timeout;
-    Ok(SelectedRuntimeAdapter::OpenCode(
+    SelectedRuntimeAdapter::OpenCode(
         crate::adapters::opencode::OpenCodeAdapter::new(cfg),
-    ))
+    )
 }
 
-fn build_codex_adapter(mut runtime: ProjectRuntimeConfig) -> Result<SelectedRuntimeAdapter> {
+fn build_codex_adapter(mut runtime: ProjectRuntimeConfig) -> SelectedRuntimeAdapter {
     let timeout = Duration::from_millis(runtime.timeout_ms);
     let resume_session_id = runtime.env.remove("HIVEMIND_RUNTIME_RESUME_SESSION_ID");
     let mut cfg = CodexConfig::new(PathBuf::from(runtime.binary_path));
@@ -120,10 +120,10 @@ fn build_codex_adapter(mut runtime: ProjectRuntimeConfig) -> Result<SelectedRunt
     cfg.base.env = runtime.env;
     cfg.base.resume_session_id.clone_from(&resume_session_id);
     cfg.base.timeout = timeout;
-    Ok(SelectedRuntimeAdapter::Codex(CodexAdapter::new(cfg)))
+    SelectedRuntimeAdapter::Codex(CodexAdapter::new(cfg))
 }
 
-fn build_claude_code_adapter(runtime: ProjectRuntimeConfig) -> Result<SelectedRuntimeAdapter> {
+fn build_claude_code_adapter(runtime: ProjectRuntimeConfig) -> SelectedRuntimeAdapter {
     let timeout = Duration::from_millis(runtime.timeout_ms);
     let mut cfg = ClaudeCodeConfig::new(PathBuf::from(runtime.binary_path));
     cfg.model = runtime.model;
@@ -134,12 +134,12 @@ fn build_claude_code_adapter(runtime: ProjectRuntimeConfig) -> Result<SelectedRu
     };
     cfg.base.env = runtime.env;
     cfg.base.timeout = timeout;
-    Ok(SelectedRuntimeAdapter::ClaudeCode(ClaudeCodeAdapter::new(
+    SelectedRuntimeAdapter::ClaudeCode(ClaudeCodeAdapter::new(
         cfg,
-    )))
+    ))
 }
 
-fn build_kilo_adapter(mut runtime: ProjectRuntimeConfig) -> Result<SelectedRuntimeAdapter> {
+fn build_kilo_adapter(mut runtime: ProjectRuntimeConfig) -> SelectedRuntimeAdapter {
     let timeout = Duration::from_millis(runtime.timeout_ms);
     let resume_session_id = runtime.env.remove("HIVEMIND_RUNTIME_RESUME_SESSION_ID");
     let mut cfg = KiloConfig::new(PathBuf::from(runtime.binary_path));
@@ -148,10 +148,10 @@ fn build_kilo_adapter(mut runtime: ProjectRuntimeConfig) -> Result<SelectedRunti
     cfg.base.env = runtime.env;
     cfg.base.resume_session_id.clone_from(&resume_session_id);
     cfg.base.timeout = timeout;
-    Ok(SelectedRuntimeAdapter::Kilo(KiloAdapter::new(cfg)))
+    SelectedRuntimeAdapter::Kilo(KiloAdapter::new(cfg))
 }
 
-fn build_native_adapter(runtime: ProjectRuntimeConfig) -> Result<SelectedRuntimeAdapter> {
+fn build_native_adapter(runtime: ProjectRuntimeConfig) -> SelectedRuntimeAdapter {
     let timeout = Duration::from_millis(runtime.timeout_ms);
     let runtime_args = runtime.args.clone();
     let mut cfg = NativeAdapterConfig::new();
@@ -205,9 +205,9 @@ fn build_native_adapter(runtime: ProjectRuntimeConfig) -> Result<SelectedRuntime
     } else {
         scripted_from_args
     };
-    Ok(SelectedRuntimeAdapter::Native(NativeRuntimeAdapter::new(
+    SelectedRuntimeAdapter::Native(NativeRuntimeAdapter::new(
         cfg,
-    )))
+    ))
 }
 
 impl Registry {
@@ -226,7 +226,7 @@ impl Registry {
                 "registry:build_runtime_adapter",
             ));
         };
-        build(runtime)
+        Ok(build(runtime))
     }
 }
 

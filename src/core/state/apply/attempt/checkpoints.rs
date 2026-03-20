@@ -4,7 +4,7 @@ impl AppState {
     pub(super) fn apply_attempt_checkpoint_event(
         &mut self,
         payload: &EventPayload,
-        timestamp: DateTime<Utc>,
+        _timestamp: DateTime<Utc>,
     ) -> bool {
         match payload {
             EventPayload::CheckpointDeclared {

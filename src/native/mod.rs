@@ -15,8 +15,8 @@ pub mod runtime_hardening;
 pub mod startup_hardening;
 pub mod tool_engine;
 
-pub use openrouter::OpenRouterModelClient;
 pub use contracts::{AgentLoopObserver, HistoryCompactionEvent, ModelClient};
+pub use openrouter::OpenRouterModelClient;
 
 use crate::adapters::runtime::{NativeToolCallTrace, RuntimeError};
 use crate::core::error::{ErrorCategory, HivemindError};

@@ -54,8 +54,8 @@ impl Registry {
         Ok(plan.result)
     }
 
-// ARCH_DEBT: legacy oversized function
-        #[allow(clippy::too_many_lines)]
+    // ARCH_DEBT: legacy oversized function
+    #[allow(clippy::too_many_lines)]
     pub fn project_governance_repair_apply(
         &self,
         id_or_name: &str,

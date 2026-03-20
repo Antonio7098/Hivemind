@@ -1,8 +1,8 @@
 use super::*;
 
 impl Registry {
-// ARCH_DEBT: legacy oversized function
-        #[allow(clippy::too_many_lines)]
+    // ARCH_DEBT: legacy oversized function
+    #[allow(clippy::too_many_lines)]
     pub fn verify_override(&self, task_id: &str, decision: &str, reason: &str) -> Result<TaskFlow> {
         let origin = "registry:verify_override";
 

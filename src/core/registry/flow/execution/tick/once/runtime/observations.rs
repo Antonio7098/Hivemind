@@ -1,6 +1,8 @@
 use super::*;
 
 impl Registry {
+    // ARCH_DEBT: legacy function with too many arguments awaiting refactor
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn append_runtime_output_stream(
         &self,
         attempt_id: Uuid,
@@ -21,18 +23,15 @@ impl Registry {
                 },
                 attempt_corr.clone(),
             );
-            self.store.append(event).map_err(|e| {
-                HivemindError::system("event_append_failed", e.to_string(), origin)
-            })?;
+            self.store
+                .append(event)
+                .map_err(|e| HivemindError::system("event_append_failed", e.to_string(), origin))?;
 
             let observations = runtime_projector.observe_chunk(stream, &format!("{content}\n"));
             let _ = self.append_projected_runtime_observations(
                 attempt_id,
                 attempt_corr,
-                filter_projected_runtime_observations(
-                    observations,
-                    has_structured_command_events,
-                ),
+                filter_projected_runtime_observations(observations, has_structured_command_events),
                 origin,
             );
         }

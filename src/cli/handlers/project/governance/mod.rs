@@ -19,7 +19,9 @@ pub(super) fn handle_project_governance(
         | ProjectGovernanceCommands::Migrate(_)
         | ProjectGovernanceCommands::Inspect(_)
         | ProjectGovernanceCommands::Diagnose(_)
-        | ProjectGovernanceCommands::Replay(_) => core::handle_project_governance_core(service, cmd, format),
+        | ProjectGovernanceCommands::Replay(_) => {
+            core::handle_project_governance_core(service, cmd, format)
+        }
         ProjectGovernanceCommands::Snapshot(subcmd) => {
             snapshot::handle_snapshot_commands(service, subcmd, format)
         }

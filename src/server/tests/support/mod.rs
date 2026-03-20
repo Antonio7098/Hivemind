@@ -41,6 +41,8 @@ pub(crate) fn native_blob_ref(label: &str) -> NativeBlobRef {
     }
 }
 
+// ARCH_DEBT: legacy oversized test helper awaiting refactor
+#[allow(clippy::too_many_lines)]
 pub(crate) fn seed_runtime_projection_attempt(registry: &Registry) -> (Uuid, Uuid, Uuid) {
     let project_id = Uuid::new_v4();
     let graph_id = Uuid::new_v4();

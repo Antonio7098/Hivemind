@@ -1,6 +1,5 @@
 //! Governance-focused integration tests for Hivemind.
 
-use std::path::PathBuf;
 use std::process::Command;
 
 mod support;

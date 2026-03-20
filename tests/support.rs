@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-pub(crate) fn init_git_repo(repo_dir: &std::path::Path) {
+pub fn init_git_repo(repo_dir: &std::path::Path) {
     std::fs::create_dir_all(repo_dir).expect("create repo dir");
 
     let out = Command::new("git")
@@ -50,7 +50,7 @@ pub(crate) fn init_git_repo(repo_dir: &std::path::Path) {
     );
 }
 
-pub(crate) fn git_commit_all(repo_dir: &std::path::Path, message: &str) {
+pub fn git_commit_all(repo_dir: &std::path::Path, message: &str) {
     let out = Command::new("git")
         .args(["add", "-A"])
         .current_dir(repo_dir)
@@ -82,7 +82,7 @@ pub(crate) fn git_commit_all(repo_dir: &std::path::Path, message: &str) {
     );
 }
 
-pub(crate) fn hivemind_bin() -> PathBuf {
+pub fn hivemind_bin() -> PathBuf {
     option_env!("CARGO_BIN_EXE_hivemind").map_or_else(
         || {
             std::env::var("CARGO_BIN_EXE_hivemind")
@@ -93,7 +93,7 @@ pub(crate) fn hivemind_bin() -> PathBuf {
     )
 }
 
-pub(crate) fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, String, String) {
+pub fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, String, String) {
     let data_dir = home.join(".hivemind");
     let worktree_dir = home.join("hivemind").join("worktrees");
     let output = Command::new(hivemind_bin())
@@ -112,7 +112,7 @@ pub(crate) fn run_hivemind(home: &std::path::Path, args: &[&str]) -> (i32, Strin
     )
 }
 
-pub(crate) fn set_project_runtime_script(
+pub fn set_project_runtime_script(
     home: &std::path::Path,
     project: &str,
     unix_script: &str,
@@ -129,7 +129,7 @@ pub(crate) fn set_project_runtime_script(
     )
 }
 
-pub(crate) fn set_project_native_scripted_runtime(
+pub fn set_project_native_scripted_runtime(
     home: &std::path::Path,
     project: &str,
     directives: &[&str],
@@ -164,7 +164,7 @@ pub(crate) fn set_project_native_scripted_runtime(
     run_hivemind(home, &arg_refs)
 }
 
-pub(crate) fn set_project_runtime_script_with_model(
+pub fn set_project_runtime_script_with_model(
     home: &std::path::Path,
     project: &str,
     model: Option<&str>,
@@ -212,13 +212,13 @@ pub(crate) fn set_project_runtime_script_with_model(
         args.push(model.to_string());
     }
 
+    args.push("--arg".to_string());
+
     if cfg!(windows) {
-        args.push("--arg".to_string());
         args.push("/C".to_string());
         args.push("--arg".to_string());
         args.push(windows_script);
     } else {
-        args.push("--arg".to_string());
         args.push("sh".to_string());
         args.push("--arg".to_string());
         args.push("-c".to_string());
@@ -233,7 +233,7 @@ pub(crate) fn set_project_runtime_script_with_model(
     run_hivemind(home, &arg_refs)
 }
 
-pub(crate) fn expected_runtime_flag_prefix() -> &'static [&'static str] {
+pub fn expected_runtime_flag_prefix() -> &'static [&'static str] {
     if cfg!(windows) {
         &["/C"]
     } else {
@@ -241,7 +241,7 @@ pub(crate) fn expected_runtime_flag_prefix() -> &'static [&'static str] {
     }
 }
 
-pub(crate) fn failing_check_command() -> &'static str {
+pub fn failing_check_command() -> &'static str {
     if cfg!(windows) {
         "exit /b 1"
     } else {
@@ -249,11 +249,11 @@ pub(crate) fn failing_check_command() -> &'static str {
     }
 }
 
-pub(crate) fn worktree_root(home: &std::path::Path) -> PathBuf {
+pub fn worktree_root(home: &std::path::Path) -> PathBuf {
     home.join("hivemind").join("worktrees")
 }
 
-pub(crate) fn run_hivemind_with_env(
+pub fn run_hivemind_with_env(
     home: &std::path::Path,
     args: &[&str],
     extra_env: &[(&str, &str)],

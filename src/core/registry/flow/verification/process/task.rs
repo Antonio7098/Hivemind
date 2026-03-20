@@ -5,8 +5,8 @@ mod outcomes;
 mod scope_validation;
 
 impl Registry {
-// ARCH_DEBT: legacy oversized function
-        #[allow(clippy::too_many_lines)]
+    // ARCH_DEBT: legacy oversized function
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn process_verifying_task(&self, flow_id: &str, task_id: Uuid) -> Result<TaskFlow> {
         let flow = self.get_flow(flow_id)?;
         if flow.state != FlowState::Running {

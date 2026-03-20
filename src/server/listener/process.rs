@@ -22,9 +22,8 @@ pub(crate) fn process_request(mut req: tiny_http::Request, app: &AppContext, eve
             }
             Err(e) => {
                 let wrapped = CliResponse::<()>::error(&e);
-                let mut response = ApiResponse::json(500, &wrapped).unwrap_or_else(|_| {
-                    ApiResponse::text(500, "text/plain", "internal error\n")
-                });
+                let mut response = ApiResponse::json(500, &wrapped)
+                    .unwrap_or_else(|_| ApiResponse::text(500, "text/plain", "internal error\n"));
                 response.extra_headers.extend(cors_headers());
                 let _ = req.respond(api_response_to_tiny(response));
             }
@@ -42,9 +41,8 @@ pub(crate) fn process_request(mut req: tiny_http::Request, app: &AppContext, eve
             }
             Err(e) => {
                 let wrapped = CliResponse::<()>::error(&e);
-                let mut response = ApiResponse::json(500, &wrapped).unwrap_or_else(|_| {
-                    ApiResponse::text(500, "text/plain", "internal error\n")
-                });
+                let mut response = ApiResponse::json(500, &wrapped)
+                    .unwrap_or_else(|_| ApiResponse::text(500, "text/plain", "internal error\n"));
                 response.extra_headers.extend(cors_headers());
                 let _ = req.respond(api_response_to_tiny(response));
             }
@@ -84,11 +82,8 @@ pub(crate) fn process_request(mut req: tiny_http::Request, app: &AppContext, eve
     let mut tiny = tiny_http::Response::from_data(response.body)
         .with_status_code(response.status_code)
         .with_header(
-            tiny_http::Header::from_bytes(
-                &b"Content-Type"[..],
-                response.content_type.as_bytes(),
-            )
-            .expect("content-type header"),
+            tiny_http::Header::from_bytes(&b"Content-Type"[..], response.content_type.as_bytes())
+                .expect("content-type header"),
         );
 
     for h in response.extra_headers {

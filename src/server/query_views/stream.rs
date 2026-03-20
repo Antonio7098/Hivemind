@@ -3,6 +3,8 @@ use crate::core::events::RuntimeOutputStream;
 use serde_json::json;
 use serde_json::Value;
 
+// ARCH_DEBT: legacy oversized function awaiting query view refactor
+#[allow(clippy::too_many_lines)]
 pub(crate) fn runtime_stream_item(event: Event) -> Option<RuntimeStreamItemView> {
     let sequence = event.metadata.sequence.unwrap_or(0);
     let flow_id = event

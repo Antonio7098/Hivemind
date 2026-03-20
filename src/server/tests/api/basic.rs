@@ -81,7 +81,13 @@ fn api_worktree_restore_turn_requires_confirmation() {
         "confirm": false
     });
     let body = serde_json::to_vec(&body).expect("json body");
-    let err = handle_api_request_inner(&app, ApiMethod::Post, "/api/worktrees/restore-turn", 10, Some(&body))
-        .expect_err("restore turn should require confirmation");
+    let err = handle_api_request_inner(
+        &app,
+        ApiMethod::Post,
+        "/api/worktrees/restore-turn",
+        10,
+        Some(&body),
+    )
+    .expect_err("restore turn should require confirmation");
     assert_eq!(err.code, "confirmation_required");
 }

@@ -12,8 +12,8 @@ mod raw_mode;
 use raw_mode::*;
 
 impl OpenCodeAdapter {
-// ARCH_DEBT: legacy oversized function
-        #[allow(clippy::too_many_lines)]
+    // ARCH_DEBT: legacy oversized function
+    #[allow(clippy::too_many_lines)]
     pub fn execute_interactive<F>(
         &mut self,
         input: &ExecutionInput,

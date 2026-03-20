@@ -1,5 +1,7 @@
 use super::*;
 
+// ARCH_DEBT: legacy oversized function awaiting route handler refactor
+#[allow(clippy::too_many_lines)]
 pub(super) fn handle_attempt_queries(
     path: &str,
     url: &str,

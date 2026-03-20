@@ -146,8 +146,8 @@ impl Registry {
     ///
     /// # Errors
     /// Returns an error if confirmation is missing, mirror input is invalid, or rebuild fails.
-// ARCH_DEBT: legacy oversized function
-        #[allow(clippy::too_many_lines)]
+    // ARCH_DEBT: legacy oversized function
+    #[allow(clippy::too_many_lines)]
     pub fn events_recover_from_mirror(&self, confirm: bool) -> Result<EventsRecoverResult> {
         let origin = "registry:events_recover_from_mirror";
         if !confirm {

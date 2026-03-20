@@ -5,6 +5,8 @@ use crate::core::events::{
 use uuid::Uuid;
 
 #[test]
+// ARCH_DEBT: legacy oversized test awaiting refactor
+#[allow(clippy::too_many_lines)]
 fn native_summary_reports_passed_verification() {
     let flow = NativeEventCorrelation {
         project_id: Uuid::new_v4(),
@@ -137,6 +139,8 @@ fn native_summary_reports_passed_verification() {
 }
 
 #[test]
+// ARCH_DEBT: legacy oversized test awaiting refactor
+#[allow(clippy::too_many_lines)]
 fn native_summary_accepts_prior_tool_results_delivered_via_navigation() {
     let flow = NativeEventCorrelation {
         project_id: Uuid::new_v4(),

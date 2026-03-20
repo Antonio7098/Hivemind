@@ -1,8 +1,8 @@
 use super::*;
 
 impl Registry {
-// ARCH_DEBT: legacy oversized function
-        #[allow(clippy::too_many_lines)]
+    // ARCH_DEBT: legacy oversized function
+    #[allow(clippy::too_many_lines)]
     pub fn checkpoint_complete(
         &self,
         attempt_id: &str,

@@ -19,9 +19,7 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
     let (code, _out, err) =
         run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
     assert_eq!(code, 0, "{err}");
-    let unix_runtime_script = format!(
-        "printf data > hm_scope_violation.txt; printf data > \"$HOME/hm_scope_scope_violation.txt\""
-    );
+    let unix_runtime_script = "printf data > hm_scope_violation.txt; printf data > \"$HOME/hm_scope_scope_violation.txt\"".to_string();
     let windows_runtime_script =
         "echo data > hm_scope_violation.txt & echo data > \"%USERPROFILE%\\hm_scope_scope_violation.txt\""
             .to_string();
@@ -238,9 +236,7 @@ fn cli_scope_violation_detects_tmp_write_outside_worktree() {
     let (code, _out, err) =
         run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
     assert_eq!(code, 0, "{err}");
-    let unix_runtime_script = format!(
-        "printf data > \"$HOME/hm_scope_tmp_violation.txt\""
-    );
+    let unix_runtime_script = "printf data > \"$HOME/hm_scope_tmp_violation.txt\"".to_string();
     let windows_runtime_script =
         "echo data > \"%USERPROFILE%\\hm_scope_tmp_violation.txt\"".to_string();
 

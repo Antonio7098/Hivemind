@@ -20,6 +20,8 @@ pub(crate) struct AttemptInspectCollected {
     pub(crate) delivered_context_hash: Option<String>,
 }
 
+// ARCH_DEBT: legacy oversized function awaiting CLI handler refactor
+#[allow(clippy::too_many_lines)]
 pub(crate) fn collect_attempt_runtime_data(
     events: &[crate::core::events::Event],
 ) -> AttemptInspectCollected {

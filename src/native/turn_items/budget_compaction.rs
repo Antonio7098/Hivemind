@@ -76,7 +76,8 @@ fn compact_history_for_budget_mode(
             .max()
         {
             for (index, item) in items.iter().enumerate() {
-                if item.model_visible && item.provenance.turn_index == Some(latest_visible_turn_index)
+                if item.model_visible
+                    && item.provenance.turn_index == Some(latest_visible_turn_index)
                 {
                     pinned_positions.insert(index);
                 }

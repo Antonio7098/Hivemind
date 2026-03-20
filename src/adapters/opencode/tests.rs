@@ -143,9 +143,9 @@ fn initialize_falls_back_to_help_when_version_fails() {
     .unwrap();
     #[cfg(unix)]
     {
-    let mut perms = std::fs::metadata(&script_path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&script_path, perms).unwrap();
+        let mut perms = std::fs::metadata(&script_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&script_path, perms).unwrap();
     }
 
     let cfg = OpenCodeConfig::new(script_path);
@@ -218,9 +218,9 @@ fn write_executable(path: &Path, body: &str) {
     std::fs::write(path, body).unwrap();
     #[cfg(unix)]
     {
-    let mut perms = std::fs::metadata(path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(path, perms).unwrap();
+        let mut perms = std::fs::metadata(path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(path, perms).unwrap();
     }
 }
 

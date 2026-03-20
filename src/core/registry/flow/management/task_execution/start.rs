@@ -1,8 +1,8 @@
 use super::*;
 
 impl Registry {
-// ARCH_DEBT: legacy oversized function
-        #[allow(clippy::too_many_lines)]
+    // ARCH_DEBT: legacy oversized function
+    #[allow(clippy::too_many_lines)]
     pub fn start_task_execution(&self, task_id: &str) -> Result<Uuid> {
         let origin = "registry:start_task_execution";
         let id = Uuid::parse_str(task_id).map_err(|_| {

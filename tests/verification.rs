@@ -135,8 +135,13 @@ fn cli_verify_override_can_force_success_after_check_failure_and_is_audited() {
         run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
     assert_eq!(code, 0, "{err}");
 
-    let (code, _out, err) =
-        set_project_runtime_script(tmp.path(), "proj", "echo runtime_ok", "echo runtime_ok", 1000);
+    let (code, _out, err) = set_project_runtime_script(
+        tmp.path(),
+        "proj",
+        "echo runtime_ok",
+        "echo runtime_ok",
+        1000,
+    );
     assert_eq!(code, 0, "{err}");
 
     let (code, out1, err) = run_hivemind(tmp.path(), &["task", "create", "proj", "t1"]);
@@ -200,7 +205,9 @@ fn cli_verify_override_can_force_success_after_check_failure_and_is_audited() {
 
     let (code, events_out, err) = run_hivemind(
         tmp.path(),
-        &["-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "200"],
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "200",
+        ],
     );
     assert_eq!(code, 0, "{err}");
     let events_json: serde_json::Value = serde_json::from_str(&events_out).expect("events json");

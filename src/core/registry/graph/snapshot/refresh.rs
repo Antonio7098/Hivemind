@@ -13,8 +13,8 @@ impl Registry {
         }
     }
 
-// ARCH_DEBT: legacy oversized function
-        #[allow(clippy::too_many_lines)]
+    // ARCH_DEBT: legacy oversized function
+    #[allow(clippy::too_many_lines)]
     pub fn graph_snapshot_refresh(
         &self,
         id_or_name: &str,

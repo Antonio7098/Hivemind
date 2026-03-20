@@ -85,7 +85,7 @@ pub(super) fn evaluate_tool_policies_impl(
             if raw_joined != joined {
                 fallback_command_line = Some(raw_joined);
             }
-        };
+        }
         dangerous_reason = dangerous_command_reason(&command, &args);
         approval_cache_key = command.to_ascii_lowercase();
         command_line = Some(joined);

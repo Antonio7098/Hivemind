@@ -31,10 +31,20 @@ fn api_chat_sessions_create_send_and_inspect_round_trip() {
     let create_project =
         serde_json::json!({"name": "proj-chat-session", "description": "chat session project"});
     let create_project = serde_json::to_vec(&create_project).expect("json body");
-    let _ = api_request(&app, ApiMethod::Post, "/api/projects/create", Some(&create_project));
+    let _ = api_request(
+        &app,
+        ApiMethod::Post,
+        "/api/projects/create",
+        Some(&create_project),
+    );
     let create_session = serde_json::json!({"mode": "plan", "project": "proj-chat-session", "title": "Session test"});
     let create_session = serde_json::to_vec(&create_session).expect("json body");
-    let create_resp = api_request(&app, ApiMethod::Post, "/api/chat/sessions/create", Some(&create_session));
+    let create_resp = api_request(
+        &app,
+        ApiMethod::Post,
+        "/api/chat/sessions/create",
+        Some(&create_session),
+    );
     assert_eq!(create_resp.status_code, 200);
     let created = json_value(&create_resp.body);
     let session_id = created["data"]["session_id"]

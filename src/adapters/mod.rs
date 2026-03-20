@@ -166,7 +166,9 @@ pub fn runtime_descriptor_for(name: &str) -> Option<&'static RuntimeDescriptor> 
     if name.trim().is_empty() {
         return None;
     }
-    RUNTIME_DESCRIPTORS.iter().find(|descriptor| descriptor.matches(name))
+    RUNTIME_DESCRIPTORS
+        .iter()
+        .find(|descriptor| descriptor.matches(name))
 }
 
 /// Resolves the canonical adapter name for a given input.

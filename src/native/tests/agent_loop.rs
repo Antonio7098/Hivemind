@@ -507,7 +507,9 @@ fn agent_loop_records_budget_pressure_and_timings() {
     config.token_budget = 80;
     config.prompt_headroom = 1;
     let mut loop_harness = AgentLoop::new(config, model);
-    let result = loop_harness.run(&"x".repeat(60), None).expect("loop should complete");
+    let result = loop_harness
+        .run(&"x".repeat(60), None)
+        .expect("loop should complete");
 
     assert!(result.turns[0].budget_used_after >= result.turns[0].budget_used_before);
     assert!(!result.turns[0].budget_thresholds_crossed.is_empty());

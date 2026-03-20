@@ -7,8 +7,8 @@ use super::super::scope::{
 };
 use super::super::view::{map_session_inspect, preview_text};
 use crate::app::ChatService;
-use crate::core::events::{Event, EventPayload};
 use crate::core::error::Result;
+use crate::core::events::{Event, EventPayload};
 use crate::server::api_types::{
     ChatSessionCreateRequest, ChatSessionInspectView, ChatSessionSendRequest,
     ChatSessionSendResponse,

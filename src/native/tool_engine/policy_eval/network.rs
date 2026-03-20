@@ -1,5 +1,7 @@
 use super::*;
 
+// ARCH_DEBT: legacy oversized function awaiting policy engine refactor
+#[allow(clippy::too_many_lines)]
 pub(super) fn evaluate_network_targets(
     ctx: &ToolExecutionContext<'_>,
     network_targets: &[NativeNetworkTarget],
@@ -72,8 +74,7 @@ pub(super) fn evaluate_network_targets(
                 ))
                 .with_policy_tags(tags.clone()));
             }
-            if ctx.network_policy.block_private_addresses
-                && is_private_or_local_host(&target.host)
+            if ctx.network_policy.block_private_addresses && is_private_or_local_host(&target.host)
             {
                 tags.push("network_decision:denied_private_address".to_string());
                 return Err(NativeToolEngineError::policy_violation(format!(

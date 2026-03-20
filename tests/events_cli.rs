@@ -1,7 +1,6 @@
 //! Event CLI integration tests for Hivemind.
 
 use std::path::PathBuf;
-use std::process::Command;
 
 mod support;
 

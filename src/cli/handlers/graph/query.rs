@@ -1,5 +1,5 @@
-use super::view::print_graph_query_result;
 use super::super::common::get_graph_service;
+use super::view::print_graph_query_result;
 use crate::cli::commands::GraphQueryCommands;
 use crate::cli::output::{output_error, OutputFormat};
 use crate::core::error::ExitCode;

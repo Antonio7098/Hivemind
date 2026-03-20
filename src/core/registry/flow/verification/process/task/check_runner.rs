@@ -2,6 +2,8 @@ use super::*;
 use std::time::Instant;
 
 impl Registry {
+    // ARCH_DEBT: legacy function with complex return type awaiting refactor
+    #[allow(clippy::type_complexity)]
     #[allow(clippy::too_many_arguments)]
     pub(super) fn run_verification_checks(
         &self,
