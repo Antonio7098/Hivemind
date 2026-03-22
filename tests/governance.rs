@@ -921,6 +921,10 @@ rules:
     );
     assert_eq!(code, 0, "{err}");
 
+    let (code, _snapshot_out, err) =
+        run_hivemind(tmp.path(), &["graph", "snapshot", "refresh", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
     let (code, check_out, err) = run_hivemind(
         tmp.path(),
         &["-f", "json", "constitution", "check", "--project", "proj"],

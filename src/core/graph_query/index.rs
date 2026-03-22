@@ -15,6 +15,61 @@ pub struct GraphQueryIndex {
     pub(crate) incoming: BTreeMap<String, Vec<GraphQueryEdge>>,
     pub(crate) all_edges: Vec<GraphQueryEdge>,
 }
+
+fn block_graph_path(block: &ucm_core::Block) -> Option<String> {
+    let metadata_path = block
+        .metadata
+        .custom
+        .get("path")
+        .and_then(serde_json::Value::as_str)
+        .map(normalize_graph_path)
+        .filter(|item| !item.is_empty());
+
+    let metadata_coderef_path = block
+        .metadata
+        .custom
+        .get("coderef")
+        .and_then(|value| value.get("path"))
+        .and_then(serde_json::Value::as_str)
+        .map(normalize_graph_path)
+        .filter(|item| !item.is_empty());
+
+    let content_coderef_path = match &block.content {
+        ucm_core::Content::Json { value, .. } => value
+            .get("coderef")
+            .and_then(|value| value.get("path"))
+            .and_then(serde_json::Value::as_str)
+            .map(normalize_graph_path)
+            .filter(|item| !item.is_empty()),
+        _ => None,
+    };
+
+    let metadata_coderef_display = block
+        .metadata
+        .custom
+        .get("coderef")
+        .and_then(|value| value.get("display"))
+        .and_then(serde_json::Value::as_str)
+        .map(normalize_graph_path)
+        .filter(|item| !item.is_empty());
+
+    let content_coderef_display = match &block.content {
+        ucm_core::Content::Json { value, .. } => value
+            .get("coderef")
+            .and_then(|value| value.get("display"))
+            .and_then(serde_json::Value::as_str)
+            .map(normalize_graph_path)
+            .filter(|item| !item.is_empty()),
+        _ => None,
+    };
+
+    metadata_path
+        .or(metadata_coderef_path)
+        .or(content_coderef_path)
+        .or(metadata_coderef_display)
+        .or(content_coderef_display)
+}
+
 impl GraphQueryIndex {
     // ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
@@ -50,13 +105,7 @@ impl GraphQueryIndex {
                     .unwrap_or("unknown")
                     .trim()
                     .to_string();
-                let normalized_path = block
-                    .metadata
-                    .custom
-                    .get("path")
-                    .and_then(serde_json::Value::as_str)
-                    .map(normalize_graph_path)
-                    .filter(|item| !item.is_empty());
+                let normalized_path = block_graph_path(block);
                 let partition = normalized_path
                     .as_deref()
                     .and_then(|path| match_partition(path, partition_paths));
