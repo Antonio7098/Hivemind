@@ -129,10 +129,16 @@ impl Registry {
         let trace_path = self.scope_trace_path(attempt_id);
         eprintln!("[DEBUG] Looking for trace log at: {}", trace_path.display());
         let Ok(contents) = fs::read_to_string(&trace_path) else {
-            eprintln!("[DEBUG] Failed to read trace log at: {}", trace_path.display());
+            eprintln!(
+                "[DEBUG] Failed to read trace log at: {}",
+                trace_path.display()
+            );
             return Vec::new();
         };
-        eprintln!("[DEBUG] Trace log contents (first 2000 chars): {}", &contents[..contents.len().min(2000)]);
+        eprintln!(
+            "[DEBUG] Trace log contents (first 2000 chars): {}",
+            &contents[..contents.len().min(2000)]
+        );
 
         let Ok(worktrees) = Self::inspect_task_worktrees(flow, state, task_id, origin) else {
             eprintln!("[DEBUG] Failed to inspect task worktrees");

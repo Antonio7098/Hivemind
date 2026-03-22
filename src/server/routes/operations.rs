@@ -27,9 +27,8 @@ pub(super) fn handle_post(
             let req: MergePrepareRequest = parse_json_body(body, "server:merge:prepare")?;
             super::json_ok(
                 match (req.workflow_run_id.as_deref(), req.flow_id.as_deref()) {
-                    (Some(workflow_run_id), _) => {
-                        registry()?.workflow_merge_prepare(workflow_run_id, req.target.as_deref())?
-                    }
+                    (Some(workflow_run_id), _) => registry()?
+                        .workflow_merge_prepare(workflow_run_id, req.target.as_deref())?,
                     (None, Some(flow_id)) => {
                         merge_service()?.merge_prepare(flow_id, req.target.as_deref())?
                     }

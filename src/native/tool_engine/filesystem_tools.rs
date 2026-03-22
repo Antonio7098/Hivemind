@@ -228,10 +228,7 @@ pub(super) fn handle_write_file(
             .strip_prefix(ctx.worktree)
             .map(Path::to_path_buf)
             .map_err(|_| {
-                NativeToolEngineError::validation(format!(
-                    "invalid relative path '{}'",
-                    input.path
-                ))
+                NativeToolEngineError::validation(format!("invalid relative path '{}'", input.path))
             })?
     } else {
         normalize_relative_path(&input.path, false)?

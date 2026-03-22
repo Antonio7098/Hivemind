@@ -1,7 +1,5 @@
 use super::*;
-use crate::adapters::runtime::{
-    ExecutionInput, NativeActiveCodeWindowTrace, NativePromptMetadata,
-};
+use crate::adapters::runtime::{ExecutionInput, NativeActiveCodeWindowTrace, NativePromptMetadata};
 use crate::native::tool_engine::ToolContract;
 use crate::native::turn_items::TurnItemKind;
 use sha2::{Digest, Sha256};

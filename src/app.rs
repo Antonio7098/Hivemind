@@ -28,8 +28,8 @@ use crate::core::state::{
     AppState, AttemptCheckpoint, AttemptState, MergeState, Project, ProjectRuntimeConfig, Task,
     TaskState,
 };
-use crate::core::workflow::WorkflowRun;
 use crate::core::verification::CheckConfig;
+use crate::core::workflow::WorkflowRun;
 use crate::core::worktree::WorktreeStatus;
 use crate::storage::event_store::EventFilter;
 use std::path::PathBuf;

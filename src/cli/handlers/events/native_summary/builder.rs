@@ -16,18 +16,25 @@ pub(super) fn build_native_summary(events: &[Event]) -> NativeSummaryReport {
             EventPayload::RuntimeStarted { attempt_id, .. } => {
                 runtime_started_at.insert(attempt_id.to_string(), event.timestamp());
             }
-            EventPayload::RuntimeOutputChunk { attempt_id, content, .. } => {
+            EventPayload::RuntimeOutputChunk {
+                attempt_id,
+                content,
+                ..
+            } => {
                 if let Some(invocation_id) = attempt_to_invocation.get(&attempt_id.to_string()) {
                     let entry = invocations.entry(invocation_id.clone()).or_default();
-                    entry.runtime_output_chunk_count = entry.runtime_output_chunk_count.saturating_add(1);
+                    entry.runtime_output_chunk_count =
+                        entry.runtime_output_chunk_count.saturating_add(1);
                     for line in content.lines() {
                         let trimmed = line.trim();
                         if !trimmed.contains("[native-progress]") {
                             continue;
                         }
                         entry.startup_progress.push(StartupProgressRow {
-                            stage: native_progress_field(trimmed, "stage").unwrap_or_else(|| "unknown".to_string()),
-                            elapsed_ms: native_progress_field(trimmed, "elapsed_ms").and_then(|value| value.parse::<u64>().ok()),
+                            stage: native_progress_field(trimmed, "stage")
+                                .unwrap_or_else(|| "unknown".to_string()),
+                            elapsed_ms: native_progress_field(trimmed, "elapsed_ms")
+                                .and_then(|value| value.parse::<u64>().ok()),
                             line: trimmed.to_string(),
                         });
                     }
@@ -68,19 +75,24 @@ pub(super) fn build_native_summary(events: &[Event]) -> NativeSummaryReport {
                 let attempt_id = native_correlation.attempt_id.to_string();
                 attempt_to_invocation.insert(attempt_id.clone(), invocation_id.clone());
                 invocation_started_at.insert(invocation_id.clone(), event.timestamp());
-                entry.runtime_to_invocation_ms = runtime_started_at
-                    .get(&attempt_id)
-                    .map(|started| event.timestamp().signed_duration_since(*started).num_milliseconds());
+                entry.runtime_to_invocation_ms =
+                    runtime_started_at.get(&attempt_id).map(|started| {
+                        event
+                            .timestamp()
+                            .signed_duration_since(*started)
+                            .num_milliseconds()
+                    });
             }
-            EventPayload::ModelRequestPrepared {
-                invocation_id,
-                ..
-            } => {
+            EventPayload::ModelRequestPrepared { invocation_id, .. } => {
                 let entry = invocations.entry(invocation_id.clone()).or_default();
                 if entry.invocation_to_first_model_request_ms.is_none() {
-                    entry.invocation_to_first_model_request_ms = invocation_started_at
-                        .get(invocation_id)
-                        .map(|started| event.timestamp().signed_duration_since(*started).num_milliseconds());
+                    entry.invocation_to_first_model_request_ms =
+                        invocation_started_at.get(invocation_id).map(|started| {
+                            event
+                                .timestamp()
+                                .signed_duration_since(*started)
+                                .num_milliseconds()
+                        });
                 }
             }
             EventPayload::ToolCallFailed {
@@ -311,7 +323,9 @@ pub(super) fn build_native_summary(events: &[Event]) -> NativeSummaryReport {
             .map(|turn| turn.elapsed_since_invocation_ms)
             .max()
             .unwrap_or_default();
-        summary.startup_progress.sort_by(|left, right| left.elapsed_ms.cmp(&right.elapsed_ms));
+        summary
+            .startup_progress
+            .sort_by(|left, right| left.elapsed_ms.cmp(&right.elapsed_ms));
         summary.turns.sort_by_key(|turn| turn.turn_index);
         summary
             .history_compactions

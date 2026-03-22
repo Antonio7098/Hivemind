@@ -1,10 +1,22 @@
 mod support;
 
+use std::process::Command;
 use support::*;
+
+fn strace_functional() -> bool {
+    if cfg!(windows) {
+        return false;
+    }
+    // Test if strace can actually capture syscalls
+    let output = Command::new("strace")
+        .args(["-o", "/dev/null", "-e", "trace=file", "--", "true"])
+        .output();
+    matches!(output, Ok(o) if o.status.success())
+}
 
 #[test]
 fn cli_scope_violation_is_fatal_and_preserves_worktree() {
-    if cfg!(windows) {
+    if cfg!(windows) || !strace_functional() {
         return;
     }
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -221,7 +233,7 @@ fn cli_runtime_config_and_flow_tick() {
 
 #[test]
 fn cli_scope_violation_detects_tmp_write_outside_worktree() {
-    if cfg!(windows) {
+    if cfg!(windows) || !strace_functional() {
         return;
     }
     let tmp = tempfile::tempdir().expect("tempdir");

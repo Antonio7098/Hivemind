@@ -60,10 +60,11 @@ impl NativeToolEngine {
         match self.execute_internal(action, ctx) {
             Ok((output, policy_tags)) => {
                 let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
-                let mut response_payload = json!({"ok": true, "output": output});
-                let mut response = serde_json::to_string(&response_payload).unwrap_or_else(
-                    |error| format!("{{\"ok\":false,\"encode_error\":\"{error}\"}}"),
-                );
+                let response_payload = json!({"ok": true, "output": output});
+                let mut response =
+                    serde_json::to_string(&response_payload).unwrap_or_else(|error| {
+                        format!("{{\"ok\":false,\"encode_error\":\"{error}\"}}")
+                    });
                 let response_original_bytes = Some(response.len());
                 let mut response_truncated = false;
                 if response.len() > TOOL_TRACE_RESPONSE_MAX_CHARS {
@@ -168,7 +169,10 @@ impl NativeToolEngine {
         }
 
         if error.code == "native_tool_input_invalid"
-            && matches!(action.name.as_str(), "list_files" | "read_file" | "write_file")
+            && matches!(
+                action.name.as_str(),
+                "list_files" | "read_file" | "write_file"
+            )
         {
             let hint = if action.name == "list_files" {
                 "Use repository-relative paths instead of absolute paths."

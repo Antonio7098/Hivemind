@@ -19,7 +19,6 @@ use crate::native::{
     MockModelClient, ModelClient, ModelDirective, ModelTurnRequest, NativeRuntimeConfig,
     OpenRouterModelClient, TurnItem,
 };
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;

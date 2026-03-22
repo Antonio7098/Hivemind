@@ -102,9 +102,7 @@ fn build_opencode_adapter(mut runtime: ProjectRuntimeConfig) -> SelectedRuntimeA
     cfg.base.env = runtime.env;
     cfg.base.resume_session_id.clone_from(&resume_session_id);
     cfg.base.timeout = timeout;
-    SelectedRuntimeAdapter::OpenCode(
-        crate::adapters::opencode::OpenCodeAdapter::new(cfg),
-    )
+    SelectedRuntimeAdapter::OpenCode(crate::adapters::opencode::OpenCodeAdapter::new(cfg))
 }
 
 fn build_codex_adapter(mut runtime: ProjectRuntimeConfig) -> SelectedRuntimeAdapter {
@@ -134,9 +132,7 @@ fn build_claude_code_adapter(runtime: ProjectRuntimeConfig) -> SelectedRuntimeAd
     };
     cfg.base.env = runtime.env;
     cfg.base.timeout = timeout;
-    SelectedRuntimeAdapter::ClaudeCode(ClaudeCodeAdapter::new(
-        cfg,
-    ))
+    SelectedRuntimeAdapter::ClaudeCode(ClaudeCodeAdapter::new(cfg))
 }
 
 fn build_kilo_adapter(mut runtime: ProjectRuntimeConfig) -> SelectedRuntimeAdapter {
@@ -205,9 +201,7 @@ fn build_native_adapter(runtime: ProjectRuntimeConfig) -> SelectedRuntimeAdapter
     } else {
         scripted_from_args
     };
-    SelectedRuntimeAdapter::Native(NativeRuntimeAdapter::new(
-        cfg,
-    ))
+    SelectedRuntimeAdapter::Native(NativeRuntimeAdapter::new(cfg))
 }
 
 impl Registry {

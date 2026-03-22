@@ -1,9 +1,9 @@
 use super::observer::{compact_progress_value, NativeProgressObserver, ProgressEmitter};
 use super::*;
 use crate::native::{assemble_native_prompt, NativePromptAssembly};
-use std::fs;
 use std::cell::RefCell;
 use std::collections::BTreeSet;
+use std::fs;
 use std::rc::Rc;
 use std::time::Instant;
 
