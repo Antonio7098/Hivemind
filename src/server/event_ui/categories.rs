@@ -171,6 +171,6 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::CheckpointCommitCreated { .. }
         | EventPayload::BaselineCaptured { .. } => "filesystem",
 
-        _ => "workflow",
+        _ => "other",
     }
 }

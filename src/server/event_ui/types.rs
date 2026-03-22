@@ -161,7 +161,6 @@ pub(super) fn payload_pascal_type(payload: &EventPayload) -> &'static str {
         EventPayload::RuntimeToolCallObserved { .. } => "RuntimeToolCallObserved",
         EventPayload::RuntimeTodoSnapshotUpdated { .. } => "RuntimeTodoSnapshotUpdated",
         EventPayload::RuntimeNarrativeOutputObserved { .. } => "RuntimeNarrativeOutputObserved",
-        EventPayload::Unknown => "Unknown",
         _ => "Unknown",
     }
 }

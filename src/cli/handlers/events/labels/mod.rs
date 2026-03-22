@@ -163,7 +163,6 @@ pub(super) fn event_type_label(payload: &crate::core::events::EventPayload) -> &
         EventPayload::RuntimeToolCallObserved { .. } => "runtime_tool_call_observed",
         EventPayload::RuntimeTodoSnapshotUpdated { .. } => "runtime_todo_snapshot_updated",
         EventPayload::RuntimeNarrativeOutputObserved { .. } => "runtime_narrative_output_observed",
-        EventPayload::Unknown => "unknown",
         _ => "unknown",
     }
 }
