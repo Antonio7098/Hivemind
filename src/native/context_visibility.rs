@@ -4,10 +4,14 @@ use crate::native::runtime_hardening::{NativeRuntimeStateStore, RuntimeHardening
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 
+// ARCH_DEBT: Context visibility module contains unused code for future context management features
+#[allow(dead_code)]
 const LEASE_TOOL_NAME: &str = "retain_context";
+#[allow(dead_code)]
 const MAX_LEASE_TURNS: u32 = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(dead_code)]
 pub(crate) enum ContextRepresentationLevel {
     Hidden,
     HandleOnly,
@@ -16,6 +20,7 @@ pub(crate) enum ContextRepresentationLevel {
     ExpandedExcerpt,
 }
 
+#[allow(dead_code)]
 impl ContextRepresentationLevel {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
@@ -33,6 +38,7 @@ impl ContextRepresentationLevel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[allow(dead_code)]
 pub(crate) struct GraphWorkingSetHints {
     pub(crate) current_focus_paths: HashSet<String>,
     pub(crate) pinned_paths: HashSet<String>,
@@ -43,6 +49,7 @@ pub(crate) struct GraphWorkingSetHints {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) struct ContextWindowSignals {
     pub(crate) path: String,
     pub(crate) status: String,
@@ -52,6 +59,7 @@ pub(crate) struct ContextWindowSignals {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) struct ContextVisibilityDecision {
     pub(crate) relevance_score: u32,
     pub(crate) desired_level: ContextRepresentationLevel,
@@ -63,6 +71,7 @@ pub(crate) struct ContextVisibilityDecision {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[allow(dead_code)]
 struct LeaseRequest {
     path: String,
     turns: u32,
@@ -70,6 +79,7 @@ struct LeaseRequest {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct SessionNodeRef {
     node_id: String,
     #[serde(default)]
@@ -77,11 +87,13 @@ struct SessionNodeRef {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 struct SessionTraversal {
     #[serde(default)]
     paths: Vec<String>,
 }
 
+#[allow(dead_code)]
 pub(crate) fn load_graph_working_set_hints(
     runtime_env: &HashMap<String, String>,
 ) -> GraphWorkingSetHints {
@@ -117,6 +129,7 @@ pub(crate) fn load_graph_working_set_hints(
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn score_context_windows(
     task_text: &str,
     current_turn_index: u32,
@@ -148,6 +161,7 @@ pub(crate) fn score_context_windows(
         .collect()
 }
 
+#[allow(dead_code)]
 fn score_single_window(
     task_text: &str,
     current_turn_index: u32,
@@ -268,6 +282,7 @@ fn score_single_window(
     }
 }
 
+#[allow(dead_code)]
 fn desired_level_for_score(score: u32) -> ContextRepresentationLevel {
     match score {
         75..=u32::MAX => ContextRepresentationLevel::ExpandedExcerpt,
@@ -278,6 +293,7 @@ fn desired_level_for_score(score: u32) -> ContextRepresentationLevel {
     }
 }
 
+#[allow(dead_code)]
 fn downgrade_horizon(
     score: u32,
     current: ContextRepresentationLevel,
@@ -314,6 +330,7 @@ fn downgrade_horizon(
     Some(lease_remaining_turns.map_or(base, |lease_turns| base.max(lease_turns)))
 }
 
+#[allow(dead_code)]
 fn granted_leases(history: &[TurnItem], current_turn_index: u32) -> HashMap<String, LeaseRequest> {
     let requests = history
         .iter()
@@ -353,6 +370,7 @@ fn granted_leases(history: &[TurnItem], current_turn_index: u32) -> HashMap<Stri
         .collect()
 }
 
+#[allow(dead_code)]
 fn parse_lease_request(request: &str) -> LeaseRequest {
     let value = serde_json::from_str::<serde_json::Value>(request).unwrap_or_default();
     let input = value.get("input").unwrap_or(&value);
@@ -373,6 +391,7 @@ fn parse_lease_request(request: &str) -> LeaseRequest {
     LeaseRequest { path, turns, floor }
 }
 
+#[allow(dead_code)]
 fn parse_floor(value: &str) -> Option<ContextRepresentationLevel> {
     match value {
         "handle_only" => Some(ContextRepresentationLevel::HandleOnly),
@@ -383,6 +402,7 @@ fn parse_floor(value: &str) -> Option<ContextRepresentationLevel> {
     }
 }
 
+#[allow(dead_code)]
 fn recent_action_paths(history: &[TurnItem], current_turn_index: u32) -> HashSet<String> {
     history
         .iter()
@@ -398,6 +418,7 @@ fn recent_action_paths(history: &[TurnItem], current_turn_index: u32) -> HashSet
         .collect()
 }
 
+#[allow(dead_code)]
 fn assistant_action_path(action: &str) -> Option<String> {
     let mut parts = action.splitn(3, ':');
     if parts.next()? != "tool" {
@@ -411,10 +432,12 @@ fn assistant_action_path(action: &str) -> Option<String> {
         .map(ToString::to_string)
 }
 
+#[allow(dead_code)]
 fn same_directory(left: &str, right: &str) -> bool {
     left.rsplit_once('/').map(|(dir, _)| dir) == right.rsplit_once('/').map(|(dir, _)| dir)
 }
 
+#[allow(dead_code)]
 fn parse_graph_working_set_hints(
     current_focus_json: &str,
     pinned_nodes_json: &str,

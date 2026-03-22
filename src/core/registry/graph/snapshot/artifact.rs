@@ -320,6 +320,8 @@ impl Registry {
             .map_err(|error| HivemindError::system(error.code, error.message, origin))
     }
 
+    // ARCH_DEBT: Method for attempt-level graph snapshot dirty path tracking - not yet integrated
+    #[allow(dead_code)]
     pub(crate) fn mark_attempt_graph_snapshot_dirty_paths(
         &self,
         project_id: Uuid,
