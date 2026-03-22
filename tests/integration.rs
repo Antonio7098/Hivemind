@@ -872,6 +872,7 @@ fn cli_sprint35_governance_artifacts_and_template_instantiation() {
     );
 }
 
+// ARCH_DEBT: Complex integration test for constitution lifecycle; should be split into smaller focused tests
 #[test]
 #[allow(clippy::too_many_lines)]
 fn cli_sprint36_constitution_lifecycle_and_auditability() {
@@ -1136,6 +1137,7 @@ rules:
     assert!(events_out.contains("constitution_updated"), "{events_out}");
 }
 
+// ARCH_DEBT: Complex integration test for constitution violation checking; should be split into smaller tests
 #[test]
 #[allow(clippy::too_many_lines)]
 fn cli_constitution_check_reports_blocking_violations() {
@@ -1340,6 +1342,7 @@ rules:
     }));
 }
 
+// ARCH_DEBT: Complex integration test for governance diagnostics; should be split into smaller tests
 #[test]
 #[allow(clippy::too_many_lines)]
 fn cli_project_governance_diagnose_reports_invalid_refs_and_stale_snapshot() {
@@ -1575,6 +1578,7 @@ fn cli_graph_query_filter_returns_bounded_results() {
     assert!(nodes.len() <= 2, "{out}");
 }
 
+// ARCH_DEBT: Complex integration test for concurrent governance operations; should be split into smaller tests
 #[test]
 #[allow(clippy::too_many_lines)]
 fn cli_governance_artifact_ops_stable_under_concurrent_flow_activity() {
@@ -1827,6 +1831,7 @@ fn run_hivemind_with_env(
     )
 }
 
+// ARCH_DEBT: Complex integration test for verify run outcomes; should be split into smaller tests
 #[test]
 #[allow(clippy::too_many_lines)]
 fn cli_verify_run_and_results_capture_check_outcomes() {

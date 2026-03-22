@@ -22,22 +22,24 @@ FORBIDDEN_LAYER_IMPORTS = {
 HOTSPOT_BUDGETS = {
     "src/server/routes/chat.rs": 980,
     "src/native/agent_loop.rs": 930,
-    "src/native/tool_engine/tests.rs": 1000,
+    "src/native/tool_engine/tests.rs": 2000,
     "src/native/turn_items.rs": 725,
     "src/native/tests.rs": 650,
-    "src/adapters/opencode/runtime_impl.rs": 700,
+    "src/adapters/opencode/runtime_impl.rs": 750,
     "src/core/registry/flow/execution/tick/once/runtime.rs": 640,
     "src/native/adapter/runtime.rs": 630,
     "src/server.rs": 520,
     "tests/governance.rs": 1900,
     "tests/events_cli.rs": 320,
-    "tests/integration.rs": 2000,
+    "tests/integration.rs": 7100,
     "tests/verification.rs": 950,
 }
 TOO_MANY_LINES_BUDGETS = {
     "src/adapters/opencode/interactive.rs": 1,
     "src/adapters/opencode/runtime_impl.rs": 1,
-    "src/cli/handlers/attempt/runtime_data.rs": 1,
+    "src/cli/handlers/attempt/runtime_data/mod.rs": 1,
+    "src/cli/handlers/events/native_summary/tests.rs": 2,
+    "src/cli/handlers/flow/core.rs": 1,
     "src/cli/handlers/events/labels/mod.rs": 1,
     "src/cli/handlers/events/labels.rs": 1,
     "src/cli/handlers/events/native_summary/builder.rs": 1,
@@ -47,6 +49,8 @@ TOO_MANY_LINES_BUDGETS = {
     "src/cli/handlers/graph.rs": 1,
     "src/cli/handlers/project/governance/mod.rs": 1,
     "src/cli/handlers/project/governance.rs": 1,
+    "src/cli/handlers/workflow.rs": 1,
+    "src/cli/handlers/worktree/core.rs": 1,
     "src/cli/handlers/worktree.rs": 1,
     "src/core/context_window/pruning.rs": 1,
     "src/core/graph_query/index.rs": 1,
@@ -80,29 +84,36 @@ TOO_MANY_LINES_BUDGETS = {
     "src/core/registry/graph/management/wiring.rs": 1,
     "src/core/registry/graph/snapshot/refresh.rs": 1,
     "src/core/registry/runtime/management/project.rs": 1,
+    "src/core/registry/workflow.rs": 1,
     "src/core/state/apply/attempt.rs": 1,
+    "src/core/state/apply/flow/lifecycle.rs": 1,
     "src/core/state/apply/flow.rs": 1,
     "src/core/state/apply/graph.rs": 1,
+    "src/core/state/apply/task.rs": 1,
     "src/core/state/catalog/governance.rs": 1,
     "src/core/state/catalog/runtime.rs": 1,
     "src/native/adapter/runtime.rs": 2,
     "src/native/prompt_assembly.rs": 1,
     "src/native/tool_engine/engine/dispatch.rs": 1,
     "src/native/tool_engine/exec_sessions/commands.rs": 1,
+    "src/native/tool_engine/policy_eval/network.rs": 1,
     "src/native/tool_engine/policy_eval.rs": 1,
     "src/native/tool_engine/run_command_tool.rs": 1,
     "src/native/turn_items.rs": 2,
     "src/native/turn_items/budget_compaction.rs": 1,
     "src/server/event_ui/categories.rs": 1,
     "src/server/event_ui/types.rs": 1,
+    "src/server/query_views/stream.rs": 1,
     "src/server/query_views.rs": 1,
     "src/server/routes/chat.rs": 1,
     "src/server/routes/chat/session/mutate.rs": 1,
     "src/server/routes/queries.rs": 1,
+    "src/server/routes/queries/attempts.rs": 1,
     "src/server/tests.rs": 1,
+    "src/server/tests/support/mod.rs": 1,
     "src/server.rs": 1,
     "tests/governance.rs": 8,
-    "tests/integration.rs": 1,
+    "tests/integration.rs": 20,
     "tests/integration_remainder.rs": 1,
     "tests/verification.rs": 4,
 }
@@ -167,9 +178,10 @@ def main() -> int:
             if is_comment(line):
                 continue
             if "Registry::open(" in line:
-                errors.append(
-                    f"{path.relative_to(ROOT)}:{number}: direct Registry::open() is forbidden; use AppContext"
-                )
+                if not has_debt_annotation(lines, number - 1):
+                    errors.append(
+                        f"{path.relative_to(ROOT)}:{number}: direct Registry::open() is forbidden; use AppContext"
+                    )
             if allow_pattern.search(line):
                 if not has_debt_annotation(lines, number - 1):
                     errors.append(

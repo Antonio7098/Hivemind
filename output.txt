@@ -1,0 +1,22 @@
+Architecture checks failed:
+- src/cli/handlers/workflow.rs:23: direct Registry::open() is forbidden; use AppContext
+- tests/integration.rs:445: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:877: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:1142: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:1347: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:1583: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:1836: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:1957: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:2104: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:2418: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:3349: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:3694: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:4692: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:4857: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:4999: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:5112: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:5294: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:5484: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:5796: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:6023: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
+- tests/integration.rs:6160: add preceding '// ARCH_DEBT: reason' comment to treat this allowance as explicit architecture debt
