@@ -18,9 +18,8 @@ use crate::core::workflow::{
 use std::collections::BTreeMap;
 use std::fs;
 
-// ARCH_DEBT: CLI handlers need AppContext injection; Registry::open() call is properly using AppContext
 fn get_registry(app_ctx: &AppContext, format: OutputFormat) -> Option<Registry> {
-    match Registry::open(app_ctx) {
+    match app_ctx.open_registry() {
         Ok(r) => Some(r),
         Err(e) => {
             output_error(&e, format);

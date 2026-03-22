@@ -12,7 +12,7 @@ use crate::core::flow::RunMode;
 use crate::core::registry::MergeExecuteMode;
 use uuid::Uuid;
 
-pub(crate) fn app_context() -> AppContext {
+pub fn app_context() -> AppContext {
     AppContext::default()
 }
 
