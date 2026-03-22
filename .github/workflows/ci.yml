@@ -74,7 +74,7 @@ jobs:
           cargo test native::tests
 
       - name: Run tests
-        run: cargo nextest run --all-features --test-threads=2
+        run: cargo nextest run --all-features
 
   lint:
     runs-on: ubuntu-latest
