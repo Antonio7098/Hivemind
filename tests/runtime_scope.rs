@@ -21,7 +21,7 @@ fn strace_functional() -> bool {
 // 3. Use a different test approach that doesn't involve checkpoints
 // See: https://github.com/Antonio7098/Hivemind/issues/XXX
 #[test]
-#[ignore]
+#[ignore = "scope violation detection blocked by checkpoints - needs redesign"]
 fn cli_scope_violation_is_fatal_and_preserves_worktree() {
     if cfg!(windows) || !strace_functional() {
         return;
@@ -224,7 +224,7 @@ fn cli_runtime_config_and_flow_tick() {
 // TODO: Scope violation detection tests need redesign - checkpoints block execution
 // before violations can be detected. See ignored test above for details.
 #[test]
-#[ignore]
+#[ignore = "scope violation detection blocked by checkpoints - needs redesign"]
 fn cli_scope_violation_detects_tmp_write_outside_worktree() {
     if cfg!(windows) || !strace_functional() {
         return;
