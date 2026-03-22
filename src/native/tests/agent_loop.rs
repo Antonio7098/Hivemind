@@ -182,6 +182,10 @@ fn agent_loop_compacts_history_to_avoid_token_budget_overflow() {
                     request: action.to_string(),
                     duration_ms: Some(1),
                     response: Some(large_tool_response.clone()),
+                    prompt_response: None,
+                    response_original_bytes: None,
+                    response_stored_bytes: None,
+                    response_truncated: false,
                     failure: None,
                     policy_tags: Vec::new(),
                 }]

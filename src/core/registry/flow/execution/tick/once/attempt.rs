@@ -28,13 +28,8 @@ impl Registry {
         origin: &'static str,
     ) -> Result<TickAttemptLaunch> {
         let attempt_id = self.start_task_execution(&task_id.to_string())?;
-        let attempt_corr = CorrelationIds::for_graph_flow_task_attempt(
-            flow.project_id,
-            flow.graph_id,
-            flow.id,
-            task_id,
-            attempt_id,
-        );
+        let attempt_corr =
+            Self::correlation_for_flow_task_attempt_event(state, flow, task_id, attempt_id);
 
         let task = graph.tasks.get(&task_id).ok_or_else(|| {
             HivemindError::system("task_not_found", "Task not found in graph", origin)
@@ -96,6 +91,13 @@ impl Registry {
             (None, Vec::new())
         };
 
+        let workflow_attempt_context =
+            self.workflow_attempt_context_for_task(state, flow, task_id, origin)?;
+        let (workflow_manifest, workflow_section) = workflow_attempt_context
+            .map_or((None, None), |(manifest, section)| {
+                (Some(manifest), Some(section))
+            });
+
         let context_build = self.assemble_attempt_context(
             state,
             flow,
@@ -103,6 +105,8 @@ impl Registry {
             attempt_id,
             &runtime.adapter_name,
             &retry_prior_attempt_ids,
+            workflow_manifest,
+            workflow_section,
             origin,
         )?;
 

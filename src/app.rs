@@ -28,6 +28,7 @@ use crate::core::state::{
     AppState, AttemptCheckpoint, AttemptState, MergeState, Project, ProjectRuntimeConfig, Task,
     TaskState,
 };
+use crate::core::workflow::WorkflowRun;
 use crate::core::verification::CheckConfig;
 use crate::core::worktree::WorktreeStatus;
 use crate::storage::event_store::EventFilter;
@@ -1109,6 +1110,10 @@ impl EventService {
 
     pub fn get_flow(&self, flow_id: &str) -> Result<TaskFlow> {
         self.registry.get_flow(flow_id)
+    }
+
+    pub fn get_workflow_run(&self, workflow_run_id: &str) -> Result<WorkflowRun> {
+        self.registry.get_workflow_run(workflow_run_id)
     }
 
     pub fn events_verify(&self) -> Result<EventsVerifyResult> {

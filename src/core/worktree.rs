@@ -45,6 +45,10 @@ pub struct WorktreeInfo {
     pub id: Uuid,
     pub task_id: Uuid,
     pub flow_id: Uuid,
+    pub workflow_id: Option<Uuid>,
+    pub workflow_run_id: Option<Uuid>,
+    pub step_id: Option<Uuid>,
+    pub step_run_id: Option<Uuid>,
     pub path: PathBuf,
     pub branch: String,
     pub base_commit: String,
@@ -54,6 +58,14 @@ pub struct WorktreeInfo {
 pub struct WorktreeStatus {
     pub flow_id: Uuid,
     pub task_id: Uuid,
+    #[serde(default)]
+    pub workflow_id: Option<Uuid>,
+    #[serde(default)]
+    pub workflow_run_id: Option<Uuid>,
+    #[serde(default)]
+    pub step_id: Option<Uuid>,
+    #[serde(default)]
+    pub step_run_id: Option<Uuid>,
     pub path: PathBuf,
     pub is_worktree: bool,
     pub head_commit: Option<String>,

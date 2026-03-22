@@ -71,6 +71,24 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::WorktreeCleanupPerformed { .. }
         | EventPayload::WorktreeTurnRefRestored { .. } => "flow",
 
+        EventPayload::WorkflowDefinitionCreated { .. }
+        | EventPayload::WorkflowDefinitionUpdated { .. }
+        | EventPayload::WorkflowConditionEvaluated { .. }
+        | EventPayload::WorkflowWaitActivated { .. }
+        | EventPayload::WorkflowWaitCompleted { .. }
+        | EventPayload::WorkflowSignalReceived { .. }
+        | EventPayload::WorkflowRunCreated { .. }
+        | EventPayload::WorkflowRunStarted { .. }
+        | EventPayload::WorkflowRunPaused { .. }
+        | EventPayload::WorkflowRunResumed { .. }
+        | EventPayload::WorkflowRunCompleted { .. }
+        | EventPayload::WorkflowRunAborted { .. }
+        | EventPayload::WorkflowContextInitialized { .. }
+        | EventPayload::WorkflowContextSnapshotCaptured { .. }
+        | EventPayload::WorkflowStepInputsResolved { .. }
+        | EventPayload::WorkflowOutputAppended { .. }
+        | EventPayload::WorkflowStepStateChanged { .. } => "workflow",
+
         EventPayload::TaskReady { .. }
         | EventPayload::TaskBlocked { .. }
         | EventPayload::ScopeConflictDetected { .. }
@@ -152,5 +170,7 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::DiffComputed { .. }
         | EventPayload::CheckpointCommitCreated { .. }
         | EventPayload::BaselineCaptured { .. } => "filesystem",
+
+        _ => "workflow",
     }
 }

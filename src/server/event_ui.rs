@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::{EventService, StateService};
+use crate::core::workflow::{WorkflowDefinition, WorkflowRun};
 mod types;
 use types::*;
 mod categories;
@@ -40,6 +41,14 @@ pub(super) fn build_ui_state(
     flows.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
     flows.reverse();
 
+    let mut workflows: Vec<WorkflowDefinition> = state.workflows.into_values().collect();
+    workflows.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
+    workflows.reverse();
+
+    let mut workflow_runs: Vec<WorkflowRun> = state.workflow_runs.into_values().collect();
+    workflow_runs.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
+    workflow_runs.reverse();
+
     let mut merge_states: Vec<MergeState> = state.merge_states.into_values().collect();
     merge_states.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
     merge_states.reverse();
@@ -54,6 +63,8 @@ pub(super) fn build_ui_state(
         tasks,
         graphs,
         flows,
+        workflows,
+        workflow_runs,
         merge_states,
         events: ui_events,
     })

@@ -80,7 +80,7 @@ impl Registry {
                 reason: reason.to_string(),
                 user,
             },
-            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, id),
+            Self::correlation_for_flow_task_event(&state, &flow, id),
         );
 
         self.store
@@ -106,26 +106,17 @@ impl Registry {
                     }
                 }
             }
+        }
 
-            let all_success = updated
-                .task_executions
-                .values()
-                .all(|e| e.state == TaskExecState::Success);
-            if all_success {
-                let event = Event::new(
-                    EventPayload::TaskFlowCompleted {
-                        flow_id: updated.id,
-                    },
-                    CorrelationIds::for_graph_flow(
-                        updated.project_id,
-                        updated.graph_id,
-                        updated.id,
-                    ),
-                );
-                let _ = self.store.append(event);
-            } else if updated.run_mode == RunMode::Auto {
-                return self.tick_flow(&updated.id.to_string(), false, None);
-            }
+        let updated_flow_id = updated.id.to_string();
+        if self
+            .maybe_complete_finished_flow(&updated, &updated_flow_id, origin)?
+            .is_some()
+        {
+            return self.get_flow(&updated_flow_id);
+        }
+        if updated.run_mode == RunMode::Auto {
+            return self.tick_flow(&updated.id.to_string(), false, None);
         }
 
         self.get_flow(&flow.id.to_string())

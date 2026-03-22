@@ -23,6 +23,7 @@ impl Registry {
         system_prompt_section: String,
         skill_sections: &[String],
         document_sections: &[String],
+        workflow_section: Option<String>,
         graph_section: String,
         origin: &'static str,
     ) -> Result<AttemptContextWindowBuildResult> {
@@ -142,6 +143,19 @@ impl Registry {
                 "expand_documents",
                 window_actor.clone(),
                 true,
+            ));
+        }
+        if let Some(workflow_section) = workflow_section {
+            context_window_ops.push(window.add_entry(
+                ContextEntryCandidate {
+                    entry_id: "workflow-step-primary".to_string(),
+                    section: "workflow_step".to_string(),
+                    content: workflow_section,
+                    source: "workflow_runtime".to_string(),
+                    depth: 0,
+                },
+                "seed_workflow_step",
+                window_actor.clone(),
             ));
         }
         context_window_ops.push(window.add_entry(

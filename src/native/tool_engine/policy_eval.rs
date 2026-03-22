@@ -40,7 +40,19 @@ pub(super) fn evaluate_tool_policies_impl(
         }
         NativeSandboxMode::WorkspaceWrite if action.name == "write_file" => {
             let write = decode_input::<WriteFileInput>(&action.input)?;
-            let rel = normalize_relative_path(&write.path, false)?;
+            let rel = if Path::new(&write.path).is_absolute() {
+                Path::new(&write.path)
+                    .strip_prefix(ctx.worktree)
+                    .map(Path::to_path_buf)
+                    .map_err(|_| {
+                        NativeToolEngineError::validation(format!(
+                            "invalid relative path '{}'",
+                            write.path
+                        ))
+                    })?
+            } else {
+                normalize_relative_path(&write.path, false)?
+            };
             let rel_display = relative_display(&rel);
             let roots = if ctx.sandbox_policy.writable_roots.is_empty() {
                 vec![".".to_string()]

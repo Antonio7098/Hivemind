@@ -70,6 +70,13 @@ impl AgentLoopObserver for NativeProgressObserver<'_> {
     ) -> Result<(), NativeRuntimeError> {
         let assembly = request.prompt_assembly.as_ref();
         self.emit_line(format!(
+            "[native-progress] stage=turn_request_snapshot turn={} state={} prompt_bytes={} context_bytes={}",
+            request.turn_index,
+            request.state.as_str(),
+            request.prompt.len(),
+            request.context.as_ref().map_or(0, String::len),
+        ))?;
+        self.emit_line(format!(
             "[native-progress] stage=turn_request_prepared turn={} state={} prompt_bytes={} context_bytes={} prompt_headroom={} available_budget={} rendered_prompt_bytes={} runtime_context_bytes={} visible_items={} selected_history_count={} selected_history_chars={} compacted_summary_count={} compacted_summary_chars={} assembly_latency_ms={}",
             request.turn_index,
             request.state.as_str(),

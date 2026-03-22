@@ -1,6 +1,10 @@
 use super::observer::{compact_progress_value, NativeProgressObserver, ProgressEmitter};
 use super::*;
+use crate::native::{assemble_native_prompt, NativePromptAssembly};
+use std::fs;
+use std::cell::RefCell;
 use std::collections::BTreeSet;
+use std::rc::Rc;
 use std::time::Instant;
 
 impl NativeRuntimeAdapter {
@@ -61,6 +65,14 @@ impl NativeRuntimeAdapter {
     ) -> Result<Box<dyn ModelClient>, RuntimeError> {
         if config.provider_name.eq_ignore_ascii_case("openrouter") {
             let client = OpenRouterModelClient::from_env(config.model_name.clone(), runtime_env)
+                .map_err(|error| error.to_runtime_error())?;
+            Ok(Box::new(client))
+        } else if config.provider_name.eq_ignore_ascii_case("minimax") {
+            let client = MiniMaxModelClient::from_env(config.model_name.clone(), runtime_env)
+                .map_err(|error| error.to_runtime_error())?;
+            Ok(Box::new(client))
+        } else if config.provider_name.eq_ignore_ascii_case("groq") {
+            let client = GroqModelClient::from_env(config.model_name.clone(), runtime_env)
                 .map_err(|error| error.to_runtime_error())?;
             Ok(Box::new(client))
         } else {
@@ -136,6 +148,34 @@ impl NativeRuntimeAdapter {
         items
     }
 
+    fn write_request_snapshot(
+        runtime_env: &HashMap<String, String>,
+        invocation_id: &str,
+        turn_index: u32,
+        prompt: &str,
+        assembly: &NativePromptAssembly,
+    ) {
+        let Some(state_dir) = runtime_env.get("HIVEMIND_NATIVE_STATE_DIR") else {
+            return;
+        };
+        let invocation_dir = std::path::Path::new(state_dir)
+            .join("request-snapshots")
+            .join(invocation_id);
+        if fs::create_dir_all(&invocation_dir).is_err() {
+            return;
+        }
+        let snapshot_path = invocation_dir.join(format!("turn-{turn_index:04}.json"));
+        let payload = serde_json::json!({
+            "turn_index": turn_index,
+            "prompt": prompt,
+            "prompt_assembly": assembly,
+        });
+        let _ = fs::write(
+            snapshot_path,
+            serde_json::to_vec_pretty(&payload).unwrap_or_else(|_| b"{}".to_vec()),
+        );
+    }
+
     fn allowed_capabilities(contracts: &[crate::native::tool_engine::ToolContract]) -> Vec<String> {
         let mut capabilities = BTreeSet::new();
         for contract in contracts {
@@ -202,7 +242,17 @@ impl NativeRuntimeAdapter {
             .map(|contract| contract.name.clone())
             .collect::<Vec<_>>();
         let allowed_capabilities = Self::allowed_capabilities(&allowed_contracts);
-        let mut observer = NativeProgressObserver::new(emit);
+        let progress_output = Rc::new(RefCell::new(String::new()));
+        let progress_output_for_emit = Rc::clone(&progress_output);
+        let mut emit = emit;
+        let capture_emit: ProgressEmitter<'_> = Box::new(move |content| {
+            progress_output_for_emit.borrow_mut().push_str(&content);
+            if let Some(emit) = emit.as_mut() {
+                emit(content)?;
+            }
+            Ok(())
+        });
+        let mut observer = NativeProgressObserver::new(Some(capture_emit));
 
         let timeout_budget_ms =
             u64::try_from(self.config.native.timeout_budget.as_millis()).unwrap_or(u64::MAX);
@@ -284,6 +334,13 @@ impl NativeRuntimeAdapter {
                     u64::try_from(assembly_started.elapsed().as_millis()).unwrap_or(u64::MAX);
                 let mut assembly = rendered.assembly;
                 assembly.assembly_duration_ms = assembly_duration_ms;
+                Self::write_request_snapshot(
+                    &runtime_env,
+                    &invocation_id,
+                    turn_index,
+                    &rendered.prompt,
+                    &assembly,
+                );
                 Ok(ModelTurnRequest {
                     turn_index,
                     state,
@@ -328,7 +385,11 @@ impl NativeRuntimeAdapter {
                     allowed_tools,
                     allowed_capabilities,
                 );
-                let stdout = Self::render_stdout(&result);
+                let stdout = format!(
+                    "{}{}",
+                    progress_output.borrow(),
+                    Self::render_stdout(&result)
+                );
                 if let Some(failure) = trace.failure.clone() {
                     ExecutionReport::failure_with_output(
                         1,
@@ -367,11 +428,16 @@ impl NativeRuntimeAdapter {
                     allowed_tools,
                     allowed_capabilities,
                 );
+                let stdout = format!(
+                    "{}{}",
+                    progress_output.borrow(),
+                    Self::render_stdout(&partial)
+                );
                 ExecutionReport::failure_with_output(
                     1,
                     duration,
                     err.to_runtime_error(),
-                    Self::render_stdout(&partial),
+                    stdout,
                     err.message(),
                 )
                 .with_native_invocation(trace)

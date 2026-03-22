@@ -30,7 +30,13 @@ mod tests;
 
 use self::readiness::NativeReadinessGate;
 use self::secrets::NativeSecretsManager;
-use self::storage::{NativeRuntimeStateStore, RuntimeLogIngestor, RuntimeLogRecord};
+#[allow(unused_imports)]
+pub(crate) use self::storage::{
+    GraphCodeArtifactRecord, GraphCodeArtifactUpsert, GraphCodeSessionUpsert,
+    NativeRuntimeStateStore,
+};
+use self::storage::{RuntimeLogIngestor, RuntimeLogRecord};
+pub(crate) use self::support::cleanup_native_blob_storage;
 
 use crate::adapters::runtime::{
     NativeReadinessTransition, NativeRuntimeStateTelemetry, RuntimeError,
@@ -51,15 +57,17 @@ const DEFAULT_BUSY_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_LOG_BATCH_SIZE: usize = 32;
 const DEFAULT_LOG_FLUSH_INTERVAL_MS: u64 = 150;
 const DEFAULT_LOG_RETENTION_DAYS: u64 = 14;
+const DEFAULT_BLOB_RETENTION_DAYS: u64 = 30;
 const DEFAULT_LEASE_TTL_MS: u64 = 30_000;
 const DEFAULT_RETENTION_SWEEP_INTERVAL_SECS: u64 = 30;
 
-const STATE_DB_PATH_ENV: &str = "HIVEMIND_NATIVE_STATE_DB_PATH";
-const STATE_DIR_ENV: &str = "HIVEMIND_NATIVE_STATE_DIR";
+pub(crate) const STATE_DB_PATH_ENV: &str = "HIVEMIND_NATIVE_STATE_DB_PATH";
+pub(crate) const STATE_DIR_ENV: &str = "HIVEMIND_NATIVE_STATE_DIR";
 const BUSY_TIMEOUT_ENV: &str = "HIVEMIND_NATIVE_STATE_BUSY_TIMEOUT_MS";
 const LOG_BATCH_SIZE_ENV: &str = "HIVEMIND_NATIVE_LOG_BATCH_SIZE";
 const LOG_FLUSH_INTERVAL_ENV: &str = "HIVEMIND_NATIVE_LOG_FLUSH_INTERVAL_MS";
 const LOG_RETENTION_DAYS_ENV: &str = "HIVEMIND_NATIVE_LOG_RETENTION_DAYS";
+const BLOB_RETENTION_DAYS_ENV: &str = "HIVEMIND_NATIVE_BLOB_RETENTION_DAYS";
 const LEASE_TTL_ENV: &str = "HIVEMIND_NATIVE_LEASE_TTL_MS";
 const RETENTION_SWEEP_INTERVAL_ENV: &str = "HIVEMIND_NATIVE_RETENTION_SWEEP_INTERVAL_SECS";
 
@@ -96,10 +104,12 @@ type Result<T> = std::result::Result<T, RuntimeHardeningError>;
 #[derive(Debug, Clone)]
 pub struct RuntimeHardeningConfig {
     pub state_db_path: PathBuf,
+    pub blob_storage_dir: PathBuf,
     pub busy_timeout_ms: u64,
     pub log_batch_size: usize,
     pub log_flush_interval_ms: u64,
     pub log_retention_days: u64,
+    pub blob_retention_days: u64,
     pub lease_ttl_ms: u64,
     pub retention_sweep_interval_secs: u64,
     pub secrets_store_path: PathBuf,

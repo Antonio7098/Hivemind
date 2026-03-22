@@ -7,6 +7,7 @@ impl Registry {
         graph: &TaskGraph,
         origin: &'static str,
     ) -> Result<()> {
+        let state = self.state()?;
         let mut newly_ready = Vec::new();
         let mut newly_blocked: Vec<(Uuid, String)> = Vec::new();
         for task_id in graph.tasks.keys() {
@@ -72,12 +73,7 @@ impl Registry {
                     task_id,
                     reason: Some(reason),
                 },
-                CorrelationIds::for_graph_flow_task(
-                    flow.project_id,
-                    flow.graph_id,
-                    flow.id,
-                    task_id,
-                ),
+                Self::correlation_for_flow_task_event(&state, flow, task_id),
             );
             self.store
                 .append(event)
@@ -90,12 +86,7 @@ impl Registry {
                     flow_id: flow.id,
                     task_id,
                 },
-                CorrelationIds::for_graph_flow_task(
-                    flow.project_id,
-                    flow.graph_id,
-                    flow.id,
-                    task_id,
-                ),
+                Self::correlation_for_flow_task_event(&state, flow, task_id),
             );
             self.store
                 .append(event)
@@ -128,23 +119,20 @@ impl Registry {
         })
     }
 
-    pub(super) fn maybe_complete_finished_flow(
+    pub(crate) fn maybe_complete_finished_flow(
         &self,
         flow: &TaskFlow,
         flow_id: &str,
         origin: &'static str,
     ) -> Result<Option<TaskFlow>> {
-        let all_success = flow
-            .task_executions
-            .values()
-            .all(|e| e.state == TaskExecState::Success);
-        if !all_success {
+        let all_terminal = flow.task_executions.values().all(|e| e.state.is_terminal());
+        if !all_terminal {
             return Ok(None);
         }
 
         let event = Event::new(
             EventPayload::TaskFlowCompleted { flow_id: flow.id },
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            Self::correlation_for_flow_event(&self.state()?, flow),
         );
         self.store
             .append(event)

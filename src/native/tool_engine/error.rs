@@ -28,7 +28,7 @@ impl NativeToolEngineError {
     }
 
     pub(crate) fn validation(error: impl Into<String>) -> Self {
-        Self::new("native_tool_input_invalid", error, false)
+        Self::new("native_tool_input_invalid", error, true)
     }
 
     pub(crate) fn output_validation(tool_name: &str, error: impl Into<String>) -> Self {
@@ -47,11 +47,15 @@ impl NativeToolEngineError {
     }
 
     pub(crate) fn policy_violation(error: impl Into<String>) -> Self {
-        Self::new("native_policy_violation", error, false)
+        Self::new("native_policy_violation", error, true)
     }
 
     pub(crate) fn execution(error: impl Into<String>) -> Self {
         Self::new("native_tool_execution_failed", error, false)
+    }
+
+    pub(crate) fn execution_recoverable(error: impl Into<String>) -> Self {
+        Self::new("native_tool_execution_failed", error, true)
     }
 
     pub(crate) fn timeout(tool_name: &str, timeout_ms: u64) -> Self {

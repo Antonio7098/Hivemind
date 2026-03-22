@@ -6,6 +6,7 @@ use crate::core::worktree::{WorktreeConfig, WorktreeManager};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::io::BufRead;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CliCommandFlavor {
@@ -173,6 +174,7 @@ fn json_nested_str<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
 fn read_stream_to_string(
     stream: impl Read,
     mut tracker: Option<LiveJsonRuntimeTracker>,
+    progress: Option<Arc<Mutex<Instant>>>,
 ) -> (String, Option<LiveJsonRuntimeTracker>) {
     let mut reader = BufReader::new(stream);
     let mut out = String::new();
@@ -182,6 +184,11 @@ fn read_stream_to_string(
         match reader.read_line(&mut line) {
             Ok(0) | Err(_) => break,
             Ok(_) => {
+                if let Some(progress) = progress.as_ref() {
+                    if let Ok(mut last_progress) = progress.lock() {
+                        *last_progress = Instant::now();
+                    }
+                }
                 if let Some(tracker) = tracker.as_mut() {
                     tracker.observe_stdout_line(&line);
                 }
@@ -265,13 +272,13 @@ impl RuntimeAdapter for OpenCodeAdapter {
         let binary = &self.config.base.binary_path;
 
         // Try to run with --version or --help
-        let result = status_with_retry(binary, "--version");
+        let result = status_with_retry(binary, "--version", self.config.base.timeout);
 
         match result {
             Ok(status) if status.success() => Ok(()),
             Ok(_) => {
                 // Try --help as fallback
-                let help_result = status_with_retry(binary, "--help");
+                let help_result = status_with_retry(binary, "--help", self.config.base.timeout);
 
                 match help_result {
                     Ok(status) if status.success() => Ok(()),
@@ -282,11 +289,18 @@ impl RuntimeAdapter for OpenCodeAdapter {
                     )),
                 }
             }
-            Err(e) => Err(RuntimeError::new(
-                "binary_not_found",
-                format!("Cannot execute {}: {e}", binary.display()),
-                false,
-            )),
+            Err(e) => {
+                let code = if e.kind() == std::io::ErrorKind::TimedOut {
+                    "health_check_failed"
+                } else {
+                    "binary_not_found"
+                };
+                Err(RuntimeError::new(
+                    code,
+                    format!("Cannot execute {}: {e}", binary.display()),
+                    false,
+                ))
+            }
         }
     }
 
@@ -315,6 +329,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
 
         let start = Instant::now();
         let timeout = self.config.base.timeout;
+        let no_progress_timeout = self.no_progress_timeout();
 
         let formatted_input = self.format_input(&input);
 
@@ -453,36 +468,41 @@ impl RuntimeAdapter for OpenCodeAdapter {
 
         self.process = Some(child);
 
-        let (stdout_handle, stderr_handle) = if let Some(ref mut process) = self.process {
-            let stdout = process.stdout.take().ok_or_else(|| {
-                RuntimeError::new("stdout_capture_failed", "Missing stdout pipe", false)
-            })?;
-            let stderr = process.stderr.take().ok_or_else(|| {
-                RuntimeError::new("stderr_capture_failed", "Missing stderr pipe", false)
-            })?;
+        let (stdout_handle, stderr_handle, last_progress_at) =
+            if let Some(ref mut process) = self.process {
+                let stdout = process.stdout.take().ok_or_else(|| {
+                    RuntimeError::new("stdout_capture_failed", "Missing stdout pipe", false)
+                })?;
+                let stderr = process.stderr.take().ok_or_else(|| {
+                    RuntimeError::new("stderr_capture_failed", "Missing stderr pipe", false)
+                })?;
+                let last_progress_at = Arc::new(Mutex::new(Instant::now()));
 
-            let stdout_tracker = LiveJsonRuntimeTracker::new(
-                flavor,
-                self.config.base.name.clone(),
-                worktree.clone(),
-                &self.config.base.env,
-            );
+                let stdout_tracker = LiveJsonRuntimeTracker::new(
+                    flavor,
+                    self.config.base.name.clone(),
+                    worktree.clone(),
+                    &self.config.base.env,
+                );
 
-            let stdout_handle =
-                std::thread::spawn(move || read_stream_to_string(stdout, stdout_tracker));
-            let stderr_handle = std::thread::spawn(move || {
-                let (out, _) = read_stream_to_string(stderr, None);
-                out
-            });
+                let stdout_progress = Arc::clone(&last_progress_at);
+                let stderr_progress = Arc::clone(&last_progress_at);
+                let stdout_handle = std::thread::spawn(move || {
+                    read_stream_to_string(stdout, stdout_tracker, Some(stdout_progress))
+                });
+                let stderr_handle = std::thread::spawn(move || {
+                    let (out, _) = read_stream_to_string(stderr, None, Some(stderr_progress));
+                    out
+                });
 
-            (stdout_handle, stderr_handle)
-        } else {
-            return Err(RuntimeError::new(
-                "no_process",
-                "No process to wait on",
-                false,
-            ));
-        };
+                (stdout_handle, stderr_handle, last_progress_at)
+            } else {
+                return Err(RuntimeError::new(
+                    "no_process",
+                    "No process to wait on",
+                    false,
+                ));
+            };
 
         let status = loop {
             let Some(ref mut process) = self.process else {
@@ -497,6 +517,25 @@ impl RuntimeAdapter for OpenCodeAdapter {
                 let _ = stderr_handle.join();
                 self.process = None;
                 return Err(RuntimeError::timeout(timeout));
+            }
+            if no_progress_timeout.is_some_and(|limit| {
+                last_progress_at
+                    .lock()
+                    .map(|last_progress| last_progress.elapsed() > limit)
+                    .unwrap_or(false)
+            }) {
+                let _ = process.kill();
+                let _ = stdout_handle.join();
+                let _ = stderr_handle.join();
+                self.process = None;
+                return Err(RuntimeError::new(
+                    "no_observable_progress_timeout",
+                    format!(
+                        "Runtime produced no observable progress for {:?}",
+                        no_progress_timeout.unwrap_or(timeout)
+                    ),
+                    true,
+                ));
             }
 
             if let Some(status) = process.try_wait().map_err(|e| {
@@ -600,10 +639,18 @@ mod tests {
     use std::path::Path;
     use tempfile::tempdir;
 
+    fn git_bin() -> &'static str {
+        if Path::new("/usr/bin/git").exists() {
+            "/usr/bin/git"
+        } else {
+            "git"
+        }
+    }
+
     fn init_git_repo(path: &Path) {
         std::fs::create_dir_all(path).expect("create repo dir");
         let run = |args: &[&str]| {
-            let output = Command::new("git")
+            let output = Command::new(git_bin())
                 .current_dir(path)
                 .args(args)
                 .output()

@@ -9,15 +9,10 @@ impl Registry {
         completion: CompletionArtifacts<'_>,
         origin: &'static str,
     ) -> Result<()> {
-        let corr_task =
-            CorrelationIds::for_graph_flow_task(flow.project_id, flow.graph_id, flow.id, task_id);
-        let corr_attempt = CorrelationIds::for_graph_flow_task_attempt(
-            flow.project_id,
-            flow.graph_id,
-            flow.id,
-            task_id,
-            attempt.id,
-        );
+        let state = self.state()?;
+        let corr_task = Self::correlation_for_flow_task_event(&state, flow, task_id);
+        let corr_attempt =
+            Self::correlation_for_flow_task_attempt_event(&state, flow, task_id, attempt.id);
 
         self.append_event(
             Event::new(

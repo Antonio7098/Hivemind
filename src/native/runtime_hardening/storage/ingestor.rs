@@ -10,6 +10,8 @@ impl RuntimeLogIngestor {
         let batch_size = config.log_batch_size;
         let flush_interval = Duration::from_millis(config.log_flush_interval_ms);
         let retention_days = config.log_retention_days;
+        let blob_storage_dir = config.blob_storage_dir.clone();
+        let blob_retention_days = config.blob_retention_days;
         let lease_ttl_ms = config.lease_ttl_ms;
         let retention_interval = Duration::from_secs(config.retention_sweep_interval_secs);
         let thread_owner = owner_token.clone();
@@ -24,6 +26,8 @@ impl RuntimeLogIngestor {
                     batch_size,
                     flush_interval,
                     retention_days,
+                    blob_storage_dir,
+                    blob_retention_days,
                     lease_ttl_ms,
                     retention_interval,
                 );
@@ -100,6 +104,8 @@ fn run_log_ingestor_loop(
     batch_size: usize,
     flush_interval: Duration,
     retention_days: u64,
+    blob_storage_dir: PathBuf,
+    blob_retention_days: u64,
     lease_ttl_ms: u64,
     retention_interval: Duration,
 ) {
@@ -143,6 +149,7 @@ fn run_log_ingestor_loop(
             if let Ok(true) = store.acquire_lease(RETENTION_LEASE_NAME, &owner_token, lease_ttl_ms)
             {
                 let _ = store.cleanup_logs(retention_days);
+                let _ = cleanup_native_blob_storage(&blob_storage_dir, blob_retention_days);
                 let _ = store.heartbeat_lease(RETENTION_LEASE_NAME, &owner_token, lease_ttl_ms);
             }
             last_retention = Instant::now();

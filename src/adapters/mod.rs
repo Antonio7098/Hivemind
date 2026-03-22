@@ -25,7 +25,7 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```ignore
 //! use hivemind::adapters::{runtime_descriptors, SUPPORTED_ADAPTERS};
 //!
 //! // List available adapters

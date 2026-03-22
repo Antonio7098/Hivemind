@@ -13,6 +13,15 @@ This document specifies the **operational semantics** of Hivemind CLI commands: 
 
 The CLI is the authoritative interface. These semantics are the contract.
 
+## Workflow-First Execution Note
+
+For new execution in Phase 5, `workflow/*` is the primary orchestration surface.
+Legacy `flow/*`, `merge`, `runtime`, and `worktree` commands remain available for compatibility and low-level inspection, but workflow-owned commands and `workflow_run_id` selectors are the preferred operator contract for:
+
+- runtime stream inspection
+- worktree inspection and cleanup
+- merge prepare, approve, and execute
+
 ---
 
 ## 1. Semantic Structure
@@ -1241,7 +1250,7 @@ hivemind [-f json|table|yaml] graph snapshot refresh <project>
 - Attached repositories resolve a valid HEAD commit
 
 **Effects:**
-- Rebuilds static snapshot artifact at `~/.hivemind/projects/<project-id>/graph_snapshot.json`
+- Rebuilds the derivative snapshot artifact at `~/.hivemind/projects/<project-id>/graph_snapshot.json` and refreshes the authoritative GraphCode registry record in the native runtime state store
 - Uses UCP codegraph extraction as authoritative backend (no local duplicate parser)
 - Persists UCP profile/version metadata, canonical fingerprint, repository provenance, and static structure+blocks projection
 - Emits diff telemetry when canonical fingerprint changes
@@ -1304,7 +1313,7 @@ hivemind [-f json|table|yaml] graph query filter <project> [--type <class>] [--p
 - Graph snapshot exists, is current, and passes integrity checks
 
 **Effects:**
-- Executes deterministic bounded query over stored UCP graph snapshot substrate
+- Executes deterministic bounded query over the authoritative GraphCode-registry-backed UCP snapshot substrate (with `graph_snapshot.json` retained only as a migration/derivative projection)
 - Emits `GraphQueryExecuted` telemetry with source attribution (`cli_graph_query`)
 
 **Failures:**

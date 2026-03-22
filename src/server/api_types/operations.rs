@@ -14,18 +14,21 @@ pub(crate) struct VerifyRunRequest {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct MergePrepareRequest {
-    pub(crate) flow_id: String,
+    pub(crate) flow_id: Option<String>,
+    pub(crate) workflow_run_id: Option<String>,
     pub(crate) target: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct MergeApproveRequest {
-    pub(crate) flow_id: String,
+    pub(crate) flow_id: Option<String>,
+    pub(crate) workflow_run_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct MergeExecuteRequest {
-    pub(crate) flow_id: String,
+    pub(crate) flow_id: Option<String>,
+    pub(crate) workflow_run_id: Option<String>,
     pub(crate) mode: Option<String>,
     pub(crate) monitor_ci: Option<bool>,
     pub(crate) auto_merge: Option<bool>,
@@ -41,7 +44,8 @@ pub(crate) struct CheckpointCompleteRequest {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct WorktreeCleanupRequest {
-    pub(crate) flow_id: String,
+    pub(crate) flow_id: Option<String>,
+    pub(crate) workflow_run_id: Option<String>,
     #[serde(default)]
     pub(crate) force: bool,
     #[serde(default)]

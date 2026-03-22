@@ -10,12 +10,16 @@
 
 pub mod adapter;
 mod contracts;
+mod groq;
+mod minimax;
 mod openrouter;
 pub mod runtime_hardening;
 pub mod startup_hardening;
 pub mod tool_engine;
 
 pub use contracts::{AgentLoopObserver, HistoryCompactionEvent, ModelClient};
+pub use groq::GroqModelClient;
+pub use minimax::MiniMaxModelClient;
 pub use openrouter::OpenRouterModelClient;
 
 use crate::adapters::runtime::{NativeToolCallTrace, RuntimeError};
@@ -76,7 +80,6 @@ pub struct ModelTurnRequest {
     #[serde(default)]
     pub prompt_assembly: Option<NativePromptAssembly>,
 }
-
 /// Parsed model directive.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -178,6 +181,7 @@ pub struct AgentLoop<M: ModelClient> {
 }
 
 mod agent_loop;
+mod context_visibility;
 mod error;
 mod mock;
 mod prompt_assembly;
@@ -185,6 +189,7 @@ mod support;
 mod turn_items;
 
 pub use self::mock::MockModelClient;
+#[cfg_attr(not(test), allow(unused_imports))]
 pub(crate) use self::prompt_assembly::{assemble_native_prompt, NativePromptAssembly};
 pub(crate) use self::turn_items::{
     assistant_item, compact_history_for_budget_pressure, compact_history_for_hard_budget_limit,

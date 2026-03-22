@@ -21,7 +21,7 @@
 //!
 //! The server can be configured via [`ServeConfig`]:
 //!
-//! ```no_run
+//! ```ignore
 //! use hivemind::server::ServeConfig;
 //!
 //! let config = ServeConfig {
@@ -41,7 +41,7 @@
 //!
 //! Or programmatically:
 //!
-//! ```no_run
+//! ```ignore
 //! use hivemind::server::{serve, ServeConfig};
 //!
 //! let config = ServeConfig::default();
@@ -65,7 +65,11 @@ use crate::core::flow::{RetryMode, RunMode};
 use crate::core::registry::{MergeExecuteMode, MergeExecuteOptions};
 use crate::core::state::{MergeState, Project, Task};
 use crate::core::verification::CheckConfig;
-use crate::core::{flow::TaskFlow, graph::TaskGraph};
+use crate::core::{
+    flow::TaskFlow,
+    graph::TaskGraph,
+    workflow::{WorkflowDefinition, WorkflowRun},
+};
 use crate::storage::event_store::EventFilter;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -184,6 +188,8 @@ pub struct UiState {
     pub tasks: Vec<Task>,
     pub graphs: Vec<TaskGraph>,
     pub flows: Vec<TaskFlow>,
+    pub workflows: Vec<WorkflowDefinition>,
+    pub workflow_runs: Vec<WorkflowRun>,
     pub merge_states: Vec<MergeState>,
     pub events: Vec<UiEvent>,
 }

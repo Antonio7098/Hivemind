@@ -127,13 +127,14 @@ impl Registry {
         operation: &str,
         origin: &'static str,
     ) -> Result<()> {
+        let state = self.state()?;
         self.append_event(
             Event::new(
                 EventPayload::FlowIntegrationLockAcquired {
                     flow_id: flow.id,
                     operation: operation.to_string(),
                 },
-                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                Self::correlation_for_flow_event(&state, flow),
             ),
             origin,
         )

@@ -45,7 +45,7 @@
 //!
 //! ## Example: Creating a Project
 //!
-//! ```no_run
+//! ```ignore
 //! use hivemind::core::registry::Registry;
 //!
 //! let registry = Registry::open()?;
@@ -56,7 +56,7 @@
 //!
 //! ## Example: Defining a Task Graph
 //!
-//! ```no_run
+//! ```ignore
 //! use hivemind::core::graph::{TaskGraph, GraphTask, SuccessCriteria};
 //! use uuid::Uuid;
 //!

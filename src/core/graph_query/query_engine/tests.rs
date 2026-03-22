@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 // ARCH_DEBT: legacy oversized function
 #[allow(clippy::too_many_lines)]
@@ -137,6 +137,9 @@ fn sample_index() -> GraphQueryIndex {
         outgoing,
         incoming,
         all_edges,
+        repositories: Vec::new(),
+        node_to_repository_index: HashMap::new(),
+        node_to_block_selector: HashMap::new(),
     }
 }
 

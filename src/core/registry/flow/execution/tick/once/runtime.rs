@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::adapters::runtime::StructuredRuntimeObservation;
+use serde_json::Value;
 
 mod adapter_lifecycle;
 mod environment;
@@ -327,6 +328,50 @@ impl Registry {
             runtime_for_adapter,
             report,
         }))
+    }
+
+    pub(super) fn apply_external_runtime_tool_directives(
+        &self,
+        attempt_id: Uuid,
+        _runtime_for_adapter: &ProjectRuntimeConfig,
+        stdout: &str,
+        stderr: &str,
+        _origin: &'static str,
+    ) -> std::result::Result<(), (String, String, bool)> {
+        for stream in [stdout, stderr] {
+            for line in stream.lines() {
+                let trimmed = line.trim();
+                let Some(payload) = trimmed
+                    .strip_prefix("ACT:tool:checkpoint_complete:")
+                    .or_else(|| trimmed.strip_prefix("tool:checkpoint_complete:"))
+                else {
+                    continue;
+                };
+                let parsed: Value = serde_json::from_str(payload).map_err(|error| {
+                    (
+                        "runtime_tool_directive_invalid".to_string(),
+                        format!("Invalid checkpoint_complete directive payload: {error}"),
+                        true,
+                    )
+                })?;
+                let checkpoint_id = parsed
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        (
+                            "runtime_tool_directive_invalid".to_string(),
+                            "checkpoint_complete directive is missing a non-empty 'id'".to_string(),
+                            true,
+                        )
+                    })?;
+                let summary = parsed.get("summary").and_then(Value::as_str);
+                self.checkpoint_complete(&attempt_id.to_string(), checkpoint_id, summary)
+                    .map_err(|error| (error.code, error.message, error.recoverable))?;
+            }
+        }
+        Ok(())
     }
 }
 

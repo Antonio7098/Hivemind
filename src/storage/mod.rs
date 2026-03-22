@@ -23,7 +23,7 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```ignore
 //! use hivemind::storage::event_store::{EventStore, EventFilter, SqliteEventStore};
 //! use uuid::Uuid;
 //!

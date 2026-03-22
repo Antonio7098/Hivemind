@@ -4,11 +4,12 @@ impl Registry {
     pub fn merge_approve(&self, flow_id: &str) -> Result<crate::core::state::MergeState> {
         let flow = self.get_flow(flow_id)?;
         let origin = "registry:merge_approve";
+        let flow_corr = Self::correlation_for_flow_event(&self.state()?, &flow);
 
         let _ = self.enforce_constitution_gate(
             flow.project_id,
             "merge_approve",
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            flow_corr.clone(),
             origin,
         )?;
 
@@ -43,7 +44,7 @@ impl Registry {
                 flow_id: flow.id,
                 user,
             },
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            flow_corr,
         );
 
         self.store

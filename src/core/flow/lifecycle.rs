@@ -86,10 +86,7 @@ impl TaskFlow {
             });
         }
         for exec in self.task_executions.values() {
-            if !matches!(
-                exec.state,
-                TaskExecState::Success | TaskExecState::Failed | TaskExecState::Escalated
-            ) {
+            if !exec.state.is_terminal() {
                 return Err(FlowError::TasksNotComplete);
             }
         }

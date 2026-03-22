@@ -62,7 +62,8 @@
 //! - [`events`] - Event definitions and types
 //! - [`state`] - Derived state types (Project, Task, Attempt, etc.)
 //! - [`graph`] - `TaskGraph`: static planning DAG
-//! - [`flow`] - `TaskFlow`: runtime execution state
+//! - [`flow`] - `TaskFlow`: legacy runtime execution state
+//! - [`workflow`] - `WorkflowDefinition`/`WorkflowRun`: workflow-native execution domain
 //! - [`error`] - Structured error types
 //! - [`scope`] - Execution scope definitions
 //! - [`enforcement`] - Scope enforcement and verification
@@ -88,4 +89,5 @@ pub mod scope;
 pub mod skill_registry;
 pub mod state;
 pub mod verification;
+pub mod workflow;
 pub mod worktree;

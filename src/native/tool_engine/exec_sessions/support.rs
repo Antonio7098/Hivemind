@@ -12,6 +12,7 @@ pub(super) struct ExecSession {
     pub(super) session_id: u64,
     pub(super) owner_worktree: PathBuf,
     pub(super) command_line: String,
+    pub(super) worktree_baseline: Option<crate::core::diff::Baseline>,
     pub(super) child: Child,
     pub(super) stdin: Option<ChildStdin>,
     pub(super) stdout_rx: Receiver<Vec<u8>>,
@@ -190,6 +191,14 @@ pub(super) fn resolve_session_cwd(
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return Ok(worktree.to_path_buf());
+    }
+    if Path::new(trimmed).is_absolute() {
+        return Path::new(trimmed)
+            .strip_prefix(worktree)
+            .map(|_| PathBuf::from(trimmed))
+            .map_err(|_| {
+                NativeToolEngineError::validation(format!("invalid relative path '{trimmed}'"))
+            });
     }
     let rel = normalize_relative_path(trimmed, true)?;
     Ok(worktree.join(rel))

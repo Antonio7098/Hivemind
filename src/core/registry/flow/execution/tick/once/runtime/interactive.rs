@@ -41,6 +41,7 @@ impl Registry {
                 );
                 self.store.append(event).map_err(|e| e.to_string())?;
             }
+            InteractiveAdapterEvent::FilesystemObserved { .. } => {}
             InteractiveAdapterEvent::Interrupted => {
                 let event = Event::new(
                     EventPayload::RuntimeInterrupted { attempt_id },

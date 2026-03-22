@@ -126,12 +126,7 @@ impl Registry {
                     task_id,
                     commit_sha,
                 },
-                CorrelationIds::for_graph_flow_task(
-                    flow.project_id,
-                    flow.graph_id,
-                    flow.id,
-                    task_id,
-                ),
+                Self::correlation_for_flow_task_event(&self.state()?, flow, task_id),
             ),
             origin,
         )

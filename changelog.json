@@ -4,6 +4,173 @@
   "format_version": "1.0.0",
   "entries": [
     {
+      "version": "v0.1.57",
+      "date": "2026-03-13",
+      "phase": 71,
+      "changes": [
+        {
+          "type": "added",
+          "area": "workflow",
+          "description": "Add topology-aligned workflow spec bindings so recursive intent/spec trees can bind onto existing workflow and step identities without taking ownership of execution topology"
+        },
+        {
+          "type": "changed",
+          "area": "workflow",
+          "description": "Expose workflow spec validation and binding through workflow CLI/API surfaces and thread bound spec node ids plus merged spec execution context into workflow-backed inspection and attempt manifests"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 71 regression coverage for workflow spec topology validation, persistence, and workflow-backed spec-context propagation"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update the Phase 5 roadmap and workflow architecture/design docs to document the workflow spec binding model as an intent layer attached to the workflow engine"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.56",
+      "date": "2026-03-13",
+      "phase": 70,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "workflow",
+          "description": "Close Phase 5 with end-to-end workflow hardening across nested lineage inspection, resume-after-partial-child-completion recovery, and workflow-correlated merge failure reporting"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 70 regressions for nested workflow recovery and workflow-native merge-boundary observability, and retain workflow-focused replay/hardening coverage"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Publish Sprint 70 and Phase 5 closeout reports, add Sprint 70 manual artifacts, and update quickstart/roadmap documentation to reflect the validated workflow-first model"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.55",
+      "date": "2026-03-13",
+      "phase": 69,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "workflow",
+          "description": "Promote workflows to the primary execution surface for runtime stream inspection, worktree inspection and cleanup, and merge prepare/approve/execute via workflow-run-owned CLI and API paths"
+        },
+        {
+          "type": "changed",
+          "area": "worktree",
+          "description": "Expose workflow lineage on worktree inspection status so operators can attribute worktrees directly to workflow runs and step runs without discovering synthetic flow ids first"
+        },
+        {
+          "type": "changed",
+          "area": "server",
+          "description": "Expose workflows and workflow runs as first-class UI state projections and add workflow_run_id query support for runtime-stream and worktree API surfaces"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 69 regression coverage plus manual workflow-native happy-path, negative-case, and real opencode nemotron smoke evidence"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Update workflow architecture, quickstart, CLI semantics, roadmap, and sprint reports to document the workflow-first execution model and retained legacy flow compatibility"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.54",
+      "date": "2026-03-13",
+      "phase": 68,
+      "changes": [
+        {
+          "type": "added",
+          "area": "workflow",
+          "description": "Complete Sprint 68 with typed conditional branches, explicit wait-step state, durable workflow signals, subtree pause/resume/abort propagation, and workflow-native signal CLI/API support"
+        },
+        {
+          "type": "added",
+          "area": "events",
+          "description": "Emit attributable workflow control-plane events for condition evaluation, wait activation/completion, and signal receipt so control flow remains replay-visible"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 68 regression coverage for signal-driven wait completion, duplicate signal rejection, and end-to-end CLI control-plane behavior"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Document workflow control-plane semantics, close Sprint 68 roadmap/report state, and publish manual smoke evidence including provider-backed OpenCode runtime runs"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.53",
+      "date": "2026-03-13",
+      "phase": 66,
+      "changes": [
+        {
+          "type": "added",
+          "area": "workflow",
+          "description": "Complete Sprint 66 with typed workflow context snapshots, deterministic step input resolution, append-only workflow output bag entries, workflow-derived attempt manifest hashes, and native join-step fan-in on top of the Sprint 65 bridge"
+        },
+        {
+          "type": "changed",
+          "area": "runtime",
+          "description": "Add a shared external-runtime no-progress watchdog plus orchestration-level handling of emitted `ACT:tool:checkpoint_complete` directives so non-native runtimes fail loudly when silent and can complete workflow checkpoints without adapter-specific hacks"
+        },
+        {
+          "type": "changed",
+          "area": "workflow",
+          "description": "Make workflow bag reducers deterministic by honoring declared `producer_step_ids`, complete workflow runs as soon as all workflow steps become terminal, and force synthetic join steps onto the native runtime even when branch tasks use external runtimes"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 66 regression coverage for live-style external checkpoint directive bridging, recovered join completion, deterministic join ordering, workflow attempt-manifest hashing, and shared no-progress watchdog behavior"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Close Sprint 66 in roadmap/report/manual artifacts with real-runtime smoke evidence from post-fix `opencode/nemotron-3-super-free` runs and updated sprint execution guidance for workflow/runtime validation"
+        }
+      ]
+    },
+    {
+      "version": "v0.1.52",
+      "date": "2026-03-13",
+      "phase": 67,
+      "changes": [
+        {
+          "type": "changed",
+          "area": "workflow",
+          "description": "Expose nested workflow inspection through a shared CLI/API payload with a recursive `child_runs` tree, explicit workflow names, and parent-step names"
+        },
+        {
+          "type": "changed",
+          "area": "events",
+          "description": "Make `events list --workflow-run <root-run-id>` follow root workflow lineage by default so nested child events are returned without extra filter guesswork"
+        },
+        {
+          "type": "added",
+          "area": "tests",
+          "description": "Add Sprint 67 regressions for nested workflow status inspection and workflow-run inspect API lineage output"
+        },
+        {
+          "type": "changed",
+          "area": "docs",
+          "description": "Close Sprint 67 roadmap/report/manual artifacts and document the final nested-lineage inspection contract"
+        }
+      ]
+    },
+    {
       "version": "v0.1.51",
       "date": "2026-03-09",
       "phase": 58,

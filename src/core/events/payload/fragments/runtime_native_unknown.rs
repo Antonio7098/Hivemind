@@ -119,6 +119,8 @@
         #[serde(default)]
         latest_tool_names_visible: Vec<String>,
         #[serde(default)]
+        active_code_window_trace: Vec<crate::adapters::runtime::NativeActiveCodeWindowTrace>,
+        #[serde(default)]
         delivery_target: Option<String>,
     },
     ModelResponseReceived {
@@ -305,6 +307,8 @@
         latest_tool_result_turn_index: Option<u32>,
         #[serde(default)]
         latest_tool_names_visible: Vec<String>,
+        #[serde(default)]
+        active_code_window_trace: Vec<crate::adapters::runtime::NativeActiveCodeWindowTrace>,
         #[serde(default)]
         tool_call_count: usize,
         #[serde(default)]

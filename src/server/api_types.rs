@@ -9,6 +9,7 @@ mod operations;
 mod projects;
 mod tasks;
 mod views;
+mod workflows;
 
 pub(crate) use catalog::api_catalog;
 pub(crate) use chat::{
@@ -41,4 +42,9 @@ pub(crate) use tasks::{
 pub(crate) use views::{
     AttemptInspectView, AttemptRuntimeSessionView, AttemptTurnRefView, RuntimeStreamEnvelope,
     RuntimeStreamItemView, VerifyResultsView,
+};
+pub(crate) use workflows::{
+    WorkflowAbortRequest, WorkflowCreateRequest, WorkflowRunCreateRequest, WorkflowRunIdRequest,
+    WorkflowSignalRequest, WorkflowSpecRequest, WorkflowStepAddRequest, WorkflowStepStateRequest,
+    WorkflowTickRequest, WorkflowUpdateRequest,
 };

@@ -497,6 +497,10 @@ fn agent_loop_treats_checkpoint_already_completed_auto_completion_as_benign() {
                     request: "{}".to_string(),
                     duration_ms: None,
                     response: None,
+                    prompt_response: None,
+                    response_original_bytes: None,
+                    response_stored_bytes: None,
+                    response_truncated: false,
                     failure: Some(NativeToolCallFailure {
                         code: "native_tool_execution_failed".to_string(),
                         message: "checkpoint completion failed with checkpoint_already_completed"

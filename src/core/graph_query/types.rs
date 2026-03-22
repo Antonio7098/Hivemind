@@ -122,4 +122,20 @@ pub struct GraphQueryResult {
     pub nodes: Vec<GraphQueryNode>,
     #[serde(default)]
     pub edges: Vec<GraphQueryEdge>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub selected_block_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub python_repo_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub python_result: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub python_summary: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub python_usage: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub python_limits: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub python_stdout: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub python_export_summary: Option<serde_json::Value>,
 }

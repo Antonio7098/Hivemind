@@ -30,6 +30,7 @@ pub struct Cli {
     pub command: Option<Commands>,
 }
 /// Top-level commands.
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum Commands {
     /// Show version information
@@ -61,6 +62,10 @@ pub enum Commands {
     /// Task flows (execution): run a graph using a configured runtime adapter
     #[command(subcommand)]
     Flow(FlowCommands),
+
+    /// Workflow definitions and workflow run lifecycle commands
+    #[command(subcommand)]
+    Workflow(WorkflowCommands),
 
     /// Event inspection commands
     #[command(subcommand)]

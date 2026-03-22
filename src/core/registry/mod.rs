@@ -19,6 +19,7 @@ pub mod shared_types;
 pub mod tasks;
 pub mod templates;
 pub mod types;
+pub mod workflow;
 pub mod worktree;
 
 pub use context::*;
@@ -31,6 +32,7 @@ pub use runtime::*;
 pub use tasks::*;
 pub use templates::*;
 pub use types::*;
+pub use workflow::*;
 pub use worktree::*;
 
 pub const GOVERNANCE_SCHEMA_VERSION: &str = "governance.v1";
@@ -43,8 +45,8 @@ pub const CONSTITUTION_VERSION: u32 = 1;
 pub const GRAPH_SNAPSHOT_SCHEMA_VERSION: &str = "graph_snapshot.v1";
 pub const GRAPH_SNAPSHOT_VERSION: u32 = 1;
 pub const GOVERNANCE_RECOVERY_SNAPSHOT_SCHEMA_VERSION: &str = "governance_recovery_snapshot.v1";
-pub const ATTEMPT_CONTEXT_SCHEMA_VERSION: &str = "attempt_context.v2";
-pub const ATTEMPT_CONTEXT_VERSION: u32 = 2;
+pub const ATTEMPT_CONTEXT_SCHEMA_VERSION: &str = "attempt_context.v3";
+pub const ATTEMPT_CONTEXT_VERSION: u32 = 3;
 pub const ATTEMPT_CONTEXT_SECTION_BUDGET_BYTES: usize = 6_000;
 pub const ATTEMPT_CONTEXT_TOTAL_BUDGET_BYTES: usize = 24_000;
 pub const ATTEMPT_CONTEXT_MAX_EXPAND_DEPTH: usize = 2;

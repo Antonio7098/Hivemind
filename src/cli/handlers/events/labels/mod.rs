@@ -74,6 +74,25 @@ pub(super) fn event_type_label(payload: &crate::core::events::EventPayload) -> &
         EventPayload::TaskFlowCompleted { .. } => "flow_completed",
         EventPayload::TaskFlowAborted { .. } => "flow_aborted",
         EventPayload::TaskFlowDeleted { .. } => "flow_deleted",
+        EventPayload::WorkflowDefinitionCreated { .. } => "workflow_definition_created",
+        EventPayload::WorkflowDefinitionUpdated { .. } => "workflow_definition_updated",
+        EventPayload::WorkflowConditionEvaluated { .. } => "workflow_condition_evaluated",
+        EventPayload::WorkflowWaitActivated { .. } => "workflow_wait_activated",
+        EventPayload::WorkflowWaitCompleted { .. } => "workflow_wait_completed",
+        EventPayload::WorkflowSignalReceived { .. } => "workflow_signal_received",
+        EventPayload::WorkflowRunCreated { .. } => "workflow_run_created",
+        EventPayload::WorkflowRunStarted { .. } => "workflow_run_started",
+        EventPayload::WorkflowRunPaused { .. } => "workflow_run_paused",
+        EventPayload::WorkflowRunResumed { .. } => "workflow_run_resumed",
+        EventPayload::WorkflowRunCompleted { .. } => "workflow_run_completed",
+        EventPayload::WorkflowRunAborted { .. } => "workflow_run_aborted",
+        EventPayload::WorkflowContextInitialized { .. } => "workflow_context_initialized",
+        EventPayload::WorkflowContextSnapshotCaptured { .. } => {
+            "workflow_context_snapshot_captured"
+        }
+        EventPayload::WorkflowStepInputsResolved { .. } => "workflow_step_inputs_resolved",
+        EventPayload::WorkflowOutputAppended { .. } => "workflow_output_appended",
+        EventPayload::WorkflowStepStateChanged { .. } => "workflow_step_state_changed",
         EventPayload::TaskReady { .. } => "task_ready",
         EventPayload::TaskBlocked { .. } => "task_blocked",
         EventPayload::ScopeConflictDetected { .. } => "scope_conflict_detected",
@@ -145,5 +164,6 @@ pub(super) fn event_type_label(payload: &crate::core::events::EventPayload) -> &
         EventPayload::RuntimeTodoSnapshotUpdated { .. } => "runtime_todo_snapshot_updated",
         EventPayload::RuntimeNarrativeOutputObserved { .. } => "runtime_narrative_output_observed",
         EventPayload::Unknown => "unknown",
+        _ => "unknown",
     }
 }

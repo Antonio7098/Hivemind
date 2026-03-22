@@ -147,6 +147,33 @@ fn digest_hex(payload: &[u8]) -> String {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use ucp_codegraph::{
+        CodeGraphBuildInput, CodeGraphExpandMode, CodeGraphExportConfig, CodeGraphNavigator,
+        CodeGraphRenderConfig, CodeGraphTraversalConfig,
+    };
+
+    fn build_eval_graph() -> CodeGraphNavigator {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(tmp.path().join("src")).expect("mkdir src");
+        fs::write(
+            tmp.path().join("src/util.rs"),
+            "pub fn util() -> i32 { 1 }\n",
+        )
+        .expect("write util");
+        fs::write(
+            tmp.path().join("src/lib.rs"),
+            "mod util;\npub fn add(a: i32, b: i32) -> i32 { util::util() + a + b }\n",
+        )
+        .expect("write lib");
+        let repository_path = tmp.path().to_path_buf();
+        std::mem::forget(tmp);
+        CodeGraphNavigator::build(&CodeGraphBuildInput {
+            repository_path,
+            commit_hash: "HEAD".to_string(),
+            config: Default::default(),
+        })
+        .expect("build eval graph")
+    }
 
     #[test]
     fn load_partition_paths_ignores_invalid_entries() {
@@ -209,5 +236,51 @@ partitions:
                 }
             ])
         );
+    }
+
+    #[test]
+    fn codegraph_session_covers_canonical_pathing_and_explanation_workflows() {
+        let graph = build_eval_graph();
+        let add = graph
+            .resolve_selector("symbol:src/lib.rs::add")
+            .expect("resolve add symbol");
+        let util = graph
+            .resolve_selector("symbol:src/util.rs::util")
+            .expect("resolve util symbol");
+
+        let path = graph
+            .path_between(add, util, 4)
+            .expect("path between symbols");
+        assert!(!path.hops.is_empty());
+
+        let mut session = graph.session();
+        session.seed_overview(Some(4));
+        session
+            .expand(
+                "src/lib.rs",
+                CodeGraphExpandMode::File,
+                &CodeGraphTraversalConfig::default(),
+            )
+            .expect("expand file");
+        session
+            .expand(
+                "symbol:src/lib.rs::add",
+                CodeGraphExpandMode::Dependencies,
+                &CodeGraphTraversalConfig::default(),
+            )
+            .expect("expand dependencies");
+
+        let explanation = session
+            .why_selected("symbol:src/util.rs::util")
+            .expect("selection explanation");
+        assert!(explanation.selected);
+        assert!(explanation.explanation.contains("dependency"));
+
+        let export = session.export(
+            &CodeGraphRenderConfig::default(),
+            &CodeGraphExportConfig::compact(),
+        );
+        assert!(export.nodes.iter().any(|node| node.label.contains("add")));
+        assert!(export.nodes.iter().any(|node| node.label.contains("util")));
     }
 }

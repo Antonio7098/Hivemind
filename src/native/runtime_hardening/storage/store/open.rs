@@ -58,6 +58,46 @@ impl NativeRuntimeStateStore {
                    lease_expires_at_ms INTEGER NOT NULL\
                  );",
             ),
+            (
+                3,
+                "CREATE TABLE IF NOT EXISTS graphcode_artifacts (\
+                   registry_key TEXT PRIMARY KEY,\
+                   project_id TEXT NOT NULL,\
+                   substrate_kind TEXT NOT NULL,\
+                   storage_backend TEXT NOT NULL,\
+                   storage_reference TEXT NOT NULL,\
+                   derivative_snapshot_path TEXT,\
+                   constitution_path TEXT,\
+                   canonical_fingerprint TEXT NOT NULL,\
+                   profile_version TEXT NOT NULL,\
+                   ucp_engine_version TEXT NOT NULL,\
+                   extractor_version TEXT NOT NULL,\
+                   runtime_version TEXT NOT NULL,\
+                   freshness_state TEXT NOT NULL,\
+                   repo_manifest_json TEXT NOT NULL,\
+                   active_session_ref TEXT,\
+                   snapshot_json TEXT NOT NULL,\
+                   updated_at_ms INTEGER NOT NULL\
+                 );\
+                 CREATE INDEX IF NOT EXISTS idx_graphcode_artifacts_project \
+                   ON graphcode_artifacts(project_id, substrate_kind, updated_at_ms DESC);\
+                 CREATE TABLE IF NOT EXISTS graphcode_sessions (\
+                   session_ref TEXT PRIMARY KEY,\
+                   registry_key TEXT NOT NULL,\
+                   substrate_kind TEXT NOT NULL,\
+                   current_focus_json TEXT NOT NULL,\
+                   pinned_nodes_json TEXT NOT NULL,\
+                   recent_traversals_json TEXT NOT NULL,\
+                   working_set_refs_json TEXT NOT NULL,\
+                   hydrated_excerpts_json TEXT NOT NULL,\
+                   path_artifacts_json TEXT NOT NULL,\
+                   snapshot_fingerprint TEXT NOT NULL,\
+                   freshness_state TEXT NOT NULL,\
+                   updated_at_ms INTEGER NOT NULL\
+                 );\
+                 CREATE INDEX IF NOT EXISTS idx_graphcode_sessions_registry \
+                   ON graphcode_sessions(registry_key, updated_at_ms DESC);",
+            ),
         ];
 
         for (version, sql) in MIGRATIONS {

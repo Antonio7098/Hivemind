@@ -1,3 +1,3 @@
 use super::*;
 
-include!("payload/generated.rs");
+include!(concat!(env!("OUT_DIR"), "/event_payload_generated.rs"));

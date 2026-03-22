@@ -3,6 +3,7 @@ use super::*;
 impl Registry {
     pub fn pause_flow(&self, flow_id: &str) -> Result<TaskFlow> {
         let flow = self.get_flow(flow_id)?;
+        let state = self.state()?;
 
         match flow.state {
             FlowState::Paused => return Ok(flow),
@@ -22,7 +23,7 @@ impl Registry {
                 flow_id: flow.id,
                 running_tasks,
             },
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            Self::correlation_for_flow_event(&state, &flow),
         );
 
         self.store.append(event).map_err(|e| {
@@ -34,6 +35,7 @@ impl Registry {
 
     pub fn resume_flow(&self, flow_id: &str) -> Result<TaskFlow> {
         let flow = self.get_flow(flow_id)?;
+        let state = self.state()?;
         if flow.state != FlowState::Paused {
             return Err(HivemindError::user(
                 "flow_not_paused",
@@ -44,7 +46,7 @@ impl Registry {
 
         let event = Event::new(
             EventPayload::TaskFlowResumed { flow_id: flow.id },
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            Self::correlation_for_flow_event(&state, &flow),
         );
         self.store.append(event).map_err(|e| {
             HivemindError::system("event_append_failed", e.to_string(), "registry:resume_flow")

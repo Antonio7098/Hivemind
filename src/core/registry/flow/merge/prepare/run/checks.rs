@@ -9,6 +9,7 @@ impl Registry {
         merge_path: &Path,
         origin: &'static str,
     ) -> Result<Vec<String>> {
+        let state = self.state()?;
         let target_dir = self
             .config
             .data_dir
@@ -30,7 +31,7 @@ impl Registry {
                         check_name: check.name.clone(),
                         required: check.required,
                     },
-                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                    Self::correlation_for_flow_event(&state, flow),
                 ),
                 origin,
             )?;
@@ -80,7 +81,7 @@ impl Registry {
                         duration_ms,
                         required: check.required,
                     },
-                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                    Self::correlation_for_flow_event(&state, flow),
                 ),
                 origin,
             )?;

@@ -11,6 +11,18 @@ pub struct EventFilter {
     pub task_id: Option<Uuid>,
     /// Filter by flow ID.
     pub flow_id: Option<Uuid>,
+    /// Filter by workflow definition ID.
+    pub workflow_id: Option<Uuid>,
+    /// Filter by workflow run ID.
+    pub workflow_run_id: Option<Uuid>,
+    /// Filter by root workflow run ID.
+    pub root_workflow_run_id: Option<Uuid>,
+    /// Filter by parent workflow run ID.
+    pub parent_workflow_run_id: Option<Uuid>,
+    /// Filter by workflow step ID.
+    pub step_id: Option<Uuid>,
+    /// Filter by workflow step run ID.
+    pub step_run_id: Option<Uuid>,
     /// Filter by attempt ID.
     pub attempt_id: Option<Uuid>,
     /// Filter by governance artifact ID/key.
@@ -72,6 +84,36 @@ impl EventFilter {
         }
         if let Some(fid) = self.flow_id {
             if event.metadata.correlation.flow_id != Some(fid) {
+                return false;
+            }
+        }
+        if let Some(workflow_id) = self.workflow_id {
+            if event.metadata.correlation.workflow_id != Some(workflow_id) {
+                return false;
+            }
+        }
+        if let Some(workflow_run_id) = self.workflow_run_id {
+            if event.metadata.correlation.workflow_run_id != Some(workflow_run_id) {
+                return false;
+            }
+        }
+        if let Some(root_workflow_run_id) = self.root_workflow_run_id {
+            if event.metadata.correlation.root_workflow_run_id != Some(root_workflow_run_id) {
+                return false;
+            }
+        }
+        if let Some(parent_workflow_run_id) = self.parent_workflow_run_id {
+            if event.metadata.correlation.parent_workflow_run_id != Some(parent_workflow_run_id) {
+                return false;
+            }
+        }
+        if let Some(step_id) = self.step_id {
+            if event.metadata.correlation.step_id != Some(step_id) {
+                return false;
+            }
+        }
+        if let Some(step_run_id) = self.step_run_id {
+            if event.metadata.correlation.step_run_id != Some(step_run_id) {
                 return false;
             }
         }

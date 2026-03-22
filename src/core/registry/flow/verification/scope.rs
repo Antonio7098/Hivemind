@@ -127,21 +127,30 @@ impl Registry {
         origin: &'static str,
     ) -> Vec<crate::core::enforcement::ScopeViolation> {
         let trace_path = self.scope_trace_path(attempt_id);
+        eprintln!("[DEBUG] Looking for trace log at: {}", trace_path.display());
         let Ok(contents) = fs::read_to_string(&trace_path) else {
+            eprintln!("[DEBUG] Failed to read trace log at: {}", trace_path.display());
             return Vec::new();
         };
+        eprintln!("[DEBUG] Trace log contents (first 2000 chars): {}", &contents[..contents.len().min(2000)]);
 
         let Ok(worktrees) = Self::inspect_task_worktrees(flow, state, task_id, origin) else {
+            eprintln!("[DEBUG] Failed to inspect task worktrees");
             return Vec::new();
         };
         let allowed_roots: Vec<PathBuf> = worktrees
             .iter()
             .filter_map(|(_, status)| status.path.canonicalize().ok())
             .collect();
+        eprintln!("[DEBUG] Allowed worktree roots: {:?}", allowed_roots);
         let home_dir = env::var("HOME").ok().map(PathBuf::from);
+        eprintln!("[DEBUG] Home dir: {:?}", home_dir);
 
         let mut violations = Vec::new();
-        for observed in Self::parse_scope_trace_written_paths(&contents) {
+        let parsed_paths = Self::parse_scope_trace_written_paths(&contents);
+        eprintln!("[DEBUG] Parsed {} paths from trace", parsed_paths.len());
+        for observed in parsed_paths {
+            eprintln!("[DEBUG] Processing observed path: {:?}", observed);
             let observed_abs = if observed.is_absolute() {
                 observed
             } else if let Some((_, first)) = worktrees.first() {
@@ -153,14 +162,18 @@ impl Registry {
             let canonical = observed_abs
                 .canonicalize()
                 .unwrap_or_else(|_| observed_abs.clone());
+            eprintln!("[DEBUG] Canonical path: {:?}", canonical);
             if Self::scope_trace_is_ignored(&canonical, home_dir.as_deref(), &self.config.data_dir)
             {
+                eprintln!("[DEBUG] Path is ignored: {:?}", canonical);
                 continue;
             }
             if allowed_roots.iter().any(|root| canonical.starts_with(root)) {
+                eprintln!("[DEBUG] Path is within allowed root: {:?}", canonical);
                 continue;
             }
 
+            eprintln!("[DEBUG] VIOLATION DETECTED: {:?}", canonical);
             violations.push(crate::core::enforcement::ScopeViolation::filesystem(
                 canonical.to_string_lossy().to_string(),
                 "Write outside task worktree detected via runtime syscall trace",
@@ -169,6 +182,7 @@ impl Registry {
 
         violations.sort_by(|a, b| a.path.cmp(&b.path));
         violations.dedup_by(|a, b| a.path == b.path);
+        eprintln!("[DEBUG] Total violations found: {}", violations.len());
         violations
     }
 }

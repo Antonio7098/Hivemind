@@ -38,13 +38,7 @@ impl Registry {
                 ));
             self.record_error_event(
                 &err,
-                CorrelationIds::for_graph_flow_task_attempt(
-                    flow.project_id,
-                    flow.graph_id,
-                    flow.id,
-                    id,
-                    attempt.id,
-                ),
+                Self::correlation_for_flow_task_attempt_event(&state, &flow, id, attempt.id),
             );
             return Err(err);
         }

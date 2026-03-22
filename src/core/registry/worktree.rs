@@ -21,6 +21,21 @@ mod managers;
 mod scope;
 
 impl Registry {
+    fn with_workflow_lineage(
+        status: &mut WorktreeStatus,
+        run: &WorkflowRun,
+        workflow: &WorkflowDefinition,
+    ) {
+        status.workflow_id = Some(workflow.id);
+        status.workflow_run_id = Some(run.id);
+        if let Some((step_id, step_run_id)) =
+            Self::workflow_bridge_step_for_task(run, status.task_id)
+        {
+            status.step_id = Some(step_id);
+            status.step_run_id = Some(step_run_id);
+        }
+    }
+
     pub fn worktree_list(&self, flow_id: &str) -> Result<Vec<WorktreeStatus>> {
         let flow = self.get_flow(flow_id)?;
         let state = self.state()?;
@@ -34,6 +49,18 @@ impl Registry {
                     .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_list"))?;
                 statuses.push(status);
             }
+        }
+        Ok(statuses)
+    }
+
+    pub fn workflow_worktree_list(&self, workflow_run_id: &str) -> Result<Vec<WorktreeStatus>> {
+        let (run, workflow, flow) = self.workflow_run_bridge_flow(workflow_run_id)?;
+        let Some(flow) = flow else {
+            return Ok(Vec::new());
+        };
+        let mut statuses = self.worktree_list(&flow.id.to_string())?;
+        for status in &mut statuses {
+            Self::with_workflow_lineage(status, &run, &workflow);
         }
         Ok(statuses)
     }
@@ -69,6 +96,43 @@ impl Registry {
         manager
             .inspect(flow.id, tid)
             .map_err(|e| Self::worktree_error_to_hivemind(e, "registry:worktree_inspect"))
+    }
+
+    pub fn workflow_worktree_inspect(
+        &self,
+        workflow_run_id: &str,
+        step_id: &str,
+    ) -> Result<WorktreeStatus> {
+        let (run, workflow, flow) = self.workflow_run_bridge_flow(workflow_run_id)?;
+        let Some(flow) = flow else {
+            return Err(HivemindError::user(
+                "workflow_run_has_no_execution_bridge",
+                "Workflow run has not created execution worktrees yet",
+                "registry:workflow_worktree_inspect",
+            ));
+        };
+        let step_id = Uuid::parse_str(step_id).map_err(|_| {
+            HivemindError::user(
+                "invalid_step_id",
+                format!("'{step_id}' is not a valid workflow step ID"),
+                "registry:workflow_worktree_inspect",
+            )
+        })?;
+        let step = workflow.steps.get(&step_id).ok_or_else(|| {
+            HivemindError::user(
+                "workflow_step_not_found",
+                format!("Workflow step '{step_id}' not found"),
+                "registry:workflow_worktree_inspect",
+            )
+        })?;
+        let task_id = Self::workflow_bridge_task_id(run.id, step.id);
+        let state = self.state()?;
+        let manager = Self::worktree_manager_for_flow(&flow, &state)?;
+        let mut status = manager.inspect(flow.id, task_id).map_err(|e| {
+            Self::worktree_error_to_hivemind(e, "registry:workflow_worktree_inspect")
+        })?;
+        Self::with_workflow_lineage(&mut status, &run, &workflow);
+        Ok(status)
     }
 
     pub fn worktree_cleanup(
@@ -122,6 +186,19 @@ impl Registry {
             forced: force,
             dry_run,
         })
+    }
+
+    pub fn workflow_worktree_cleanup(
+        &self,
+        workflow_run_id: &str,
+        force: bool,
+        dry_run: bool,
+    ) -> Result<WorktreeCleanupResult> {
+        let (run, _workflow, flow) = self.workflow_run_bridge_flow(workflow_run_id)?;
+        let flow_id = flow
+            .map(|flow| flow.id)
+            .unwrap_or_else(|| Self::workflow_bridge_flow_uuid(run.id));
+        self.worktree_cleanup(&flow_id.to_string(), force, dry_run)
     }
 
     pub fn worktree_restore_turn_ref(

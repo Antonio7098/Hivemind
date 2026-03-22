@@ -1,0 +1,15 @@
+{"success":false,"error":{"category":"user","code":"flow_not_found","message":"Flow '3c4cc4aa-1652-4c5a-9622-6e87477a41f9' not found","origin":"registry:get_flow"}}
+{"success":false,"error":{"category":"user","code":"flow_not_found","message":"Flow '3c4cc4aa-1652-4c5a-9622-6e87477a41f9' not found","origin":"registry:get_flow"}}
+{"success":false,"error":{"category":"user","code":"workflow_run_has_no_execution_bridge","message":"Workflow run has not created execution worktrees yet","origin":"registry:workflow_worktree_inspect"}}
+{"success":false,"error":{"category":"user","code":"workflow_run_not_found","message":"Workflow run '00000000-0000-0000-0000-000000000000' not found","origin":"registry:get_workflow_run","hint":"Use 'hivemind workflow run-list' to inspect available workflow runs"}}
+{"success":false,"error":{"category":"user","code":"workflow_run_not_running","message":"Workflow run '050348e7-5260-4e58-ae42-c1ff145e956d' is not in running state","origin":"registry:tick_workflow_run","hint":"Start or resume the workflow run before ticking it"}}
+merge_prepare_before_complete_rc=2
+merge_approve_before_prepare_rc=2
+bad_step_rc=1
+bad_run_rc=2
+second_tick_rc=3
+
+TMP_ROOT=/tmp/tmp.sncZBTNdc5
+LOG=/tmp/tmp.sncZBTNdc5/sprint69-workflow-edges.log
+RUN_ID=050348e7-5260-4e58-ae42-c1ff145e956d
+STEP_ID=4adb760c-89d3-4417-bd57-bd8aac6333cb

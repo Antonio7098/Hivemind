@@ -3,6 +3,9 @@ use super::*;
 impl NativeRuntimeStateStore {
     pub(super) fn exec(&self, sql: &str) -> Result<()> {
         let output = Command::new("sqlite3")
+            .arg("-batch")
+            .arg("-cmd")
+            .arg(format!(".timeout {}", self.busy_timeout_ms))
             .arg(self.db_path.as_os_str())
             .arg(sql)
             .output()
@@ -34,6 +37,8 @@ impl NativeRuntimeStateStore {
         let output = Command::new("sqlite3")
             .arg("-noheader")
             .arg("-batch")
+            .arg("-cmd")
+            .arg(format!(".timeout {}", self.busy_timeout_ms))
             .arg(self.db_path.as_os_str())
             .arg(sql)
             .output()
@@ -81,6 +86,8 @@ impl NativeRuntimeStateStore {
         let output = Command::new("sqlite3")
             .arg("-noheader")
             .arg("-batch")
+            .arg("-cmd")
+            .arg(format!(".timeout {}", self.busy_timeout_ms))
             .arg(self.db_path.as_os_str())
             .arg(sql)
             .output()

@@ -15,6 +15,7 @@ impl Registry {
     ) -> Result<crate::core::state::MergeState> {
         let origin = "registry:merge_prepare";
         let mut flow = self.get_flow(flow_id)?;
+        let flow_corr = Self::correlation_for_flow_event(&self.state()?, &flow);
 
         if !matches!(flow.state, FlowState::Completed | FlowState::FrozenForMerge) {
             let err = HivemindError::user(
@@ -22,19 +23,12 @@ impl Registry {
                 "Flow has not completed successfully",
                 origin,
             );
-            self.record_error_event(
-                &err,
-                CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
-            );
+            self.record_error_event(&err, flow_corr);
             return Err(err);
         }
 
-        let _ = self.enforce_constitution_gate(
-            flow.project_id,
-            "merge_prepare",
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
-            origin,
-        )?;
+        let _ =
+            self.enforce_constitution_gate(flow.project_id, "merge_prepare", flow_corr, origin)?;
 
         let mut state = self.state()?;
         if let Some(ms) = state.merge_states.get(&flow.id) {
@@ -50,7 +44,7 @@ impl Registry {
             self.append_event(
                 Event::new(
                     EventPayload::FlowFrozenForMerge { flow_id: flow.id },
-                    CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+                    Self::correlation_for_flow_event(&state, &flow),
                 ),
                 origin,
             )?;
@@ -115,12 +109,7 @@ impl Registry {
                             task_id: *task_id,
                             commit_sha: commit_sha.clone(),
                         },
-                        CorrelationIds::for_graph_flow_task(
-                            flow.project_id,
-                            flow.graph_id,
-                            flow.id,
-                            *task_id,
-                        ),
+                        Self::correlation_for_flow_task_event(&state, &flow, *task_id),
                     ),
                     origin,
                 )?;
@@ -143,7 +132,7 @@ impl Registry {
                 target_branch: Some(prepared_target_branch),
                 conflicts,
             },
-            CorrelationIds::for_graph_flow(flow.project_id, flow.graph_id, flow.id),
+            Self::correlation_for_flow_event(&state, &flow),
         );
         self.store
             .append(event)

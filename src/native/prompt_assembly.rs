@@ -1,5 +1,7 @@
 use super::*;
-use crate::adapters::runtime::{ExecutionInput, NativePromptMetadata};
+use crate::adapters::runtime::{
+    ExecutionInput, NativeActiveCodeWindowTrace, NativePromptMetadata,
+};
 use crate::native::tool_engine::ToolContract;
 use crate::native::turn_items::TurnItemKind;
 use sha2::{Digest, Sha256};
@@ -36,6 +38,8 @@ pub struct NativePromptAssembly {
     #[serde(default)]
     pub selected_history_chars: usize,
     #[serde(default)]
+    pub active_code_window_chars: usize,
+    #[serde(default)]
     pub compacted_summary_chars: usize,
     #[serde(default)]
     pub code_navigation_chars: usize,
@@ -47,6 +51,10 @@ pub struct NativePromptAssembly {
     #[serde(default)]
     pub selected_history_count: usize,
     #[serde(default)]
+    pub active_code_window_count: usize,
+    #[serde(default)]
+    pub active_code_window_trace: Vec<NativeActiveCodeWindowTrace>,
+    #[serde(default)]
     pub code_navigation_count: usize,
     #[serde(default)]
     pub compacted_summary_count: usize,
@@ -56,6 +64,14 @@ pub struct NativePromptAssembly {
     pub skipped_item_count: usize,
     #[serde(default)]
     pub truncated_item_count: usize,
+    #[serde(default)]
+    pub omitted_active_code_window_count: usize,
+    #[serde(default)]
+    pub suppressed_by_active_code_window_count: usize,
+    #[serde(default)]
+    pub suppressed_duplicate_read_count: usize,
+    #[serde(default)]
+    pub suppressed_stale_tool_call_count: usize,
     #[serde(default)]
     pub tool_result_items_visible: usize,
     #[serde(default)]
@@ -257,17 +273,24 @@ pub(crate) fn assemble_native_prompt(
             selected_item_count: prompt_items.len(),
             static_prompt_chars,
             selected_history_chars,
+            active_code_window_chars: 0,
             compacted_summary_chars,
             code_navigation_chars,
             tool_contract_chars,
             assembly_duration_ms: 0,
             selected_history_count,
+            active_code_window_count: 0,
+            active_code_window_trace: Vec::new(),
             code_navigation_count,
             compacted_summary_count,
             tool_contract_count,
             runtime_context_bytes: metadata.runtime_context_bytes,
             skipped_item_count: selection.skipped_item_count,
             truncated_item_count: selection.truncated_item_count,
+            omitted_active_code_window_count: 0,
+            suppressed_by_active_code_window_count: 0,
+            suppressed_duplicate_read_count: 0,
+            suppressed_stale_tool_call_count: 0,
             tool_result_items_visible,
             latest_tool_result_turn_index,
             latest_tool_names_visible,

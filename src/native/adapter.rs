@@ -15,9 +15,9 @@ use crate::native::tool_engine::{
     NativeToolAction, NativeToolEngine, ToolExecutionContext,
 };
 use crate::native::{
-    assemble_native_prompt, compacted_summary_item, user_input_item, AgentLoop, MockModelClient,
-    ModelClient, ModelDirective, ModelTurnRequest, NativeRuntimeConfig, OpenRouterModelClient,
-    TurnItem,
+    compacted_summary_item, user_input_item, AgentLoop, GroqModelClient, MiniMaxModelClient,
+    MockModelClient, ModelClient, ModelDirective, ModelTurnRequest, NativeRuntimeConfig,
+    OpenRouterModelClient, TurnItem,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;

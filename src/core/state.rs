@@ -7,6 +7,7 @@ use super::flow::{FlowState, RetryMode, RunMode, TaskExecState, TaskExecution, T
 use super::graph::{GraphState, TaskGraph};
 use super::scope::{RepoAccessMode, Scope};
 use super::verification::CheckResult;
+use super::workflow::{WorkflowDefinition, WorkflowRun};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -309,6 +310,8 @@ pub struct AppState {
     pub tasks: HashMap<Uuid, Task>,
     pub graphs: HashMap<Uuid, TaskGraph>,
     pub flows: HashMap<Uuid, TaskFlow>,
+    pub workflows: HashMap<Uuid, WorkflowDefinition>,
+    pub workflow_runs: HashMap<Uuid, WorkflowRun>,
     pub global_runtime_defaults: RuntimeRoleDefaults,
     pub flow_runtime_defaults: HashMap<Uuid, RuntimeRoleDefaults>,
     pub merge_states: HashMap<Uuid, MergeState>,

@@ -48,7 +48,18 @@ pub(super) struct NativeInvocationSummary {
     pub max_selected_history_chars: usize,
     pub max_assembly_duration_ms: u64,
     pub max_elapsed_since_invocation_ms: u64,
+    pub runtime_to_invocation_ms: Option<i64>,
+    pub invocation_to_first_model_request_ms: Option<i64>,
+    pub runtime_output_chunk_count: u64,
+    pub startup_progress: Vec<StartupProgressRow>,
     pub turns: Vec<NativeTurnSummaryRow>,
+}
+
+#[derive(Debug, Default, Serialize, Clone)]
+pub(super) struct StartupProgressRow {
+    pub stage: String,
+    pub elapsed_ms: Option<u64>,
+    pub line: String,
 }
 
 #[derive(Debug, Default, Serialize)]

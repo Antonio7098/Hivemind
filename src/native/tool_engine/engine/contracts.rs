@@ -59,7 +59,7 @@ impl NativeToolEngine {
             "checkpoint_complete",
             "orchestration_checkpoint",
             vec![ToolPermission::Execution],
-            DEFAULT_TIMEOUT_MS,
+            CHECKPOINT_COMPLETE_TIMEOUT_MS,
             false,
             handle_checkpoint_complete,
         )?;
@@ -99,7 +99,7 @@ impl NativeToolEngine {
             "graph_query",
             "graph_query_read",
             vec![ToolPermission::FilesystemRead, ToolPermission::GitRead],
-            DEFAULT_TIMEOUT_MS,
+            GRAPH_QUERY_TIMEOUT_MS,
             true,
             handle_graph_query,
         )?;
@@ -170,7 +170,8 @@ impl NativeToolEngine {
         tool_name: &str,
         payload: &Value,
     ) -> Result<(), NativeToolEngineError> {
-        validator.validate(payload).map_err(|iter| {
+        let normalized = Self::normalize_wrapped_tool_payload(tool_name, payload);
+        validator.validate(&normalized).map_err(|iter| {
             let first = iter.into_iter().next();
             let message = first.map_or_else(
                 || "schema validation failed".to_string(),
@@ -180,6 +181,46 @@ impl NativeToolEngine {
                 "tool '{tool_name}' input is invalid: {message}"
             ))
         })
+    }
+
+    pub(super) fn normalize_wrapped_tool_payload(tool_name: &str, payload: &Value) -> Value {
+        let Some(object) = payload.as_object() else {
+            return payload.clone();
+        };
+        let mut normalized = if let Some(arguments) = object.get("arguments") {
+            let action_name_matches = object
+                .get("action")
+                .and_then(Value::as_str)
+                .is_some_and(|name| name.eq_ignore_ascii_case(tool_name));
+            if action_name_matches {
+                arguments.clone()
+            } else {
+                payload.clone()
+            }
+        } else {
+            payload.clone()
+        };
+
+        let Some(map) = normalized.as_object_mut() else {
+            return normalized;
+        };
+
+        match tool_name {
+            "run_command" => {
+                if let Some(cmd) = map.remove("cmd") {
+                    map.entry("command".to_string()).or_insert(cmd);
+                }
+                map.remove("cwd");
+            }
+            "exec_command" => {
+                if let Some(command) = map.remove("command") {
+                    map.entry("cmd".to_string()).or_insert(command);
+                }
+            }
+            _ => {}
+        }
+
+        normalized
     }
 
     pub(super) fn validate_output(

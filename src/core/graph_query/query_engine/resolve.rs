@@ -2,6 +2,13 @@ use super::super::support::normalize_graph_path;
 use super::*;
 use std::collections::BTreeSet;
 
+#[derive(Debug, Clone)]
+pub(super) struct ResolvedRuntimeNode {
+    pub(super) node_id: String,
+    pub(super) repository_index: usize,
+    pub(super) block_selector: String,
+}
+
 pub(super) fn collect_nodes(
     nodes: &BTreeMap<String, IndexedNode>,
     node_ids: &BTreeSet<String>,
@@ -62,5 +69,49 @@ impl GraphQueryIndex {
                 matches.len()
             ),
         ))
+    }
+
+    pub(super) fn resolve_runtime_node(
+        &self,
+        input: &str,
+    ) -> Result<ResolvedRuntimeNode, GraphQueryError> {
+        let node_id = self.resolve_node_id(input)?;
+        let repository_index = self
+            .node_to_repository_index
+            .get(&node_id)
+            .copied()
+            .ok_or_else(|| {
+                GraphQueryError::new(
+                    "graph_query_runtime_unavailable",
+                    format!("Node '{node_id}' is not available in the local GraphCode runtime"),
+                )
+            })?;
+        let block_selector = self
+            .node_to_block_selector
+            .get(&node_id)
+            .cloned()
+            .ok_or_else(|| {
+                GraphQueryError::new(
+                    "graph_query_runtime_unavailable",
+                    format!("Node '{node_id}' is missing a local GraphCode selector"),
+                )
+            })?;
+        Ok(ResolvedRuntimeNode {
+            node_id,
+            repository_index,
+            block_selector,
+        })
+    }
+
+    pub(super) fn runtime_node_id_for_block(
+        &self,
+        repository_index: usize,
+        block_selector: &str,
+    ) -> Option<String> {
+        self.repositories
+            .get(repository_index)?
+            .block_to_node_id
+            .get(block_selector)
+            .cloned()
     }
 }
