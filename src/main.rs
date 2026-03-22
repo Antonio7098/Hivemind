@@ -159,6 +159,7 @@ fn main() {
 
 fn run(cli: Cli) -> ExitCode {
     let format = cli.format;
+    let app_ctx = hivemind::cli::handlers::common::app_context();
 
     match cli.command {
         Some(Commands::Version) => {
@@ -174,7 +175,7 @@ fn run(cli: Cli) -> ExitCode {
         Some(Commands::Task(cmd)) => hivemind::cli::handlers::handle_task(cmd, format),
         Some(Commands::Graph(cmd)) => hivemind::cli::handlers::handle_graph(cmd, format),
         Some(Commands::Flow(cmd)) => hivemind::cli::handlers::handle_flow(cmd, format),
-        Some(Commands::Workflow(cmd)) => hivemind::cli::handlers::handle_workflow(cmd, format),
+        Some(Commands::Workflow(cmd)) => hivemind::cli::handlers::handle_workflow(cmd, &app_ctx, format),
         Some(Commands::Events(cmd)) => hivemind::cli::handlers::handle_events(cmd, format),
         Some(Commands::Runtime(cmd)) => hivemind::cli::handlers::handle_runtime(cmd, format),
         Some(Commands::Verify(cmd)) => hivemind::cli::handlers::handle_verify(cmd, format),

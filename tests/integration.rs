@@ -440,6 +440,7 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
     );
 }
 
+// ARCH_DEBT: Complex integration test for governance artifacts; should be split into smaller focused tests
 #[test]
 #[allow(clippy::too_many_lines)]
 fn cli_sprint35_governance_artifacts_and_template_instantiation() {

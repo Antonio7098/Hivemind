@@ -14,11 +14,12 @@ use crate::core::workflow::{
     WorkflowStepInputBinding, WorkflowStepKind, WorkflowStepOutputBinding, WorkflowStepState,
     WorkflowWaitConfig,
 };
+use crate::app::AppContext;
 use std::collections::BTreeMap;
 use std::fs;
 
-fn get_registry(format: OutputFormat) -> Option<Registry> {
-    match Registry::open() {
+fn get_registry(app_ctx: &AppContext, format: OutputFormat) -> Option<Registry> {
+    match Registry::open(app_ctx) {
         Ok(r) => Some(r),
         Err(e) => {
             output_error(&e, format);
@@ -311,9 +312,10 @@ fn render_workflow_run(
     ExitCode::Success
 }
 
+// ARCH_DEBT: CLI handlers need AppContext injection for proper dependency management
 #[allow(clippy::too_many_lines)]
-pub fn handle_workflow(cmd: WorkflowCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+pub fn handle_workflow(cmd: WorkflowCommands, app_ctx: &AppContext, format: OutputFormat) -> ExitCode {
+    let Some(registry) = get_registry(app_ctx, format) else {
         return ExitCode::Error;
     };
 

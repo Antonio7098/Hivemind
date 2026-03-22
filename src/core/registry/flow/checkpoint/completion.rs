@@ -36,6 +36,7 @@ impl Registry {
 
         Ok(false)
     }
+    // ARCH_DEBT: Checkpoint completion involves complex validation and event orchestration; should be broken into smaller functions
     #[allow(clippy::too_many_lines)]
     pub fn checkpoint_complete(
         &self,

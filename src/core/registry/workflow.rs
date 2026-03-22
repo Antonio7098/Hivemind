@@ -3598,6 +3598,7 @@ impl Registry {
         Ok(())
     }
 
+    // ARCH_DEBT: Complex workflow-to-flow bridge logic requires many lines; should be refactored into smaller functions
     #[allow(clippy::too_many_lines)]
     fn ensure_synthetic_flow_for_workflow_run(
         &self,

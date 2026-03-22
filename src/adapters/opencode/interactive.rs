@@ -42,6 +42,7 @@ impl OpenCodeAdapter {
             std::cmp::max(Duration::from_secs(5), timeout / 4),
         ))
     }
+    // ARCH_DEBT: Complex interactive PTY handling requires many lines; should be refactored into smaller components
     #[allow(clippy::too_many_lines)]
     pub fn execute_interactive<F>(
         &mut self,
