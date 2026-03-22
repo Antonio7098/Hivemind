@@ -822,7 +822,7 @@ fn cli_attempt_inspect_context_returns_manifest_and_retry_linkage() {
         manifest
             .get("manifest_version")
             .and_then(serde_json::Value::as_u64),
-        Some(2)
+        Some(3)
     );
     let ordered_inputs = manifest
         .get("ordered_inputs")
