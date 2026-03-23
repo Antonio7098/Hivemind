@@ -53,6 +53,9 @@ pub struct ExecutionReport {
     pub native_invocation: Option<NativeInvocationTrace>,
     #[serde(default)]
     pub structured_runtime_observations: Vec<StructuredRuntimeObservation>,
+    #[serde(default)]
+    pub projected_runtime_observations:
+        Vec<crate::core::runtime_event_projection::ProjectedRuntimeObservation>,
 }
 
 impl ExecutionReport {
@@ -68,6 +71,7 @@ impl ExecutionReport {
             errors: Vec::new(),
             native_invocation: None,
             structured_runtime_observations: Vec::new(),
+            projected_runtime_observations: Vec::new(),
         }
     }
 
@@ -93,6 +97,7 @@ impl ExecutionReport {
             errors: vec![error],
             native_invocation: None,
             structured_runtime_observations: Vec::new(),
+            projected_runtime_observations: Vec::new(),
         }
     }
 
@@ -126,6 +131,15 @@ impl ExecutionReport {
         observations: Vec<StructuredRuntimeObservation>,
     ) -> Self {
         self.structured_runtime_observations = observations;
+        self
+    }
+
+    #[must_use]
+    pub fn with_projected_runtime_observations(
+        mut self,
+        observations: Vec<crate::core::runtime_event_projection::ProjectedRuntimeObservation>,
+    ) -> Self {
+        self.projected_runtime_observations = observations;
         self
     }
 }

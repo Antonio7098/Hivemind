@@ -1,5 +1,6 @@
 use super::runtime::StructuredRuntimeObservation;
 use crate::core::events::RuntimeOutputStream;
+use crate::core::runtime_event_projection::ProjectedRuntimeObservation;
 use serde_json::Value;
 use std::convert::TryFrom;
 
@@ -24,6 +25,7 @@ pub(crate) struct ParsedJsonAdapterOutput {
     pub stderr: String,
     pub parsed_event_count: usize,
     pub structured_runtime_observations: Vec<StructuredRuntimeObservation>,
+    pub projected_runtime_observations: Vec<ProjectedRuntimeObservation>,
 }
 
 pub(crate) fn transform_json_output(
@@ -35,6 +37,7 @@ pub(crate) fn transform_json_output(
     let mut stderr_lines = Vec::new();
     let mut parsed_event_count = 0;
     let mut structured_runtime_observations = Vec::new();
+    let mut projected_runtime_observations = Vec::new();
 
     for line in raw_stdout.lines() {
         let trimmed = line.trim();
@@ -54,6 +57,7 @@ pub(crate) fn transform_json_output(
                             &mut stdout_lines,
                             &mut stderr_lines,
                             &mut structured_runtime_observations,
+                            &mut projected_runtime_observations,
                         );
                     }
                     JsonAdapterKind::Codex => {
@@ -62,6 +66,7 @@ pub(crate) fn transform_json_output(
                             &mut stdout_lines,
                             &mut stderr_lines,
                             &mut structured_runtime_observations,
+                            &mut projected_runtime_observations,
                         );
                     }
                 }
@@ -76,6 +81,7 @@ pub(crate) fn transform_json_output(
             stderr: raw_stderr.to_string(),
             parsed_event_count,
             structured_runtime_observations,
+            projected_runtime_observations,
         };
     }
 
@@ -84,6 +90,7 @@ pub(crate) fn transform_json_output(
         stderr: combine_outputs(raw_stderr, &join_lines(&stderr_lines)),
         parsed_event_count,
         structured_runtime_observations,
+        projected_runtime_observations,
     }
 }
 
@@ -92,6 +99,7 @@ fn render_opencode_event(
     stdout: &mut Vec<String>,
     stderr: &mut Vec<String>,
     structured_runtime_observations: &mut Vec<StructuredRuntimeObservation>,
+    projected_runtime_observations: &mut Vec<ProjectedRuntimeObservation>,
 ) {
     match nested_str(value, &["type"]) {
         Some("text") => {
@@ -107,11 +115,34 @@ fn render_opencode_event(
                         }
                     }),
                 );
+                for command in extract_command_lines(text) {
+                    projected_runtime_observations.push(
+                        ProjectedRuntimeObservation::CommandObserved {
+                            stream: RuntimeOutputStream::Stdout,
+                            command,
+                        },
+                    );
+                }
+                if !extract_command_lines(text).is_empty() {
+                    projected_runtime_observations.push(
+                        ProjectedRuntimeObservation::NarrativeOutputObserved {
+                            stream: RuntimeOutputStream::Stdout,
+                            content: text.to_string(),
+                        },
+                    );
+                }
             }
         }
         Some("tool_use") => {
             if let Some(tool) = nested_str(value, &["part", "tool"]) {
                 stdout.push(format!("Tool: {tool}"));
+                projected_runtime_observations.push(
+                    ProjectedRuntimeObservation::ToolCallObserved {
+                        stream: RuntimeOutputStream::Stdout,
+                        tool_name: tool.to_string(),
+                        details: format!("Tool: {}", tool),
+                    },
+                );
             }
             if let Some(command) = nested_str(value, &["part", "state", "input", "command"]) {
                 stdout.push(format!("Command: {command}"));
@@ -126,6 +157,10 @@ fn render_opencode_event(
                             .map(ToString::to_string),
                     },
                 );
+                projected_runtime_observations.push(ProjectedRuntimeObservation::CommandObserved {
+                    stream: RuntimeOutputStream::Stdout,
+                    command: command.to_string(),
+                });
             }
             if let Some(title) = nested_str(value, &["part", "state", "title"]) {
                 push_lines(stdout, title);
@@ -164,6 +199,7 @@ fn render_codex_event(
     stdout: &mut Vec<String>,
     stderr: &mut Vec<String>,
     structured_runtime_observations: &mut Vec<StructuredRuntimeObservation>,
+    _projected_runtime_observations: &mut Vec<ProjectedRuntimeObservation>,
 ) {
     match nested_str(value, &["type"]) {
         Some("thread.started") => {
@@ -199,6 +235,7 @@ fn render_codex_event(
                     stdout,
                     stderr,
                     structured_runtime_observations,
+                    _projected_runtime_observations,
                 );
             }
         }
@@ -212,6 +249,7 @@ fn render_codex_item(
     stdout: &mut Vec<String>,
     stderr: &mut Vec<String>,
     structured_runtime_observations: &mut Vec<StructuredRuntimeObservation>,
+    _projected_runtime_observations: &mut Vec<ProjectedRuntimeObservation>,
 ) {
     match nested_str(item, &["type"]) {
         Some("agent_message") => {

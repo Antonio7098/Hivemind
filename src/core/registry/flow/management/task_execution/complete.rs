@@ -67,10 +67,14 @@ impl Registry {
             origin,
         )?;
 
-        let updated = self.get_flow(&flow.id.to_string())?;
+        let flow_id = flow.id.to_string();
+        let updated = self.get_flow(&flow_id)?;
+        self.reconcile_workflow_bridge_for_flow(updated.id, origin)?;
         if updated.run_mode == RunMode::Auto {
-            return self.auto_progress_flow(&flow.id.to_string());
+            let progressed = self.auto_progress_flow(&flow_id)?;
+            self.reconcile_workflow_bridge_for_flow(progressed.id, origin)?;
+            return self.get_flow(&flow_id);
         }
-        Ok(updated)
+        self.get_flow(&flow_id)
     }
 }

@@ -5,6 +5,7 @@
 //! never drive `TaskFlow` control flow.
 
 use crate::core::events::RuntimeOutputStream;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 mod normalize;
@@ -16,7 +17,7 @@ mod tests;
 use normalize::{normalize_projection_line, starts_new_projection_line};
 use parser::{is_narrative_line, parse_command, parse_todo_item, parse_tool_name};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProjectedRuntimeObservation {
     CommandObserved {
         stream: RuntimeOutputStream,

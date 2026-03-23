@@ -285,29 +285,54 @@ impl Registry {
                 origin,
             )?;
 
-            let _ = self.append_structured_runtime_observations(
+            if let Err(e) = self.append_structured_runtime_observations(
                 attempt_id,
                 attempt_corr,
                 report.structured_runtime_observations.clone(),
                 origin,
+            ) {
+                eprintln!(
+                    "ERROR: Failed to append structured runtime observations: {} (attempt_id={}, origin={})",
+                    e, attempt_id, origin
+                );
+            } else {
+                eprintln!("DEBUG: Successfully appended {} structured runtime observations for attempt {}",
+                    report.structured_runtime_observations.len(), attempt_id);
+            }
+        }
+
+        let mut all_projected = runtime_projector.flush();
+        all_projected.extend(report.projected_runtime_observations.clone());
+        let projected =
+            filter_projected_runtime_observations(all_projected, has_structured_command_events);
+        if let Err(e) = self.append_projected_runtime_observations(
+            attempt_id,
+            attempt_corr,
+            projected.clone(),
+            origin,
+        ) {
+            eprintln!(
+                "ERROR: Failed to append projected runtime observations: {} (attempt_id={}, origin={}, count={})",
+                e, attempt_id, origin, projected.len()
+            );
+        } else if !projected.is_empty() {
+            eprintln!(
+                "DEBUG: Successfully appended {} projected runtime observations for attempt {}",
+                projected.len(),
+                attempt_id
             );
         }
 
-        let _ = self.append_projected_runtime_observations(
-            attempt_id,
-            attempt_corr,
-            filter_projected_runtime_observations(
-                runtime_projector.flush(),
-                has_structured_command_events,
-            ),
-            origin,
-        );
-
         if let Some(reason) = terminated_reason {
-            let _ = self.store.append(Event::new(
+            if let Err(e) = self.store.append(Event::new(
                 EventPayload::RuntimeTerminated { attempt_id, reason },
                 attempt_corr.clone(),
-            ));
+            )) {
+                eprintln!(
+                    "ERROR: Failed to append RuntimeTerminated event: {} (attempt_id={})",
+                    e, attempt_id
+                );
+            }
         }
 
         let duration_ms = u64::try_from(report.duration.as_millis().min(u128::from(u64::MAX)))

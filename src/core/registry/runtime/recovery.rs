@@ -118,10 +118,34 @@ impl Registry {
         let corr_attempt =
             Self::correlation_for_flow_task_attempt_event(state, flow, task_id, attempt_id);
 
+        if failure_code == "checkpoints_incomplete" {
+            let reason = format!("{failure_code}: {failure_message}");
+            self.append_event(
+                Event::new(
+                    EventPayload::RuntimeTerminated { attempt_id, reason },
+                    corr_attempt.clone(),
+                ),
+                origin,
+            )?;
+            return Ok(());
+        }
+
         let reason = format!("{failure_code}: {failure_message}");
         self.append_event(
             Event::new(
                 EventPayload::RuntimeTerminated { attempt_id, reason },
+                corr_attempt.clone(),
+            ),
+            origin,
+        )?;
+
+        self.append_event(
+            Event::new(
+                EventPayload::RuntimeExited {
+                    attempt_id,
+                    exit_code: -1,
+                    duration_ms: 0,
+                },
                 corr_attempt.clone(),
             ),
             origin,
@@ -142,10 +166,6 @@ impl Registry {
             &classified,
             origin,
         )?;
-
-        if failure_code == "checkpoints_incomplete" {
-            return Ok(());
-        }
 
         self.fail_running_attempt(flow, task_id, attempt_id, failure_code, origin)?;
 

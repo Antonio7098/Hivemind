@@ -6,7 +6,12 @@ use crate::core::worktree::{WorktreeConfig, WorktreeManager};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::io::BufRead;
-use std::sync::{Arc, Mutex};
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc, Arc, Mutex,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CliCommandFlavor {
@@ -25,6 +30,11 @@ struct LiveJsonRuntimeTracker {
     current_session_id: Option<String>,
     seen_session_ids: HashSet<String>,
     next_turn_ordinal: u32,
+    stdout_nonempty_lines: usize,
+    parsed_json_lines: usize,
+    non_json_lines: usize,
+    first_non_json_line: Option<String>,
+    protocol_completed: Option<Arc<AtomicBool>>,
     observations: Vec<StructuredRuntimeObservation>,
     warnings: Vec<String>,
 }
@@ -35,6 +45,7 @@ impl LiveJsonRuntimeTracker {
         adapter_name: String,
         worktree: PathBuf,
         env: &std::collections::HashMap<String, String>,
+        protocol_completed: Option<Arc<AtomicBool>>,
     ) -> Option<Self> {
         matches!(
             flavor,
@@ -49,6 +60,11 @@ impl LiveJsonRuntimeTracker {
             current_session_id: None,
             seen_session_ids: HashSet::new(),
             next_turn_ordinal: 0,
+            stdout_nonempty_lines: 0,
+            parsed_json_lines: 0,
+            non_json_lines: 0,
+            first_non_json_line: None,
+            protocol_completed,
             observations: Vec::new(),
             warnings: Vec::new(),
         })
@@ -59,9 +75,15 @@ impl LiveJsonRuntimeTracker {
         if trimmed.is_empty() {
             return;
         }
+        self.stdout_nonempty_lines += 1;
         let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
+            self.non_json_lines += 1;
+            if self.first_non_json_line.is_none() {
+                self.first_non_json_line = Some(truncate_for_warning(trimmed));
+            }
             return;
         };
+        self.parsed_json_lines += 1;
 
         match self.flavor {
             CliCommandFlavor::OpenCodeFamily => self.observe_opencode_value(&value),
@@ -70,7 +92,20 @@ impl LiveJsonRuntimeTracker {
         }
     }
 
-    fn finish(self) -> (Vec<StructuredRuntimeObservation>, Vec<String>) {
+    fn finish(mut self) -> (Vec<StructuredRuntimeObservation>, Vec<String>) {
+        if self.non_json_lines > 0 || self.parsed_json_lines == 0 {
+            let mut warning = format!(
+                "runtime stdout observation summary: lines={}, parsed_json={}, non_json={}, projected_observations={}",
+                self.stdout_nonempty_lines,
+                self.parsed_json_lines,
+                self.non_json_lines,
+                self.observations.len()
+            );
+            if let Some(preview) = self.first_non_json_line.as_deref() {
+                warning.push_str(&format!(", first_non_json_line={preview:?}"));
+            }
+            self.warnings.push(warning);
+        }
         (self.observations, self.warnings)
     }
 
@@ -81,7 +116,8 @@ impl LiveJsonRuntimeTracker {
             self.note_session(session_id.to_string());
         }
 
-        if json_nested_str(value, &["type"]) == Some("step_finish") {
+        let type_str = json_nested_str(value, &["type"]);
+        if type_str == Some("step_finish") {
             let provider_turn_id = json_nested_str(value, &["snapshot"]).map(ToString::to_string);
             self.record_turn_completed(provider_turn_id, None);
         }
@@ -112,6 +148,9 @@ impl LiveJsonRuntimeTracker {
     }
 
     fn record_turn_completed(&mut self, provider_turn_id: Option<String>, summary: Option<String>) {
+        if let Some(protocol_completed) = self.protocol_completed.as_ref() {
+            protocol_completed.store(true, Ordering::Relaxed);
+        }
         self.next_turn_ordinal += 1;
         let ordinal = self.next_turn_ordinal;
         let (git_ref, commit_sha) = self.create_turn_ref(ordinal);
@@ -171,11 +210,29 @@ fn json_nested_str<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
     current.as_str()
 }
 
+#[derive(Default)]
+struct StreamReadResult {
+    output: String,
+    tracker: Option<LiveJsonRuntimeTracker>,
+}
+
+fn truncate_for_warning(value: &str) -> String {
+    let mut truncated = String::new();
+    for (index, ch) in value.chars().enumerate() {
+        if index >= 160 {
+            truncated.push_str("...");
+            return truncated;
+        }
+        truncated.push(ch);
+    }
+    truncated
+}
+
 fn read_stream_to_string(
     stream: impl Read,
     mut tracker: Option<LiveJsonRuntimeTracker>,
     progress: Option<Arc<Mutex<Instant>>>,
-) -> (String, Option<LiveJsonRuntimeTracker>) {
+) -> StreamReadResult {
     let mut reader = BufReader::new(stream);
     let mut out = String::new();
     let mut line = String::new();
@@ -196,7 +253,10 @@ fn read_stream_to_string(
             }
         }
     }
-    (out, tracker)
+    StreamReadResult {
+        output: out,
+        tracker,
+    }
 }
 
 fn command_flavor(binary: &std::path::Path) -> CliCommandFlavor {
@@ -260,6 +320,30 @@ fn strip_codex_wrapper_args(args: &[String]) -> (Vec<String>, bool) {
 fn has_model_flag(args: &[String]) -> bool {
     args.iter()
         .any(|arg| arg == "--model" || arg == "-m" || arg.starts_with("--model="))
+}
+
+#[cfg(unix)]
+fn configure_child_process_group(cmd: &mut Command) {
+    cmd.process_group(0);
+}
+
+#[cfg(not(unix))]
+fn configure_child_process_group(_cmd: &mut Command) {}
+
+#[cfg(unix)]
+fn terminate_process_group_by_pid(pid: u32) {
+    let group = format!("-{pid}");
+    let _ = Command::new("kill").args(["-TERM", &group]).status();
+    std::thread::sleep(Duration::from_millis(20));
+    let _ = Command::new("kill").args(["-KILL", &group]).status();
+}
+
+#[cfg(not(unix))]
+fn terminate_process_group_by_pid(_pid: u32) {}
+
+fn terminate_child_process_group(child: &mut Child) {
+    terminate_process_group_by_pid(child.id());
+    let _ = child.wait();
 }
 
 impl RuntimeAdapter for OpenCodeAdapter {
@@ -440,6 +524,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
         }
 
         // Spawn process
+        configure_child_process_group(&mut cmd);
         let mut child = cmd.spawn().map_err(|e| {
             RuntimeError::new(
                 "spawn_failed",
@@ -468,107 +553,271 @@ impl RuntimeAdapter for OpenCodeAdapter {
 
         self.process = Some(child);
 
-        let (stdout_handle, stderr_handle, last_progress_at) =
-            if let Some(ref mut process) = self.process {
-                let stdout = process.stdout.take().ok_or_else(|| {
-                    RuntimeError::new("stdout_capture_failed", "Missing stdout pipe", false)
-                })?;
-                let stderr = process.stderr.take().ok_or_else(|| {
-                    RuntimeError::new("stderr_capture_failed", "Missing stderr pipe", false)
-                })?;
-                let last_progress_at = Arc::new(Mutex::new(Instant::now()));
+        let (
+            mut stdout_handle,
+            stdout_rx,
+            mut stderr_handle,
+            stderr_rx,
+            last_progress_at,
+            protocol_completed,
+        ) = if let Some(ref mut process) = self.process {
+            let stdout = process.stdout.take().ok_or_else(|| {
+                RuntimeError::new("stdout_capture_failed", "Missing stdout pipe", false)
+            })?;
+            let stderr = process.stderr.take().ok_or_else(|| {
+                RuntimeError::new("stderr_capture_failed", "Missing stderr pipe", false)
+            })?;
+            let last_progress_at = Arc::new(Mutex::new(Instant::now()));
+            let protocol_completed = Arc::new(AtomicBool::new(false));
 
-                let stdout_tracker = LiveJsonRuntimeTracker::new(
-                    flavor,
-                    self.config.base.name.clone(),
-                    worktree.clone(),
-                    &self.config.base.env,
-                );
+            let stdout_tracker = LiveJsonRuntimeTracker::new(
+                flavor,
+                self.config.base.name.clone(),
+                worktree.clone(),
+                &self.config.base.env,
+                Some(Arc::clone(&protocol_completed)),
+            );
 
-                let stdout_progress = Arc::clone(&last_progress_at);
-                let stderr_progress = Arc::clone(&last_progress_at);
-                let stdout_handle = std::thread::spawn(move || {
-                    read_stream_to_string(stdout, stdout_tracker, Some(stdout_progress))
-                });
-                let stderr_handle = std::thread::spawn(move || {
-                    let (out, _) = read_stream_to_string(stderr, None, Some(stderr_progress));
-                    out
-                });
-
-                (stdout_handle, stderr_handle, last_progress_at)
-            } else {
-                return Err(RuntimeError::new(
-                    "no_process",
-                    "No process to wait on",
-                    false,
+            let stdout_progress = Arc::clone(&last_progress_at);
+            let stderr_progress = Arc::clone(&last_progress_at);
+            let (stdout_tx, stdout_rx) = mpsc::channel();
+            let stdout_handle = std::thread::spawn(move || {
+                let _ = stdout_tx.send(read_stream_to_string(
+                    stdout,
+                    stdout_tracker,
+                    Some(stdout_progress),
                 ));
-            };
+            });
+            let (stderr_tx, stderr_rx) = mpsc::channel();
+            let stderr_handle = std::thread::spawn(move || {
+                let _ = stderr_tx.send(read_stream_to_string(stderr, None, Some(stderr_progress)));
+            });
 
-        let status = loop {
+            (
+                Some(stdout_handle),
+                stdout_rx,
+                Some(stderr_handle),
+                stderr_rx,
+                last_progress_at,
+                protocol_completed,
+            )
+        } else {
+            return Err(RuntimeError::new(
+                "no_process",
+                "No process to wait on",
+                false,
+            ));
+        };
+
+        let process_group_pid = self.process.as_ref().map(std::process::Child::id);
+
+        enum WaitOutcome {
+            Exited(std::process::ExitStatus),
+            ProtocolCompleted,
+            TimedOut,
+            NoObservableProgress,
+            MissingProcess,
+        }
+
+        let protocol_completion_grace_period = Duration::from_millis(250);
+
+        let outcome = loop {
             let Some(ref mut process) = self.process else {
-                let _ = stdout_handle.join();
-                let _ = stderr_handle.join();
-                self.process = None;
-                return Err(RuntimeError::timeout(timeout));
+                break WaitOutcome::MissingProcess;
             };
 
             if start.elapsed() > timeout {
-                let _ = stdout_handle.join();
-                let _ = stderr_handle.join();
-                self.process = None;
-                return Err(RuntimeError::timeout(timeout));
+                break WaitOutcome::TimedOut;
             }
             if no_progress_timeout.is_some_and(|limit| {
-                last_progress_at
+                let elapsed = last_progress_at
                     .lock()
-                    .map(|last_progress| last_progress.elapsed() > limit)
-                    .unwrap_or(false)
+                    .map(|l: std::sync::MutexGuard<'_, std::time::Instant>| l.elapsed())
+                    .unwrap_or(timeout);
+                elapsed > limit
             }) {
-                let _ = process.kill();
-                let _ = stdout_handle.join();
-                let _ = stderr_handle.join();
-                self.process = None;
-                return Err(RuntimeError::new(
-                    "no_observable_progress_timeout",
-                    format!(
-                        "Runtime produced no observable progress for {:?}",
-                        no_progress_timeout.unwrap_or(timeout)
-                    ),
-                    true,
-                ));
+                break WaitOutcome::NoObservableProgress;
+            }
+            if protocol_completed.load(Ordering::Relaxed)
+                && last_progress_at
+                    .lock()
+                    .map(
+                        |last_progress: std::sync::MutexGuard<'_, std::time::Instant>| {
+                            last_progress.elapsed()
+                        },
+                    )
+                    .unwrap_or(protocol_completion_grace_period)
+                    >= protocol_completion_grace_period
+            {
+                break WaitOutcome::ProtocolCompleted;
             }
 
-            if let Some(status) = process.try_wait().map_err(|e| {
-                RuntimeError::new(
-                    "wait_failed",
-                    format!("Failed to wait on process: {e}"),
-                    false,
-                )
-            })? {
-                break status;
+            match process.try_wait() {
+                Ok(Some(status)) => {
+                    break WaitOutcome::Exited(status);
+                }
+                Ok(None) => {}
+                Err(_) => {}
             }
 
             std::thread::sleep(Duration::from_millis(10));
         };
 
-        let duration = start.elapsed();
-        let (mut stdout_content, live_tracker) = stdout_handle
-            .join()
-            .unwrap_or_else(|_| (String::new(), None));
-        let mut stderr_content = stderr_handle.join().unwrap_or_else(|_| String::new());
-        let mut structured_runtime_observations = Vec::new();
-
-        if let Some(tracker) = live_tracker {
-            let (mut observations, warnings) = tracker.finish();
-            structured_runtime_observations.append(&mut observations);
-            if !warnings.is_empty() {
-                if !stderr_content.is_empty() && !stderr_content.ends_with('\n') {
-                    stderr_content.push('\n');
-                }
-                stderr_content.push_str(&warnings.join("\n"));
-                stderr_content.push('\n');
+        if !matches!(outcome, WaitOutcome::Exited(_)) {
+            if let Some(ref mut process) = self.process {
+                terminate_child_process_group(process);
             }
         }
+        self.process = None;
+
+        let reader_wait_timeout = Duration::from_millis(500);
+        let mut stdout_result: Option<StreamReadResult> = None;
+        let mut stderr_result: Option<StreamReadResult> = None;
+        let mut runtime_warnings = Vec::new();
+
+        if matches!(outcome, WaitOutcome::ProtocolCompleted) {
+            runtime_warnings.push(
+                "runtime protocol reported completion before process exit; terminated lingering process-group members"
+                    .to_string(),
+            );
+        }
+
+        let reader_deadline = Instant::now() + reader_wait_timeout;
+        while (stdout_result.is_none() || stderr_result.is_none())
+            && Instant::now() < reader_deadline
+        {
+            if stdout_result.is_none() {
+                match stdout_rx.recv_timeout(Duration::from_millis(20)) {
+                    Ok(result) => stdout_result = Some(result),
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        stdout_result = Some(StreamReadResult::default());
+                    }
+                }
+            }
+            if stderr_result.is_none() {
+                match stderr_rx.recv_timeout(Duration::from_millis(20)) {
+                    Ok(result) => stderr_result = Some(result),
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        stderr_result = Some(StreamReadResult::default());
+                    }
+                }
+            }
+        }
+
+        if stdout_result.is_none() || stderr_result.is_none() {
+            if let Some(pid) = process_group_pid {
+                terminate_process_group_by_pid(pid);
+                runtime_warnings.push(format!(
+                    "runtime stream collection exceeded {:?}; terminated remaining process-group members for pid {}",
+                    reader_wait_timeout, pid
+                ));
+            }
+
+            let reader_deadline = Instant::now() + reader_wait_timeout;
+            while (stdout_result.is_none() || stderr_result.is_none())
+                && Instant::now() < reader_deadline
+            {
+                if stdout_result.is_none() {
+                    match stdout_rx.recv_timeout(Duration::from_millis(20)) {
+                        Ok(result) => stdout_result = Some(result),
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(mpsc::RecvTimeoutError::Disconnected) => {
+                            stdout_result = Some(StreamReadResult::default());
+                        }
+                    }
+                }
+                if stderr_result.is_none() {
+                    match stderr_rx.recv_timeout(Duration::from_millis(20)) {
+                        Ok(result) => stderr_result = Some(result),
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(mpsc::RecvTimeoutError::Disconnected) => {
+                            stderr_result = Some(StreamReadResult::default());
+                        }
+                    }
+                }
+            }
+        }
+
+        let duration = start.elapsed();
+        let stdout_result = stdout_result.unwrap_or_default();
+        let stderr_result = stderr_result.unwrap_or_default();
+
+        if stdout_result.tracker.is_some() {
+            if let Some(handle) = stdout_handle.take() {
+                let _ = handle.join();
+            }
+        }
+        if stderr_result.tracker.is_some()
+            || stderr_result.output.is_empty()
+            || stdout_handle.is_none()
+        {
+            if let Some(handle) = stderr_handle.take() {
+                let _ = handle.join();
+            }
+        }
+
+        let mut stdout_content = stdout_result.output;
+        let mut stderr_content = stderr_result.output;
+        let mut structured_runtime_observations = Vec::new();
+
+        if let Some(tracker) = stdout_result.tracker {
+            let (mut observations, warnings) = tracker.finish();
+            structured_runtime_observations.append(&mut observations);
+            runtime_warnings.extend(warnings);
+        }
+
+        if !runtime_warnings.is_empty() {
+            if !stderr_content.is_empty() && !stderr_content.ends_with('\n') {
+                stderr_content.push('\n');
+            }
+            stderr_content.push_str(&runtime_warnings.join("\n"));
+            stderr_content.push('\n');
+        }
+
+        let runtime_diagnostics = if runtime_warnings.is_empty() {
+            String::new()
+        } else {
+            format!(" Diagnostics: {}", runtime_warnings.join(" | "))
+        };
+
+        let mut projected_runtime_observations: Vec<
+            crate::core::runtime_event_projection::ProjectedRuntimeObservation,
+        > = Vec::new();
+
+        let status = match outcome {
+            WaitOutcome::Exited(status) => Some(status),
+            WaitOutcome::ProtocolCompleted => None,
+            WaitOutcome::TimedOut => {
+                return Err(RuntimeError::new(
+                    "timeout",
+                    format!(
+                        "Execution timed out after {:?}.{}",
+                        timeout, runtime_diagnostics
+                    ),
+                    true,
+                ));
+            }
+            WaitOutcome::NoObservableProgress => {
+                return Err(RuntimeError::new(
+                    "no_observable_progress_timeout",
+                    format!(
+                        "Runtime produced no observable progress for {:?}.{}",
+                        no_progress_timeout.unwrap_or(timeout),
+                        runtime_diagnostics
+                    ),
+                    true,
+                ));
+            }
+            WaitOutcome::MissingProcess => {
+                return Err(RuntimeError::new(
+                    "no_process",
+                    format!("No process to wait on.{}", runtime_diagnostics),
+                    true,
+                ));
+            }
+        };
 
         match flavor {
             CliCommandFlavor::OpenCodeFamily => {
@@ -580,6 +829,7 @@ impl RuntimeAdapter for OpenCodeAdapter {
                 stdout_content = parsed.stdout;
                 stderr_content = parsed.stderr;
                 structured_runtime_observations.extend(parsed.structured_runtime_observations);
+                projected_runtime_observations = parsed.projected_runtime_observations;
             }
             CliCommandFlavor::Codex => {
                 let parsed =
@@ -587,17 +837,22 @@ impl RuntimeAdapter for OpenCodeAdapter {
                 stdout_content = parsed.stdout;
                 stderr_content = parsed.stderr;
                 structured_runtime_observations.extend(parsed.structured_runtime_observations);
+                projected_runtime_observations = parsed.projected_runtime_observations;
             }
             CliCommandFlavor::Generic => {}
         }
 
         self.process = None;
 
-        let exit_code = status.code().unwrap_or(-1);
-        if exit_code == 0 {
+        let exit_code = status
+            .as_ref()
+            .and_then(std::process::ExitStatus::code)
+            .unwrap_or(0);
+        if status.is_none() || exit_code == 0 {
             Ok(
                 ExecutionReport::success(duration, stdout_content, stderr_content)
-                    .with_structured_runtime_observations(structured_runtime_observations),
+                    .with_structured_runtime_observations(structured_runtime_observations)
+                    .with_projected_runtime_observations(projected_runtime_observations),
             )
         } else {
             Ok(ExecutionReport::failure_with_output(
@@ -611,7 +866,8 @@ impl RuntimeAdapter for OpenCodeAdapter {
                 stdout_content,
                 stderr_content,
             )
-            .with_structured_runtime_observations(structured_runtime_observations))
+            .with_structured_runtime_observations(structured_runtime_observations)
+            .with_projected_runtime_observations(projected_runtime_observations))
         }
     }
 
@@ -638,6 +894,9 @@ mod tests {
     use super::*;
     use std::path::Path;
     use tempfile::tempdir;
+
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
 
     fn git_bin() -> &'static str {
         if Path::new("/usr/bin/git").exists() {
@@ -666,6 +925,16 @@ mod tests {
         run(&["commit", "-m", "initial"]);
     }
 
+    fn write_executable(path: &Path, body: &str) {
+        std::fs::write(path, body).expect("write executable");
+        #[cfg(unix)]
+        {
+            let mut perms = std::fs::metadata(path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(path, perms).expect("set permissions");
+        }
+    }
+
     #[test]
     fn live_tracker_emits_session_and_turn_ref_for_opencode() {
         let tmp = tempdir().expect("tempdir");
@@ -685,6 +954,7 @@ mod tests {
             "opencode".to_string(),
             repo.clone(),
             &env,
+            None,
         )
         .expect("tracker");
 
@@ -723,5 +993,84 @@ mod tests {
             }
             other => panic!("unexpected observation: {other:?}"),
         }
+    }
+
+    #[test]
+    fn execute_does_not_hang_when_background_child_keeps_stdout_open() {
+        let tmp = tempdir().expect("tempdir");
+        let binary_path = tmp.path().join("generic-runtime.sh");
+        write_executable(
+            &binary_path,
+            "#!/bin/sh\nif [ \"${1-}\" = \"--version\" ] || [ \"${1-}\" = \"--help\" ]; then\n  exit 0\nfi\n(sleep 5) &\nprintf 'done\\n'\nexit 0\n",
+        );
+
+        let mut cfg = OpenCodeConfig::new(binary_path);
+        cfg.base.args = vec!["--run".to_string()];
+        cfg.base.timeout = Duration::from_secs(2);
+
+        let mut adapter = OpenCodeAdapter::new(cfg);
+        adapter.initialize().expect("initialize adapter");
+        adapter
+            .prepare(Uuid::new_v4(), tmp.path())
+            .expect("prepare adapter");
+
+        let start = Instant::now();
+        let report = adapter
+            .execute(ExecutionInput {
+                task_description: "Verify stream cleanup".to_string(),
+                success_criteria: "Runtime exits cleanly".to_string(),
+                context: None,
+                prior_attempts: Vec::new(),
+                verifier_feedback: None,
+                native_prompt_metadata: None,
+            })
+            .expect("execute runtime");
+
+        assert!(start.elapsed() < Duration::from_secs(3));
+        assert_eq!(report.exit_code, 0);
+        assert!(report.stdout.contains("done"));
+        assert!(report.stderr.contains("runtime stream collection exceeded"));
+    }
+
+    #[test]
+    fn execute_returns_after_protocol_completion_even_if_process_lingers() {
+        let tmp = tempdir().expect("tempdir");
+        let binary_path = tmp.path().join("opencode");
+        write_executable(
+            &binary_path,
+            "#!/bin/sh\nif [ \"${1-}\" = \"--version\" ] || [ \"${1-}\" = \"--help\" ]; then\n  exit 0\nfi\nprintf '%s\\n' '{\"type\":\"step_finish\",\"sessionID\":\"sess-123\",\"snapshot\":\"snap-1\"}'\nsleep 5\n",
+        );
+
+        let mut cfg = OpenCodeConfig::new(binary_path);
+        cfg.base.timeout = Duration::from_secs(2);
+
+        let mut adapter = OpenCodeAdapter::new(cfg);
+        adapter.initialize().expect("initialize adapter");
+        adapter
+            .prepare(Uuid::new_v4(), tmp.path())
+            .expect("prepare adapter");
+
+        let start = Instant::now();
+        let report = adapter
+            .execute(ExecutionInput {
+                task_description: "Verify protocol completion handling".to_string(),
+                success_criteria: "Runtime completes after step_finish".to_string(),
+                context: None,
+                prior_attempts: Vec::new(),
+                verifier_feedback: None,
+                native_prompt_metadata: None,
+            })
+            .expect("execute runtime");
+
+        assert!(start.elapsed() < Duration::from_secs(3));
+        assert_eq!(report.exit_code, 0);
+        assert!(report
+            .stderr
+            .contains("runtime protocol reported completion before process exit"));
+        assert!(matches!(
+            report.structured_runtime_observations.as_slice(),
+            [StructuredRuntimeObservation::SessionObserved { session_id, .. }, StructuredRuntimeObservation::TurnCompleted { provider_turn_id, .. }]
+                if session_id == "sess-123" && provider_turn_id.as_deref() == Some("snap-1")
+        ));
     }
 }

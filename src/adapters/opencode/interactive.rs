@@ -472,6 +472,7 @@ impl OpenCodeAdapter {
                 )],
                 native_invocation: None,
                 structured_runtime_observations: Vec::new(),
+                projected_runtime_observations: Vec::new(),
             }
         };
 

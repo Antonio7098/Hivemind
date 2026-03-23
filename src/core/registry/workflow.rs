@@ -4388,6 +4388,147 @@ mod tests {
     }
 
     #[test]
+    fn workflow_bridge_reconciles_success_when_task_finishes_outside_workflow_tick() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry =
+            Registry::open_with_config(RegistryConfig::with_dir(dir.path().to_path_buf())).unwrap();
+        let project = registry.create_project("workflow-project", None).unwrap();
+        registry
+            .project_runtime_set(
+                &project.id.to_string(),
+                "native",
+                "builtin-native",
+                None,
+                &[],
+                &[],
+                60_000,
+                1,
+            )
+            .unwrap();
+        let repo_dir = dir.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        std::fs::write(repo_dir.join("README.md"), "seed\n").unwrap();
+        std::process::Command::new("git")
+            .arg("init")
+            .current_dir(&repo_dir)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["add", "README.md"])
+            .current_dir(&repo_dir)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "init",
+            ])
+            .current_dir(&repo_dir)
+            .output()
+            .unwrap();
+        registry
+            .attach_repo(
+                &project.id.to_string(),
+                repo_dir.to_str().unwrap(),
+                Some("repo"),
+                RepoAccessMode::ReadWrite,
+            )
+            .unwrap();
+
+        let workflow = registry
+            .create_workflow(&project.id.to_string(), "demo-workflow", Some("execution"))
+            .unwrap();
+        let workflow = registry
+            .workflow_add_step(
+                &workflow.id.to_string(),
+                "step-a",
+                WorkflowStepKind::Task,
+                Some("first step"),
+                &[],
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let step_id = workflow
+            .steps
+            .values()
+            .find(|step| step.name == "step-a")
+            .unwrap()
+            .id;
+
+        let run = registry
+            .create_workflow_run(&workflow.id.to_string(), None, None, BTreeMap::new())
+            .unwrap();
+        let run = registry.start_workflow_run(&run.id.to_string()).unwrap();
+        let flow_id = registry
+            .ensure_synthetic_flow_for_workflow_run(&run, &workflow)
+            .unwrap();
+        registry.start_flow(&flow_id.to_string()).unwrap();
+
+        let task_id = Registry::workflow_bridge_task_id(run.id, step_id);
+        let attempt_id = registry
+            .start_task_execution(&task_id.to_string())
+            .unwrap();
+        registry
+            .append_event(
+                Event::new(
+                    EventPayload::AllCheckpointsCompleted {
+                        flow_id,
+                        task_id,
+                        attempt_id,
+                    },
+                    Registry::workflow_bridge_corr(
+                        &run,
+                        Registry::workflow_bridge_graph_id(run.id),
+                        Some(flow_id),
+                        Some(task_id),
+                        Some(step_id),
+                        run.step_runs.get(&step_id).map(|step_run| step_run.id),
+                    ),
+                ),
+                "test:workflow_bridge_reconciles_success_when_task_finishes_outside_workflow_tick",
+            )
+            .unwrap();
+        registry
+            .reconcile_workflow_bridge_for_flow(
+                flow_id,
+                "test:workflow_bridge_reconciles_success_when_task_finishes_outside_workflow_tick",
+            )
+            .unwrap();
+
+        let running = registry.get_workflow_run(&run.id.to_string()).unwrap();
+        assert_eq!(
+            running.step_runs.get(&step_id).unwrap().state,
+            WorkflowStepState::Running
+        );
+
+        registry.complete_task_execution(&task_id.to_string()).unwrap();
+        let verifying = registry.get_workflow_run(&run.id.to_string()).unwrap();
+        assert_eq!(
+            verifying.step_runs.get(&step_id).unwrap().state,
+            WorkflowStepState::Verifying
+        );
+
+        registry.process_verifying_task(&flow_id.to_string(), task_id).unwrap();
+
+        let completed = registry.get_workflow_run(&run.id.to_string()).unwrap();
+        assert_eq!(completed.state, WorkflowRunState::Completed);
+        assert_eq!(
+            completed.step_runs.get(&step_id).unwrap().state,
+            WorkflowStepState::Succeeded
+        );
+    }
+
+    #[test]
     fn workflow_lifecycle_delegates_to_synthetic_flow() {
         let dir = tempfile::tempdir().unwrap();
         let registry =
