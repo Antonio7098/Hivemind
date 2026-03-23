@@ -9,10 +9,17 @@ impl Registry {
     ) -> std::io::Result<(i32, String, bool)> {
         let started = Instant::now();
 
-        let mut cmd = std::process::Command::new("sh");
+        let mut cmd = if cfg!(windows) {
+            let mut cmd = std::process::Command::new("cmd");
+            cmd.args(["/C", command]);
+            cmd
+        } else {
+            let mut cmd = std::process::Command::new("sh");
+            cmd.args(["-lc", command]);
+            cmd
+        };
         cmd.current_dir(workdir)
-            .env("CARGO_TARGET_DIR", cargo_target_dir)
-            .args(["-lc", command]);
+            .env("CARGO_TARGET_DIR", cargo_target_dir);
 
         if let Some(timeout_ms) = timeout_ms {
             let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;

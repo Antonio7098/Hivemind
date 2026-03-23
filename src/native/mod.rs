@@ -9,6 +9,7 @@
 //! - scripted mock model client for deterministic harness tests
 
 pub mod adapter;
+mod contracts;
 mod groq;
 mod minimax;
 mod openrouter;
@@ -16,11 +17,12 @@ pub mod runtime_hardening;
 pub mod startup_hardening;
 pub mod tool_engine;
 
+pub use contracts::{AgentLoopObserver, HistoryCompactionEvent, ModelClient};
 pub use groq::GroqModelClient;
 pub use minimax::MiniMaxModelClient;
 pub use openrouter::OpenRouterModelClient;
 
-use crate::adapters::runtime::{NativeToolCallTrace, NativeTransportTelemetry, RuntimeError};
+use crate::adapters::runtime::{NativeToolCallTrace, RuntimeError};
 use crate::core::error::{ErrorCategory, HivemindError};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -78,82 +80,6 @@ pub struct ModelTurnRequest {
     #[serde(default)]
     pub prompt_assembly: Option<NativePromptAssembly>,
 }
-
-/// Provider-agnostic model contract used by native runtime.
-pub trait ModelClient: Send + Sync {
-    fn complete_turn(&mut self, request: &ModelTurnRequest) -> Result<String, NativeRuntimeError>;
-
-    fn take_transport_telemetry(&mut self) -> NativeTransportTelemetry {
-        NativeTransportTelemetry::default()
-    }
-}
-
-pub trait AgentLoopObserver {
-    fn on_turn_request_prepared(
-        &mut self,
-        _request: &ModelTurnRequest,
-    ) -> Result<(), NativeRuntimeError> {
-        Ok(())
-    }
-
-    fn on_model_request_started(
-        &mut self,
-        _request: &ModelTurnRequest,
-    ) -> Result<(), NativeRuntimeError> {
-        Ok(())
-    }
-
-    fn on_model_response_received(
-        &mut self,
-        _request: &ModelTurnRequest,
-        _response: &str,
-    ) -> Result<(), NativeRuntimeError> {
-        Ok(())
-    }
-
-    fn on_model_request_failed(
-        &mut self,
-        _request: &ModelTurnRequest,
-        _error: &NativeRuntimeError,
-    ) -> Result<(), NativeRuntimeError> {
-        Ok(())
-    }
-
-    fn on_tool_action_started(
-        &mut self,
-        _turn_index: u32,
-        _action: &str,
-    ) -> Result<(), NativeRuntimeError> {
-        Ok(())
-    }
-
-    fn on_tool_action_completed(
-        &mut self,
-        _turn_index: u32,
-        _tool_call_count: usize,
-    ) -> Result<(), NativeRuntimeError> {
-        Ok(())
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn on_history_compacted(
-        &mut self,
-        _turn_index: u32,
-        _reason: &str,
-        _rendered_prompt_bytes_before: usize,
-        _selected_history_count_before: usize,
-        _selected_history_chars_before: usize,
-        _visible_items_before: usize,
-        _visible_items_after: usize,
-        _prompt_tokens_before: usize,
-        _projected_budget_used: usize,
-        _token_budget: usize,
-        _elapsed_since_invocation_ms: u64,
-    ) -> Result<(), NativeRuntimeError> {
-        Ok(())
-    }
-}
-
 /// Parsed model directive.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -264,9 +190,7 @@ mod turn_items;
 
 pub use self::mock::MockModelClient;
 #[cfg_attr(not(test), allow(unused_imports))]
-pub(crate) use self::prompt_assembly::{
-    assemble_native_prompt, assemble_native_prompt_with_runtime_env, NativePromptAssembly,
-};
+pub(crate) use self::prompt_assembly::{assemble_native_prompt, NativePromptAssembly};
 pub(crate) use self::turn_items::{
     assistant_item, compact_history_for_budget_pressure, compact_history_for_hard_budget_limit,
     compacted_summary_item, items_from_tool_trace, normalize_turn_items, user_input_item, TurnItem,

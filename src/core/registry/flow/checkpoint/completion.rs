@@ -1,6 +1,7 @@
 use super::*;
 
 impl Registry {
+    // ARCH_DEBT: legacy oversized function
     fn project_repository_heads_changed_since_graph_snapshot(
         &self,
         project_id: Uuid,
@@ -35,7 +36,7 @@ impl Registry {
 
         Ok(false)
     }
-
+    // ARCH_DEBT: Checkpoint completion involves complex validation and event orchestration; should be broken into smaller functions
     #[allow(clippy::too_many_lines)]
     pub fn checkpoint_complete(
         &self,

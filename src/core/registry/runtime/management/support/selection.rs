@@ -1,39 +1,16 @@
 use super::*;
 
 impl Registry {
-    pub(crate) fn supported_runtime_descriptors() -> Vec<crate::adapters::RuntimeDescriptor> {
-        let mut descriptors = runtime_descriptors().into_iter().collect::<Vec<_>>();
-        if descriptors
-            .iter()
-            .all(|descriptor| descriptor.adapter_name != "native")
-        {
-            descriptors.push(crate::adapters::RuntimeDescriptor {
-                adapter_name: "native",
-                default_binary: "builtin-native",
-                opencode_compatible: false,
-                requires_binary: false,
-                capabilities: &[
-                    "native_loop",
-                    "typed_tool_engine",
-                    "schema_validated_tools",
-                    "scope_policy_enforcement",
-                    "deterministic_harness",
-                    "provider_agnostic_contracts",
-                ],
-            });
-        }
-        descriptors
+    pub(crate) fn supported_runtime_descriptors() -> &'static [crate::adapters::RuntimeDescriptor] {
+        crate::adapters::runtime_descriptors()
     }
 
     pub(crate) fn ensure_supported_runtime_adapter(
         adapter: &str,
         origin: &'static str,
     ) -> Result<()> {
-        let supported = Self::supported_runtime_descriptors();
-        if !supported
-            .iter()
-            .any(|descriptor| descriptor.adapter_name == adapter)
-        {
+        if crate::adapters::runtime_descriptor_for(adapter).is_none() {
+            let supported = Self::supported_runtime_descriptors();
             return Err(HivemindError::user(
                 "invalid_runtime_adapter",
                 format!(

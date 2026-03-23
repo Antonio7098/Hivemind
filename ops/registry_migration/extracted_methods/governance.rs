@@ -490,6 +490,7 @@
     }
 
 // validate_constitution (4620-4776)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     fn validate_constitution(artifact: &ConstitutionArtifact) -> Vec<ConstitutionValidationIssue> {
         let mut issues = Vec::new();
@@ -1650,6 +1651,7 @@
     ///
     /// # Errors
     /// Returns an error if the project cannot be resolved or artifact listing fails.
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn project_governance_diagnose(
         &self,
@@ -2073,6 +2075,7 @@
     ///
     /// # Errors
     /// Returns an error if snapshot persistence fails.
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn project_governance_snapshot_create(
         &self,
@@ -2238,6 +2241,7 @@
     ///
     /// # Errors
     /// Returns an error if restore confirmation is missing or snapshot files cannot be restored.
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn project_governance_snapshot_restore(
         &self,
@@ -2373,6 +2377,7 @@
     }
 
 // build_governance_repair_plan (10650-10928)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     fn build_governance_repair_plan(
         &self,
@@ -2721,6 +2726,7 @@
     ///
     /// # Errors
     /// Returns an error if confirmation is missing, active flows exist, or repair cannot fully proceed.
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn project_governance_repair_apply(
         &self,
@@ -2867,6 +2873,7 @@
     /// # Errors
     /// Returns an error if explicit confirmation is missing, project resolution fails,
     /// constitution schema is invalid, or validation checks fail.
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn constitution_init(
         &self,
@@ -3084,6 +3091,7 @@
     /// # Errors
     /// Returns an error if confirmation is missing, content is invalid,
     /// constitution is not initialized, or validation fails.
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn constitution_update(
         &self,

@@ -26,7 +26,63 @@ pub struct GraphQueryIndex {
     pub(crate) node_to_repository_index: HashMap<String, usize>,
     pub(crate) node_to_block_selector: HashMap<String, String>,
 }
+
+fn block_graph_path(block: &ucm_core::Block) -> Option<String> {
+    let metadata_path = block
+        .metadata
+        .custom
+        .get("path")
+        .and_then(serde_json::Value::as_str)
+        .map(normalize_graph_path)
+        .filter(|item| !item.is_empty());
+
+    let metadata_coderef_path = block
+        .metadata
+        .custom
+        .get("coderef")
+        .and_then(|value| value.get("path"))
+        .and_then(serde_json::Value::as_str)
+        .map(normalize_graph_path)
+        .filter(|item| !item.is_empty());
+
+    let content_coderef_path = match &block.content {
+        ucm_core::Content::Json { value, .. } => value
+            .get("coderef")
+            .and_then(|value| value.get("path"))
+            .and_then(serde_json::Value::as_str)
+            .map(normalize_graph_path)
+            .filter(|item| !item.is_empty()),
+        _ => None,
+    };
+
+    let metadata_coderef_display = block
+        .metadata
+        .custom
+        .get("coderef")
+        .and_then(|value| value.get("display"))
+        .and_then(serde_json::Value::as_str)
+        .map(normalize_graph_path)
+        .filter(|item| !item.is_empty());
+
+    let content_coderef_display = match &block.content {
+        ucm_core::Content::Json { value, .. } => value
+            .get("coderef")
+            .and_then(|value| value.get("display"))
+            .and_then(serde_json::Value::as_str)
+            .map(normalize_graph_path)
+            .filter(|item| !item.is_empty()),
+        _ => None,
+    };
+
+    metadata_path
+        .or(metadata_coderef_path)
+        .or(content_coderef_path)
+        .or(metadata_coderef_display)
+        .or(content_coderef_display)
+}
+
 impl GraphQueryIndex {
+    // ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn from_snapshot_repositories(
         repositories: &[GraphQueryRepository],
@@ -58,15 +114,30 @@ impl GraphQueryIndex {
                 let Some(summary) = navigator.describe_node(*block_id) else {
                     continue;
                 };
+                let Some(block) = document.blocks.get(block_id) else {
+                    continue;
+                };
                 let logical_key = summary.logical_key.unwrap_or_default().trim().to_string();
                 if logical_key.is_empty() {
                     continue;
                 }
-                let node_class = summary.node_class.trim().to_string();
+                let node_class = if summary.node_class.trim().is_empty() {
+                    block
+                        .metadata
+                        .custom
+                        .get("node_class")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("unknown")
+                        .trim()
+                        .to_string()
+                } else {
+                    summary.node_class.trim().to_string()
+                };
                 let normalized_path = summary
                     .path
                     .map(|path| normalize_graph_path(&path))
-                    .filter(|item| !item.is_empty());
+                    .filter(|item| !item.is_empty())
+                    .or_else(|| block_graph_path(block));
                 let partition = normalized_path
                     .as_deref()
                     .and_then(|path| match_partition(path, partition_paths));

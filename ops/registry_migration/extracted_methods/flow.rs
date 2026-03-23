@@ -736,6 +736,7 @@
     }
 
 // process_verifying_task (2888-3266)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     fn process_verifying_task(&self, flow_id: &str, task_id: Uuid) -> Result<TaskFlow> {
         let flow = self.get_flow(flow_id)?;
@@ -1804,6 +1805,7 @@
     }
 
 // tick_flow_once (8088-9158)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     fn tick_flow_once(
         &self,
@@ -2877,6 +2879,7 @@
     }
 
 // tick_flow (9160-9407)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn tick_flow(
         &self,
@@ -3518,6 +3521,7 @@
     }
 
 // start_flow (14988-15173)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn start_flow(&self, flow_id: &str) -> Result<TaskFlow> {
         let flow = self
@@ -3951,6 +3955,7 @@
     }
 
 // retry_task (15519-15642)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn retry_task(
         &self,
@@ -4077,6 +4082,7 @@
     }
 
 // start_task_execution (15644-15819)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn start_task_execution(&self, task_id: &str) -> Result<Uuid> {
         let origin = "registry:start_task_execution";
@@ -4255,6 +4261,7 @@
     }
 
 // checkpoint_complete (15821-16073)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn checkpoint_complete(
         &self,
@@ -4697,6 +4704,7 @@
     }
 
 // verify_override (16258-16383)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn verify_override(&self, task_id: &str, decision: &str, reason: &str) -> Result<TaskFlow> {
         let origin = "registry:verify_override";
@@ -4825,6 +4833,7 @@
     }
 
 // merge_prepare (16385-17167)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn merge_prepare(
         &self,
@@ -5670,6 +5679,7 @@
     }
 
 // merge_execute (17228-17541)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn merge_execute(&self, flow_id: &str) -> Result<crate::core::state::MergeState> {
         let origin = "registry:merge_execute";
@@ -5998,6 +6008,7 @@
     }
 
 // merge_execute_via_pr (17554-17851)
+// ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     fn merge_execute_via_pr(
         &self,

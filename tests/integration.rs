@@ -441,6 +441,7 @@ fn cli_scope_violation_is_fatal_and_preserves_worktree() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_sprint35_governance_artifacts_and_template_instantiation() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -872,6 +873,7 @@ fn cli_sprint35_governance_artifacts_and_template_instantiation() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_sprint36_constitution_lifecycle_and_auditability() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1136,6 +1138,7 @@ rules:
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_constitution_check_reports_blocking_violations() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1340,6 +1343,7 @@ rules:
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_project_governance_diagnose_reports_invalid_refs_and_stale_snapshot() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1575,6 +1579,7 @@ fn cli_graph_query_filter_returns_bounded_results() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_governance_artifact_ops_stable_under_concurrent_flow_activity() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1827,6 +1832,7 @@ fn run_hivemind_with_env(
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_verify_run_and_results_capture_check_outcomes() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1948,6 +1954,7 @@ fn cli_verify_run_and_results_capture_check_outcomes() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_verify_override_can_force_success_after_check_failure_and_is_audited() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -2095,6 +2102,7 @@ fn cli_verify_override_can_force_success_after_check_failure_and_is_audited() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_verify_override_fail_completes_flow_with_failed_task() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -2409,6 +2417,7 @@ fn cli_task_retry_clean_resets_worktree_but_continue_preserves_it() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn scheduler_emits_task_blocked_and_respects_dependency_order() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -3340,6 +3349,7 @@ fn cli_native_runtime_reports_startup_progress_in_events_and_summary() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_checkpoint_complete_unblocks_attempt_and_emits_lifecycle_events() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -3685,6 +3695,7 @@ fn cli_scope_violation_detects_tmp_write_outside_worktree() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_attempt_inspect_context_returns_manifest_and_retry_linkage() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -4683,6 +4694,7 @@ fn cli_dependency_chain_only_root_task_starts_ready() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_governance_snapshot_restore_and_repair_flow() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -4848,6 +4860,7 @@ fn cli_governance_snapshot_restore_and_repair_flow() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_governance_replay_and_snapshot_restore_verification() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -4990,6 +5003,7 @@ fn cli_governance_replay_and_snapshot_restore_verification() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_governance_replay_verify_and_diagnose_detect_missing_artifact_files() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -5103,6 +5117,7 @@ fn cli_governance_replay_verify_and_diagnose_detect_missing_artifact_files() {
     );
 }
 
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 #[test]
 fn cli_workflow_commands_support_step_authoring_and_event_filters() {
@@ -5285,6 +5300,7 @@ fn cli_workflow_commands_support_step_authoring_and_event_filters() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_workflow_tick_executes_flat_task_steps() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -5475,6 +5491,7 @@ fn cli_workflow_tick_executes_flat_task_steps() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -5787,6 +5804,7 @@ fn cli_workflow_tick_executes_join_steps_with_fan_in_outputs() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_workflow_tick_emits_workflow_attempt_manifest_section() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -6014,6 +6032,7 @@ fn cli_workflow_tick_emits_workflow_attempt_manifest_section() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_workflow_lifecycle_commands_bridge_to_synthetic_flow() {
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -6151,6 +6170,7 @@ fn cli_workflow_lifecycle_commands_bridge_to_synthetic_flow() {
 }
 
 #[test]
+// ARCH_DEBT: Large integration test; should be split into smaller focused tests
 #[allow(clippy::too_many_lines)]
 fn cli_workflow_signal_drives_wait_step_completion() {
     let tmp = tempfile::tempdir().expect("tempdir");

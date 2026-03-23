@@ -79,3 +79,120 @@
         #[serde(default)]
         reason: Option<String>,
     },
+    WorkflowStepStarted {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepSucceeded {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepFailed {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+        #[serde(default)]
+        reason: Option<String>,
+    },
+    WorkflowStepSkipped {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+        #[serde(default)]
+        reason: Option<String>,
+    },
+    WorkflowStepCancelled {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+        #[serde(default)]
+        reason: Option<String>,
+    },
+    WorkflowStepTimedOut {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepTerminated {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepRetried {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepIgnored {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepCompleted {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepExecutionRequested {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepExecutionStarted {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepExecutionSucceeded {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepExecutionFailed {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+        #[serde(default)]
+        reason: Option<String>,
+    },
+    WorkflowStepExecutionSkipped {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+        #[serde(default)]
+        reason: Option<String>,
+    },
+    WorkflowStepExecutionCancelled {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+        #[serde(default)]
+        reason: Option<String>,
+    },
+    WorkflowStepExecutionTimedOut {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepExecutionTerminated {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepExecutionRetried {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepExecutionIgnored {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },
+    WorkflowStepExecutionCompleted {
+        workflow_run_id: Uuid,
+        step_id: Uuid,
+        step_run_id: Uuid,
+    },

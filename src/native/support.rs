@@ -1,4 +1,5 @@
 use super::*;
+use crate::adapters::runtime::NativeTransportTelemetry;
 use crate::native::tool_engine::NativeToolAction;
 use crate::native::tool_engine::ToolPermission;
 use serde_json::{Map, Value};

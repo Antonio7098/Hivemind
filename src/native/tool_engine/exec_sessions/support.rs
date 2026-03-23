@@ -192,6 +192,14 @@ pub(super) fn resolve_session_cwd(
     if trimmed.is_empty() {
         return Ok(worktree.to_path_buf());
     }
+    if Path::new(trimmed).is_absolute() {
+        return Path::new(trimmed)
+            .strip_prefix(worktree)
+            .map(|_| PathBuf::from(trimmed))
+            .map_err(|_| {
+                NativeToolEngineError::validation(format!("invalid relative path '{trimmed}'"))
+            });
+    }
     let rel = normalize_relative_path(trimmed, true)?;
     Ok(worktree.join(rel))
 }

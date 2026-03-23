@@ -223,7 +223,16 @@ pub(super) fn handle_write_file(
     _timeout_ms: u64,
 ) -> Result<Value, NativeToolEngineError> {
     let input = decode_input::<WriteFileInput>(input)?;
-    let rel = normalize_relative_path(&input.path, false)?;
+    let rel = if Path::new(&input.path).is_absolute() {
+        Path::new(&input.path)
+            .strip_prefix(ctx.worktree)
+            .map(Path::to_path_buf)
+            .map_err(|_| {
+                NativeToolEngineError::validation(format!("invalid relative path '{}'", input.path))
+            })?
+    } else {
+        normalize_relative_path(&input.path, false)?
+    };
     ensure_can_write(ctx.scope, &rel)?;
 
     let absolute = ctx.worktree.join(&rel);

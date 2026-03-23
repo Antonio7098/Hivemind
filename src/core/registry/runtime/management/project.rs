@@ -168,7 +168,7 @@ impl Registry {
     #[must_use]
     pub fn runtime_list(&self) -> Vec<RuntimeListEntry> {
         Self::supported_runtime_descriptors()
-            .into_iter()
+            .iter()
             .map(|d| RuntimeListEntry {
                 adapter_name: d.adapter_name.to_string(),
                 default_binary: d.default_binary.to_string(),
@@ -195,6 +195,7 @@ impl Registry {
         self.runtime_health_with_role(project, task_id, None, RuntimeRole::Worker)
     }
 
+    // ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn runtime_health_with_role(
         &self,

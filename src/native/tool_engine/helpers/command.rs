@@ -95,8 +95,7 @@ pub(crate) fn windows_command_extensions(env_map: &HashMap<String, String>) -> V
             .map(str::to_string)
             .or_else(|| env::var("PATHEXT").ok())
             .unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".to_string());
-        return raw
-            .split(';')
+        raw.split(';')
             .filter_map(|entry| {
                 let trimmed = entry.trim().trim_start_matches('.').to_ascii_lowercase();
                 if trimmed.is_empty() {
@@ -105,7 +104,7 @@ pub(crate) fn windows_command_extensions(env_map: &HashMap<String, String>) -> V
                     Some(trimmed)
                 }
             })
-            .collect();
+            .collect()
     }
 
     #[cfg(not(windows))]

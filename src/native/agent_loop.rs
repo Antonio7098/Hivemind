@@ -1,16 +1,32 @@
 use super::*;
+use crate::adapters::runtime::NativeTransportTelemetry;
+
+mod budget_support;
+mod checkpoint_support;
+mod directive_repair;
 use crate::native::tool_engine::NativeToolAction;
 use crate::native::turn_items::{TurnItemKind, TurnItemOutcome};
 use serde_json::Value;
+
+struct TurnCallbackObserver<F> {
+    on_turn: F,
+}
+
+impl<F> AgentLoopObserver for TurnCallbackObserver<F>
+where
+    F: FnMut(&AgentLoopTurn) -> Result<(), NativeRuntimeError>,
+{
+    fn on_turn_completed(&mut self, turn: &AgentLoopTurn) -> Result<(), NativeRuntimeError> {
+        (self.on_turn)(turn)
+    }
+}
 
 impl<M: ModelClient> AgentLoop<M> {
     const MAX_MALFORMED_DIRECTIVE_RECOVERY_ATTEMPTS: u8 = 4;
     const MAX_TOKEN_BUDGET_RECOVERY_ATTEMPTS: u8 = 3;
     const MAX_CHECKPOINT_DONE_RECOVERY_ATTEMPTS: u8 = 3;
     const MAX_POST_CHECKPOINT_DONE_RECOVERY_ATTEMPTS: u8 = 1;
-    const MAX_NOOP_THINK_RECOVERY_ATTEMPTS: u8 = 2;
-    const NOOP_THINK_REPAIR_THRESHOLD: usize = 3;
-    const SOFT_TOKEN_BUDGET_COMPACTION_PERCENT: usize = 45;
+    const SOFT_TOKEN_BUDGET_COMPACTION_PERCENT: usize = 60;
 
     #[must_use]
     pub fn new(config: NativeRuntimeConfig, model_client: M) -> Self {
@@ -110,390 +126,6 @@ impl<M: ModelClient> AgentLoop<M> {
         Ok(())
     }
 
-    fn parse_directive(raw: &str) -> Result<ModelDirective, NativeRuntimeError> {
-        let raw = raw.trim();
-        if let Some(directive) = ModelDirective::parse_relaxed(raw) {
-            return Ok(directive);
-        }
-        Err(NativeRuntimeError::MalformedModelOutput {
-            raw_output: raw.to_string(),
-            expected: "THINK:<message> | ACT:<action> | DONE:<summary>".to_string(),
-            recovery_hint: "Return one explicit directive with a known prefix (THINK/ACT/DONE)"
-                .to_string(),
-        })
-    }
-
-    fn malformed_output_repair_item(
-        invocation_id: &str,
-        turn_index: u32,
-        repair_attempt: u8,
-        raw_output: &str,
-    ) -> TurnItem {
-        let raw_output = if raw_output.chars().count() > 600 {
-            let mut truncated = raw_output.chars().take(600).collect::<String>();
-            truncated.push_str(" …");
-            truncated
-        } else {
-            raw_output.to_string()
-        };
-        user_input_item(
-            invocation_id,
-            turn_index
-                .saturating_mul(100)
-                .saturating_add(90)
-                .saturating_add(u32::from(repair_attempt)),
-            "controller_repair",
-            format!(
-                "Your previous response could not be parsed as one native directive. Return exactly one line beginning with THINK:, ACT:, or DONE:. Do not include prose before the directive. If acting, use ACT:tool:<name>:<json_object>. Previous response:\n{raw_output}"
-            ),
-            "runtime.repair",
-        )
-    }
-
-    fn consecutive_noop_think_turns(turns: &[AgentLoopTurn]) -> usize {
-        turns
-            .iter()
-            .rev()
-            .take_while(|turn| {
-                matches!(turn.directive, ModelDirective::Think { .. }) && turn.tool_calls.is_empty()
-            })
-            .count()
-    }
-
-    fn noop_think_repair_item(
-        invocation_id: &str,
-        turn_index: u32,
-        repair_attempt: u8,
-        consecutive_thinks: usize,
-        raw_output: &str,
-    ) -> TurnItem {
-        let raw_output = if raw_output.chars().count() > 600 {
-            let mut truncated = raw_output.chars().take(600).collect::<String>();
-            truncated.push_str(" …");
-            truncated
-        } else {
-            raw_output.to_string()
-        };
-        user_input_item(
-            invocation_id,
-            turn_index
-                .saturating_mul(100)
-                .saturating_add(92)
-                .saturating_add(u32::from(repair_attempt)),
-            "controller_repair",
-            format!(
-                "Runtime repair #{repair_attempt}: you have already spent {consecutive_thinks} consecutive turns in THINK without taking a tool action. On your next response, return exactly one directive and prefer ACT:tool:<name>:<json_object> now. If the task is already complete, return DONE:<summary>. Do not return THINK again unless you are blocked by a concrete missing prerequisite. If you need repository context, call read_file or list_files immediately. Previous response:\n{raw_output}"
-            ),
-            "runtime.repair",
-        )
-    }
-
-    fn checkpoint_completion_recorded(&self, history: &[TurnItem]) -> bool {
-        history.iter().any(|item| {
-            matches!(
-                &item.kind,
-                TurnItemKind::ToolResult {
-                    tool_name,
-                    outcome: TurnItemOutcome::Success,
-                    ..
-                } if tool_name == "checkpoint_complete"
-            )
-        }) || self.completed_turns.iter().any(|turn| {
-            turn.tool_calls
-                .iter()
-                .any(|trace| trace.tool_name == "checkpoint_complete" && trace.failure.is_none())
-        })
-    }
-
-    fn synthetic_checkpoint_completion_already_satisfied(calls: &[NativeToolCallTrace]) -> bool {
-        !calls.is_empty()
-            && calls.iter().all(|trace| {
-                trace.tool_name == "checkpoint_complete"
-                    && trace.failure.as_ref().is_some_and(|failure| {
-                        failure.code == "checkpoint_already_completed"
-                            || failure.message.contains("checkpoint_already_completed")
-                            || failure.message.contains("already completed")
-                    })
-            })
-    }
-
-    fn checkpoint_id_from_response_payload(content: &str) -> Option<String> {
-        let value = serde_json::from_str::<Value>(content).ok()?;
-        value
-            .get("checkpoint_id")
-            .and_then(Value::as_str)
-            .or_else(|| {
-                value
-                    .get("output")
-                    .and_then(|output| output.get("checkpoint_id"))
-                    .and_then(Value::as_str)
-            })
-            .map(ToString::to_string)
-    }
-
-    fn completed_checkpoint_ids(&self, history: &[TurnItem]) -> std::collections::BTreeSet<String> {
-        let mut ids = std::collections::BTreeSet::new();
-        for item in history {
-            if let TurnItemKind::ToolResult {
-                tool_name,
-                outcome: TurnItemOutcome::Success,
-                content,
-                ..
-            } = &item.kind
-            {
-                if tool_name == "checkpoint_complete" {
-                    if let Some(id) = Self::checkpoint_id_from_response_payload(content) {
-                        ids.insert(id);
-                    }
-                }
-            }
-        }
-        for turn in &self.completed_turns {
-            for trace in &turn.tool_calls {
-                if trace.tool_name == "checkpoint_complete" && trace.failure.is_none() {
-                    if let Some(id) = trace
-                        .response
-                        .as_deref()
-                        .and_then(Self::checkpoint_id_from_response_payload)
-                    {
-                        ids.insert(id);
-                    }
-                }
-            }
-        }
-        ids
-    }
-
-    fn checkpoint_summary_from_request_payload(content: &str) -> Option<String> {
-        let value = serde_json::from_str::<Value>(content).ok()?;
-        value
-            .get("input")
-            .and_then(|input| input.get("summary"))
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|summary| !summary.is_empty())
-            .map(ToString::to_string)
-    }
-
-    fn latest_completed_checkpoint_summary(&self) -> Option<String> {
-        self.completed_turns.iter().rev().find_map(|turn| {
-            turn.tool_calls.iter().rev().find_map(|trace| {
-                (trace.tool_name == "checkpoint_complete" && trace.failure.is_none())
-                    .then_some(trace.request.as_str())
-                    .and_then(Self::checkpoint_summary_from_request_payload)
-            })
-        })
-    }
-
-    fn soft_token_budget_compaction_limit(&self) -> usize {
-        self.config
-            .token_budget
-            .saturating_mul(Self::SOFT_TOKEN_BUDGET_COMPACTION_PERCENT)
-            / 100
-    }
-
-    fn should_attempt_preemptive_budget_compaction(&self, request_tokens: usize) -> bool {
-        self.used_tokens.saturating_add(request_tokens) >= self.soft_token_budget_compaction_limit()
-    }
-
-    fn requires_checkpoint_completion_repair(
-        &self,
-        request: &ModelTurnRequest,
-        history: &[TurnItem],
-        directive: &ModelDirective,
-    ) -> bool {
-        matches!(directive, ModelDirective::Done { .. })
-            && Self::first_declared_checkpoint_id(request).is_some()
-            && !self.checkpoint_completion_recorded(history)
-    }
-
-    fn checkpoint_done_repair_item(
-        invocation_id: &str,
-        turn_index: u32,
-        repair_attempt: u8,
-        raw_output: &str,
-    ) -> TurnItem {
-        user_input_item(
-            invocation_id,
-            turn_index
-                .saturating_mul(100)
-                .saturating_add(95)
-                .saturating_add(u32::from(repair_attempt)),
-            "controller_repair",
-            format!(
-                "Your previous response returned DONE before the active execution checkpoint was completed. Before DONE, call the built-in checkpoint tool exactly as instructed in the prompt, e.g. ACT:tool:checkpoint_complete:{{\"id\":\"<checkpoint-id>\",\"summary\":\"optional progress summary\"}}. After the checkpoint tool succeeds, continue and return DONE only if the task is truly complete. Previous response:\n{raw_output}"
-            ),
-            "runtime.repair",
-        )
-    }
-
-    fn declared_checkpoint_ids(request: &ModelTurnRequest) -> Vec<String> {
-        const PREFIX: &str = "Execution checkpoints (in order):";
-
-        [request.context.as_deref(), Some(request.prompt.as_str())]
-            .into_iter()
-            .flatten()
-            .find_map(|text| {
-                text.lines().find_map(|line| {
-                    line.trim().strip_prefix(PREFIX).map(|rest| {
-                        rest.split(',')
-                            .map(str::trim)
-                            .filter(|id| !id.is_empty())
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>()
-                    })
-                })
-            })
-            .unwrap_or_default()
-    }
-
-    fn first_declared_checkpoint_id(request: &ModelTurnRequest) -> Option<String> {
-        Self::declared_checkpoint_ids(request).into_iter().next()
-    }
-
-    fn checkpoint_completion_action_payload(
-        directive: &ModelDirective,
-    ) -> Option<(String, Option<String>)> {
-        let ModelDirective::Act { action } = directive else {
-            return None;
-        };
-        let tool_action = NativeToolAction::parse(action).ok().flatten()?;
-        if tool_action.name != "checkpoint_complete" {
-            return None;
-        }
-        let checkpoint_id = tool_action.input.get("id")?.as_str()?.trim();
-        if checkpoint_id.is_empty() {
-            return None;
-        }
-        let summary = tool_action
-            .input
-            .get("summary")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToString::to_string);
-        Some((checkpoint_id.to_string(), summary))
-    }
-
-    fn redundant_checkpoint_completion_done_summary(
-        &self,
-        request: &ModelTurnRequest,
-        history: &[TurnItem],
-        directive: &ModelDirective,
-    ) -> Option<String> {
-        let declared = Self::declared_checkpoint_ids(request);
-        if declared.is_empty() {
-            return None;
-        }
-        let completed = self.completed_checkpoint_ids(history);
-        if !declared.iter().all(|id| completed.contains(id)) {
-            return None;
-        }
-        let (checkpoint_id, summary) = Self::checkpoint_completion_action_payload(directive)?;
-        if !completed.contains(&checkpoint_id) {
-            return None;
-        }
-        Some(summary.unwrap_or_else(|| format!("completed checkpoints: {}", declared.join(", "))))
-    }
-
-    fn all_declared_checkpoints_completed(
-        &self,
-        request: &ModelTurnRequest,
-        history: &[TurnItem],
-    ) -> bool {
-        let declared = Self::declared_checkpoint_ids(request);
-        if declared.is_empty() {
-            return false;
-        }
-        let completed = self.completed_checkpoint_ids(history);
-        declared.iter().all(|id| completed.contains(id))
-    }
-
-    fn post_checkpoint_done_repair_item(
-        invocation_id: &str,
-        turn_index: u32,
-        repair_attempt: u8,
-    ) -> TurnItem {
-        user_input_item(
-            invocation_id,
-            turn_index
-                .saturating_mul(100)
-                .saturating_add(98)
-                .saturating_add(u32::from(repair_attempt)),
-            "controller_repair",
-            format!(
-                "Runtime repair #{repair_attempt}: all declared execution checkpoints are complete. Return DONE now with a concise summary. Do not call more tools unless essential to fix a newly discovered failure."
-            ),
-            "runtime.repair",
-        )
-    }
-
-    fn checkpoint_auto_completion_action(
-        request: &ModelTurnRequest,
-        directive: &ModelDirective,
-    ) -> Option<String> {
-        let ModelDirective::Done { summary } = directive else {
-            return None;
-        };
-        let checkpoint_id = Self::first_declared_checkpoint_id(request)?;
-        let summary = summary.trim();
-        let payload = if summary.is_empty() {
-            serde_json::json!({ "id": checkpoint_id })
-        } else {
-            serde_json::json!({
-                "id": checkpoint_id,
-                "summary": summary,
-            })
-        };
-        Some(format!("tool:checkpoint_complete:{payload}"))
-    }
-
-    fn exact_write_target_visible(request: &ModelTurnRequest, path: &str) -> bool {
-        let item_id = format!("code-window:{path}");
-        request.prompt_assembly.as_ref().is_some_and(|assembly| {
-            assembly
-                .active_code_windows
-                .iter()
-                .any(|item| item.kind == "code_window" && item.item_id == item_id)
-        })
-    }
-
-    fn write_visibility_promotion_action(
-        request: &ModelTurnRequest,
-        directive: &ModelDirective,
-    ) -> Option<String> {
-        let ModelDirective::Act { action } = directive else {
-            return None;
-        };
-        let tool_action = NativeToolAction::parse(action).ok().flatten()?;
-        if tool_action.name != "write_file" {
-            return None;
-        }
-        let path = tool_action.input.get("path")?.as_str()?.trim();
-        if path.is_empty() || Self::exact_write_target_visible(request, path) {
-            return None;
-        }
-        let payload = serde_json::json!({ "path": path });
-        Some(format!("tool:read_file:{payload}"))
-    }
-
-    fn budget_thresholds_crossed(&mut self) -> Vec<u8> {
-        if self.config.token_budget == 0 {
-            return Vec::new();
-        }
-        let used_percent = self.used_tokens.saturating_mul(100) / self.config.token_budget;
-        let mut crossed = Vec::new();
-        for threshold in [70_u8, 85, 95] {
-            if used_percent >= usize::from(threshold)
-                && !self.emitted_budget_thresholds.contains(&threshold)
-            {
-                self.emitted_budget_thresholds.push(threshold);
-                crossed.push(threshold);
-            }
-        }
-        crossed
-    }
-
     /// Execute the loop with explicit history-backed prompt assembly and in-loop tool handling.
     pub(crate) fn run_with_history<BuildRequest, ExecuteAction>(
         &mut self,
@@ -547,7 +179,6 @@ impl<M: ModelClient> AgentLoop<M> {
         let mut token_budget_recovery_attempts = 0u8;
         let mut checkpoint_done_repair_attempts = 0u8;
         let mut post_checkpoint_done_repair_attempts = 0u8;
-        let mut noop_think_repair_attempts = 0u8;
 
         while self.state != AgentLoopState::Done {
             self.enforce_budgets()?;
@@ -570,32 +201,36 @@ impl<M: ModelClient> AgentLoop<M> {
                             .filter(|item| item.model_visible)
                             .count();
                         if let Some(observer) = observer.as_deref_mut() {
-                            observer.on_history_compacted(
-                                self.next_turn_index,
-                                "soft_budget_pressure",
-                                request
+                            observer.on_history_compacted(&HistoryCompactionEvent {
+                                turn_index: self.next_turn_index,
+                                reason: "soft_budget_pressure".to_string(),
+                                rendered_prompt_bytes_before: request
                                     .prompt_assembly
                                     .as_ref()
                                     .map(|assembly| assembly.rendered_prompt_bytes)
                                     .unwrap_or_default(),
-                                request
+                                selected_history_count_before: request
                                     .prompt_assembly
                                     .as_ref()
                                     .map(|assembly| assembly.selected_history_count)
                                     .unwrap_or_default(),
-                                request
+                                selected_history_chars_before: request
                                     .prompt_assembly
                                     .as_ref()
                                     .map(|assembly| assembly.selected_history_chars)
                                     .unwrap_or_default(),
                                 visible_items_before,
                                 visible_items_after,
-                                request_tokens,
-                                self.used_tokens.saturating_add(request_tokens),
-                                self.config.token_budget,
-                                u64::try_from(self.started_at.elapsed().as_millis())
-                                    .unwrap_or(u64::MAX),
-                            )?;
+                                prompt_tokens_before: request_tokens,
+                                projected_budget_used: self
+                                    .used_tokens
+                                    .saturating_add(request_tokens),
+                                token_budget: self.config.token_budget,
+                                elapsed_since_invocation_ms: u64::try_from(
+                                    self.started_at.elapsed().as_millis(),
+                                )
+                                .unwrap_or(u64::MAX),
+                            })?;
                         }
                         history = compacted_history;
                         self.history_items = history.clone();
@@ -618,32 +253,36 @@ impl<M: ModelClient> AgentLoop<M> {
                                 .filter(|item| item.model_visible)
                                 .count();
                             if let Some(observer) = observer.as_deref_mut() {
-                                observer.on_history_compacted(
-                                    self.next_turn_index,
-                                    "hard_budget_limit",
-                                    request
+                                observer.on_history_compacted(&HistoryCompactionEvent {
+                                    turn_index: self.next_turn_index,
+                                    reason: "hard_budget_limit".to_string(),
+                                    rendered_prompt_bytes_before: request
                                         .prompt_assembly
                                         .as_ref()
                                         .map(|assembly| assembly.rendered_prompt_bytes)
                                         .unwrap_or_default(),
-                                    request
+                                    selected_history_count_before: request
                                         .prompt_assembly
                                         .as_ref()
                                         .map(|assembly| assembly.selected_history_count)
                                         .unwrap_or_default(),
-                                    request
+                                    selected_history_chars_before: request
                                         .prompt_assembly
                                         .as_ref()
                                         .map(|assembly| assembly.selected_history_chars)
                                         .unwrap_or_default(),
                                     visible_items_before,
                                     visible_items_after,
-                                    request_tokens,
-                                    self.used_tokens.saturating_add(request_tokens),
-                                    self.config.token_budget,
-                                    u64::try_from(self.started_at.elapsed().as_millis())
-                                        .unwrap_or(u64::MAX),
-                                )?;
+                                    prompt_tokens_before: request_tokens,
+                                    projected_budget_used: self
+                                        .used_tokens
+                                        .saturating_add(request_tokens),
+                                    token_budget: self.config.token_budget,
+                                    elapsed_since_invocation_ms: u64::try_from(
+                                        self.started_at.elapsed().as_millis(),
+                                    )
+                                    .unwrap_or(u64::MAX),
+                                })?;
                             }
                             history = compacted_history;
                             self.history_items = history.clone();
@@ -712,26 +351,6 @@ impl<M: ModelClient> AgentLoop<M> {
                 Err(error) => return Err(error),
             };
             let mut synthetic_tool_action = None;
-            if matches!(directive, ModelDirective::Think { .. }) {
-                let noop_think_streak = Self::consecutive_noop_think_turns(&turns);
-                if noop_think_streak >= Self::NOOP_THINK_REPAIR_THRESHOLD
-                    && noop_think_repair_attempts < Self::MAX_NOOP_THINK_RECOVERY_ATTEMPTS
-                {
-                    noop_think_repair_attempts = noop_think_repair_attempts.saturating_add(1);
-                    history.push(Self::noop_think_repair_item(
-                        invocation_id,
-                        self.next_turn_index,
-                        noop_think_repair_attempts,
-                        noop_think_streak.saturating_add(1),
-                        &raw_output,
-                    ));
-                    history = normalize_turn_items(&history);
-                    self.history_items = history.clone();
-                    continue;
-                }
-            } else {
-                noop_think_repair_attempts = 0;
-            }
             if self.requires_checkpoint_completion_repair(&request, &history, &directive) {
                 if checkpoint_done_repair_attempts >= Self::MAX_CHECKPOINT_DONE_RECOVERY_ATTEMPTS {
                     synthetic_tool_action =
@@ -800,9 +419,6 @@ impl<M: ModelClient> AgentLoop<M> {
             } else {
                 post_checkpoint_done_repair_attempts = 0;
             }
-            if let Some(action) = Self::write_visibility_promotion_action(&request, &directive) {
-                directive = ModelDirective::Act { action };
-            }
             let tool_started = Instant::now();
             let tool_calls = if let Some(action) = synthetic_tool_action.as_deref() {
                 if let Some(observer) = observer.as_deref_mut() {
@@ -844,9 +460,6 @@ impl<M: ModelClient> AgentLoop<M> {
             };
             let tool_latency_ms =
                 u64::try_from(tool_started.elapsed().as_millis()).unwrap_or(u64::MAX);
-            if !matches!(directive, ModelDirective::Think { .. }) || !tool_calls.is_empty() {
-                noop_think_repair_attempts = 0;
-            }
             let to_state = directive.target_state();
             self.transition_to(to_state)?;
             let budget_used_after = self.used_tokens;
@@ -888,6 +501,11 @@ impl<M: ModelClient> AgentLoop<M> {
             self.history_items = history.clone();
             self.completed_turns.push(turn.clone());
             turns.push(turn);
+            if let Some(observer) = observer.as_deref_mut() {
+                if let Some(turn) = turns.last() {
+                    observer.on_turn_completed(turn)?;
+                }
+            }
             self.next_turn_index = self.next_turn_index.saturating_add(1);
         }
 
@@ -896,6 +514,55 @@ impl<M: ModelClient> AgentLoop<M> {
         self.completed_turns = turns;
 
         Ok(self.snapshot_result(invocation_id))
+    }
+
+    /// Execute the loop while surfacing each completed turn to a callback.
+    pub fn run_with_turn_callback<F>(
+        &mut self,
+        prompt: impl Into<String>,
+        context: Option<&str>,
+        on_turn: F,
+    ) -> Result<AgentLoopResult, NativeRuntimeError>
+    where
+        F: FnMut(&AgentLoopTurn) -> Result<(), NativeRuntimeError>,
+    {
+        let prompt = prompt.into();
+        let context = context.map(ToString::to_string);
+        let mode = self.config.agent_mode;
+        let mut initial_items = vec![user_input_item(
+            "native-loop",
+            1,
+            "prompt",
+            prompt.clone(),
+            "runtime.prompt",
+        )];
+        if let Some(context_text) = context.clone() {
+            initial_items.push(user_input_item(
+                "native-loop",
+                2,
+                "context",
+                context_text,
+                "runtime.context",
+            ));
+        }
+
+        let mut observer = TurnCallbackObserver { on_turn };
+        self.run_with_history_observed(
+            "native-loop",
+            initial_items,
+            move |turn_index, state, _history| {
+                Ok(ModelTurnRequest {
+                    turn_index,
+                    state,
+                    agent_mode: mode,
+                    prompt: prompt.clone(),
+                    context: context.clone(),
+                    prompt_assembly: None,
+                })
+            },
+            |_turn_index, _action| Vec::new(),
+            Some(&mut observer),
+        )
     }
 
     /// Execute the loop deterministically until `done` or a hard budget/error boundary.

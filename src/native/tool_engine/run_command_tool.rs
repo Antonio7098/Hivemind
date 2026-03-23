@@ -1,6 +1,12 @@
 use super::graph_query_tool::mark_runtime_graph_dirty;
 use super::*;
 
+mod policy;
+
+use policy::{
+    apply_deferred_network_decisions, enforce_execution_scope, start_managed_proxy_if_needed,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(super) struct RunCommandInput {
@@ -152,6 +158,7 @@ impl Drop for ManagedProxyRuntime {
     }
 }
 
+// ARCH_DEBT: legacy oversized function
 #[allow(clippy::too_many_lines)]
 pub(super) fn handle_run_command(
     ctx: &ToolExecutionContext<'_>,
@@ -185,28 +192,13 @@ pub(super) fn handle_run_command(
         format!("{raw_command} {}", input.args.join(" "))
     };
 
-    if let Some(scope) = ctx.scope {
-        if !scope.execution.is_allowed(&command_line)
-            && (raw_command_line == command_line || !scope.execution.is_allowed(&raw_command_line))
-        {
-            return Err(NativeToolEngineError::scope_violation(format!(
-                "run_command blocked by execution scope: {command_line}"
-            )));
-        }
-    }
+    enforce_execution_scope(ctx, &command_line, &raw_command_line)?;
     let timeout_ms = input
         .timeout_ms
         .unwrap_or(default_timeout_ms)
         .min(default_timeout_ms);
     let network_targets = extract_network_targets(&command, &input.args);
-    let managed_proxy = if matches!(
-        ctx.network_policy.proxy_mode,
-        NativeNetworkProxyMode::Managed
-    ) {
-        Some(ManagedProxyRuntime::start(&ctx.network_policy)?)
-    } else {
-        None
-    };
+    let managed_proxy = start_managed_proxy_if_needed(ctx)?;
 
     let mut cmd = Command::new(&command);
     cmd.args(&input.args)
@@ -243,45 +235,7 @@ pub(super) fn handle_run_command(
             let _ = child.wait();
             return Err(NativeToolEngineError::timeout("run_command", timeout_ms));
         }
-        if matches!(
-            ctx.network_policy.approval_mode,
-            NativeNetworkApprovalMode::Deferred
-        ) && !network_targets.is_empty()
-        {
-            if let Some(path) = ctx.network_policy.deferred_decisions_file.as_ref() {
-                let decisions = read_deferred_network_decisions(path);
-                let keys = network_targets
-                    .iter()
-                    .map(NativeNetworkTarget::cache_key)
-                    .collect::<Vec<_>>();
-
-                for decision in decisions {
-                    if !keys.iter().any(|key| key == &decision.target_key) {
-                        continue;
-                    }
-                    if decision.deny {
-                        let _ = child.kill();
-                        let _ = child.wait();
-                        let mut tags = ctx.network_policy.base_policy_tags();
-                        tags.push("network_approval_outcome:deferred_denied".to_string());
-                        tags.push(format!(
-                            "network_target:{}",
-                            sanitize_policy_tag_value(&decision.target_key)
-                        ));
-                        return Err(NativeToolEngineError::policy_violation(format!(
-                            "network deferred denial received for '{}'",
-                            decision.target_key
-                        ))
-                        .with_policy_tags(tags));
-                    }
-                    let mut cache = ctx.network_approval_cache.borrow_mut();
-                    cache.insert_bounded(
-                        decision.target_key,
-                        ctx.network_policy.approval_cache_max_entries,
-                    );
-                }
-            }
-        }
+        apply_deferred_network_decisions(ctx, &network_targets, &mut child)?;
         thread::sleep(Duration::from_millis(20));
     }
     let output = child.wait_with_output().map_err(|error| {

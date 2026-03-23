@@ -1,6 +1,7 @@
 use super::*;
 
 impl Registry {
+    // ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn merge_execute(&self, flow_id: &str) -> Result<crate::core::state::MergeState> {
         let origin = "registry:merge_execute";

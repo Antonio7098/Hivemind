@@ -90,6 +90,7 @@ impl Registry {
         self.get_flow(&flow_id.to_string())
     }
 
+    // ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     pub fn start_flow(&self, flow_id: &str) -> Result<TaskFlow> {
         let flow = self

@@ -64,6 +64,10 @@ At a high level, Hivemind consists of the following major subsystems:
 
 These subsystems communicate exclusively via **events and derived state**, never hidden memory.
 
+Delivery surfaces are expected to stay thin. In the current implementation, `src/app.rs` acts as the composition root for default wiring, while CLI and server entrypoints should prefer narrower application services over constructing `Registry` directly.
+
+Repository-level architecture checks in CI also enforce the intended dependency direction between core/support layers and delivery layers so boundary drift is detected early.
+
 ---
 
 ## 3. Projects, Repositories, and Scope

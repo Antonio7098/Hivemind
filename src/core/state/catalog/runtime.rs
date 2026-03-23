@@ -1,3 +1,4 @@
+// ARCH_DEBT: legacy oversized function
 #![allow(clippy::too_many_lines)]
 
 use super::*;

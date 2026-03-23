@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::registry::Registry;
 
 pub(super) fn handle_post(
     path: &str,

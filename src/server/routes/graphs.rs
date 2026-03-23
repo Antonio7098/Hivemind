@@ -3,8 +3,9 @@ use super::*;
 pub(super) fn handle_post(
     path: &str,
     body: Option<&[u8]>,
-    registry: &Registry,
+    app: &AppContext,
 ) -> Result<Option<ApiResponse>> {
+    let graph_service = || app.graph_service();
     let resp = match path {
         "/api/graphs/create" => {
             let req: GraphCreateRequest = parse_json_body(body, "server:graphs:create")?;
@@ -21,18 +22,18 @@ pub(super) fn handle_post(
                     })
                 })
                 .collect::<Result<Vec<_>>>()?;
-            super::json_ok(registry.create_graph(&req.project, &req.name, &from_tasks)?)?
+            super::json_ok(graph_service()?.create_graph(&req.project, &req.name, &from_tasks)?)?
         }
         "/api/graphs/delete" => {
             let req: GraphDeleteRequest = parse_json_body(body, "server:graphs:delete")?;
             super::json_ok(serde_json::json!({
-                "graph_id": registry.delete_graph(&req.graph_id)?,
+                "graph_id": graph_service()?.delete_graph(&req.graph_id)?,
             }))?
         }
         "/api/graphs/dependencies/add" => {
             let req: GraphDependencyRequest =
                 parse_json_body(body, "server:graphs:dependencies:add")?;
-            super::json_ok(registry.add_graph_dependency(
+            super::json_ok(graph_service()?.add_graph_dependency(
                 &req.graph_id,
                 &req.from_task,
                 &req.to_task,
@@ -43,11 +44,15 @@ pub(super) fn handle_post(
             let mut check = CheckConfig::new(req.name, req.command);
             check.required = req.required.unwrap_or(true);
             check.timeout_ms = req.timeout_ms;
-            super::json_ok(registry.add_graph_task_check(&req.graph_id, &req.task_id, check)?)?
+            super::json_ok(graph_service()?.add_graph_task_check(
+                &req.graph_id,
+                &req.task_id,
+                check,
+            )?)?
         }
         "/api/graphs/validate" => {
             let req: GraphValidateRequest = parse_json_body(body, "server:graphs:validate")?;
-            super::json_ok(registry.validate_graph(&req.graph_id)?)?
+            super::json_ok(graph_service()?.validate_graph(&req.graph_id)?)?
         }
         _ => return Ok(None),
     };

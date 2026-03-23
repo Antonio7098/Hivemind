@@ -1,18 +1,18 @@
 //! Verify command handlers.
 
 use crate::cli::commands::VerifyCommands;
-use crate::cli::handlers::common::{get_registry, print_flow_id};
+use crate::cli::handlers::common::{get_verification_service, print_flow_id};
 use crate::cli::output::{output_error, OutputFormat};
 use crate::core::error::ExitCode;
 
 pub fn handle_verify(cmd: VerifyCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+    let Some(service) = get_verification_service(format) else {
         return ExitCode::Error;
     };
 
     match cmd {
         VerifyCommands::Override(args) => {
-            match registry.verify_override(&args.task_id, &args.decision, &args.reason) {
+            match service.verify_override(&args.task_id, &args.decision, &args.reason) {
                 Ok(flow) => {
                     print_flow_id(flow.id, format);
                     ExitCode::Success
@@ -20,14 +20,14 @@ pub fn handle_verify(cmd: VerifyCommands, format: OutputFormat) -> ExitCode {
                 Err(e) => output_error(&e, format),
             }
         }
-        VerifyCommands::Run(args) => match registry.verify_run(&args.task_id) {
+        VerifyCommands::Run(args) => match service.verify_run(&args.task_id) {
             Ok(flow) => {
                 print_flow_id(flow.id, format);
                 ExitCode::Success
             }
             Err(e) => output_error(&e, format),
         },
-        VerifyCommands::Results(args) => match registry.get_attempt(&args.attempt_id) {
+        VerifyCommands::Results(args) => match service.get_attempt(&args.attempt_id) {
             Ok(attempt) => {
                 let check_results: Vec<serde_json::Value> = attempt
                     .check_results

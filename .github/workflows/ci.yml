@@ -65,6 +65,14 @@ jobs:
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
 
+      - name: Run targeted architecture smoke tests
+        run: |
+          cargo test --test runtime_scope
+          cargo test --test query_views
+          cargo test --test flow_lifecycle
+          cargo test --test integration_remainder
+          cargo test native::tests
+
       - name: Run tests
         run: cargo nextest run --all-features
 
@@ -83,6 +91,9 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --all --check
+
+      - name: Architecture guardrails
+        run: python3 scripts/check_architecture.py
 
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings

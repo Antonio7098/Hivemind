@@ -2,8 +2,10 @@ use super::*;
 use crate::adapters::codex::{CodexAdapter, CodexConfig};
 use crate::adapters::runtime::StructuredRuntimeObservation;
 use crate::core::events::RuntimeOutputStream;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn opencode_config_creation() {
@@ -139,9 +141,12 @@ fn initialize_falls_back_to_help_when_version_fails() {
         "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then exit 1; fi\nif [ \"$1\" = \"--help\" ]; then exit 0; fi\nexit 0\n",
     )
     .unwrap();
-    let mut perms = std::fs::metadata(&script_path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&script_path, perms).unwrap();
+    #[cfg(unix)]
+    {
+        let mut perms = std::fs::metadata(&script_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&script_path, perms).unwrap();
+    }
 
     let cfg = OpenCodeConfig::new(script_path);
     let mut adapter = OpenCodeAdapter::new(cfg);
@@ -226,9 +231,12 @@ fn execute_nonzero_exit_returns_failure_report() {
 
 fn write_executable(path: &Path, body: &str) {
     std::fs::write(path, body).unwrap();
-    let mut perms = std::fs::metadata(path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(path, perms).unwrap();
+    #[cfg(unix)]
+    {
+        let mut perms = std::fs::metadata(path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(path, perms).unwrap();
+    }
 }
 
 #[test]

@@ -1,5 +1,6 @@
 use super::*;
 
+// ARCH_DEBT: legacy oversized function
 #[allow(clippy::too_many_lines)]
 pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
     match payload {
@@ -169,5 +170,7 @@ pub(super) fn payload_category(payload: &EventPayload) -> &'static str {
         | EventPayload::DiffComputed { .. }
         | EventPayload::CheckpointCommitCreated { .. }
         | EventPayload::BaselineCaptured { .. } => "filesystem",
+
+        _ => "other",
     }
 }

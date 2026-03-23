@@ -1,246 +1,11 @@
+use super::observer::{compact_progress_value, NativeProgressObserver, ProgressEmitter};
 use super::*;
-use crate::adapters::runtime::NativeHistoryCompactionTrace;
-use crate::native::assemble_native_prompt_with_runtime_env;
-use crate::native::runtime_hardening::STATE_DIR_ENV;
-use crate::native::{AgentLoopObserver, NativeRuntimeError};
-use sha2::{Digest, Sha256};
+use crate::native::{assemble_native_prompt, NativePromptAssembly};
+use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::PathBuf;
+use std::rc::Rc;
 use std::time::Instant;
-
-type ProgressEmitter<'a> = Box<dyn FnMut(String) -> Result<(), RuntimeError> + 'a>;
-
-fn compact_progress_value(value: &str, max_chars: usize) -> String {
-    let compact = value.split_whitespace().collect::<Vec<_>>().join(" ");
-    let mut chars = compact.chars();
-    let truncated = chars.by_ref().take(max_chars).collect::<String>();
-    if chars.next().is_some() {
-        format!("{truncated}…")
-    } else {
-        truncated
-    }
-}
-
-fn progress_callback_error(error: &RuntimeError) -> NativeRuntimeError {
-    NativeRuntimeError::ModelRequestFailed {
-        code: "native_observability_callback_failed".to_string(),
-        message: format!(
-            "Native progress callback failed: {}",
-            compact_progress_value(&error.message, 200)
-        ),
-        recoverable: false,
-    }
-}
-
-struct NativeProgressObserver<'a> {
-    emit: Option<ProgressEmitter<'a>>,
-    started_at: Instant,
-    history_compactions: Vec<NativeHistoryCompactionTrace>,
-    invocation_id: String,
-    request_snapshot_root: Option<PathBuf>,
-}
-
-struct TurnRequestSnapshot {
-    digest: String,
-    path: PathBuf,
-}
-
-impl<'a> NativeProgressObserver<'a> {
-    fn new(
-        emit: Option<ProgressEmitter<'a>>,
-        invocation_id: String,
-        request_snapshot_root: Option<PathBuf>,
-    ) -> Self {
-        Self {
-            emit,
-            started_at: Instant::now(),
-            history_compactions: Vec::new(),
-            invocation_id,
-            request_snapshot_root,
-        }
-    }
-
-    fn take_history_compactions(&mut self) -> Vec<NativeHistoryCompactionTrace> {
-        std::mem::take(&mut self.history_compactions)
-    }
-
-    fn emit_line(&mut self, line: impl Into<String>) -> Result<(), NativeRuntimeError> {
-        let line = line.into();
-        let line = if let Some(stripped) = line.strip_prefix("[native-progress] ") {
-            format!(
-                "[native-progress] elapsed_ms={} {stripped}",
-                self.started_at.elapsed().as_millis()
-            )
-        } else {
-            line
-        };
-        if let Some(emit) = self.emit.as_mut() {
-            emit(format!("{line}\n")).map_err(|error| progress_callback_error(&error))?;
-        }
-        Ok(())
-    }
-
-    fn persist_request_snapshot(
-        &self,
-        request: &ModelTurnRequest,
-    ) -> Result<Option<TurnRequestSnapshot>, String> {
-        let Some(root) = self.request_snapshot_root.as_ref() else {
-            return Ok(None);
-        };
-        let payload = serde_json::to_vec_pretty(request)
-            .map_err(|error| format!("serialize failed: {error}"))?;
-        let digest = format!("{:x}", Sha256::digest(&payload));
-        let dir = root.join(&self.invocation_id);
-        fs::create_dir_all(&dir)
-            .map_err(|error| format!("create dir failed for {}: {error}", dir.display()))?;
-        let path = dir.join(format!(
-            "turn-{:04}-{}.json",
-            request.turn_index,
-            &digest[..12]
-        ));
-        fs::write(&path, payload)
-            .map_err(|error| format!("write failed for {}: {error}", path.display()))?;
-        Ok(Some(TurnRequestSnapshot { digest, path }))
-    }
-}
-
-impl AgentLoopObserver for NativeProgressObserver<'_> {
-    fn on_turn_request_prepared(
-        &mut self,
-        request: &ModelTurnRequest,
-    ) -> Result<(), NativeRuntimeError> {
-        match self.persist_request_snapshot(request) {
-            Ok(Some(snapshot)) => {
-                self.emit_line(format!(
-                    "[native-progress] stage=turn_request_snapshot turn={} digest={} snapshot_path={}",
-                    request.turn_index,
-                    snapshot.digest,
-                    snapshot.path.display(),
-                ))?;
-            }
-            Ok(None) => {}
-            Err(error) => {
-                self.emit_line(format!(
-                    "[native-progress] stage=turn_request_snapshot_failed turn={} message={}",
-                    request.turn_index,
-                    compact_progress_value(&error, 160),
-                ))?;
-            }
-        }
-        let assembly = request.prompt_assembly.as_ref();
-        self.emit_line(format!(
-            "[native-progress] stage=turn_request_prepared turn={} state={} prompt_bytes={} context_bytes={} prompt_headroom={} available_budget={} rendered_prompt_bytes={} runtime_context_bytes={} visible_items={} selected_history_count={} selected_history_chars={} compacted_summary_count={} compacted_summary_chars={} assembly_latency_ms={}",
-            request.turn_index,
-            request.state.as_str(),
-            request.prompt.len(),
-            request.context.as_ref().map_or(0, String::len),
-            assembly.map_or(0, |value| value.prompt_headroom),
-            assembly.map_or(0, |value| value.available_budget),
-            assembly.map_or(0, |value| value.rendered_prompt_bytes),
-            assembly.map_or(0, |value| value.runtime_context_bytes),
-            assembly.map_or(0, |value| value.selected_item_count),
-            assembly.map_or(0, |value| value.selected_history_count),
-            assembly.map_or(0, |value| value.selected_history_chars),
-            assembly.map_or(0, |value| value.compacted_summary_count),
-            assembly.map_or(0, |value| value.compacted_summary_chars),
-            assembly.map_or(0, |value| value.assembly_duration_ms),
-        ))
-    }
-
-    fn on_model_request_started(
-        &mut self,
-        request: &ModelTurnRequest,
-    ) -> Result<(), NativeRuntimeError> {
-        self.emit_line(format!(
-            "[native-progress] stage=model_request_started turn={} state={} agent_mode={}",
-            request.turn_index,
-            request.state.as_str(),
-            request.agent_mode.as_str(),
-        ))
-    }
-
-    fn on_model_response_received(
-        &mut self,
-        request: &ModelTurnRequest,
-        response: &str,
-    ) -> Result<(), NativeRuntimeError> {
-        self.emit_line(format!(
-            "[native-progress] stage=model_response_received turn={} response_bytes={} preview={}",
-            request.turn_index,
-            response.len(),
-            compact_progress_value(response, 120),
-        ))
-    }
-
-    fn on_model_request_failed(
-        &mut self,
-        request: &ModelTurnRequest,
-        error: &NativeRuntimeError,
-    ) -> Result<(), NativeRuntimeError> {
-        self.emit_line(format!(
-            "[native-progress] stage=model_request_failed turn={} code={} recoverable={} message={}",
-            request.turn_index,
-            error.code(),
-            error.recoverable(),
-            compact_progress_value(&error.message(), 160),
-        ))
-    }
-
-    fn on_tool_action_started(
-        &mut self,
-        turn_index: u32,
-        action: &str,
-    ) -> Result<(), NativeRuntimeError> {
-        self.emit_line(format!(
-            "[native-progress] stage=tool_action_started turn={} action={}",
-            turn_index,
-            compact_progress_value(action, 160),
-        ))
-    }
-
-    fn on_tool_action_completed(
-        &mut self,
-        turn_index: u32,
-        tool_call_count: usize,
-    ) -> Result<(), NativeRuntimeError> {
-        self.emit_line(format!(
-            "[native-progress] stage=tool_action_completed turn={turn_index} tool_call_count={tool_call_count}",
-        ))
-    }
-
-    fn on_history_compacted(
-        &mut self,
-        turn_index: u32,
-        reason: &str,
-        rendered_prompt_bytes_before: usize,
-        selected_history_count_before: usize,
-        selected_history_chars_before: usize,
-        visible_items_before: usize,
-        visible_items_after: usize,
-        prompt_tokens_before: usize,
-        projected_budget_used: usize,
-        token_budget: usize,
-        elapsed_since_invocation_ms: u64,
-    ) -> Result<(), NativeRuntimeError> {
-        self.history_compactions.push(NativeHistoryCompactionTrace {
-            turn_index,
-            reason: reason.to_string(),
-            rendered_prompt_bytes_before,
-            selected_history_count_before,
-            selected_history_chars_before,
-            visible_items_before,
-            visible_items_after,
-            prompt_tokens_before,
-            projected_budget_used,
-            token_budget,
-            elapsed_since_invocation_ms,
-        });
-        self.emit_line(format!(
-            "[native-progress] stage=history_compacted turn={turn_index} reason={reason} rendered_prompt_bytes_before={rendered_prompt_bytes_before} selected_history_count_before={selected_history_count_before} selected_history_chars_before={selected_history_chars_before} visible_items_before={visible_items_before} visible_items_after={visible_items_after} prompt_tokens_before={prompt_tokens_before} projected_budget_used={projected_budget_used} token_budget={token_budget}",
-        ))
-    }
-}
 
 impl NativeRuntimeAdapter {
     #[must_use]
@@ -302,12 +67,12 @@ impl NativeRuntimeAdapter {
             let client = OpenRouterModelClient::from_env(config.model_name.clone(), runtime_env)
                 .map_err(|error| error.to_runtime_error())?;
             Ok(Box::new(client))
-        } else if config.provider_name.eq_ignore_ascii_case("groq") {
-            let client = GroqModelClient::from_env(config.model_name.clone(), runtime_env)
-                .map_err(|error| error.to_runtime_error())?;
-            Ok(Box::new(client))
         } else if config.provider_name.eq_ignore_ascii_case("minimax") {
             let client = MiniMaxModelClient::from_env(config.model_name.clone(), runtime_env)
+                .map_err(|error| error.to_runtime_error())?;
+            Ok(Box::new(client))
+        } else if config.provider_name.eq_ignore_ascii_case("groq") {
+            let client = GroqModelClient::from_env(config.model_name.clone(), runtime_env)
                 .map_err(|error| error.to_runtime_error())?;
             Ok(Box::new(client))
         } else {
@@ -383,6 +148,34 @@ impl NativeRuntimeAdapter {
         items
     }
 
+    fn write_request_snapshot(
+        runtime_env: &HashMap<String, String>,
+        invocation_id: &str,
+        turn_index: u32,
+        prompt: &str,
+        assembly: &NativePromptAssembly,
+    ) {
+        let Some(state_dir) = runtime_env.get("HIVEMIND_NATIVE_STATE_DIR") else {
+            return;
+        };
+        let invocation_dir = std::path::Path::new(state_dir)
+            .join("request-snapshots")
+            .join(invocation_id);
+        if fs::create_dir_all(&invocation_dir).is_err() {
+            return;
+        }
+        let snapshot_path = invocation_dir.join(format!("turn-{turn_index:04}.json"));
+        let payload = serde_json::json!({
+            "turn_index": turn_index,
+            "prompt": prompt,
+            "prompt_assembly": assembly,
+        });
+        let _ = fs::write(
+            snapshot_path,
+            serde_json::to_vec_pretty(&payload).unwrap_or_else(|_| b"{}".to_vec()),
+        );
+    }
+
     fn allowed_capabilities(contracts: &[crate::native::tool_engine::ToolContract]) -> Vec<String> {
         let mut capabilities = BTreeSet::new();
         for contract in contracts {
@@ -394,6 +187,7 @@ impl NativeRuntimeAdapter {
         capabilities.into_iter().collect()
     }
 
+    // ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     fn execute_with_progress(
         &self,
@@ -415,25 +209,12 @@ impl NativeRuntimeAdapter {
             )
         })?;
         let mut runtime_env = self.config.base.env.clone();
-        let request_snapshot_root = if self.config.native.capture_full_payloads {
-            runtime_env
-                .get(STATE_DIR_ENV)
-                .map(|path| PathBuf::from(path).join("request-snapshots"))
-        } else {
-            None
-        };
         let runtime_support = NativeRuntimeSupport::bootstrap(&runtime_env)
             .map_err(|error| error.to_runtime_error())?;
         let readiness_transitions = runtime_support.readiness_transitions();
         let runtime_state = Some(runtime_support.telemetry());
         runtime_support
             .ensure_secret_from_or_to_env(&mut runtime_env, "OPENROUTER_API_KEY")
-            .map_err(|error| error.to_runtime_error())?;
-        runtime_support
-            .ensure_secret_from_or_to_env(&mut runtime_env, "MINIMAX_API_KEY")
-            .map_err(|error| error.to_runtime_error())?;
-        runtime_support
-            .ensure_secret_from_or_to_env(&mut runtime_env, "GROQ_API_KEY")
             .map_err(|error| error.to_runtime_error())?;
 
         let scope = Self::scope_from_env(&runtime_env)?;
@@ -461,10 +242,17 @@ impl NativeRuntimeAdapter {
             .map(|contract| contract.name.clone())
             .collect::<Vec<_>>();
         let allowed_capabilities = Self::allowed_capabilities(&allowed_contracts);
-        let started_at = Instant::now();
-        let invocation_id = Uuid::new_v4().to_string();
-        let mut observer =
-            NativeProgressObserver::new(emit, invocation_id.clone(), request_snapshot_root);
+        let progress_output = Rc::new(RefCell::new(String::new()));
+        let progress_output_for_emit = Rc::clone(&progress_output);
+        let mut emit = emit;
+        let capture_emit: ProgressEmitter<'_> = Box::new(move |content| {
+            progress_output_for_emit.borrow_mut().push_str(&content);
+            if let Some(emit) = emit.as_mut() {
+                emit(content)?;
+            }
+            Ok(())
+        });
+        let mut observer = NativeProgressObserver::new(Some(capture_emit));
 
         let timeout_budget_ms =
             u64::try_from(self.config.native.timeout_budget.as_millis()).unwrap_or(u64::MAX);
@@ -498,6 +286,8 @@ impl NativeRuntimeAdapter {
             ))
             .map_err(|error| error.to_runtime_error())?;
 
+        let started_at = Instant::now();
+        let invocation_id = Uuid::new_v4().to_string();
         runtime_support
             .ingest_log(
                 "native_runtime",
@@ -538,17 +328,19 @@ impl NativeRuntimeAdapter {
             initial_items,
             |turn_index, state, history| {
                 let assembly_started = Instant::now();
-                let rendered = assemble_native_prompt_with_runtime_env(
-                    &self.config.native,
-                    input,
-                    history,
-                    &allowed_contracts,
-                    &runtime_env,
-                );
+                let rendered =
+                    assemble_native_prompt(&self.config.native, input, history, &allowed_contracts);
                 let assembly_duration_ms =
                     u64::try_from(assembly_started.elapsed().as_millis()).unwrap_or(u64::MAX);
                 let mut assembly = rendered.assembly;
                 assembly.assembly_duration_ms = assembly_duration_ms;
+                Self::write_request_snapshot(
+                    &runtime_env,
+                    &invocation_id,
+                    turn_index,
+                    &rendered.prompt,
+                    &assembly,
+                );
                 Ok(ModelTurnRequest {
                     turn_index,
                     state,
@@ -593,7 +385,11 @@ impl NativeRuntimeAdapter {
                     allowed_tools,
                     allowed_capabilities,
                 );
-                let stdout = Self::render_stdout(&result);
+                let stdout = format!(
+                    "{}{}",
+                    progress_output.borrow(),
+                    Self::render_stdout(&result)
+                );
                 if let Some(failure) = trace.failure.clone() {
                     ExecutionReport::failure_with_output(
                         1,
@@ -632,11 +428,16 @@ impl NativeRuntimeAdapter {
                     allowed_tools,
                     allowed_capabilities,
                 );
+                let stdout = format!(
+                    "{}{}",
+                    progress_output.borrow(),
+                    Self::render_stdout(&partial)
+                );
                 ExecutionReport::failure_with_output(
                     1,
                     duration,
                     err.to_runtime_error(),
-                    Self::render_stdout(&partial),
+                    stdout,
                     err.message(),
                 )
                 .with_native_invocation(trace)
@@ -680,6 +481,7 @@ impl RuntimeAdapter for NativeRuntimeAdapter {
         Ok(())
     }
 
+    // ARCH_DEBT: legacy oversized function
     #[allow(clippy::too_many_lines)]
     fn execute(&mut self, input: ExecutionInput) -> Result<ExecutionReport, RuntimeError> {
         self.execute_with_progress(&input, None)

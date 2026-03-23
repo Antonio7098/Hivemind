@@ -52,7 +52,7 @@ fn parse_non_empty_filter(
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub(super) fn build_event_filter(
-    registry: &Registry,
+    service: &EventService,
     origin: &str,
     project: Option<&str>,
     graph: Option<&str>,
@@ -79,7 +79,7 @@ pub(super) fn build_event_filter(
     filter.limit = Some(limit);
 
     if let Some(project) = project {
-        filter.project_id = Some(registry.get_project(project)?.id);
+        filter.project_id = Some(service.get_project(project)?.id);
     }
     if let Some(graph) = graph {
         filter.graph_id = Some(parse_event_uuid(
@@ -109,7 +109,7 @@ pub(super) fn build_event_filter(
         )?;
         if root_workflow_run.is_none()
             && parent_workflow_run.is_none()
-            && registry
+            && service
                 .get_workflow_run(&workflow_run_id.to_string())
                 .ok()
                 .is_some_and(|run| run.root_workflow_run_id == workflow_run_id)

@@ -6,6 +6,7 @@ mod flow;
 mod graph;
 mod merge;
 mod support;
+mod task;
 mod workflow;
 
 impl AppState {
@@ -16,6 +17,7 @@ impl AppState {
         if self.apply_catalog_event(&event.payload, timestamp)
             || self.apply_graph_event(&event.payload, timestamp)
             || self.apply_flow_event(event, timestamp)
+            || self.apply_task_execution_event(event, timestamp)
             || self.apply_workflow_event(&event.payload, timestamp)
             || self.apply_attempt_event(&event.payload, timestamp)
             || self.apply_chat_event(&event.payload, timestamp)

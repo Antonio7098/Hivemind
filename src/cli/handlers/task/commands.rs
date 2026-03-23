@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn handle_task_create(
-    registry: &Registry,
+    service: &TaskService,
     args: &TaskCreateArgs,
     format: OutputFormat,
 ) -> ExitCode {
@@ -10,7 +10,7 @@ pub(super) fn handle_task_create(
         Err(code) => return code,
     };
 
-    match registry.create_task(
+    match service.create_task(
         &args.project,
         &args.title,
         args.description.as_deref(),
@@ -24,12 +24,12 @@ pub(super) fn handle_task_create(
     }
 }
 pub(super) fn handle_task_list(
-    registry: &Registry,
+    service: &TaskService,
     args: &TaskListArgs,
     format: OutputFormat,
 ) -> ExitCode {
     let state_filter = args.state.as_ref().and_then(|s| parse_task_state(s));
-    match registry.list_tasks(&args.project, state_filter) {
+    match service.list_tasks(&args.project, state_filter) {
         Ok(tasks) => {
             print_tasks(&tasks, format);
             ExitCode::Success
@@ -38,11 +38,11 @@ pub(super) fn handle_task_list(
     }
 }
 pub(super) fn handle_task_inspect(
-    registry: &Registry,
+    service: &TaskService,
     args: &TaskInspectArgs,
     format: OutputFormat,
 ) -> ExitCode {
-    match registry.get_task(&args.task_id) {
+    match service.get_task(&args.task_id) {
         Ok(task) => {
             print_task(&task, format);
             ExitCode::Success
@@ -51,11 +51,11 @@ pub(super) fn handle_task_inspect(
     }
 }
 pub(super) fn handle_task_update(
-    registry: &Registry,
+    service: &TaskService,
     args: &TaskUpdateArgs,
     format: OutputFormat,
 ) -> ExitCode {
-    match registry.update_task(
+    match service.update_task(
         &args.task_id,
         args.title.as_deref(),
         args.description.as_deref(),
@@ -68,15 +68,15 @@ pub(super) fn handle_task_update(
     }
 }
 pub(super) fn handle_task_runtime_set(
-    registry: &Registry,
+    service: &TaskService,
     args: &crate::cli::commands::TaskRuntimeSetArgs,
     format: OutputFormat,
 ) -> ExitCode {
     let role = parse_runtime_role(args.role);
     let result = if args.clear {
-        registry.task_runtime_clear_role(&args.task_id, role)
+        service.task_runtime_clear_role(&args.task_id, role)
     } else {
-        registry.task_runtime_set_role(
+        service.task_runtime_set_role(
             &args.task_id,
             role,
             &args.adapter,
@@ -97,11 +97,11 @@ pub(super) fn handle_task_runtime_set(
     }
 }
 pub(super) fn handle_task_close(
-    registry: &Registry,
+    service: &TaskService,
     args: &TaskCloseArgs,
     format: OutputFormat,
 ) -> ExitCode {
-    match registry.close_task(&args.task_id, args.reason.as_deref()) {
+    match service.close_task(&args.task_id, args.reason.as_deref()) {
         Ok(task) => {
             print_task(&task, format);
             ExitCode::Success
@@ -109,36 +109,12 @@ pub(super) fn handle_task_close(
         Err(e) => output_error(&e, format),
     }
 }
-fn resolve_task_id_with_legacy_project(
-    registry: &Registry,
-    project_or_task: &str,
-    legacy_task_id: Option<&str>,
-    origin: &str,
-) -> Result<String, crate::core::error::HivemindError> {
-    if let Some(task_id) = legacy_task_id {
-        let project = registry.get_project(project_or_task)?;
-        let task = registry.get_task(task_id)?;
-        if task.project_id != project.id {
-            return Err(crate::core::error::HivemindError::user(
-                "task_project_mismatch",
-                format!("Task '{task_id}' does not belong to project '{project_or_task}'"),
-                origin,
-            )
-            .with_hint("Pass the matching project/task pair or use `hivemind task <op> <task-id>`")
-            .with_context("project", project_or_task)
-            .with_context("task_id", task_id));
-        }
-        return Ok(task_id.to_string());
-    }
-    Ok(project_or_task.to_string())
-}
 pub(super) fn handle_task_start(
-    registry: &Registry,
+    service: &TaskService,
     args: &TaskStartArgs,
     format: OutputFormat,
 ) -> ExitCode {
-    let task_id = match resolve_task_id_with_legacy_project(
-        registry,
+    let task_id = match service.resolve_task_id_with_legacy_project(
         &args.task_id,
         args.legacy_task_id.as_deref(),
         "cli:task:start",
@@ -147,7 +123,7 @@ pub(super) fn handle_task_start(
         Err(e) => return output_error(&e, format),
     };
 
-    match registry.start_task_execution(&task_id) {
+    match service.start_task_execution(&task_id) {
         Ok(attempt_id) => {
             print_attempt_id(attempt_id, format);
             ExitCode::Success
@@ -156,12 +132,11 @@ pub(super) fn handle_task_start(
     }
 }
 pub(super) fn handle_task_complete(
-    registry: &Registry,
+    service: &TaskService,
     args: &TaskCompleteArgs,
     format: OutputFormat,
 ) -> ExitCode {
-    let task_id = match resolve_task_id_with_legacy_project(
-        registry,
+    let task_id = match service.resolve_task_id_with_legacy_project(
         &args.task_id,
         args.legacy_task_id.as_deref(),
         "cli:task:complete",
@@ -171,7 +146,7 @@ pub(super) fn handle_task_complete(
     };
 
     if matches!(args.success, Some(false)) {
-        return match registry.close_task(&task_id, args.message.as_deref()) {
+        return match service.close_task(&task_id, args.message.as_deref()) {
             Ok(task) => {
                 print_task(&task, format);
                 ExitCode::Success
@@ -180,7 +155,7 @@ pub(super) fn handle_task_complete(
         };
     }
 
-    match registry.complete_task_execution(&task_id) {
+    match service.complete_task_execution(&task_id) {
         Ok(flow) => {
             print_flow_id(flow.id, format);
             ExitCode::Success
@@ -189,12 +164,11 @@ pub(super) fn handle_task_complete(
     }
 }
 pub(super) fn handle_task_retry(
-    registry: &Registry,
+    service: &TaskService,
     args: &TaskRetryArgs,
     format: OutputFormat,
 ) -> ExitCode {
-    let task_id = match resolve_task_id_with_legacy_project(
-        registry,
+    let task_id = match service.resolve_task_id_with_legacy_project(
         &args.task_id,
         args.legacy_task_id.as_deref(),
         "cli:task:retry",
@@ -208,7 +182,7 @@ pub(super) fn handle_task_retry(
         crate::cli::commands::TaskRetryMode::Continue => RetryMode::Continue,
     };
 
-    match registry.retry_task(&task_id, args.reset_count, mode) {
+    match service.retry_task(&task_id, args.reset_count, mode) {
         Ok(flow) => {
             print_flow_id(flow.id, format);
             ExitCode::Success
@@ -217,11 +191,11 @@ pub(super) fn handle_task_retry(
     }
 }
 pub(super) fn handle_task_abort(
-    registry: &Registry,
+    service: &TaskService,
     args: &TaskAbortArgs,
     format: OutputFormat,
 ) -> ExitCode {
-    match registry.abort_task(&args.task_id, args.reason.as_deref()) {
+    match service.abort_task(&args.task_id, args.reason.as_deref()) {
         Ok(flow) => {
             print_flow_id(flow.id, format);
             ExitCode::Success

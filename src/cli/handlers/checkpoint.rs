@@ -1,17 +1,17 @@
 //! Checkpoint command handlers.
 
 use crate::cli::commands::CheckpointCommands;
-use crate::cli::handlers::common::get_registry;
+use crate::cli::handlers::common::get_checkpoint_service;
 use crate::cli::output::{output, output_error, OutputFormat};
 use crate::core::error::ExitCode;
 
 pub fn handle_checkpoint(cmd: CheckpointCommands, format: OutputFormat) -> ExitCode {
-    let Some(registry) = get_registry(format) else {
+    let Some(service) = get_checkpoint_service(format) else {
         return ExitCode::Error;
     };
 
     match cmd {
-        CheckpointCommands::List(args) => match registry.list_checkpoints(&args.attempt_id) {
+        CheckpointCommands::List(args) => match service.list_checkpoints(&args.attempt_id) {
             Ok(checkpoints) => match format {
                 OutputFormat::Table => {
                     if checkpoints.is_empty() {
@@ -61,7 +61,7 @@ pub fn handle_checkpoint(cmd: CheckpointCommands, format: OutputFormat) -> ExitC
                 );
             };
 
-            match registry.checkpoint_complete(
+            match service.checkpoint_complete(
                 &attempt_id,
                 &args.checkpoint_id,
                 args.summary.as_deref(),
