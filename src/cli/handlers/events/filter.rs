@@ -72,11 +72,13 @@ pub(super) fn build_event_filter(
     since: Option<&str>,
     until: Option<&str>,
     limit: usize,
+    offset: Option<usize>,
 ) -> Result<crate::storage::event_store::EventFilter, crate::core::error::HivemindError> {
     use crate::storage::event_store::EventFilter;
 
     let mut filter = EventFilter::all();
     filter.limit = Some(limit);
+    filter.offset = offset;
 
     if let Some(project) = project {
         filter.project_id = Some(service.get_project(project)?.id);

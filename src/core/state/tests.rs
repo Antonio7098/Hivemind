@@ -76,6 +76,7 @@ fn task_lifecycle() {
                 project_id,
                 title: "task1".to_string(),
                 description: None,
+                checkpoints_required: true,
                 scope: None,
             },
             CorrelationIds::for_task(project_id, task_id),

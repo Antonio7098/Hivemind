@@ -43,6 +43,17 @@ pub(super) fn list_ui_events(event_service: &EventService, limit: usize) -> Resu
     Ok(ui_events)
 }
 
+pub(super) fn list_ui_events_filtered(
+    event_service: &EventService,
+    filter: &EventFilter,
+) -> Result<Vec<UiEvent>> {
+    let events = event_service.read_events(filter)?;
+    let mut ui_events: Vec<UiEvent> = events.iter().map(ui_event).collect::<Result<_>>()?;
+    ui_events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+    ui_events.reverse();
+    Ok(ui_events)
+}
+
 #[allow(dead_code)]
 pub(super) fn list_runtime_stream_items(
     event_service: &EventService,

@@ -37,6 +37,7 @@ pub(super) fn handle_events_native_summary(
         args.since.as_deref(),
         args.until.as_deref(),
         args.limit,
+        None,
     ) {
         Ok(filter) => filter,
         Err(error) => return output_error(&error, format),

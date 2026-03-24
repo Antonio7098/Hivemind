@@ -1,5 +1,6 @@
 use super::*;
 
+/// Deprecated: TaskGraph routes are legacy. Use `/api/workflows/*` instead.
 pub(super) fn handle_post(
     path: &str,
     body: Option<&[u8]>,

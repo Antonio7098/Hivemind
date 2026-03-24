@@ -2588,7 +2588,7 @@ hivemind runtime defaults-set [--role worker|validator] [--adapter <name>] [--bi
 
 **Synopsis:**
 ```
-hivemind events list [--project <project>] [--graph <graph-id>] [--flow <flow-id>] [--task <task-id>] [--attempt <attempt-id>] [--artifact-id <artifact-id>] [--template-id <template-id>] [--rule-id <rule-id>] [--error-type <category>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
+hivemind events list [--project <project>] [--graph <graph-id>] [--flow <flow-id>] [--workflow <workflow-id>] [--workflow-run <workflow-run-id>] [--root-workflow-run <root-workflow-run-id>] [--parent-workflow-run <parent-workflow-run-id>] [--step <step-id>] [--step-run <step-run-id>] [--task <task-id>] [--attempt <attempt-id>] [--artifact-id <artifact-id>] [--template-id <template-id>] [--rule-id <rule-id>] [--error-type <category>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>] [--offset <n>]
 ```
 
 **Preconditions:** None
@@ -2598,6 +2598,7 @@ hivemind events list [--project <project>] [--graph <graph-id>] [--flow <flow-id
 **Output:**
 - Historical event records
 - Optional correlation, governance payload selector, and time-window filtering
+- Server-side pagination via `--limit` and `--offset`
 - JSON/YAML responses use the standard envelope: `{"success": true, "data": [...]}`
 - Defaults to `--limit 200` when not explicitly provided
 
@@ -2641,7 +2642,7 @@ hivemind events inspect <event-id>
 
 **Synopsis:**
 ```
-hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project>] [--graph <graph-id>] [--attempt <attempt-id>] [--artifact-id <artifact-id>] [--template-id <template-id>] [--rule-id <rule-id>] [--error-type <category>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
+hivemind events stream [--flow <flow-id>] [--task <task-id>] [--project <project>] [--graph <graph-id>] [--workflow <workflow-id>] [--workflow-run <workflow-run-id>] [--root-workflow-run <root-workflow-run-id>] [--parent-workflow-run <parent-workflow-run-id>] [--step <step-id>] [--step-run <step-run-id>] [--attempt <attempt-id>] [--artifact-id <artifact-id>] [--template-id <template-id>] [--rule-id <rule-id>] [--error-type <category>] [--since <rfc3339>] [--until <rfc3339>] [--limit <n>]
 ```
 
 **Preconditions:** None

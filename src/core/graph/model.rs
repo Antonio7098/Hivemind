@@ -41,6 +41,7 @@ impl GraphTask {
             description: None,
             criteria,
             retry_policy: RetryPolicy::default(),
+            checkpoints_required: true,
             checkpoints: Self::default_checkpoints(),
             scope: None,
         }
@@ -64,7 +65,11 @@ impl GraphTask {
     #[must_use]
     pub fn with_checkpoints(mut self, checkpoints: Vec<String>) -> Self {
         self.checkpoints = if checkpoints.is_empty() {
-            Self::default_checkpoints()
+            if self.checkpoints_required {
+                Self::default_checkpoints()
+            } else {
+                Vec::new()
+            }
         } else {
             checkpoints
         };

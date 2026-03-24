@@ -25,8 +25,15 @@ impl Registry {
         }
 
         let attempt = Self::resolve_latest_attempt_without_diff(&state, flow.id, id, origin)?;
+        let graph = state
+            .graphs
+            .get(&flow.graph_id)
+            .ok_or_else(|| HivemindError::system("graph_not_found", "Graph not found", origin))?;
+        let graph_task = graph.tasks.get(&id).ok_or_else(|| {
+            HivemindError::system("task_not_found", "Task not found in graph", origin)
+        })?;
 
-        if !attempt.all_checkpoints_completed {
+        if graph_task.checkpoints_required && !attempt.all_checkpoints_completed {
             let err = HivemindError::user(
                     "checkpoints_incomplete",
                     "All checkpoints must be completed before task completion",

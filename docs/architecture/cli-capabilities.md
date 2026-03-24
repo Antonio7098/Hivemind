@@ -53,6 +53,7 @@ Capabilities:
 - Query historical events by correlation (project / graph / flow / task / attempt)
 - Query historical events by governance payload selectors (`--artifact-id`, `--template-id`, `--rule-id`)
 - Query events by time window (`--since`, `--until`)
+- **Server-side pagination** (`--limit`, `--offset`) for bounded result sets
 - Inspect full event payload by event ID
 - Replay events into derived state
 

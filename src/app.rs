@@ -921,10 +921,17 @@ impl TaskService {
         project_id_or_name: &str,
         title: &str,
         description: Option<&str>,
+        checkpoints_required: bool,
         scope: Option<Scope>,
     ) -> Result<Task> {
         self.registry
-            .create_task(project_id_or_name, title, description, scope)
+            .create_task(
+                project_id_or_name,
+                title,
+                description,
+                checkpoints_required,
+                scope,
+            )
     }
 
     pub fn list_tasks(

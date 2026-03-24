@@ -29,6 +29,7 @@ pub(super) fn handle_events_list(
         args.since.as_deref(),
         args.until.as_deref(),
         args.limit,
+        args.offset,
     ) {
         Ok(f) => f,
         Err(e) => return output_error(&e, format),
@@ -83,6 +84,7 @@ pub(super) fn handle_events_stream(
         args.since.as_deref(),
         args.until.as_deref(),
         args.limit,
+        None,
     ) {
         Ok(f) => f,
         Err(e) => return output_error(&e, format),

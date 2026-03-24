@@ -2,6 +2,13 @@
 //!
 //! A `TaskGraph` is created by the Planner and is immutable once execution begins.
 //! It represents what should happen, not what has happened.
+//!
+//! # Deprecated
+//!
+//! `TaskGraph` is legacy. The workflow engine (`WorkflowDefinition`/`WorkflowRun`)
+//! introduced in Phase 5 is the primary execution surface. `TaskGraph` objects
+//! in `AppState` may be synthetic bridge artifacts created internally by the
+//! workflow system via `ensure_synthetic_flow_for_workflow_run`.
 
 use super::scope::Scope;
 use super::verification::CheckConfig;
@@ -9,6 +16,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
+
+pub(crate) const fn default_checkpoints_required() -> bool {
+    true
+}
 
 mod error;
 mod model;
@@ -49,6 +60,9 @@ pub struct GraphTask {
     pub criteria: SuccessCriteria,
     /// Retry policy.
     pub retry_policy: RetryPolicy,
+    /// Whether checkpoints must be completed before task completion.
+    #[serde(default = "default_checkpoints_required")]
+    pub checkpoints_required: bool,
     /// Ordered checkpoint IDs for attempt execution.
     #[serde(default = "GraphTask::default_checkpoints")]
     pub checkpoints: Vec<String>,

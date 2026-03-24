@@ -36,14 +36,28 @@ impl Registry {
         })?;
 
         let max_attempts = task.retry_policy.max_retries.saturating_add(1);
-        let checkpoint_ids = Self::normalized_checkpoint_ids(&task.checkpoints);
+        let checkpoint_ids = if task.checkpoints_required {
+            Self::normalized_checkpoint_ids(&task.checkpoints)
+        } else {
+            Vec::new()
+        };
         let checkpoint_help = if checkpoint_ids.is_empty() {
             None
         } else {
-            Some(format!(
-                "Execution checkpoints (in order): {}\nComplete checkpoints from the runtime with the built-in tool: ACT:tool:checkpoint_complete:{{\"id\":\"<checkpoint-id>\",\"summary\":\"optional progress summary\"}}\nAttempt ID for this run: {attempt_id}",
+            let checkpoint_line = format!(
+                "Execution checkpoints (in order): {}",
                 checkpoint_ids.join(", ")
-            ))
+            );
+            let completion_line = if runtime.adapter_name == "native" {
+                format!(
+                    "Complete checkpoints from the runtime with the built-in tool: ACT:tool:checkpoint_complete:{{\"id\":\"<checkpoint-id>\",\"summary\":\"optional progress summary\"}}\nAttempt ID for this run: {attempt_id}"
+                )
+            } else {
+                format!(
+                    "Complete checkpoints by running: hivemind checkpoint complete --attempt-id {attempt_id} --id <checkpoint-id> --summary \"optional progress summary\"\nAttempt ID for this run: {attempt_id}"
+                )
+            };
+            Some(format!("{}\n{}", checkpoint_line, completion_line))
         };
         let repo_context = format!(
             "Multi-repo worktrees for this attempt:\n{}",

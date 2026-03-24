@@ -110,6 +110,16 @@ impl Registry {
             HivemindError::system("task_not_found", "Task not found in graph", origin)
         })?;
 
+        if !graph_task.checkpoints_required {
+            let err = HivemindError::user(
+                "checkpoints_disabled",
+                "Checkpoint completion is disabled for this task",
+                origin,
+            );
+            self.record_error_event(&err, corr_attempt);
+            return Err(err);
+        }
+
         let checkpoint_ids = Self::normalized_checkpoint_ids(&graph_task.checkpoints);
         let Some((order, total)) = Self::checkpoint_order(&checkpoint_ids, checkpoint_id) else {
             let err = HivemindError::user(

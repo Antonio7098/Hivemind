@@ -2,6 +2,13 @@
 //!
 //! A `TaskFlow` binds a `TaskGraph` to execution state. Multiple `TaskFlows`
 //! may exist for the same `TaskGraph`.
+//!
+//! # Deprecated
+//!
+//! `TaskFlow` is legacy. The workflow engine (`WorkflowDefinition`/`WorkflowRun`)
+//! introduced in Phase 5 is the primary execution surface. `TaskFlow` objects
+//! in `AppState` may be synthetic bridge artifacts created internally by the
+//! workflow system via `ensure_synthetic_flow_for_workflow_run`.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

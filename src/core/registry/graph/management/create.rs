@@ -61,7 +61,12 @@ impl Registry {
                 description: task.description,
                 criteria: SuccessCriteria::new("Done"),
                 retry_policy: RetryPolicy::default(),
-                checkpoints: vec!["checkpoint-1".to_string()],
+                checkpoints_required: task.checkpoints_required,
+                checkpoints: if task.checkpoints_required {
+                    vec!["checkpoint-1".to_string()]
+                } else {
+                    Vec::new()
+                },
                 scope: task.scope,
             };
             let event = Event::new(

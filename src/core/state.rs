@@ -22,6 +22,10 @@ const fn default_max_parallel_tasks() -> u16 {
     1
 }
 
+pub(crate) const fn default_checkpoints_required() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AttemptCheckpointState {
@@ -265,6 +269,8 @@ pub struct Task {
     pub project_id: Uuid,
     pub title: String,
     pub description: Option<String>,
+    #[serde(default = "default_checkpoints_required")]
+    pub checkpoints_required: bool,
     #[serde(default)]
     pub scope: Option<Scope>,
     #[serde(default)]

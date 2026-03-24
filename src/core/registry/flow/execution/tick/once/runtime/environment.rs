@@ -161,9 +161,11 @@ impl Registry {
             return;
         };
 
-        if let Some(session) = current_attempt.runtime_session.as_ref().filter(|session| {
-            session.adapter_name == runtime_for_adapter.adapter_name
-        }) {
+        if let Some(session) = current_attempt
+            .runtime_session
+            .as_ref()
+            .filter(|session| session.adapter_name == runtime_for_adapter.adapter_name)
+        {
             runtime_for_adapter.env.insert(
                 "HIVEMIND_RUNTIME_RESUME_SESSION_ID".to_string(),
                 session.session_id.clone(),

@@ -374,6 +374,7 @@ impl Registry {
         &self,
         state: &AppState,
         attempt_id: Uuid,
+        adapter_name: &str,
         original_input: &ExecutionInput,
         stdout: &str,
         stderr: &str,
@@ -411,10 +412,18 @@ impl Registry {
         if let Some(context) = original_input.context.as_deref() {
             context_parts.push(context.to_string());
         }
-        context_parts.push(format!(
-            "Checkpoint completion repair attempt {repair_attempt}/{MAX_EXTERNAL_CHECKPOINT_RECOVERY_ATTEMPTS}: the previous runtime invocation ended before the task's remaining checkpoints were completed. Continue in the same runtime session and complete all remaining checkpoints in order before ending. Active checkpoint: {active_checkpoint}. Pending checkpoints: {}. Emit one directive line per completed checkpoint using the built-in format ACT:tool:checkpoint_complete:{{\"id\":\"<checkpoint-id>\",\"summary\":\"short progress summary\"}}.",
-            pending.join(", ")
-        ));
+        let completion_instruction = if adapter_name == "native" {
+            format!(
+                "Checkpoint completion repair attempt {repair_attempt}/{MAX_EXTERNAL_CHECKPOINT_RECOVERY_ATTEMPTS}: the previous runtime invocation ended before the task's remaining checkpoints were completed. Continue in the same runtime session and complete all remaining checkpoints in order before ending. Active checkpoint: {active_checkpoint}. Pending checkpoints: {}. Emit one directive line per completed checkpoint using the built-in format ACT:tool:checkpoint_complete:{{\"id\":\"<checkpoint-id>\",\"summary\":\"short progress summary\"}}.",
+                pending.join(", ")
+            )
+        } else {
+            format!(
+                "Checkpoint completion repair attempt {repair_attempt}/{MAX_EXTERNAL_CHECKPOINT_RECOVERY_ATTEMPTS}: the previous runtime invocation ended before the task's remaining checkpoints were completed. Continue in the same runtime session and complete all remaining checkpoints in order before ending. Active checkpoint: {active_checkpoint}. Pending checkpoints: {}. Complete checkpoints by running: hivemind checkpoint complete --attempt-id {attempt_id} --id <checkpoint-id> --summary \"short progress summary\".",
+                pending.join(", ")
+            )
+        };
+        context_parts.push(completion_instruction);
         if !stdout.trim().is_empty() {
             context_parts.push(format!(
                 "Previous runtime stdout:\n{}",
@@ -463,6 +472,7 @@ impl Registry {
         let Some(repair_input) = self.checkpoint_repair_input(
             &latest_state,
             attempt_id,
+            &runtime_for_adapter.adapter_name,
             original_input,
             stdout,
             stderr,
@@ -490,7 +500,8 @@ impl Registry {
             runtime_flags,
             runtime_prompt,
             origin,
-        )? else {
+        )?
+        else {
             return Ok(None);
         };
 
@@ -518,6 +529,26 @@ impl Registry {
         stderr: &str,
         _origin: &'static str,
     ) -> std::result::Result<(), (String, String, bool)> {
+        let state = self
+            .state()
+            .map_err(|error| (error.code, error.message, error.recoverable))?;
+        let checkpoints_enabled = state
+            .attempts
+            .get(&attempt_id)
+            .and_then(|attempt| {
+                state.flows.get(&attempt.flow_id).and_then(|flow| {
+                    state
+                        .graphs
+                        .get(&flow.graph_id)
+                        .and_then(|graph| graph.tasks.get(&attempt.task_id))
+                        .map(|task| task.checkpoints_required)
+                })
+            })
+            .unwrap_or(true);
+        if !checkpoints_enabled {
+            return Ok(());
+        }
+
         for stream in [stdout, stderr] {
             for line in stream.lines() {
                 let trimmed = line.trim();

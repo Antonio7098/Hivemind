@@ -39,6 +39,8 @@ pub struct EventFilter {
     pub until: Option<DateTime<Utc>>,
     /// Maximum number of events to return.
     pub limit: Option<usize>,
+    /// Number of events to skip (for pagination).
+    pub offset: Option<usize>,
 }
 impl EventFilter {
     /// Creates an empty filter (matches all events).

@@ -2292,6 +2292,7 @@ impl Registry {
                 max_retries: 2,
                 escalate_on_failure: false,
             },
+            checkpoints_required: false,
             checkpoints: Vec::new(),
             scope: None,
         }
@@ -3685,6 +3686,7 @@ impl Registry {
                             project_id: run.project_id,
                             title: step.name.clone(),
                             description: step.description.clone(),
+                            checkpoints_required: false,
                             scope: None,
                         },
                         corr.clone(),
@@ -4475,9 +4477,7 @@ mod tests {
         registry.start_flow(&flow_id.to_string()).unwrap();
 
         let task_id = Registry::workflow_bridge_task_id(run.id, step_id);
-        let attempt_id = registry
-            .start_task_execution(&task_id.to_string())
-            .unwrap();
+        let attempt_id = registry.start_task_execution(&task_id.to_string()).unwrap();
         registry
             .append_event(
                 Event::new(
@@ -4511,14 +4511,18 @@ mod tests {
             WorkflowStepState::Running
         );
 
-        registry.complete_task_execution(&task_id.to_string()).unwrap();
+        registry
+            .complete_task_execution(&task_id.to_string())
+            .unwrap();
         let verifying = registry.get_workflow_run(&run.id.to_string()).unwrap();
         assert_eq!(
             verifying.step_runs.get(&step_id).unwrap().state,
             WorkflowStepState::Verifying
         );
 
-        registry.process_verifying_task(&flow_id.to_string(), task_id).unwrap();
+        registry
+            .process_verifying_task(&flow_id.to_string(), task_id)
+            .unwrap();
 
         let completed = registry.get_workflow_run(&run.id.to_string()).unwrap();
         assert_eq!(completed.state, WorkflowRunState::Completed);

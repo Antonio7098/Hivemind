@@ -13,6 +13,7 @@ pub(super) fn handle_post(
                 &req.project,
                 &req.title,
                 req.description.as_deref(),
+                false,
                 req.scope,
             )?)?
         }

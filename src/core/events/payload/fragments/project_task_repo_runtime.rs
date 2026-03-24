@@ -70,6 +70,8 @@
         project_id: Uuid,
         title: String,
         description: Option<String>,
+        #[serde(default = "crate::core::state::default_checkpoints_required")]
+        checkpoints_required: bool,
         #[serde(default)]
         scope: Option<Scope>,
     },

@@ -6,6 +6,7 @@ pub(super) mod events;
 pub(super) mod other;
 pub(super) mod runtime;
 pub(super) mod state;
+pub(super) mod workflows;
 
 fn parse_runtime_stream_detail(
     query: &std::collections::HashMap<String, String>,
@@ -47,6 +48,10 @@ pub(super) fn handle_get(
     }
 
     if let Some(resp) = other::handle_other_queries(path, url, app)? {
+        return Ok(Some(resp));
+    }
+
+    if let Some(resp) = workflows::handle_workflow_queries(path, url, app)? {
         return Ok(Some(resp));
     }
 

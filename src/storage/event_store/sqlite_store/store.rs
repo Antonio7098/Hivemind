@@ -127,7 +127,14 @@ impl EventStore for SqliteEventStore {
             query.push_str(" WHERE ");
             query.push_str(&conditions.join(" AND "));
         }
-        query.push_str(" ORDER BY sequence ASC;");
+        query.push_str(" ORDER BY sequence ASC");
+        if let Some(limit) = filter.limit {
+            query.push_str(&format!(" LIMIT {}", limit));
+        }
+        if let Some(offset) = filter.offset {
+            query.push_str(&format!(" OFFSET {}", offset));
+        }
+        query.push(';');
 
         let rows = self.run_sql_json_query(&query)?;
         let mut result = Vec::new();

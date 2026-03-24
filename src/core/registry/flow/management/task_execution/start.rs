@@ -58,7 +58,11 @@ impl Registry {
         let graph_task = graph.tasks.get(&id).ok_or_else(|| {
             HivemindError::system("task_not_found", "Task not found in graph", origin)
         })?;
-        let checkpoint_ids = Self::normalized_checkpoint_ids(&graph_task.checkpoints);
+        let checkpoint_ids = if graph_task.checkpoints_required {
+            Self::normalized_checkpoint_ids(&graph_task.checkpoints)
+        } else {
+            Vec::new()
+        };
         if graph_task.scope.is_some() {
             self.capture_scope_baseline_for_attempt(&flow, &state, attempt_id)?;
         }

@@ -14,6 +14,7 @@ pub(super) fn handle_task_create(
         &args.project,
         &args.title,
         args.description.as_deref(),
+        args.checkpoints,
         scope,
     ) {
         Ok(task) => {

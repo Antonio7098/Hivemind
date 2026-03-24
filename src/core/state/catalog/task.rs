@@ -12,6 +12,7 @@ impl AppState {
                 project_id,
                 title,
                 description,
+                checkpoints_required,
                 scope,
             } => {
                 self.tasks.insert(
@@ -21,6 +22,7 @@ impl AppState {
                         project_id: *project_id,
                         title: title.clone(),
                         description: description.clone(),
+                        checkpoints_required: *checkpoints_required,
                         scope: scope.clone(),
                         runtime_override: None,
                         runtime_overrides: TaskRuntimeRoleOverrides::default(),

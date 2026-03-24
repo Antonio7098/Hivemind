@@ -10,6 +10,7 @@ impl Registry {
         project_id_or_name: &str,
         title: &str,
         description: Option<&str>,
+        checkpoints_required: bool,
         scope: Option<Scope>,
     ) -> Result<Task> {
         let project = self
@@ -34,6 +35,7 @@ impl Registry {
                 project_id: project.id,
                 title: title.to_string(),
                 description: description.map(String::from),
+                checkpoints_required,
                 scope,
             },
             CorrelationIds::for_task(project.id, task_id),

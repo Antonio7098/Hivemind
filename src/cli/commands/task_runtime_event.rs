@@ -71,6 +71,8 @@ pub struct TaskCreateArgs {
     pub title: String,
     #[arg(long, short = 'd')]
     pub description: Option<String>,
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+    pub checkpoints: bool,
     #[arg(long)]
     pub scope: Option<String>,
 }
@@ -237,6 +239,8 @@ pub struct EventListArgs {
     pub until: Option<String>,
     #[arg(long, default_value = "200")]
     pub limit: usize,
+    #[arg(long)]
+    pub offset: Option<usize>,
 }
 
 #[derive(Args)]

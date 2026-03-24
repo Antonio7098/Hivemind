@@ -61,8 +61,8 @@
 //!
 //! - [`events`] - Event definitions and types
 //! - [`state`] - Derived state types (Project, Task, Attempt, etc.)
-//! - [`graph`] - `TaskGraph`: static planning DAG
-//! - [`flow`] - `TaskFlow`: legacy runtime execution state
+//! - [`graph`] - `TaskGraph`: legacy static planning DAG (deprecated, use workflows)
+//! - [`flow`] - `TaskFlow`: legacy runtime execution state (deprecated, use workflows)
 //! - [`workflow`] - `WorkflowDefinition`/`WorkflowRun`: workflow-native execution domain
 //! - [`error`] - Structured error types
 //! - [`scope`] - Execution scope definitions
