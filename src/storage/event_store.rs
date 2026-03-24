@@ -15,13 +15,8 @@ use uuid::Uuid;
 
 mod sqlite_store;
 pub use sqlite_store::*;
-
-mod jsonl_stores;
-pub use jsonl_stores::*;
 mod helpers;
-pub(crate) use helpers::{
-    nanos_to_timestamp, normalize_concatenated_json_objects, timestamp_to_nanos,
-};
+pub(crate) use helpers::{nanos_to_timestamp, timestamp_to_nanos};
 pub use helpers::{EventStoreError, Result};
 mod filter;
 pub use filter::*;

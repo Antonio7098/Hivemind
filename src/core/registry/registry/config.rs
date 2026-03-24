@@ -21,12 +21,6 @@ impl RegistryConfig {
         Self { data_dir }
     }
 
-    /// Returns the path to the legacy events JSONL mirror file.
-    #[must_use]
-    pub fn events_path(&self) -> PathBuf {
-        self.data_dir.join("events.jsonl")
-    }
-
     /// Returns the path to the canonical `SQLite` database file.
     #[must_use]
     pub fn db_path(&self) -> PathBuf {

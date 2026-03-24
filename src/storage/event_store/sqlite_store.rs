@@ -1,16 +1,14 @@
 use super::*;
-use fs2::FileExt;
 use std::fmt::Write;
 use std::io::Write as IoWrite;
 use std::process::Command;
 use std::process::Stdio;
 mod store;
 
-/// SQLite-backed event store (canonical) with optional JSONL mirror for inspectability.
+/// SQLite-backed event store (canonical).
 #[derive(Debug)]
 pub struct SqliteEventStore {
     db: PathBuf,
-    legacy_mirror: PathBuf,
     write_lock: PathBuf,
 }
 impl SqliteEventStore {
@@ -19,7 +17,6 @@ impl SqliteEventStore {
         std::fs::create_dir_all(base_dir)?;
 
         let db = base_dir.join("db.sqlite");
-        let legacy_mirror = base_dir.join("events.jsonl");
         let write_lock = base_dir.join("db.write.lock");
         Self::run_sql_batch_on_path(
             &db,
@@ -64,7 +61,6 @@ impl SqliteEventStore {
 
         Ok(Self {
             db,
-            legacy_mirror,
             write_lock,
         })
     }
@@ -172,25 +168,6 @@ impl SqliteEventStore {
         Ok(serde_json::from_str::<Event>(raw)?)
     }
 
-    fn append_legacy_mirror(&self, event_json: &str) -> Result<()> {
-        use std::fs::OpenOptions;
-        use std::io::Write;
-
-        if let Some(parent) = self.legacy_mirror.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .read(true)
-            .open(&self.legacy_mirror)?;
-        file.lock_exclusive()?;
-        writeln!(file, "{event_json}")?;
-        let _ = file.flush();
-        let _ = file.unlock();
-        Ok(())
-    }
 }
 
 #[cfg(test)]

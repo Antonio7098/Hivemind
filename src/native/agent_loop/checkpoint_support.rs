@@ -97,10 +97,7 @@ impl<M: ModelClient> AgentLoop<M> {
         directive: &ModelDirective,
     ) -> bool {
         matches!(directive, ModelDirective::Done { .. })
-            && request
-                .prompt_assembly
-                .as_ref()
-                .is_some_and(|assembly| assembly.objective_state.starts_with("checkpoint"))
+            && !Self::declared_checkpoint_ids(request).is_empty()
             && !self.checkpoint_completion_recorded(history)
     }
 
@@ -114,6 +111,11 @@ impl<M: ModelClient> AgentLoop<M> {
     }
 
     pub(crate) fn declared_checkpoint_ids(request: &ModelTurnRequest) -> Vec<String> {
+        if let Some(assembly) = request.prompt_assembly.as_ref() {
+            if !assembly.declared_checkpoint_ids.is_empty() {
+                return assembly.declared_checkpoint_ids.clone();
+            }
+        }
         const PREFIX: &str = "Execution checkpoints (in order):";
         [request.context.as_deref(), Some(request.prompt.as_str())]
             .into_iter()

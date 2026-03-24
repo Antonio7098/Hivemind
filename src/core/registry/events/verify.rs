@@ -106,35 +106,27 @@ impl Registry {
         Ok(())
     }
 
-    /// Verifies canonical `SQLite` and mirror event-store integrity/parity.
+    /// Verifies canonical `SQLite` event-store integrity.
     ///
     /// # Errors
-    /// Returns an error if either event source cannot be read.
+    /// Returns an error if the event source cannot be read.
     pub fn events_verify(&self) -> Result<EventsVerifyResult> {
         let origin = "registry:events_verify";
         let sqlite_events = self
             .store
             .read_all()
             .map_err(|err| HivemindError::system("event_read_failed", err.to_string(), origin))?;
-        let mirror_path = self.config.events_path();
-        let mirror_events = Self::read_mirror_events(&mirror_path, origin)?;
 
         let sqlite = Self::summarize_event_log(&sqlite_events);
-        let mirror = Self::summarize_event_log(&mirror_events);
-        let (first_mismatch_index, first_mismatch_sqlite_event_id, first_mismatch_mirror_event_id) =
-            Self::first_event_mismatch(&sqlite_events, &mirror_events);
-        let parity_ok = sqlite.event_count == mirror.event_count && first_mismatch_index.is_none();
 
         Ok(EventsVerifyResult {
             checked_at: Utc::now(),
             sqlite_path: self.config.db_path().to_string_lossy().to_string(),
-            mirror_path: mirror_path.to_string_lossy().to_string(),
-            parity_ok,
-            first_mismatch_index,
-            first_mismatch_sqlite_event_id,
-            first_mismatch_mirror_event_id,
+            parity_ok: true, // Always true since no mirror exists
+            first_mismatch_index: None,
+            first_mismatch_sqlite_event_id: None,
+            first_mismatch_mirror_event_id: None,
             sqlite,
-            mirror,
         })
     }
 }

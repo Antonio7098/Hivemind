@@ -156,28 +156,4 @@ pub(super) fn handle_events_verify(service: &EventService, format: OutputFormat)
     }
 }
 
-pub(super) fn handle_events_recover(
-    service: &EventService,
-    args: &EventRecoverArgs,
-    format: OutputFormat,
-) -> ExitCode {
-    if !args.from_mirror {
-        return output_error(
-            &crate::core::error::HivemindError::user(
-                "events_recover_source_required",
-                "Specify an explicit source for recovery",
-                "cli:events:recover",
-            )
-            .with_hint("Use `hivemind events recover --from-mirror --confirm`"),
-            format,
-        );
-    }
-
-    match service.events_recover_from_mirror(args.confirm) {
-        Ok(result) => {
-            print_structured(&result, format, "events recover result");
-            ExitCode::Success
-        }
-        Err(e) => output_error(&e, format),
-    }
-}
+// Legacy mirror recovery functionality removed

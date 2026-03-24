@@ -30,6 +30,16 @@ pub fn handle_events(cmd: EventCommands, format: OutputFormat) -> ExitCode {
         }
         EventCommands::Replay(args) => commands::handle_events_replay(&service, &args, format),
         EventCommands::Verify(_args) => commands::handle_events_verify(&service, format),
-        EventCommands::Recover(args) => commands::handle_events_recover(&service, &args, format),
+        EventCommands::Recover(_) => {
+            output_error(
+                &crate::core::error::HivemindError::user(
+                    "events_recover_removed",
+                    "Event recovery from mirror has been removed",
+                    "cli:events:recover",
+                )
+                .with_hint("Events are now stored only in SQLite - use database backups for recovery"),
+                format,
+            )
+        }
     }
 }

@@ -269,6 +269,7 @@ impl Registry {
                 .unwrap_or_else(|| task.title.clone()),
             success_criteria: task.criteria.description.clone(),
             context: Some(runtime_context.clone()),
+            declared_checkpoint_ids: checkpoint_ids.clone(),
             prior_attempts,
             verifier_feedback: None,
             native_prompt_metadata: Some(NativePromptMetadata {

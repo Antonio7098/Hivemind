@@ -1119,10 +1119,6 @@ impl EventService {
     pub fn events_verify(&self) -> Result<EventsVerifyResult> {
         self.registry.events_verify()
     }
-
-    pub fn events_recover_from_mirror(&self, confirm: bool) -> Result<EventsRecoverResult> {
-        self.registry.events_recover_from_mirror(confirm)
-    }
 }
 
 pub struct StateService {

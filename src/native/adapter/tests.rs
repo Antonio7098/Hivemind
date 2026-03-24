@@ -96,6 +96,7 @@ fn basic_input() -> ExecutionInput {
         task_description: "list files".to_string(),
         success_criteria: "show files".to_string(),
         context: None,
+        declared_checkpoint_ids: Vec::new(),
         prior_attempts: Vec::new(),
         verifier_feedback: None,
         native_prompt_metadata: None,

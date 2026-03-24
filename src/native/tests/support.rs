@@ -16,7 +16,7 @@ pub(crate) use tempfile::tempdir;
 
 pub(crate) use super::super::*;
 pub(crate) use crate::adapters::runtime::{
-    NativePromptMetadata, NativeToolCallFailure, NativeToolCallTrace,
+    AttemptSummary, NativePromptMetadata, NativeToolCallFailure, NativeToolCallTrace,
 };
 pub(crate) use crate::native::tool_engine::{NativeToolAction, NativeToolEngine};
 pub(crate) use crate::native::turn_items::{
@@ -28,6 +28,7 @@ pub(crate) fn native_input(native_prompt_metadata: Option<NativePromptMetadata>)
         task_description: "test task".to_string(),
         success_criteria: "done".to_string(),
         context: Some("test context".to_string()),
+        declared_checkpoint_ids: Vec::new(),
         prior_attempts: Vec::new(),
         verifier_feedback: None,
         native_prompt_metadata,

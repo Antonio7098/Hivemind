@@ -319,107 +319,11 @@ fn in_memory_store_filters_by_workflow_lineage() {
     ));
 }
 
-#[test]
-fn file_store_persist_and_reload() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+// Remove JSONL store tests - legacy functionality removed
 
-    let project_id = Uuid::new_v4();
-    let event = Event::new(
-        EventPayload::ProjectCreated {
-            id: project_id,
-            name: "persist-test".to_string(),
-            description: None,
-        },
-        CorrelationIds::for_project(project_id),
-    );
+// Remove JSONL store tests - legacy functionality removed
 
-    {
-        let store = FileEventStore::open(path.clone()).unwrap();
-        store.append(event.clone()).unwrap();
-    }
-
-    {
-        let store = FileEventStore::open(path).unwrap();
-        let events = store.read_all().unwrap();
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].payload, event.payload);
-    }
-}
-
-#[test]
-fn file_store_ignores_unknown_event_payload_types() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
-
-    let project_id = Uuid::new_v4();
-    let event = Event::new(
-        EventPayload::ProjectCreated {
-            id: project_id,
-            name: "persist-test".to_string(),
-            description: None,
-        },
-        CorrelationIds::for_project(project_id),
-    );
-
-    let mut value = serde_json::to_value(&event).unwrap();
-    value["payload"]["type"] = serde_json::json!("future_event_type");
-    value["payload"]["some_new_field"] = serde_json::json!("some_value");
-    let unknown_line = serde_json::to_string(&value).unwrap();
-
-    std::fs::write(&path, format!("{unknown_line}\n")).unwrap();
-
-    let store = FileEventStore::open(path).unwrap();
-    let events = store.read_all().unwrap();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].payload, EventPayload::Unknown);
-}
-
-#[test]
-fn indexed_store_writes_project_and_flow_mirrors() {
-    let dir = tempfile::tempdir().unwrap();
-    let store = IndexedEventStore::open(dir.path()).unwrap();
-    let project_id = Uuid::new_v4();
-    let flow_id = Uuid::new_v4();
-    let task_id = Uuid::new_v4();
-
-    store
-        .append(Event::new(
-            EventPayload::ErrorOccurred {
-                error: HivemindError::user(
-                    "indexed_store_test",
-                    "indexed mirror test",
-                    "storage:event_store:test",
-                ),
-            },
-            CorrelationIds::for_flow_task(project_id, flow_id, task_id),
-        ))
-        .unwrap();
-
-    let global_events = store.read_all().unwrap();
-    assert_eq!(global_events.len(), 1);
-
-    let index_json = std::fs::read_to_string(dir.path().join("index.json")).unwrap();
-    assert!(index_json.contains(&project_id.to_string()), "{index_json}");
-
-    let project_log = std::fs::read_to_string(
-        dir.path()
-            .join("projects")
-            .join(project_id.to_string())
-            .join("events.jsonl"),
-    )
-    .unwrap();
-    assert!(project_log.contains("indexed_store_test"), "{project_log}");
-
-    let flow_log = std::fs::read_to_string(
-        dir.path()
-            .join("flows")
-            .join(flow_id.to_string())
-            .join("events.jsonl"),
-    )
-    .unwrap();
-    assert!(flow_log.contains("indexed_store_test"), "{flow_log}");
-}
+// Remove indexed store tests - legacy functionality removed
 
 #[test]
 fn sqlite_store_append_read_and_reload() {
@@ -451,27 +355,7 @@ fn sqlite_store_append_read_and_reload() {
     ));
 }
 
-#[test]
-fn sqlite_store_mirrors_legacy_jsonl() {
-    let dir = tempfile::tempdir().unwrap();
-    let store = SqliteEventStore::open(dir.path()).unwrap();
-    let project_id = Uuid::new_v4();
-
-    store
-        .append(Event::new(
-            EventPayload::ProjectCreated {
-                id: project_id,
-                name: "mirror-project".to_string(),
-                description: None,
-            },
-            CorrelationIds::for_project(project_id),
-        ))
-        .unwrap();
-
-    let mirror_path = dir.path().join("events.jsonl");
-    let mirror = std::fs::read_to_string(mirror_path).unwrap();
-    assert!(mirror.contains("\"type\":\"project_created\""));
-}
+// Remove legacy mirror test - JSONL mirror functionality removed
 
 #[test]
 fn sqlite_store_enforces_append_only_triggers() {

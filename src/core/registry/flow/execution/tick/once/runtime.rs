@@ -16,6 +16,8 @@ pub(super) struct TickRuntimeExecution {
     pub(super) report: crate::adapters::runtime::ExecutionReport,
 }
 
+const MAX_EXTERNAL_CHECKPOINT_RECOVERY_ATTEMPTS: u8 = 3;
+
 impl Registry {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare_runtime_for_tick_attempt(
@@ -353,6 +355,159 @@ impl Registry {
             runtime_for_adapter,
             report,
         }))
+    }
+
+    fn runtime_supports_checkpoint_session_repair(adapter_name: &str) -> bool {
+        matches!(adapter_name, "opencode" | "codex" | "kilo")
+    }
+
+    fn truncate_checkpoint_repair_excerpt(value: &str, max_chars: usize) -> String {
+        let truncated = value.chars().take(max_chars).collect::<String>();
+        if value.chars().count() > max_chars {
+            format!("{truncated}...")
+        } else {
+            truncated
+        }
+    }
+
+    fn checkpoint_repair_input(
+        &self,
+        state: &AppState,
+        attempt_id: Uuid,
+        original_input: &ExecutionInput,
+        stdout: &str,
+        stderr: &str,
+        repair_attempt: u8,
+    ) -> Option<ExecutionInput> {
+        let attempt = state.attempts.get(&attempt_id)?;
+        if attempt.all_checkpoints_completed || attempt.runtime_session.is_none() {
+            return None;
+        }
+
+        let pending = attempt
+            .checkpoints
+            .iter()
+            .filter(|checkpoint| checkpoint.state != AttemptCheckpointState::Completed)
+            .map(|checkpoint| checkpoint.checkpoint_id.clone())
+            .collect::<Vec<_>>();
+        if pending.is_empty() {
+            return None;
+        }
+
+        let active_checkpoint = attempt
+            .checkpoints
+            .iter()
+            .find(|checkpoint| checkpoint.state == AttemptCheckpointState::Active)
+            .or_else(|| {
+                attempt
+                    .checkpoints
+                    .iter()
+                    .find(|checkpoint| checkpoint.state != AttemptCheckpointState::Completed)
+            })?
+            .checkpoint_id
+            .clone();
+
+        let mut context_parts = Vec::new();
+        if let Some(context) = original_input.context.as_deref() {
+            context_parts.push(context.to_string());
+        }
+        context_parts.push(format!(
+            "Checkpoint completion repair attempt {repair_attempt}/{MAX_EXTERNAL_CHECKPOINT_RECOVERY_ATTEMPTS}: the previous runtime invocation ended before the task's remaining checkpoints were completed. Continue in the same runtime session and complete all remaining checkpoints in order before ending. Active checkpoint: {active_checkpoint}. Pending checkpoints: {}. Emit one directive line per completed checkpoint using the built-in format ACT:tool:checkpoint_complete:{{\"id\":\"<checkpoint-id>\",\"summary\":\"short progress summary\"}}.",
+            pending.join(", ")
+        ));
+        if !stdout.trim().is_empty() {
+            context_parts.push(format!(
+                "Previous runtime stdout:\n{}",
+                Self::truncate_checkpoint_repair_excerpt(stdout, 4000)
+            ));
+        }
+        if !stderr.trim().is_empty() {
+            context_parts.push(format!(
+                "Previous runtime stderr:\n{}",
+                Self::truncate_checkpoint_repair_excerpt(stderr, 2000)
+            ));
+        }
+
+        let mut repair_input = original_input.clone();
+        repair_input.context = Some(context_parts.join("\n\n"));
+        Some(repair_input)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn try_recover_checkpoint_completion_after_runtime_exit(
+        &self,
+        flow_id: &str,
+        interactive: bool,
+        task_id: Uuid,
+        worktree_status: &WorktreeStatus,
+        repo_worktrees: &[(String, WorktreeStatus)],
+        runtime_for_adapter: &ProjectRuntimeConfig,
+        runtime_selection_source: RuntimeSelectionSource,
+        task_scope: Option<Scope>,
+        original_input: &ExecutionInput,
+        attempt_id: Uuid,
+        attempt_corr: &CorrelationIds,
+        next_attempt_number: u32,
+        max_attempts: u32,
+        repair_attempt: u8,
+        stdout: &str,
+        stderr: &str,
+        origin: &'static str,
+    ) -> Result<Option<TickRuntimeExecution>> {
+        if !Self::runtime_supports_checkpoint_session_repair(&runtime_for_adapter.adapter_name) {
+            return Ok(None);
+        }
+
+        let latest_state = self.state()?;
+        let latest_flow = self.get_flow(flow_id)?;
+        let Some(repair_input) = self.checkpoint_repair_input(
+            &latest_state,
+            attempt_id,
+            original_input,
+            stdout,
+            stderr,
+            repair_attempt,
+        ) else {
+            return Ok(None);
+        };
+
+        let runtime_prompt = format_execution_prompt(&repair_input);
+        let mut runtime_flags = Self::runtime_start_flags(runtime_for_adapter);
+        runtime_flags.push(format!("checkpoint-repair-attempt={repair_attempt}"));
+        let Some(prepared_runtime) = self.prepare_runtime_for_tick_attempt(
+            &latest_state,
+            &latest_flow,
+            task_id,
+            worktree_status,
+            repo_worktrees,
+            runtime_for_adapter.clone(),
+            runtime_selection_source,
+            task_scope,
+            attempt_id,
+            attempt_corr,
+            next_attempt_number,
+            max_attempts,
+            runtime_flags,
+            runtime_prompt,
+            origin,
+        )? else {
+            return Ok(None);
+        };
+
+        self.execute_tick_attempt(
+            interactive,
+            &latest_state,
+            &latest_flow,
+            task_id,
+            worktree_status,
+            prepared_runtime,
+            repair_input,
+            attempt_id,
+            attempt_corr,
+            next_attempt_number,
+            max_attempts,
+            origin,
+        )
     }
 
     pub(super) fn apply_external_runtime_tool_directives(

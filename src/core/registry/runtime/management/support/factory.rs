@@ -123,6 +123,8 @@ fn build_codex_adapter(mut runtime: ProjectRuntimeConfig) -> SelectedRuntimeAdap
 
 fn build_claude_code_adapter(runtime: ProjectRuntimeConfig) -> SelectedRuntimeAdapter {
     let timeout = Duration::from_millis(runtime.timeout_ms);
+    let mut runtime = runtime;
+    let resume_session_id = runtime.env.remove("HIVEMIND_RUNTIME_RESUME_SESSION_ID");
     let mut cfg = ClaudeCodeConfig::new(PathBuf::from(runtime.binary_path));
     cfg.model = runtime.model;
     cfg.base.args = if runtime.args.is_empty() {
@@ -131,6 +133,7 @@ fn build_claude_code_adapter(runtime: ProjectRuntimeConfig) -> SelectedRuntimeAd
         runtime.args
     };
     cfg.base.env = runtime.env;
+    cfg.base.resume_session_id.clone_from(&resume_session_id);
     cfg.base.timeout = timeout;
     SelectedRuntimeAdapter::ClaudeCode(ClaudeCodeAdapter::new(cfg))
 }
@@ -271,6 +274,7 @@ mod tests {
                 task_description: "Say ok".to_string(),
                 success_criteria: "Return DONE".to_string(),
                 context: None,
+                declared_checkpoint_ids: Vec::new(),
                 prior_attempts: Vec::new(),
                 verifier_feedback: None,
                 native_prompt_metadata: None,

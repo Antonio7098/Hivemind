@@ -215,7 +215,6 @@ pub struct EventLogIntegritySummary {
 pub struct EventsVerifyResult {
     pub checked_at: chrono::DateTime<Utc>,
     pub sqlite_path: String,
-    pub mirror_path: String,
     pub parity_ok: bool,
     #[serde(default)]
     pub first_mismatch_index: Option<usize>,
@@ -224,7 +223,6 @@ pub struct EventsVerifyResult {
     #[serde(default)]
     pub first_mismatch_mirror_event_id: Option<String>,
     pub sqlite: EventLogIntegritySummary,
-    pub mirror: EventLogIntegritySummary,
 }
 
 #[derive(Debug, Clone, Serialize)]

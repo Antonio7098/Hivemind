@@ -157,16 +157,30 @@ impl Registry {
             return;
         }
 
+        let Some(current_attempt) = state.attempts.get(&attempt_id) else {
+            return;
+        };
+
+        if let Some(session) = current_attempt.runtime_session.as_ref().filter(|session| {
+            session.adapter_name == runtime_for_adapter.adapter_name
+        }) {
+            runtime_for_adapter.env.insert(
+                "HIVEMIND_RUNTIME_RESUME_SESSION_ID".to_string(),
+                session.session_id.clone(),
+            );
+            runtime_for_adapter.env.insert(
+                "HIVEMIND_RUNTIME_RESUME_PARENT_ATTEMPT_ID".to_string(),
+                current_attempt.id.to_string(),
+            );
+            return;
+        }
+
         let Some(exec) = flow.task_executions.get(&task_id) else {
             return;
         };
         if exec.retry_mode != RetryMode::Continue {
             return;
         }
-
-        let Some(current_attempt) = state.attempts.get(&attempt_id) else {
-            return;
-        };
 
         let previous = state
             .attempts

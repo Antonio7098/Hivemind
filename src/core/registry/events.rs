@@ -15,7 +15,6 @@ use crate::core::registry::{
     GRAPH_SNAPSHOT_VERSION,
 };
 
-mod mirror;
 mod recover;
 mod verify;
 

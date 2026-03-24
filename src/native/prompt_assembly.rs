@@ -18,6 +18,8 @@ pub struct NativePromptAssembly {
     pub mode_contract_hash: String,
     pub objective_state: String,
     #[serde(default)]
+    pub declared_checkpoint_ids: Vec<String>,
+    #[serde(default)]
     pub selected_history: Vec<NativePromptItem>,
     #[serde(default)]
     pub code_navigation: Vec<NativePromptItem>,
@@ -260,6 +262,7 @@ pub(crate) fn assemble_native_prompt(
             mode_contract,
             mode_contract_hash,
             objective_state,
+            declared_checkpoint_ids: input.declared_checkpoint_ids.clone(),
             selected_history,
             code_navigation,
             tool_contracts: tool_contract_lines,

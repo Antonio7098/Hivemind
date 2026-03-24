@@ -1,4 +1,5 @@
 use super::*;
+use fs2::FileExt;
 
 #[allow(clippy::significant_drop_tightening)]
 impl EventStore for SqliteEventStore {
@@ -78,7 +79,6 @@ impl EventStore for SqliteEventStore {
         let result = self.run_sql_batch(&insert_sql);
         let _ = lock_file.unlock();
         result?;
-        self.append_legacy_mirror(&event_json)?;
         Ok(event.id())
     }
 

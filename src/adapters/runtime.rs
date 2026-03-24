@@ -37,6 +37,7 @@
 //!     task_description: "Implement user authentication".to_string(),
 //!     success_criteria: "Users can log in and log out".to_string(),
 //!     context: Some("Use JWT tokens".to_string()),
+//!     declared_checkpoint_ids: vec![],
 //!     prior_attempts: vec![],
 //!     verifier_feedback: None,
 //!     native_prompt_metadata: None,

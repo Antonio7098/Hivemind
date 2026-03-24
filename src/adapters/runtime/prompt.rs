@@ -6,6 +6,8 @@ pub struct ExecutionInput {
     pub task_description: String,
     pub success_criteria: String,
     pub context: Option<String>,
+    #[serde(default)]
+    pub declared_checkpoint_ids: Vec<String>,
     pub prior_attempts: Vec<AttemptSummary>,
     pub verifier_feedback: Option<String>,
     #[serde(default)]
@@ -44,6 +46,14 @@ pub fn format_execution_prompt(input: &ExecutionInput) -> String {
 
     if let Some(ref context) = input.context {
         let _ = write!(prompt, "Context:\n{context}\n\n");
+    }
+    if !input.declared_checkpoint_ids.is_empty() {
+        let _ = writeln!(
+            prompt,
+            "Execution checkpoints (in order): {}",
+            input.declared_checkpoint_ids.join(", ")
+        );
+        prompt.push('\n');
     }
     if !input.prior_attempts.is_empty() {
         prompt.push_str("Prior Attempts:\n");
