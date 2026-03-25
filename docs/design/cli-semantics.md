@@ -922,25 +922,13 @@ hivemind [-f json|table|yaml] global notepad delete
 - `show`: idempotent
 - `create`/`update`: idempotent when content unchanged
 - `delete`: idempotent if already absent
-
----
-
-## 3. Task Commands
-
-### 3.1 task create
-
-**Synopsis:**
-```
-hivemind task create <project> <title> [--description <text>] [--scope <scope-def>]
-```
-
-**Preconditions:**
 - Project exists
 
 **Effects:**
 - Task created with unique ID
 - Task added to project's task list
 - Task state: OPEN (not in any TaskFlow)
+- `--checkpoints` defaults to `true`. When explicitly set to `false`, the task's graph node will not declare checkpoints, runtime prompts omit checkpoint instructions, and flow completion will not block on checkpoint directives.
 
 **Events:**
 ```
@@ -948,6 +936,7 @@ TaskCreated:
   task_id: <generated>
   project_id: <project_id>
   title: <title>
+  checkpoints_required: <bool>
 ```
 
 **Failures:**

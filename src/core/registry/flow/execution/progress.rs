@@ -141,10 +141,10 @@ mod tests {
             )
             .expect("attach repo");
         let task_a = registry
-            .create_task(&project_id, "Task A", None, None)
+            .create_task(&project_id, "Task A", None, true, None)
             .expect("task a");
         let task_b = registry
-            .create_task(&project_id, "Task B", None, None)
+            .create_task(&project_id, "Task B", None, true, None)
             .expect("task b");
         let graph = registry
             .create_graph(&project_id, "graph", &[task_a.id, task_b.id])
@@ -250,10 +250,10 @@ mod tests {
             )
             .expect("attach repo");
         let task_a = registry
-            .create_task(&project_id, "Task A", None, None)
+            .create_task(&project_id, "Task A", None, true, None)
             .expect("task a");
         let task_b = registry
-            .create_task(&project_id, "Task B", None, None)
+            .create_task(&project_id, "Task B", None, true, None)
             .expect("task b");
         let graph = registry
             .create_graph(&project_id, "graph", &[task_a.id, task_b.id])
@@ -362,7 +362,7 @@ mod tests {
             )
             .expect("attach repo");
         let task = registry
-            .create_task(&project_id, "Task A", None, None)
+            .create_task(&project_id, "Task A", None, true, None)
             .expect("task");
         let graph = registry
             .create_graph(&project_id, "graph", &[task.id])

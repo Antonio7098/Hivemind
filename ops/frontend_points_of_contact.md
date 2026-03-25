@@ -67,18 +67,18 @@
 
 ## Constitution
 
-- [ ] **Show constitution** - `GET /api/governance/constitution` → `src/server/routes/governance.rs:6`
+- [x] **Show constitution** - `GET /api/governance/constitution` → `src/server/routes/governance.rs:6`
 - [ ] **Check constitution compliance** - `POST /api/governance/constitution/check` → `src/server/routes/governance.rs:63`
 
 ## Governance Documents
 
-- [ ] **List project governance documents** - `GET /api/governance/documents` → `src/server/routes/governance.rs:11`
-- [ ] **Inspect governance document** - `GET /api/governance/documents/inspect` → `src/server/routes/governance.rs:16`
+- [x] **List project governance documents** - `GET /api/governance/documents` → `src/server/routes/governance.rs:11`
+- [x] **Inspect governance document** - `GET /api/governance/documents/inspect` → `src/server/routes/governance.rs:16`
 
 ## Notepad
 
-- [ ] **Show project notepad** - `GET /api/governance/notepad` → `src/server/routes/governance.rs:24`
-- [ ] **Show global notepad** - `GET /api/governance/global/notepad` → `src/server/routes/governance.rs:29`
+- [x] **Show project notepad** - `GET /api/governance/notepad` → `src/server/routes/governance.rs:24`
+- [x] **Show global notepad** - `GET /api/governance/global/notepad` → `src/server/routes/governance.rs:29`
 
 ## Skills (Global Governance)
 
@@ -125,8 +125,8 @@
 
 ## Events
 
-- [ ] **Query events** - `GET /api/events` → `src/server/routes/queries/events.rs:12`
-- [ ] **Inspect single event** - `GET /api/events/inspect` → `src/server/routes/queries/events.rs:20`
+- [x] **Query events** - `GET /api/events` → `src/server/routes/queries/events.rs:12`
+- [x] **Inspect single event** - `GET /api/events/inspect` → `src/server/routes/queries/events.rs:20`
 - [ ] **Replay flow from events** - `src/server/routes/queries/other.rs` (replay_flow)
 
 ## Attempts
@@ -141,6 +141,16 @@
 - [ ] **Get version** - `GET /api/version` → `src/server/routes/queries/mod.rs:59`
 - [ ] **Get API catalog** - `GET /api/catalog` → `src/server/routes/queries/mod.rs:62`
 - [ ] **Health check** - `GET /health` → `src/server/routes/queries/mod.rs:54`
+
+## Spec Trees (Sprint 71)
+
+- [ ] **TODO: Workflow spec tree binding** - Sprint 71 spec binding UI not yet implemented. Requires spec tree API endpoints from backend. See `ops/roadmap/phase-5.md:71.1-71.7`
+- [ ] **Inspect workflow spec** - `GET /api/workflows/spec` (not yet exposed)
+- [ ] **Inspect task spec** - `GET /api/tasks/spec` (not yet exposed)
+
+## Repository Explorer
+
+- [ ] **TODO: Project repository explorer** - FileTree component (rename DocumentTree to FileTree for reuse). VS Code-style file explorer for project repos, renders code files with syntax highlighting. Reuses DocumentViewer pattern. See `src/components/common/FileTree.tsx` (to be created)
 
 ---
 

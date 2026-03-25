@@ -368,7 +368,7 @@ mod tests {
             .expect("initial graph snapshot refresh");
 
         let task = registry
-            .create_task(&project_id, "Task A", None, None)
+            .create_task(&project_id, "Task A", None, true, None)
             .expect("task");
         let graph = registry
             .create_graph(&project_id, "graph", &[task.id])

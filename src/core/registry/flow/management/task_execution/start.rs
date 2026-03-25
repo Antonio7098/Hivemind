@@ -97,6 +97,20 @@ impl Registry {
             origin,
         )?;
 
+        if checkpoint_ids.is_empty() {
+            self.append_event(
+                Event::new(
+                    EventPayload::AllCheckpointsCompleted {
+                        flow_id: flow.id,
+                        task_id: id,
+                        attempt_id,
+                    },
+                    corr_attempt.clone(),
+                ),
+                origin,
+            )?;
+        }
+
         let total = u32::try_from(checkpoint_ids.len()).map_err(|_| {
             HivemindError::system(
                 "checkpoint_count_overflow",

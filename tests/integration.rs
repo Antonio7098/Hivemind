@@ -7016,6 +7016,132 @@ fn cli_flow_tick_auto_completes_checkpoint_from_external_runtime_directive() {
 }
 
 #[test]
+fn cli_flow_tick_completes_without_checkpoint_when_task_checkpoints_disabled() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+
+    let repo_dir = tmp.path().join("repo");
+    init_git_repo(&repo_dir);
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["project", "create", "proj"]);
+    assert_eq!(code, 0, "{err}");
+
+    let repo_path = repo_dir.to_string_lossy().to_string();
+    let (code, _out, err) =
+        run_hivemind(tmp.path(), &["project", "attach-repo", "proj", &repo_path]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, task_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f",
+            "json",
+            "task",
+            "create",
+            "proj",
+            "checkpoint-toggle-task",
+            "--checkpoints",
+            "false",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    let task_json = serde_json::from_str::<serde_json::Value>(&task_out).expect("task create json");
+    let task_data = task_json.get("data").expect("task data");
+    assert_eq!(
+        task_data
+            .get("checkpoints_required")
+            .and_then(serde_json::Value::as_bool),
+        Some(false),
+        "{task_out}"
+    );
+    let task_id = task_data
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .expect("task id")
+        .to_string();
+
+    let script = "printf 'finished without checkpoint\\n'";
+    let (code, _out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "task",
+            "runtime-set",
+            &task_id,
+            "--adapter",
+            "claude-code",
+            "--binary-path",
+            "/bin/bash",
+            "--arg",
+            "-lc",
+            "--arg",
+            script,
+            "--timeout-ms",
+            "10000",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+
+    let (code, graph_out, err) = run_hivemind(
+        tmp.path(),
+        &["graph", "create", "proj", "graph", "--from-tasks", &task_id],
+    );
+    assert_eq!(code, 0, "{err}");
+    let graph_id = graph_out
+        .lines()
+        .find_map(|line| line.strip_prefix("Graph ID:").map(|s| s.trim().to_string()))
+        .expect("graph id");
+
+    let (code, flow_out, err) = run_hivemind(tmp.path(), &["flow", "create", &graph_id]);
+    assert_eq!(code, 0, "{err}");
+    let flow_id = flow_out
+        .lines()
+        .find_map(|line| line.strip_prefix("Flow ID:").map(|s| s.trim().to_string()))
+        .expect("flow id");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "start", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, _out, err) = run_hivemind(tmp.path(), &["flow", "tick", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+
+    let (code, inspect_out, err) =
+        run_hivemind(tmp.path(), &["-f", "json", "flow", "status", &flow_id]);
+    assert_eq!(code, 0, "{err}");
+    let inspect_json =
+        serde_json::from_str::<serde_json::Value>(&inspect_out).expect("flow inspect json");
+    let flow_state = inspect_json
+        .get("data")
+        .and_then(|d| d.get("state"))
+        .and_then(serde_json::Value::as_str)
+        .expect("flow state");
+    assert_eq!(flow_state, "completed", "{inspect_out}");
+
+    let task_states = inspect_json
+        .get("data")
+        .and_then(|d| d.get("task_executions"))
+        .and_then(serde_json::Value::as_object)
+        .expect("task executions");
+    let task_state = task_states
+        .values()
+        .next()
+        .and_then(|execution| execution.get("state"))
+        .and_then(serde_json::Value::as_str)
+        .expect("task execution state");
+    assert_eq!(task_state, "success", "{inspect_out}");
+
+    let (code, events_out, err) = run_hivemind(
+        tmp.path(),
+        &[
+            "-f", "json", "events", "stream", "--flow", &flow_id, "--limit", "200",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert!(events_out.contains("all_checkpoints_completed"), "{events_out}");
+    assert!(!events_out.contains("checkpoint_declared"), "{events_out}");
+    assert!(!events_out.contains("checkpoint_completed"), "{events_out}");
+    assert!(events_out.contains("task_execution_succeeded"), "{events_out}");
+}
+
+#[test]
 fn cli_flow_tick_recovers_incomplete_checkpoint_by_resuming_external_runtime_session() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
